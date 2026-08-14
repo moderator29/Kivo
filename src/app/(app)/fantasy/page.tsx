@@ -67,6 +67,24 @@ export default async function FantasyPage({
     return <FantasyOnboarding availableSeasons={seasonOptions} />;
   }
 
+  // fantasy_teams/fantasy_points/profiles are all owner-only RLS, so a plain
+  // client select can never see a teammate's row — this goes through the same
+  // ownership-checked RPC shape as get_fantasy_team_league above (see the
+  // get_fantasy_league_leaderboard migration comment).
+  const { data: leaderboardRows } = await supabase.rpc("get_fantasy_league_leaderboard", {
+    p_team_id: activeTeam.id,
+  });
+  const leaderboard = {
+    entries: (leaderboardRows ?? []).map((row) => ({
+      teamId: row.team_id,
+      teamName: row.team_name,
+      ownerUsername: row.owner_username,
+      totalPoints: row.total_points,
+      hasScores: row.has_scores,
+    })),
+    hasAnyScores: (leaderboardRows ?? []).some((row) => row.has_scores),
+  };
+
   const { data: gameweek } = await supabase
     .from("fantasy_gameweeks")
     .select("id, number, deadline_at, is_current")
@@ -146,6 +164,7 @@ export default async function FantasyPage({
       initialRoster={initialRoster}
       points={points}
       pointsAvailable={pointsAvailable}
+      leaderboard={leaderboard}
     />
   );
 }

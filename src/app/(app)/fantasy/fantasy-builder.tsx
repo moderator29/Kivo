@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { setGameweekRoster, setFantasyCaptain, searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
+import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
 import {
   POSITION_GROUPS,
   SQUAD_RULES,
@@ -66,7 +67,11 @@ type FantasyBuilderProps = {
   initialRoster: RosterEntry[];
   points: number | null;
   pointsAvailable: boolean;
+  leaderboard: { entries: LeaderboardEntry[]; hasAnyScores: boolean };
 };
+
+const VIEW_TABS = ["Squad", "Leaderboard"] as const;
+type ViewTab = (typeof VIEW_TABS)[number];
 
 // Pitch renders attacking end at the top: Forwards, Midfielders, Defenders,
 // Goalkeepers — mirrors the usual fantasy-app orientation.
@@ -111,7 +116,17 @@ function TeamCrest({ crestUrl, name, size = 20 }: { crestUrl: string | null; nam
   );
 }
 
-export function FantasyBuilder({ teams, activeTeamId, league, gameweek, initialRoster, points, pointsAvailable }: FantasyBuilderProps) {
+export function FantasyBuilder({
+  teams,
+  activeTeamId,
+  league,
+  gameweek,
+  initialRoster,
+  points,
+  pointsAvailable,
+  leaderboard,
+}: FantasyBuilderProps) {
+  const [view, setView] = useState<ViewTab>("Squad");
   const [savedRoster, setSavedRoster] = useState(initialRoster);
   const [pending, setPending] = useState(initialRoster);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -272,7 +287,37 @@ export function FantasyBuilder({ teams, activeTeamId, league, gameweek, initialR
         )}
       </FadeIn>
 
-      {!gameweek ? (
+      <FadeIn delay={0.02} className="kivo-glass-sharp flex rounded-xl p-1">
+        {VIEW_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setView(tab)}
+            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition"
+          >
+            {view === tab && (
+              <motion.span
+                layoutId="fantasy-view-active-tab"
+                className="kivo-gradient-victory absolute inset-0 rounded-lg"
+                transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              />
+            )}
+            <span className={`relative ${view === tab ? "text-kivo-white" : "text-foreground-muted"}`}>{tab}</span>
+          </button>
+        ))}
+      </FadeIn>
+
+      {view === "Leaderboard" && (
+        <FadeIn delay={0.05}>
+          <FantasyLeaderboard
+            entries={leaderboard.entries}
+            hasAnyScores={leaderboard.hasAnyScores}
+            activeTeamId={activeTeamId}
+          />
+        </FadeIn>
+      )}
+
+      {view === "Squad" && (!gameweek ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-8 text-center">
           <Clock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">No gameweek is open yet for this season.</p>
@@ -406,7 +451,7 @@ export function FantasyBuilder({ teams, activeTeamId, league, gameweek, initialR
             )}
           </AnimatePresence>
         </>
-      )}
+      ))}
 
       <PlayerActionSheet
         player={selectedPlayer}

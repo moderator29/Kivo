@@ -1717,6 +1717,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_fantasy_league_leaderboard: {
+        Args: { p_team_id: string }
+        Returns: {
+          has_scores: boolean
+          owner_username: string
+          team_id: string
+          team_name: string
+          total_points: number
+        }[]
+      }
       get_fantasy_team_league: {
         Args: { p_team_id: string }
         Returns: {
