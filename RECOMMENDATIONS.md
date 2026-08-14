@@ -74,6 +74,7 @@ Status values: `Proposed`, `Accepted`, `Implemented`, `Deferred`, `Rejected`.
 
 21. **Backend** — Founder has $0 football-data budget currently. **Recommendation**: build the full `FootballDataProvider` abstraction now against API-Football's free tier, keep live polling feature-flagged off by default, dev-only mock adapter behind the same interface for UI work. **Status**: Accepted — see `DECISIONS.md`.
 22. **Security** — Supabase RLS must authorize off `auth.jwt() ->> 'sub'` (Clerk user ID) via the native third-party integration, never the deprecated JWT-template/shared-secret approach. **Status**: Accepted, in progress.
+32. **Backend** — `ApiFootballProvider.getFixturesByDate()` (and the new admin-triggered sync in `src/lib/football/sync.ts`) calls API-Football's `/fixtures?date=` with no league filter, which returns every fixture worldwide for that day — still one API call (quota-safe), but a sync will create `competitions`/`teams`/`venues` rows for leagues far outside KIVO's actual focus (Nigeria/top European leagues). **Recommendation**: once the founder confirms which competitions matter for v1, add a `leagueIds` scope to `getFixturesByDate`/`syncTodayFixtures` (API-Football supports a `league=` query param) so sync only pulls relevant competitions. **Status**: Proposed — not a data-integrity issue (everything synced is real), just an unscoped-breadth issue worth narrowing before wider rollout.
 
 ---
 

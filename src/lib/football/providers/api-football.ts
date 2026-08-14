@@ -7,11 +7,12 @@ const BASE_URL = "https://v3.football.api-sports.io";
 const FIXTURE_CACHE_SECONDS = 300;
 
 function mapStatus(shortStatus: string): FixtureStatus {
-  if (["1H", "2H", "ET", "P", "LIVE"].includes(shortStatus)) return "live";
+  if (["1H", "2H", "ET", "P", "LIVE", "BT"].includes(shortStatus)) return "live";
   if (shortStatus === "HT") return "halftime";
   if (["FT", "AET", "PEN"].includes(shortStatus)) return "finished";
   if (shortStatus === "PST") return "postponed";
-  if (["CANC", "ABD", "AWD", "WO"].includes(shortStatus)) return "cancelled";
+  if (shortStatus === "ABD") return "abandoned";
+  if (["CANC", "AWD", "WO"].includes(shortStatus)) return "cancelled";
   if (shortStatus === "NS") return "scheduled";
   return "unknown";
 }
@@ -22,9 +23,9 @@ interface ApiFootballFixtureResponse {
       id: number;
       date: string;
       status: { short: string; elapsed: number | null };
-      venue: { name: string | null };
+      venue: { id: number | null; name: string | null };
     };
-    league: { name: string; season: number };
+    league: { id: number; name: string; season: number };
     teams: {
       home: { id: number; name: string; logo: string | null };
       away: { id: number; name: string; logo: string | null };
@@ -63,6 +64,7 @@ export class ApiFootballProvider implements FootballDataProvider {
     return data.response.map((item) => ({
       provider: this.name,
       providerId: String(item.fixture.id),
+      competitionProviderId: String(item.league.id),
       competitionName: item.league.name,
       season: item.league.season,
       kickoffAt: item.fixture.date,
@@ -82,6 +84,7 @@ export class ApiFootballProvider implements FootballDataProvider {
       },
       homeScore: item.goals.home,
       awayScore: item.goals.away,
+      venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
     }));
@@ -96,6 +99,7 @@ export class ApiFootballProvider implements FootballDataProvider {
     return {
       provider: this.name,
       providerId: String(item.fixture.id),
+      competitionProviderId: String(item.league.id),
       competitionName: item.league.name,
       season: item.league.season,
       kickoffAt: item.fixture.date,
@@ -115,6 +119,7 @@ export class ApiFootballProvider implements FootballDataProvider {
       },
       homeScore: item.goals.home,
       awayScore: item.goals.away,
+      venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
     };

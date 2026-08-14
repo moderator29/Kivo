@@ -9,6 +9,7 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
   {
     provider: "mock",
     providerId: "mock-1",
+    competitionProviderId: "mock-competition-1",
     competitionName: "Nigeria Premier Football League",
     season: 2026,
     kickoffAt: new Date().toISOString(),
@@ -18,6 +19,7 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
     awayTeam: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
     homeScore: null,
     awayScore: null,
+    venueProviderId: "mock-venue-1",
     venueName: "Remo Stars Stadium",
     retrievedAt: new Date().toISOString(),
   },

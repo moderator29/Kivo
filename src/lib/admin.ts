@@ -37,3 +37,13 @@ const USER_DATA_VISIBLE_ROLES: UserRole[] = ["admin", "super_admin"];
 export function canViewUserData(role: UserRole | undefined | null): boolean {
   return !!role && USER_DATA_VISIBLE_ROLES.includes(role);
 }
+
+/** Matches the football-reference-table write policies (`*_insert_admin` /
+ * `*_update_admin` / `*_delete_admin`) and the `provider_mappings_all_admin` /
+ * `sync_runs_all_admin` policies in supabase/migrations/0001 — the only roles
+ * that can write football data or see sync history. */
+const FOOTBALL_DATA_MANAGE_ROLES: UserRole[] = ["football_data_admin", "admin", "super_admin"];
+
+export function canManageFootballData(role: UserRole | undefined | null): boolean {
+  return !!role && FOOTBALL_DATA_MANAGE_ROLES.includes(role);
+}
