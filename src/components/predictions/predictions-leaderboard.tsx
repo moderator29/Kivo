@@ -1,4 +1,5 @@
 import { Trophy } from "lucide-react";
+import { CORRECT_PREDICTION_POINTS } from "@/lib/predictions";
 
 export interface LeaderboardEntry {
   profileId: string;
@@ -15,9 +16,12 @@ export function PredictionsLeaderboard({
 }) {
   return (
     <div className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5">
-      <div className="flex items-center gap-2">
-        <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Leaderboard</h2>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Leaderboard</h2>
+        </div>
+        <span className="text-xs text-foreground-subtle">{CORRECT_PREDICTION_POINTS} pts per correct pick</span>
       </div>
 
       {entries.length === 0 ? (

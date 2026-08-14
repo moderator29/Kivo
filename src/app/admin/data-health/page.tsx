@@ -1,9 +1,11 @@
-import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle } from "lucide-react";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy } from "lucide-react";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
+import { ScorePredictionsButton } from "@/components/admin/score-predictions-button";
+import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
 
 type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
@@ -55,6 +57,28 @@ export default async function DataHealthPage() {
     .order("started_at", { ascending: false })
     .limit(10);
 
+  // predictions_select_own means an admin's own client can't see other
+  // users' rows, so this count (like the scoring pass itself) goes through
+  // the service-role client — read-only here, just to show an honest number
+  // rather than making the button a mystery click.
+  const { data: finishedFixtures } = await supabase
+    .from("fixtures")
+    .select("id")
+    .eq("status", "finished")
+    .not("home_score", "is", null)
+    .not("away_score", "is", null);
+  const finishedFixtureIds = (finishedFixtures ?? []).map((f) => f.id);
+  let unscoredPredictions = 0;
+  if (finishedFixtureIds.length > 0) {
+    const service = createServiceRoleSupabaseClient();
+    const { count } = await service
+      .from("predictions")
+      .select("id", { count: "exact", head: true })
+      .in("fixture_id", finishedFixtureIds)
+      .is("points_awarded", null);
+    unscoredPredictions = count ?? 0;
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <FadeIn className="flex flex-col gap-1">
@@ -83,6 +107,32 @@ export default async function DataHealthPage() {
           </div>
         </div>
         {providerConfigured && <FootballSyncButton />}
+      </FadeIn>
+
+      <FadeIn delay={0.1} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              unscoredPredictions > 0 ? "bg-warning/15" : "bg-white/5"
+            }`}
+          >
+            <Trophy
+              className={`h-5 w-5 ${unscoredPredictions > 0 ? "text-warning" : "text-foreground-subtle"}`}
+              strokeWidth={1.75}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {unscoredPredictions > 0
+                ? `${unscoredPredictions} prediction${unscoredPredictions === 1 ? "" : "s"} awaiting scoring`
+                : "All predictions are scored"}
+            </p>
+            <p className="text-xs text-foreground-subtle">
+              Scores every prediction against real, finished-fixture results. Correct picks earn {CORRECT_PREDICTION_POINTS} points and {CORRECT_PREDICTION_XP} XP.
+            </p>
+          </div>
+        </div>
+        <ScorePredictionsButton />
       </FadeIn>
 
       <div className="flex flex-col gap-3">
