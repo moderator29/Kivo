@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Trophy, Target, Flame, Users, ArrowRight, Shield } from "lucide-react";
-import Image from "next/image";
+import { Trophy, Target, Flame, Users, ArrowRight } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
 import { AiTeaser } from "@/components/home/ai-teaser";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured } from "@/lib/ai/client";
@@ -15,17 +15,6 @@ function greeting() {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function TeamCrest({ crestUrl, name }: { crestUrl: string | null; name: string }) {
-  if (crestUrl) {
-    return <Image src={crestUrl} alt={name} width={24} height={24} className="h-6 w-6 shrink-0 object-contain" />;
-  }
-  return (
-    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/5">
-      <Shield className="h-3 w-3 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
 }
 
 export const metadata: Metadata = { title: "Home" };
@@ -99,9 +88,9 @@ export default async function HomePage() {
                 <FixtureRow
                   key={fixture.id}
                   href={`/matches/${fixture.id}`}
-                  homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />}
+                  homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
                   homeName={fixture.home_team?.name ?? "Home"}
-                  awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />}
+                  awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
                   awayName={fixture.away_team?.name ?? "Away"}
                   scoreLabel={hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
                   live={live}

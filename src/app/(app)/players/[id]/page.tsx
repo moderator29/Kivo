@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserRound, Shield, Flag, Cake, Activity, ArrowLeftRight } from "lucide-react";
@@ -10,6 +9,7 @@ import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { TeamCrest } from "@/components/ui/team-crest";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
@@ -40,17 +40,6 @@ function calculateAge(dateOfBirth: string): number {
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-}
-
-function TeamCrest({ crestUrl, name }: { crestUrl: string | null; name: string }) {
-  if (crestUrl) {
-    return <Image src={crestUrl} alt={name} width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />;
-  }
-  return (
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/5">
-      <Shield className="h-3.5 w-3.5 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeftRight, Shield, UserRound } from "lucide-react";
+import { ArrowLeftRight, UserRound } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { NAV_ITEMS } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
@@ -32,34 +32,11 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function TeamCrest({ crestUrl, name, size = 24 }: { crestUrl: string | null; name: string | null; size?: number }) {
-  if (crestUrl) {
-    return (
-      <Image
-        src={crestUrl}
-        alt={name ?? ""}
-        width={size}
-        height={size}
-        className="shrink-0 object-contain"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-white/5"
-      style={{ width: size, height: size }}
-    >
-      <Shield className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
-}
-
 function TeamLink({ team }: { team: TeamRef | null }) {
   if (!team) {
     return (
       <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
-        <TeamCrest crestUrl={null} name={null} />
+        <TeamCrest crestUrl={null} name={null} size={24} />
         Club not synced
       </span>
     );
@@ -69,7 +46,7 @@ function TeamLink({ team }: { team: TeamRef | null }) {
       href={`/teams/${team.id}`}
       className="group -mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-xs text-foreground transition hover:bg-white/5 hover:text-kivo-cyan"
     >
-      <TeamCrest crestUrl={team.crest_url} name={team.name} />
+      <TeamCrest crestUrl={team.crest_url} name={team.name} size={24} />
       <span className="truncate transition-transform group-hover:translate-x-0.5">{team.short_name ?? team.name}</span>
     </Link>
   );

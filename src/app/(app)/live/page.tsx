@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import { Radio, Shield } from "lucide-react";
+import { Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { NAV_ITEMS } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
@@ -35,17 +35,6 @@ function formatKickoff(kickoffAt: string): string {
 function statusBadgeText(status: FixtureStatus, kickoffAt: string): string {
   if (status === "scheduled") return formatKickoff(kickoffAt);
   return STATUS_LABEL[status];
-}
-
-function TeamCrest({ crestUrl, name }: { crestUrl: string | null; name: string }) {
-  if (crestUrl) {
-    return <Image src={crestUrl} alt={name} width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />;
-  }
-  return (
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/5">
-      <Shield className="h-3.5 w-3.5 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
 }
 
 type FixtureRow = {

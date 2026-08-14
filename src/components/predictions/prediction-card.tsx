@@ -3,9 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Shield } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
 
 type Outcome = "home_win" | "draw" | "away_win";
@@ -23,17 +22,6 @@ type PredictionCardProps = {
 };
 
 const OUTCOME_LABEL: Record<Outcome, string> = { home_win: "Home", draw: "Draw", away_win: "Away" };
-
-function TeamCrest({ crestUrl, name }: { crestUrl: string | null; name: string }) {
-  if (crestUrl) {
-    return <Image src={crestUrl} alt={name} width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />;
-  }
-  return (
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/5">
-      <Shield className="h-3.5 w-3.5 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
-}
 
 export function PredictionCard({
   fixtureId,
