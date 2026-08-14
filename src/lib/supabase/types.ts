@@ -323,6 +323,48 @@ export type Database = {
           },
         ]
       }
+      fantasy_player_prices: {
+        Row: {
+          created_at: string
+          id: string
+          player_id: string
+          price: number
+          season_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_id: string
+          price?: number
+          season_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_id?: string
+          price?: number
+          season_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fantasy_player_prices_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_player_prices_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fantasy_points: {
         Row: {
           created_at: string
@@ -526,6 +568,96 @@ export type Database = {
           },
           {
             foreignKeyName: "fixture_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixture_statistics: {
+        Row: {
+          corners: number | null
+          created_at: string
+          expected_goals: number | null
+          fixture_id: string
+          fouls: number | null
+          id: string
+          offsides: number | null
+          passes_accurate: number | null
+          passes_pct: number | null
+          passes_total: number | null
+          possession_pct: number | null
+          red_cards: number | null
+          saves: number | null
+          shots_blocked: number | null
+          shots_inside_box: number | null
+          shots_off_target: number | null
+          shots_on_target: number | null
+          shots_outside_box: number | null
+          shots_total: number | null
+          team_id: string
+          updated_at: string
+          yellow_cards: number | null
+        }
+        Insert: {
+          corners?: number | null
+          created_at?: string
+          expected_goals?: number | null
+          fixture_id: string
+          fouls?: number | null
+          id?: string
+          offsides?: number | null
+          passes_accurate?: number | null
+          passes_pct?: number | null
+          passes_total?: number | null
+          possession_pct?: number | null
+          red_cards?: number | null
+          saves?: number | null
+          shots_blocked?: number | null
+          shots_inside_box?: number | null
+          shots_off_target?: number | null
+          shots_on_target?: number | null
+          shots_outside_box?: number | null
+          shots_total?: number | null
+          team_id: string
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Update: {
+          corners?: number | null
+          created_at?: string
+          expected_goals?: number | null
+          fixture_id?: string
+          fouls?: number | null
+          id?: string
+          offsides?: number | null
+          passes_accurate?: number | null
+          passes_pct?: number | null
+          passes_total?: number | null
+          possession_pct?: number | null
+          red_cards?: number | null
+          saves?: number | null
+          shots_blocked?: number | null
+          shots_inside_box?: number | null
+          shots_off_target?: number | null
+          shots_on_target?: number | null
+          shots_outside_box?: number | null
+          shots_total?: number | null
+          team_id?: string
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixture_statistics_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixture_statistics_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -1424,6 +1556,64 @@ export type Database = {
           },
         ]
       }
+      transfers: {
+        Row: {
+          created_at: string
+          fee_text: string | null
+          from_team_id: string | null
+          id: string
+          player_id: string
+          to_team_id: string | null
+          transfer_date: string
+          transfer_type: Database["public"]["Enums"]["transfer_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fee_text?: string | null
+          from_team_id?: string | null
+          id?: string
+          player_id: string
+          to_team_id?: string | null
+          transfer_date: string
+          transfer_type?: Database["public"]["Enums"]["transfer_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fee_text?: string | null
+          from_team_id?: string | null
+          id?: string
+          player_id?: string
+          to_team_id?: string | null
+          transfer_date?: string
+          transfer_type?: Database["public"]["Enums"]["transfer_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfers_from_team_id_fkey"
+            columns: ["from_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfers_to_team_id_fkey"
+            columns: ["to_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_badges: {
         Row: {
           awarded_at: string
@@ -1527,7 +1717,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_fantasy_team_league: {
+        Args: { p_team_id: string }
+        Returns: {
+          invite_code: string
+          is_private: boolean
+          league_id: string
+          league_name: string
+          max_teams: number
+          season_id: string
+          team_count: number
+        }[]
+      }
+      redeem_invite_code: {
+        Args: { p_invite_code: string }
+        Returns: {
+          id: string
+          max_teams: number
+          name: string
+          season_id: string
+        }[]
+      }
     }
     Enums: {
       ai_message_role: "system" | "user" | "assistant" | "tool"
@@ -1563,10 +1773,12 @@ export type Database = {
         | "venue"
         | "fixture"
         | "fixture_event"
+        | "transfer"
       reaction_target_type: "post" | "comment"
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
       sync_status: "running" | "success" | "partial" | "failed"
+      transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
         | "user"
         | "moderator"
@@ -1738,11 +1950,13 @@ export const Constants = {
         "venue",
         "fixture",
         "fixture_event",
+        "transfer",
       ],
       reaction_target_type: ["post", "comment"],
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
       report_status: ["pending", "reviewing", "actioned", "dismissed"],
       sync_status: ["running", "success", "partial", "failed"],
+      transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [
         "user",
         "moderator",

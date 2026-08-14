@@ -1,10 +1,144 @@
-import { ComingSoon } from "@/components/ui/coming-soon";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getOrCreateProfile } from "@/lib/profile";
+import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
+import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
+import { FantasyOnboarding } from "./fantasy-onboarding";
+import { FantasyBuilder } from "./fantasy-builder";
 
-const item = NAV_ITEMS.find((i) => i.id === "fantasy")!;
+export default async function FantasyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ team?: string }>;
+}) {
+  const { team: teamIdParam } = await searchParams;
+  const profile = await getOrCreateProfile();
 
-export default function FantasyPage() {
+  if (!profile) {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
+        <p className="text-sm text-foreground-muted">Sign in to build your fantasy squad.</p>
+      </div>
+    );
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const [{ data: teams }, { data: currentSeasons }] = await Promise.all([
+    supabase
+      .from("fantasy_teams")
+      .select("id, name")
+      .eq("owner_profile_id", profile.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("seasons")
+      .select("id, name, competition:competitions(name, short_name)")
+      .eq("is_current", true)
+      .order("name", { ascending: true }),
+  ]);
+
+  const seasonOptions = (currentSeasons ?? []).map((s) => ({
+    id: s.id,
+    label: [s.competition?.short_name ?? s.competition?.name, s.name].filter(Boolean).join(" · ") || s.name,
+  }));
+
+  if (!teams || teams.length === 0) {
+    return <FantasyOnboarding availableSeasons={seasonOptions} />;
+  }
+
+  const activeTeam = teams.find((t) => t.id === teamIdParam) ?? teams[0];
+
+  // fantasy_leagues is owner-only RLS (see the get_fantasy_team_league
+  // migration comment) — a joined-but-non-creator member can't read their
+  // league row via a plain join, so this always goes through the
+  // ownership-checked RPC instead, for creators and joiners alike.
+  const { data: leagueRows, error: leagueError } = await supabase.rpc("get_fantasy_team_league", {
+    p_team_id: activeTeam.id,
+  });
+  const league = leagueRows?.[0] ?? null;
+
+  if (leagueError || !league) {
+    return <FantasyOnboarding availableSeasons={seasonOptions} />;
+  }
+
+  const { data: gameweek } = await supabase
+    .from("fantasy_gameweeks")
+    .select("id, number, deadline_at, is_current")
+    .eq("season_id", league.season_id)
+    .eq("is_current", true)
+    .maybeSingle();
+
+  let initialRoster: {
+    playerId: string;
+    name: string;
+    position: string | null;
+    positionGroup: ReturnType<typeof positionGroup>;
+    teamName: string | null;
+    teamCrestUrl: string | null;
+    price: number;
+    isStarting: boolean;
+    isCaptain: boolean;
+    isViceCaptain: boolean;
+  }[] = [];
+  let points: number | null = null;
+  let pointsAvailable = false;
+
+  if (gameweek) {
+    const { data: roster } = await supabase
+      .from("fantasy_rosters")
+      .select(
+        `player_id, is_starting, is_captain, is_vice_captain,
+         player:players(id, full_name, known_as, position, current_team_id, team:teams(id, name, short_name, crest_url))`,
+      )
+      .eq("fantasy_team_id", activeTeam.id)
+      .eq("gameweek_id", gameweek.id);
+
+    const rosterPlayerIds = (roster ?? []).map((r) => r.player_id);
+    if (rosterPlayerIds.length > 0) await ensureFantasyPlayerPrices(league.season_id, rosterPlayerIds);
+    const priceMap = await getFantasyPriceMap(league.season_id, rosterPlayerIds);
+
+    initialRoster = (roster ?? []).map((r) => ({
+      playerId: r.player_id,
+      name: r.player?.known_as ?? r.player?.full_name ?? "Unknown player",
+      position: r.player?.position ?? null,
+      positionGroup: positionGroup(r.player?.position ?? null),
+      teamName: r.player?.team?.short_name ?? r.player?.team?.name ?? null,
+      teamCrestUrl: r.player?.team?.crest_url ?? null,
+      price: priceMap.get(r.player_id) ?? DEFAULT_FANTASY_PRICE,
+      isStarting: r.is_starting,
+      isCaptain: r.is_captain,
+      isViceCaptain: r.is_vice_captain,
+    }));
+
+    // fantasy_points is populated by a trusted server-side scoring job that
+    // doesn't exist yet (needs real finished-fixture data to compute
+    // against) — an absent row means "not scored yet", not zero.
+    const { data: pointsRow } = await supabase
+      .from("fantasy_points")
+      .select("points")
+      .eq("fantasy_team_id", activeTeam.id)
+      .eq("gameweek_id", gameweek.id)
+      .maybeSingle();
+    points = pointsRow?.points ?? null;
+    pointsAvailable = points !== null;
+  }
+
   return (
-    <ComingSoon icon={item.icon} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription!} />
+    <FantasyBuilder
+      teams={teams.map((t) => ({ id: t.id, name: t.name }))}
+      activeTeamId={activeTeam.id}
+      league={{
+        id: league.league_id,
+        name: league.league_name,
+        isPrivate: league.is_private,
+        inviteCode: league.invite_code,
+        maxTeams: league.max_teams,
+        teamCount: league.team_count,
+        seasonId: league.season_id,
+      }}
+      gameweek={gameweek ? { id: gameweek.id, number: gameweek.number, deadlineAt: gameweek.deadline_at } : null}
+      initialRoster={initialRoster}
+      points={points}
+      pointsAvailable={pointsAvailable}
+    />
   );
 }
