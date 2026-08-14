@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MapPin, Trophy, Users, UserRound, CalendarClock, History } from "lucide-react";
+import { MapPin, Trophy, Users, UserRound, CalendarClock, History, GitCompareArrows } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -264,6 +264,15 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               <span>Venue not yet synced</span>
             </div>
           )}
+        </FadeIn>
+        <FadeIn delay={0.18}>
+          <Link
+            href={`/teams/compare?a=${team.id}`}
+            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          >
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            Compare with another team
+          </Link>
         </FadeIn>
       </div>
 
