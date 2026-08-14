@@ -1717,6 +1717,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_public_profiles: {
+        Args: { p_ids: string[] }
+        Returns: {
+          avatar_url: string | null
+          display_name: string | null
+          id: string
+          username: string
+        }[]
+      }
       get_fantasy_league_leaderboard: {
         Args: { p_team_id: string }
         Returns: {

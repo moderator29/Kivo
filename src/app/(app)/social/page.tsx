@@ -14,19 +14,30 @@ export default async function SocialPage() {
 
   const { data: posts } = await supabase
     .from("posts")
-    .select("id, body, created_at, author:profiles!posts_author_profile_id_fkey(username, display_name)")
+    .select("id, body, created_at, author_profile_id")
     .order("created_at", { ascending: false })
     .limit(50);
 
   const postIds = posts?.map((p) => p.id) ?? [];
-  const { data: reactions } = postIds.length
-    ? await supabase
-        .from("reactions")
-        .select("target_id, profile_id")
-        .eq("target_type", "post")
-        .eq("reaction_type", "like")
-        .in("target_id", postIds)
-    : { data: [] };
+  // profiles_select_own_or_admin restricts a plain select to the caller's own
+  // row, so a post's author (almost always someone else) can't be read that
+  // way — go through the narrow SECURITY DEFINER function instead, same
+  // reasoning as the fantasy leaderboard RPC. Real author identity, not a
+  // fabricated placeholder.
+  const authorIds = [...new Set((posts ?? []).map((p) => p.author_profile_id))];
+  const [{ data: reactions }, { data: authors }] = await Promise.all([
+    postIds.length
+      ? supabase
+          .from("reactions")
+          .select("target_id, profile_id")
+          .eq("target_type", "post")
+          .eq("reaction_type", "like")
+          .in("target_id", postIds)
+      : Promise.resolve({ data: [] }),
+    authorIds.length ? supabase.rpc("get_public_profiles", { p_ids: authorIds }) : Promise.resolve({ data: [] }),
+  ]);
+
+  const authorById = new Map((authors ?? []).map((a) => [a.id, a]));
 
   const likesByPost = new Map<string, { count: number; likedByViewer: boolean }>();
   for (const reaction of reactions ?? []) {
@@ -57,7 +68,7 @@ export default async function SocialPage() {
         <div className="flex flex-col gap-3">
           {posts.map((post, index) => {
             const likes = likesByPost.get(post.id) ?? { count: 0, likedByViewer: false };
-            const author = post.author;
+            const author = authorById.get(post.author_profile_id);
             const authorName = author?.display_name || author?.username || "KIVO fan";
             return (
               <PostCard
