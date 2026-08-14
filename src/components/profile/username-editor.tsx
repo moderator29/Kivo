@@ -1,23 +1,47 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Pencil, Check, X } from "lucide-react";
 import { updateUsername } from "@/app/(app)/profile/actions";
 
 export function UsernameEditor({ username }: { username: string }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!justSaved) return;
+    const timeout = setTimeout(() => setJustSaved(false), 1600);
+    return () => clearTimeout(timeout);
+  }, [justSaved]);
 
   if (!editing) {
     return (
-      <button
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1.5 text-sm text-foreground-muted transition-colors hover:text-foreground"
-      >
-        @{username}
-        <Pencil className="h-3 w-3" strokeWidth={1.75} />
-      </button>
+      <span className="flex items-center gap-2">
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1.5 text-sm text-foreground-muted transition-colors hover:text-foreground"
+        >
+          @{username}
+          <Pencil className="h-3 w-3" strokeWidth={1.75} />
+        </button>
+        <AnimatePresence>
+          {justSaved && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.6 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex items-center gap-1 text-xs font-medium text-live"
+            >
+              <Check className="h-3 w-3" strokeWidth={2.5} />
+              Saved
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </span>
     );
   }
 
@@ -28,7 +52,10 @@ export function UsernameEditor({ username }: { username: string }) {
         startTransition(async () => {
           const result = await updateUsername(formData);
           if (result.error) setError(result.error);
-          else setEditing(false);
+          else {
+            setEditing(false);
+            setJustSaved(true);
+          }
         });
       }}
       className="flex flex-col gap-1.5"

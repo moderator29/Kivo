@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { SignOutButton } from "@clerk/nextjs";
-import { CircleUserRound, LogOut } from "lucide-react";
+import { CircleUserRound, LogOut, Mail, AtSign } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { UsernameEditor } from "@/components/profile/username-editor";
+import { FadeIn } from "@/components/ui/fade-in";
 
 export default async function SettingsPage() {
   const profile = await getOrCreateProfile();
@@ -28,32 +29,40 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+      <FadeIn>
+        <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+      </FadeIn>
 
-      <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
+      <FadeIn delay={0.08} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Account</h2>
 
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-foreground-subtle">Email</span>
+          <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
+            <Mail className="h-3 w-3" strokeWidth={2} />
+            Email
+          </span>
           <span className="text-sm text-foreground">{email ?? "No email on file"}</span>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-foreground-subtle">Username</span>
+        <div className="flex flex-col gap-1 border-t border-white/5 pt-3">
+          <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
+            <AtSign className="h-3 w-3" strokeWidth={2} />
+            Username
+          </span>
           <UsernameEditor username={profile.username} />
         </div>
-      </div>
+      </FadeIn>
 
-      <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
+      <FadeIn delay={0.16} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Session</h2>
         <p className="text-sm text-foreground-muted">Sign out of KIVO on this device.</p>
         <SignOutButton redirectUrl="/">
-          <button className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground">
+          <button className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95">
             <LogOut className="h-4 w-4" strokeWidth={2} />
             Sign out
           </button>
         </SignOutButton>
-      </div>
+      </FadeIn>
     </div>
   );
 }
