@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { motion } from "motion/react";
 import { toggleLike } from "@/app/(app)/social/actions";
@@ -23,15 +24,21 @@ interface PostCardProps {
   authorName: string;
   likeCount: number;
   likedByViewer: boolean;
+  signedIn: boolean;
   index?: number;
 }
 
-export function PostCard({ id, body, createdAt, authorName, likeCount, likedByViewer, index = 0 }: PostCardProps) {
+export function PostCard({ id, body, createdAt, authorName, likeCount, likedByViewer, signedIn, index = 0 }: PostCardProps) {
+  const router = useRouter();
   const [optimisticLiked, setOptimisticLiked] = useState(likedByViewer);
   const [optimisticCount, setOptimisticCount] = useState(likeCount);
   const [pending, startTransition] = useTransition();
 
   function handleLike() {
+    if (!signedIn) {
+      router.push("/sign-up");
+      return;
+    }
     // Guard against rapid double-clicks racing two toggles against the server —
     // the button is also disabled while pending, this is defense in depth.
     if (pending) return;

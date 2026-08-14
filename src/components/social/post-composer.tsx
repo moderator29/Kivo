@@ -1,11 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createPost } from "@/app/(app)/social/actions";
 
 const MAX_LENGTH = 2000;
 
-export function PostComposer() {
+export function PostComposer({ signedIn }: { signedIn: boolean }) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -14,6 +16,10 @@ export function PostComposer() {
     <form
       ref={formRef}
       action={(formData) => {
+        if (!signedIn) {
+          router.push("/sign-up");
+          return;
+        }
         setError(null);
         startTransition(async () => {
           const result = await createPost(formData);
@@ -31,7 +37,10 @@ export function PostComposer() {
         required
         maxLength={MAX_LENGTH}
         rows={3}
-        placeholder="What's your take?"
+        placeholder={signedIn ? "What's your take?" : "Sign up to share your take."}
+        onFocus={(e) => {
+          if (!signedIn) e.currentTarget.blur();
+        }}
         className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none"
       />
       <div className="flex items-center justify-between">
@@ -41,7 +50,7 @@ export function PostComposer() {
           disabled={pending}
           className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {pending ? "Posting…" : "Post"}
+          {pending ? "Posting…" : signedIn ? "Post" : "Sign up to post"}
         </button>
       </div>
     </form>

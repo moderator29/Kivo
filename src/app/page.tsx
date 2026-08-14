@@ -56,7 +56,7 @@ export default function LandingPage() {
       <main className="flex flex-1 flex-col">
         <section className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-6 py-20 text-center lg:py-32">
           <FadeIn className="flex flex-col items-center gap-6">
-            <Image src={kivoLogo} alt="" width={144} height={144} className="h-28 w-28 lg:h-36 lg:w-36" priority />
+            <Image src={kivoLogo} alt="" width={200} height={200} className="h-36 w-36 lg:h-48 lg:w-48" priority />
             <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
               Football. Together. Live.
             </span>
@@ -69,7 +69,7 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/sign-up"
+                href="/home"
                 className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition-opacity hover:opacity-90"
               >
                 Get started

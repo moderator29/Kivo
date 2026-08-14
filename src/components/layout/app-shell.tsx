@@ -6,7 +6,7 @@ import { TopBar } from "./top-bar";
 import { PageTransition } from "./page-transition";
 import { isAiConfigured } from "@/lib/ai/client";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, signedIn }: { children: ReactNode; signedIn: boolean }) {
   const aiConfigured = isAiConfigured();
 
   return (
@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen bg-background">
         <DesktopSidebar aiConfigured={aiConfigured} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
+          <TopBar signedIn={signedIn} />
           <main className="flex flex-1 flex-col pb-20 lg:pb-0">
             <PageTransition>{children}</PageTransition>
           </main>

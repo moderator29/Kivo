@@ -58,13 +58,20 @@
   --color-info: var(--kivo-info);
   --color-achievement: var(--kivo-achievement);
 
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-jakarta);
   --font-mono: var(--font-geist-mono);
+}
+
+html {
+  /* Bumped from the 16px default so the whole rem-based type scale reads a
+     little larger and more confident, per founder direction. */
+  font-size: 17px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
 ::selection {

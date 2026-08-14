@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Shield } from "lucide-react";
 import Image from "next/image";
@@ -18,6 +19,7 @@ type PredictionCardProps = {
   homeTeam: Team;
   awayTeam: Team;
   initialPrediction: Outcome | null;
+  signedIn: boolean;
 };
 
 const OUTCOME_LABEL: Record<Outcome, string> = { home_win: "Home", draw: "Draw", away_win: "Away" };
@@ -40,12 +42,18 @@ export function PredictionCard({
   homeTeam,
   awayTeam,
   initialPrediction,
+  signedIn,
 }: PredictionCardProps) {
+  const router = useRouter();
   const [prediction, setPrediction] = useState<Outcome | null>(initialPrediction);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function handlePick(outcome: Outcome) {
+    if (!signedIn) {
+      router.push("/sign-up");
+      return;
+    }
     if (pending || outcome === prediction) return;
     setError(null);
     const previous = prediction;

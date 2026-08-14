@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import kivoLogo from "../../../public/brand/kivo-logo.png";
 
 export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
   const pathname = usePathname();
@@ -12,7 +14,7 @@ export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/5 bg-kivo-navy-deep/60 px-3 py-6 lg:flex">
       <Link href="/home" className="flex items-center gap-2 px-3 pb-8">
-        <span className="kivo-gradient-prime h-7 w-7 rounded-lg" aria-hidden />
+        <Image src={kivoLogo} alt="" width={36} height={36} className="h-9 w-9 shrink-0" priority />
         <span className="text-lg font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
 

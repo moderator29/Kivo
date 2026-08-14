@@ -1,9 +1,25 @@
+import Link from "next/link";
 import { CircleUserRound } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { UsernameEditor } from "@/components/profile/username-editor";
 
 export default async function ProfilePage() {
   const profile = await getOrCreateProfile();
+
+  if (!profile) {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
+        <CircleUserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
+        <p className="text-sm text-foreground-muted">Sign up to set up your KIVO profile.</p>
+        <Link
+          href="/sign-up"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+        >
+          Sign up
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -12,8 +28,8 @@ export default async function ProfilePage() {
           <CircleUserRound className="h-8 w-8 text-kivo-white" strokeWidth={1.5} />
         </div>
         <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-foreground">{profile?.display_name || "Your profile"}</h1>
-          {profile && <UsernameEditor username={profile.username} />}
+          <h1 className="text-lg font-semibold text-foreground">{profile.display_name || "Your profile"}</h1>
+          <UsernameEditor username={profile.username} />
         </div>
       </div>
 

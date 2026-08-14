@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
@@ -16,7 +17,13 @@ export default async function FantasyPage({
   if (!profile) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
-        <p className="text-sm text-foreground-muted">Sign in to build your fantasy squad.</p>
+        <p className="text-sm text-foreground-muted">Sign up to build your fantasy squad.</p>
+        <Link
+          href="/sign-up"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+        >
+          Sign up
+        </Link>
       </div>
     );
   }

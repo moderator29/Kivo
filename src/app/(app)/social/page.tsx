@@ -36,7 +36,7 @@ export default async function SocialPage() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 lg:px-8">
       <h1 className="text-xl font-semibold text-foreground">Community</h1>
 
-      <PostComposer />
+      <PostComposer signedIn={Boolean(profile)} />
 
       {!posts || posts.length === 0 ? (
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
@@ -60,6 +60,7 @@ export default async function SocialPage() {
                 authorName={authorName}
                 likeCount={likes.count}
                 likedByViewer={likes.likedByViewer}
+                signedIn={Boolean(profile)}
                 index={index}
               />
             );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Sparkles, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,8 @@ const SUGGESTIONS = [
   "What data does KIVO have synced today?",
 ];
 
-export function AiChat() {
+export function AiChat({ signedIn }: { signedIn: boolean }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -27,6 +29,11 @@ export function AiChat() {
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || pending) return;
+
+    if (!signedIn) {
+      router.push("/sign-up");
+      return;
+    }
 
     setError(null);
     setInput("");

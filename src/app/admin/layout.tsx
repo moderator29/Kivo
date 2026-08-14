@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
 import { isClerkConfigured } from "@/lib/clerk";
+import kivoLogo from "../../../public/brand/kivo-logo.png";
 
 // See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
 // the auth check alone.
@@ -38,7 +40,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-white/5 bg-kivo-navy-deep/60 px-3 py-6 lg:flex">
         <div className="flex items-center gap-2 px-3 pb-8">
-          <span className="kivo-gradient-victory h-7 w-7 rounded-lg" aria-hidden />
+          <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
           <span className="text-base font-semibold tracking-tight text-foreground">KIVO Admin</span>
         </div>
         <nav className="flex flex-col gap-0.5">

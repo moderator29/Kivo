@@ -68,6 +68,7 @@ export default async function PredictionsPage() {
               crest_url: fixture.away_team?.crest_url ?? null,
             }}
             initialPrediction={predictionByFixture.get(fixture.id) ?? null}
+            signedIn={Boolean(profile)}
           />
         ))}
       </div>

@@ -1,9 +1,9 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Flame, Award } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
-import { ComingSoon } from "@/components/ui/coming-soon";
 import { NAV_ITEMS } from "@/lib/navigation";
 
 const item = NAV_ITEMS.find((i) => i.id === "rewards")!;
@@ -12,7 +12,16 @@ export default async function RewardsPage() {
   const profile = await getOrCreateProfile();
   if (!profile) {
     return (
-      <ComingSoon icon={item.icon} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription!} />
+      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
+        <item.icon className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
+        <p className="text-sm text-foreground-muted">Sign up to start earning XP and badges.</p>
+        <Link
+          href="/sign-up"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+        >
+          Sign up
+        </Link>
+      </div>
     );
   }
 
