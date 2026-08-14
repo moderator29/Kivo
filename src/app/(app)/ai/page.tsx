@@ -4,6 +4,8 @@ import { AiChat } from "@/components/ai/chat";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getOrCreateProfile } from "@/lib/profile";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { ConversationSummary } from "./actions";
 
 const item = NAV_ITEMS.find((i) => i.id === "ai")!;
 
@@ -17,5 +19,18 @@ export default async function AiCopilotPage() {
   }
 
   const profile = await getOrCreateProfile();
-  return <AiChat signedIn={Boolean(profile)} />;
+
+  let initialConversations: ConversationSummary[] = [];
+  if (profile) {
+    const supabase = createServerSupabaseClient();
+    const { data } = await supabase
+      .from("ai_conversations")
+      .select("id, title, updated_at")
+      .eq("profile_id", profile.id)
+      .order("updated_at", { ascending: false })
+      .limit(50);
+    initialConversations = data ?? [];
+  }
+
+  return <AiChat signedIn={Boolean(profile)} initialConversations={initialConversations} />;
 }

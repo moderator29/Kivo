@@ -130,6 +130,18 @@ export async function POST(req: Request) {
       console.error("Failed to persist assistant message", insertAssistantError);
     }
 
+    // ai_conversations.updated_at only moves on an update to that row itself
+    // (trg_ai_conversations_updated_at) — inserting into ai_messages doesn't
+    // touch it. The history list orders by updated_at as "most recent
+    // activity", so touch it here on every turn, not just on rename.
+    const { error: touchError } = await supabase
+      .from("ai_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+    if (touchError) {
+      console.error("Failed to bump AI conversation updated_at", touchError);
+    }
+
     return NextResponse.json({ conversationId, reply });
   } catch (err) {
     console.error("Anthropic request failed", err);

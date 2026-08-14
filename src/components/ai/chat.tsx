@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { Sparkles, ArrowUp } from "lucide-react";
+import { Sparkles, ArrowUp, SquarePen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ConversationHistoryPanel } from "@/components/ai/conversation-history";
+import { loadConversationMessages, renameConversation, deleteConversation, type ConversationSummary } from "@/app/(app)/ai/actions";
 
 interface ChatMessage {
   id: string;
@@ -18,14 +20,22 @@ const SUGGESTIONS = [
   "What data does KIVO have synced today?",
 ];
 
-export function AiChat({ signedIn }: { signedIn: boolean }) {
+export function AiChat({
+  signedIn,
+  initialConversations = [],
+}: {
+  signedIn: boolean;
+  initialConversations?: ConversationSummary[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const conversationId = useRef<string | undefined>(undefined);
+  const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
+  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
+  const [loadingConversation, setLoadingConversation] = useState(false);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -42,11 +52,13 @@ export function AiChat({ signedIn }: { signedIn: boolean }) {
     setMessages((prev) => [...prev, userMessage]);
     setPending(true);
 
+    const isNewConversation = !activeConversationId;
+
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: conversationId.current, message: trimmed }),
+        body: JSON.stringify({ conversationId: activeConversationId, message: trimmed }),
       });
       const data = await res.json();
 
@@ -55,13 +67,84 @@ export function AiChat({ signedIn }: { signedIn: boolean }) {
         return;
       }
 
-      conversationId.current = data.conversationId;
+      const returnedId: string = data.conversationId;
+      setActiveConversationId(returnedId);
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: data.reply }]);
+
+      // Keep the history list in sync without a refetch: brand-new
+      // conversations get prepended (title mirrors the server's derivation —
+      // see /api/ai/chat/route.ts), existing ones just move to the top since
+      // sending bumps ai_conversations.updated_at server-side.
+      const now = new Date().toISOString();
+      setConversations((prev) => {
+        if (isNewConversation) {
+          return [{ id: returnedId, title: trimmed.slice(0, 80), updated_at: now }, ...prev];
+        }
+        return [
+          { ...(prev.find((c) => c.id === returnedId) ?? { id: returnedId, title: trimmed.slice(0, 80) }), updated_at: now },
+          ...prev.filter((c) => c.id !== returnedId),
+        ];
+      });
     } catch {
       setError("Couldn't reach KIVO's AI Copilot. Check your connection and try again.");
     } finally {
       setPending(false);
     }
+  }
+
+  async function handleSelectConversation(id: string) {
+    if (id === activeConversationId || loadingConversation) return;
+    setError(null);
+    setLoadingConversation(true);
+    setMessages([]);
+    const result = await loadConversationMessages(id);
+    if (result.error !== null) {
+      setError(result.error);
+    } else {
+      setActiveConversationId(id);
+      setMessages(result.messages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content })));
+    }
+    setLoadingConversation(false);
+  }
+
+  function handleNewConversation() {
+    setActiveConversationId(undefined);
+    setMessages([]);
+    setError(null);
+  }
+
+  async function handleRenameConversation(id: string, title: string) {
+    const previous = conversations;
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+    const result = await renameConversation(id, title);
+    if (result.error) setConversations(previous);
+    return result;
+  }
+
+  async function handleDeleteConversation(id: string) {
+    const previous = conversations;
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    const wasActive = id === activeConversationId;
+    if (wasActive) {
+      setActiveConversationId(undefined);
+      setMessages([]);
+    }
+    const result = await deleteConversation(id);
+    if (result.error) {
+      setConversations(previous);
+      // The active chat view was already cleared optimistically above — a
+      // failed delete needs its messages back, not just the sidebar row, so
+      // re-fetch rather than leave the user staring at an empty conversation
+      // that the sidebar now claims still exists.
+      if (wasActive) {
+        setActiveConversationId(id);
+        const reloaded = await loadConversationMessages(id);
+        if (reloaded.error === null) {
+          setMessages(reloaded.messages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content })));
+        }
+      }
+    }
+    return result;
   }
 
   return (
@@ -79,11 +162,50 @@ export function AiChat({ signedIn }: { signedIn: boolean }) {
         >
           <Sparkles className="h-4 w-4 text-kivo-white" strokeWidth={1.75} />
         </motion.div>
-        <h1 className="text-lg font-semibold text-foreground">AI Copilot</h1>
+        <h1 className="flex-1 text-lg font-semibold text-foreground">AI Copilot</h1>
+
+        {signedIn && (
+          <div className="flex items-center gap-1.5">
+            <motion.button
+              type="button"
+              onClick={handleNewConversation}
+              disabled={messages.length === 0 && !activeConversationId}
+              aria-label="New conversation"
+              whileTap={{ scale: 0.92 }}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+            >
+              <SquarePen className="h-4 w-4" strokeWidth={1.75} />
+            </motion.button>
+            <ConversationHistoryPanel
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              onSelect={handleSelectConversation}
+              onRename={handleRenameConversation}
+              onDelete={handleDeleteConversation}
+            />
+          </div>
+        )}
       </motion.div>
 
       <div className="flex flex-1 flex-col gap-3">
-        {messages.length === 0 && (
+        {loadingConversation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="kivo-glass mr-auto flex items-center gap-1 rounded-2xl px-4 py-3"
+          >
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="h-1.5 w-1.5 rounded-full bg-foreground-subtle"
+                animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+                transition={{ duration: 1, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+              />
+            ))}
+          </motion.div>
+        )}
+
+        {!loadingConversation && messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
