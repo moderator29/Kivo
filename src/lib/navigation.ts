@@ -15,6 +15,7 @@ import {
   Sparkles,
   Award,
   CircleUserRound,
+  Settings,
 } from "lucide-react";
 
 export type NavStatus = "live" | "coming-soon";
@@ -136,5 +137,6 @@ export const NAV_ITEMS: NavItem[] = [
     comingSoonImage: "/assets/icons/navigation/ai-copilot.webp",
   },
   { id: "rewards", label: "Rewards", href: "/rewards", icon: Award, status: "live" },
+  { id: "settings", label: "Settings", href: "/settings", icon: Settings, status: "live" },
   { id: "profile", label: "Profile", href: "/profile", icon: CircleUserRound, status: "live" },
 ];
