@@ -8,6 +8,16 @@ export default function MatchesLoading() {
         <Skeleton className="h-4 w-64" />
       </div>
 
+      <div className="flex items-center gap-1.5">
+        <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+        <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-11 shrink-0 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+      </div>
+
       <div className="flex flex-col gap-2">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">

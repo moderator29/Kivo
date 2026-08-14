@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { TransfersFilters } from "@/components/transfers/transfers-filters";
 import { NAV_ITEMS } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
@@ -25,6 +26,14 @@ const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
   end_of_loan: "End of loan",
   unknown: "Fee undisclosed",
 };
+
+// Matches the exact `transfer_type` enum in supabase/migrations/0006_transfers.sql —
+// the filter dropdown's option list has to stay a subset of real values, never a
+// fabricated taxonomy of its own.
+const TRANSFER_TYPES = Object.keys(TRANSFER_TYPE_LABEL) as TransferType[];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type TeamRef = { id: string; name: string; short_name: string | null; crest_url: string | null };
 
@@ -52,10 +61,24 @@ function TeamLink({ team }: { team: TeamRef | null }) {
   );
 }
 
-export default async function TransfersPage() {
+export default async function TransfersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string; club?: string; from?: string; to?: string }>;
+}) {
+  const { type: typeParam, club: clubParam, from: fromParam, to: toParam } = await searchParams;
   const supabase = createServerSupabaseClient();
 
-  const { data: transfers } = await supabase
+  // Never trust the search params directly in a `.or()`/`.eq()` filter string
+  // without validating shape first — an allow-listed enum value, a real UUID,
+  // a real date, or the filter is simply skipped.
+  const validType = typeParam && TRANSFER_TYPES.includes(typeParam as TransferType) ? (typeParam as TransferType) : null;
+  const validClub = clubParam && UUID_RE.test(clubParam) ? clubParam : null;
+  const validFrom = fromParam && DATE_RE.test(fromParam) ? fromParam : null;
+  const validTo = toParam && DATE_RE.test(toParam) ? toParam : null;
+  const hasActiveFilters = Boolean(validType || validClub || validFrom || validTo);
+
+  let request = supabase
     .from("transfers")
     .select(
       `id, transfer_date, fee_text, transfer_type,
@@ -63,10 +86,30 @@ export default async function TransfersPage() {
        from_team:teams!transfers_from_team_id_fkey(id, name, short_name, crest_url),
        to_team:teams!transfers_to_team_id_fkey(id, name, short_name, crest_url)`,
     )
-    .order("transfer_date", { ascending: false })
-    .limit(50);
+    .order("transfer_date", { ascending: false });
 
-  if (!transfers || transfers.length === 0) {
+  // Every filter applied server-side, before `.limit()` — the exact bug
+  // already found and fixed once in searchFantasyPlayers (filtering in JS
+  // after the limit only ever searches whichever rows happened to land in
+  // the first page).
+  if (validType) request = request.eq("transfer_type", validType);
+  if (validClub) request = request.or(`from_team_id.eq.${validClub},to_team_id.eq.${validClub}`);
+  if (validFrom) request = request.gte("transfer_date", validFrom);
+  if (validTo) request = request.lte("transfer_date", validTo);
+
+  const [{ data: transfers }, { data: clubRows }] = await Promise.all([
+    request.limit(50),
+    supabase.from("teams").select("id, name, short_name").order("name", { ascending: true }),
+  ]);
+
+  const clubs = (clubRows ?? []).map((c) => ({ id: c.id, name: c.name, shortName: c.short_name }));
+  const transferTypeOptions = TRANSFER_TYPES.map((value) => ({ value, label: TRANSFER_TYPE_LABEL[value] }));
+
+  // Nothing synced at all yet (no filters applied, still zero rows) keeps the
+  // original full-page "coming soon" state. A filtered query that happens to
+  // match nothing gets an inline empty message instead, further down, so the
+  // filters themselves stay on screen to adjust.
+  if (!hasActiveFilters && (!transfers || transfers.length === 0)) {
     return (
       <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
     );
@@ -95,53 +138,71 @@ export default async function TransfersPage() {
         </p>
       </FadeIn>
 
-      <div className="flex flex-col gap-2">
-        {transfers.map((transfer, index) => {
-          const playerName = transfer.player ? (transfer.player.known_as ?? transfer.player.full_name) : null;
+      <FadeIn delay={0.03}>
+        <TransfersFilters
+          clubs={clubs}
+          transferTypes={transferTypeOptions}
+          initialType={validType ?? "All"}
+          initialClubId={validClub ?? "All"}
+          initialFrom={validFrom ?? ""}
+          initialTo={validTo ?? ""}
+        />
+      </FadeIn>
 
-          return (
-            <FadeIn key={transfer.id} delay={Math.min(index * 0.03, 0.3)}>
-              <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
-                <div className="flex items-center justify-between gap-3">
-                  {transfer.player && playerName ? (
-                    <Link
-                      href={`/players/${transfer.player.id}`}
-                      className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-kivo-cyan"
-                    >
-                      <UserRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-                      <span className="truncate">{playerName}</span>
-                    </Link>
-                  ) : (
-                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground-subtle">
-                      <UserRound className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                      Unknown player
+      {!transfers || transfers.length === 0 ? (
+        <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-16 text-center">
+          <p className="text-sm text-foreground-muted">No transfers match those filters.</p>
+          <p className="max-w-xs text-xs text-foreground-subtle">Try widening the type, club, or date range above.</p>
+        </FadeIn>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {transfers.map((transfer, index) => {
+            const playerName = transfer.player ? (transfer.player.known_as ?? transfer.player.full_name) : null;
+
+            return (
+              <FadeIn key={transfer.id} delay={Math.min(index * 0.03, 0.3)}>
+                <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
+                  <div className="flex items-center justify-between gap-3">
+                    {transfer.player && playerName ? (
+                      <Link
+                        href={`/players/${transfer.player.id}`}
+                        className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-kivo-cyan"
+                      >
+                        <UserRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                        <span className="truncate">{playerName}</span>
+                      </Link>
+                    ) : (
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground-subtle">
+                        <UserRound className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                        Unknown player
+                      </span>
+                    )}
+                    <span className="shrink-0 text-xs tabular-nums text-foreground-subtle">
+                      {formatDate(transfer.transfer_date)}
                     </span>
-                  )}
-                  <span className="shrink-0 text-xs tabular-nums text-foreground-subtle">
-                    {formatDate(transfer.transfer_date)}
-                  </span>
-                </div>
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <TeamLink team={transfer.from_team} />
-                  <ArrowLeftRight
-                    className="h-3.5 w-3.5 shrink-0 animate-[kivo-transfer-arrow-nudge_3.4s_ease-in-out_infinite] text-foreground-subtle"
-                    strokeWidth={1.75}
-                  />
-                  <TeamLink team={transfer.to_team} />
-                </div>
+                  <div className="flex items-center gap-2">
+                    <TeamLink team={transfer.from_team} />
+                    <ArrowLeftRight
+                      className="h-3.5 w-3.5 shrink-0 animate-[kivo-transfer-arrow-nudge_3.4s_ease-in-out_infinite] text-foreground-subtle"
+                      strokeWidth={1.75}
+                    />
+                    <TeamLink team={transfer.to_team} />
+                  </div>
 
-                <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-                  <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
-                    {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "—"}</span>
+                  <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+                      {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "—"}</span>
+                  </div>
                 </div>
-              </div>
-            </FadeIn>
-          );
-        })}
-      </div>
+              </FadeIn>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

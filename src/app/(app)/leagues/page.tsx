@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
-import { Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
+import { LeaguesList } from "@/components/leagues/leagues-list";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { LEAGUES_PAGE_SIZE } from "./constants";
 
 const item = NAV_ITEMS.find((i) => i.id === "leagues")!;
 
@@ -14,12 +13,30 @@ export const metadata: Metadata = { title: item.label };
 export default async function LeaguesPage() {
   const supabase = createServerSupabaseClient();
 
-  const { data: competitions } = await supabase
+  // Fetches one extra row beyond the page size so "hasMore" can be read
+  // directly off the response, matching the same trick `loadMoreLeagues` uses
+  // for every subsequent page.
+  const { data } = await supabase
     .from("competitions")
-    .select("id, name, short_name, country, logo_url, seasons(id, name, is_current)")
-    .order("name", { ascending: true });
+    .select("id, name, country, logo_url, seasons(id, name, is_current)")
+    .order("name", { ascending: true })
+    .range(0, LEAGUES_PAGE_SIZE);
 
-  if (!competitions || competitions.length === 0) {
+  const rows = data ?? [];
+  const leagues = rows.slice(0, LEAGUES_PAGE_SIZE).map((competition) => {
+    const currentSeason = competition.seasons?.find((s) => s.is_current) ?? competition.seasons?.[0] ?? null;
+    return {
+      id: competition.id,
+      name: competition.name,
+      country: competition.country,
+      logoUrl: competition.logo_url,
+      currentSeasonName: currentSeason?.name ?? null,
+      hasSeason: currentSeason !== null,
+    };
+  });
+  const hasMore = rows.length > LEAGUES_PAGE_SIZE;
+
+  if (leagues.length === 0) {
     return (
       <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
     );
@@ -32,34 +49,7 @@ export default async function LeaguesPage() {
         <p className="text-sm text-foreground-muted">Competitions synced from today&apos;s fixtures.</p>
       </FadeIn>
 
-      <div className="flex flex-col gap-2">
-        {competitions.map((competition, index) => {
-          const currentSeason = competition.seasons?.find((s) => s.is_current) ?? competition.seasons?.[0];
-          return (
-            <FadeIn key={competition.id} delay={Math.min(index * 0.03, 0.3)}>
-              <Link
-                href={currentSeason ? `/leagues/${competition.id}` : "#"}
-                className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-              >
-                {competition.logo_url ? (
-                  <Image src={competition.logo_url} alt={competition.name} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
-                ) : (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
-                    <Trophy className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-foreground">{competition.name}</span>
-                  <span className="text-xs text-foreground-subtle">
-                    {competition.country ?? "International"}
-                    {currentSeason ? ` · ${currentSeason.name}` : ""}
-                  </span>
-                </div>
-              </Link>
-            </FadeIn>
-          );
-        })}
-      </div>
+      <LeaguesList initialLeagues={leagues} initialHasMore={hasMore} />
     </div>
   );
 }

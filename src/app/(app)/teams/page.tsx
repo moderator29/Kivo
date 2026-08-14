@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
-import { Shield } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
+import { TeamsGrid } from "@/components/teams/teams-grid";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { TEAMS_PAGE_SIZE } from "./constants";
 
 const item = NAV_ITEMS.find((i) => i.id === "teams")!;
 
@@ -14,12 +13,26 @@ export const metadata: Metadata = { title: item.label };
 export default async function TeamsPage() {
   const supabase = createServerSupabaseClient();
 
-  const { data: teams } = await supabase
+  // Fetches one extra row beyond the page size so "hasMore" can be read
+  // directly off the response, matching the same trick `loadMoreTeams` uses
+  // for every subsequent page.
+  const { data } = await supabase
     .from("teams")
     .select("id, name, short_name, country, crest_url")
-    .order("name", { ascending: true });
+    .order("name", { ascending: true })
+    .range(0, TEAMS_PAGE_SIZE);
 
-  if (!teams || teams.length === 0) {
+  const rows = data ?? [];
+  const teams = rows.slice(0, TEAMS_PAGE_SIZE).map((t) => ({
+    id: t.id,
+    name: t.name,
+    shortName: t.short_name,
+    country: t.country,
+    crestUrl: t.crest_url,
+  }));
+  const hasMore = rows.length > TEAMS_PAGE_SIZE;
+
+  if (teams.length === 0) {
     return (
       <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
     );
@@ -32,26 +45,7 @@ export default async function TeamsPage() {
         <p className="text-sm text-foreground-muted">Clubs synced from today&apos;s fixtures.</p>
       </FadeIn>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {teams.map((team, index) => (
-          <FadeIn key={team.id} delay={Math.min(index * 0.03, 0.3)}>
-            <Link
-              href={`/teams/${team.id}`}
-              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-            >
-              {team.crest_url ? (
-                <Image src={team.crest_url} alt={team.name} width={36} height={36} className="h-9 w-9 object-contain" />
-              ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5">
-                  <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-                </div>
-              )}
-              <span className="truncate text-xs font-semibold text-foreground">{team.short_name ?? team.name}</span>
-              {team.country && <span className="truncate text-[10px] text-foreground-subtle">{team.country}</span>}
-            </Link>
-          </FadeIn>
-        ))}
-      </div>
+      <TeamsGrid initialTeams={teams} initialHasMore={hasMore} />
     </div>
   );
 }

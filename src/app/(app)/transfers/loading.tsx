@@ -8,6 +8,12 @@ export default function TransfersLoading() {
         <Skeleton className="h-4 w-72" />
       </div>
 
+      <div className="kivo-glass-sharp grid grid-cols-2 gap-3 rounded-2xl p-4 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-9 w-full rounded-lg" />
+        ))}
+      </div>
+
       <div className="flex flex-col gap-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
