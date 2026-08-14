@@ -48,6 +48,12 @@ Status values: `Proposed`, `Accepted`, `Implemented`, `Deferred`, `Rejected`.
 
 ---
 
+## Brand assets
+
+23. **UI** — The only logo source provided renders with a soft, irregular alpha gradient rather than a clean cutout (confirmed via direct pixel/histogram inspection and a failed threshold attempt) — unusable for anything but a solid dark background. **Recommendation**: request a clean-alpha or vector (SVG) export of the KIVO mark from whoever produced the original artwork, ideally including a dedicated small-size/favicon mark and a flat monochrome variant (both explicitly called for in the brand directive but not present in what was supplied). **Expected benefit**: unblocks light-background placements, app-icon generation, and any future white-label/press-kit use. **Effort**: Low (once source exists) — this is a request, not build work. **Priority**: Next. **Status**: Proposed.
+
+---
+
 ## Architecture / Infra
 
 21. **Backend** — Founder has $0 football-data budget currently. **Recommendation**: build the full `FootballDataProvider` abstraction now against API-Football's free tier, keep live polling feature-flagged off by default, dev-only mock adapter behind the same interface for UI work. **Status**: Accepted — see `DECISIONS.md`.
