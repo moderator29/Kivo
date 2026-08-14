@@ -62,7 +62,7 @@ export default async function DataHealthPage() {
         <p className="text-sm text-foreground-muted">Football data provider status and sync jobs.</p>
       </FadeIn>
 
-      <FadeIn delay={0.05} className="kivo-glass flex items-center justify-between gap-4 rounded-2xl p-5">
+      <FadeIn delay={0.08} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
@@ -85,22 +85,28 @@ export default async function DataHealthPage() {
         {providerConfigured && <FootballSyncButton />}
       </FadeIn>
 
-      <FadeIn delay={0.1} className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Recent sync runs</h2>
+      <div className="flex flex-col gap-3">
+        <FadeIn delay={0.16}>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Recent sync runs</h2>
+        </FadeIn>
 
         {!syncRuns || syncRuns.length === 0 ? (
-          <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
+          <FadeIn delay={0.2} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
             {providerConfigured
               ? "No syncs have run yet. Use Sync now above to pull today's fixtures."
               : "No syncs have run yet."}
-          </div>
+          </FadeIn>
         ) : (
           <div className="flex flex-col gap-2">
-            {syncRuns.map((run) => {
+            {syncRuns.map((run, index) => {
               const style = STATUS_STYLE[run.status];
               const StatusIcon = style.icon;
               return (
-                <div key={run.id} className="kivo-glass flex flex-col gap-2 rounded-xl p-4">
+                <FadeIn
+                  key={run.id}
+                  delay={Math.min(0.2 + index * 0.05, 0.5)}
+                  className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-white/[0.03]"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm text-foreground">
@@ -122,12 +128,12 @@ export default async function DataHealthPage() {
                   {run.error_message && (
                     <p className="rounded-lg bg-critical/5 px-3 py-2 text-xs text-critical">{run.error_message}</p>
                   )}
-                </div>
+                </FadeIn>
               );
             })}
           </div>
         )}
-      </FadeIn>
+      </div>
     </div>
   );
 }

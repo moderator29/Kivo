@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
+import { MotionConfig } from "motion/react";
 import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
@@ -37,31 +38,33 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-white/5 bg-kivo-navy-deep/60 px-3 py-6 lg:flex">
-        <div className="flex items-center gap-2 px-3 pb-8">
-          <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
-          <span className="text-base font-semibold tracking-tight text-foreground">KIVO Admin</span>
-        </div>
-        <nav className="flex flex-col gap-0.5">
-          {ADMIN_NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground-muted transition-colors hover:bg-white/[0.04] hover:text-foreground"
-            >
-              <item.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-              {item.label}
+    <MotionConfig reducedMotion="user">
+      <div className="flex min-h-screen bg-background">
+        <aside className="hidden w-60 shrink-0 flex-col border-r border-white/5 bg-kivo-navy-deep/60 px-3 py-6 lg:flex">
+          <div className="flex items-center gap-2 px-3 pb-8">
+            <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+            <span className="text-base font-semibold tracking-tight text-foreground">KIVO Admin</span>
+          </div>
+          <nav className="flex flex-col gap-0.5">
+            {ADMIN_NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground-muted transition-colors hover:bg-white/[0.04] hover:text-foreground"
+              >
+                <item.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-auto px-3 pt-6">
+            <Link href="/home" className="text-xs text-foreground-subtle hover:text-foreground-muted">
+              ← Back to KIVO
             </Link>
-          ))}
-        </nav>
-        <div className="mt-auto px-3 pt-6">
-          <Link href="/home" className="text-xs text-foreground-subtle hover:text-foreground-muted">
-            ← Back to KIVO
-          </Link>
-        </div>
-      </aside>
-      <main className="flex-1 px-4 py-8 lg:px-10">{children}</main>
-    </div>
+          </div>
+        </aside>
+        <main className="flex-1 px-4 py-8 lg:px-10">{children}</main>
+      </div>
+    </MotionConfig>
   );
 }

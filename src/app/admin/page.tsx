@@ -60,13 +60,15 @@ export default async function AdminOverviewPage() {
         <p className="text-sm text-foreground-muted">What&apos;s happening on KIVO right now.</p>
       </FadeIn>
 
-      <FadeIn delay={0.05} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.label} icon={stat.icon} label={stat.label} value={stat.value} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {stats.map((stat, index) => (
+          <FadeIn key={stat.label} delay={0.08 + index * 0.05}>
+            <StatCard icon={stat.icon} label={stat.label} value={stat.value} />
+          </FadeIn>
         ))}
-      </FadeIn>
+      </div>
 
-      <FadeIn delay={0.1} className="kivo-glass rounded-2xl p-5">
+      <FadeIn delay={0.32} className="kivo-glass-brand rounded-2xl p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">System status</h2>
         <p className="mt-2 text-sm text-foreground-muted">
           No football data provider is connected yet (API-Football free tier is architected but not enabled; see

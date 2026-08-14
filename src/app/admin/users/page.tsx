@@ -2,6 +2,7 @@ import { Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewUserData } from "@/lib/admin";
+import { FadeIn } from "@/components/ui/fade-in";
 
 export default async function AdminUsersPage() {
   const profile = await getOrCreateProfile();
@@ -30,12 +31,12 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Users</h1>
         <p className="text-sm text-foreground-muted">Most recently joined, newest first.</p>
-      </div>
+      </FadeIn>
 
-      <div className="kivo-glass overflow-x-auto rounded-2xl">
+      <FadeIn delay={0.08} className="kivo-glass-brand overflow-x-auto rounded-2xl">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-foreground-subtle">
@@ -47,7 +48,7 @@ export default async function AdminUsersPage() {
           </thead>
           <tbody>
             {(users ?? []).map((user) => (
-              <tr key={user.id} className="border-b border-white/5 last:border-0">
+              <tr key={user.id} className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.03]">
                 <td className="px-4 py-3 text-foreground">{user.username}</td>
                 <td className="px-4 py-3 text-foreground-muted">{user.display_name ?? "-"}</td>
                 <td className="px-4 py-3 text-foreground-muted">{user.role}</td>
@@ -65,7 +66,7 @@ export default async function AdminUsersPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </FadeIn>
     </div>
   );
 }

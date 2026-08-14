@@ -51,45 +51,49 @@ export default async function ModerationPage() {
       </FadeIn>
 
       {!openReports || openReports.length === 0 ? (
-        <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
+        <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <ShieldAlert className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">No reports yet. The queue is clear.</p>
         </FadeIn>
       ) : (
         <div className="flex flex-col gap-2">
-          {openReports.map((report) => (
-            <ReportRow
-              key={report.id}
-              id={report.id}
-              targetType={report.target_type}
-              reason={report.reason}
-              reporterUsername={report.reporter?.username ?? "unknown"}
-              createdAt={report.created_at}
-            />
+          {openReports.map((report, index) => (
+            <FadeIn key={report.id} delay={Math.min(0.08 + index * 0.03, 0.5)}>
+              <ReportRow
+                id={report.id}
+                targetType={report.target_type}
+                reason={report.reason}
+                reporterUsername={report.reporter?.username ?? "unknown"}
+                createdAt={report.created_at}
+              />
+            </FadeIn>
           ))}
         </div>
       )}
 
       {resolvedReports && resolvedReports.length > 0 && (
-        <FadeIn delay={0.1} className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <History className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-            Recently resolved
-          </h2>
+        <div className="flex flex-col gap-3">
+          <FadeIn delay={0.55}>
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+              <History className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
+              Recently resolved
+            </h2>
+          </FadeIn>
           <div className="flex flex-col gap-2">
-            {resolvedReports.map((report) => (
-              <div
+            {resolvedReports.map((report, index) => (
+              <FadeIn
                 key={report.id}
-                className="flex items-center justify-between rounded-xl border border-white/5 px-4 py-3 text-xs text-foreground-subtle"
+                delay={Math.min(0.6 + index * 0.03, 0.85)}
+                className="flex items-center justify-between rounded-xl border border-white/5 px-4 py-3 text-xs text-foreground-subtle transition-colors hover:bg-white/[0.03]"
               >
                 <span>
                   {report.target_type} reported by {report.reporter?.username ?? "unknown"}
                 </span>
                 <span className="uppercase tracking-wide">{report.status}</span>
-              </div>
+              </FadeIn>
             ))}
           </div>
-        </FadeIn>
+        </div>
       )}
     </div>
   );
