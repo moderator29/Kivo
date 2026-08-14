@@ -136,11 +136,9 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               </span>
             )}
           </FadeIn>
-          {profile && (
-            <FadeIn delay={0.1}>
-              <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} />
-            </FadeIn>
-          )}
+          <FadeIn delay={0.1}>
+            <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} signedIn={!!profile} />
+          </FadeIn>
         </div>
 
         <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">

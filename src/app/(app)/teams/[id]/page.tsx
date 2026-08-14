@@ -212,11 +212,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             <h1 className="truncate text-xl font-semibold text-foreground">{team.name}</h1>
             {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>}
           </FadeIn>
-          {profile && (
-            <FadeIn delay={0.1}>
-              <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} />
-            </FadeIn>
-          )}
+          <FadeIn delay={0.1}>
+            <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} signedIn={!!profile} />
+          </FadeIn>
         </div>
         <FadeIn delay={0.15}>
           {team.venue ? (

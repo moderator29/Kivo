@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Trophy, Target, Flame, Users, ArrowRight } from "lucide-react";
+import { Trophy, Target, Flame, Users, Star, ArrowRight } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
@@ -63,6 +63,30 @@ export default async function HomePage() {
 
   const totalXp = (xpEntries ?? []).reduce((sum, entry) => sum + entry.amount, 0);
 
+  // "Your teams" — the one place `follows` actually changes what's on screen
+  // (RECOMMENDATIONS item 13). Two-step because `followed_id` has no DB-level
+  // FK (it's polymorphic across team/player/competition), so the team ids
+  // have to be resolved before fixtures can be filtered on them.
+  const { data: followedTeamRows } = profile
+    ? await supabase.from("follows").select("followed_id").eq("follower_profile_id", profile.id).eq("followed_type", "team")
+    : { data: null };
+  const followedTeamIds = (followedTeamRows ?? []).map((f) => f.followed_id);
+
+  const { data: yourTeamsFixtures } = followedTeamIds.length
+    ? await supabase
+        .from("fixtures")
+        .select(
+          `id, kickoff_at,
+           home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
+           away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
+        )
+        .or(followedTeamIds.map((id) => `home_team_id.eq.${id},away_team_id.eq.${id}`).join(","))
+        .eq("status", "scheduled")
+        .gt("kickoff_at", new Date().toISOString())
+        .order("kickoff_at", { ascending: true })
+        .limit(5)
+    : { data: null };
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">
       <FadeIn>
@@ -109,6 +133,55 @@ export default async function HomePage() {
             </Link>{" "}
             for the latest.
           </p>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.12} className="kivo-glass rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Star className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Your teams
+          </h2>
+          {followedTeamIds.length > 0 && (
+            <Link
+              href="/profile/following"
+              className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+            >
+              Manage
+              <ArrowRight className="h-3 w-3" strokeWidth={2} />
+            </Link>
+          )}
+        </div>
+
+        {!profile ? (
+          <p className="mt-3 text-sm text-foreground-muted">
+            <Link href="/sign-up?redirect_url=%2Fhome" className="text-kivo-cyan hover:text-kivo-cyan/80">
+              Sign up
+            </Link>{" "}
+            and follow a team to see their upcoming fixtures here.
+          </p>
+        ) : followedTeamIds.length === 0 ? (
+          <p className="mt-3 text-sm text-foreground-muted">
+            You&apos;re not following any teams yet. Star a team on its page and its fixtures will show up here.
+          </p>
+        ) : yourTeamsFixtures && yourTeamsFixtures.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-2">
+            {yourTeamsFixtures.map((fixture, index) => (
+              <FixtureRow
+                key={fixture.id}
+                href={`/matches/${fixture.id}`}
+                homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
+                homeName={fixture.home_team?.name ?? "Home"}
+                awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
+                awayName={fixture.away_team?.name ?? "Away"}
+                scoreLabel={new Date(fixture.kickoff_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                live={false}
+                index={index}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-foreground-muted">No upcoming fixtures synced yet for the teams you follow.</p>
         )}
       </FadeIn>
 

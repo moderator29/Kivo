@@ -99,11 +99,9 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
             {currentSeason ? ` · ${currentSeason.name}` : ""}
           </p>
         </FadeIn>
-        {profile && (
-          <FadeIn delay={0.1}>
-            <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} />
-          </FadeIn>
-        )}
+        <FadeIn delay={0.1}>
+          <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={!!profile} />
+        </FadeIn>
       </div>
 
       <FadeIn delay={0.15} className="flex flex-col gap-3">
