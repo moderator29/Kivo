@@ -182,3 +182,81 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Landing hero background aurora: slow-drifting, low-opacity brand-gradient
+   glow blobs positioned behind the hero copy. Purely decorative (aria-hidden,
+   pointer-events: none) and pure CSS so it costs nothing beyond a composited
+   transform. Each blob's animation-duration is clamped to near-zero by the
+   prefers-reduced-motion block above, same as every other animation on the
+   page — nothing extra to wire up here. */
+.kivo-aurora {
+  position: absolute;
+  inset: -15% -10%;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.kivo-aurora-blob {
+  position: absolute;
+  width: 50%;
+  height: 60%;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.35;
+  will-change: transform;
+}
+
+.kivo-aurora-blob--cyan {
+  top: -5%;
+  left: 2%;
+  background: radial-gradient(circle, var(--kivo-cyan), transparent 70%);
+  animation: kivo-aurora-drift-a 20s ease-in-out infinite;
+}
+
+.kivo-aurora-blob--violet {
+  right: -4%;
+  bottom: -12%;
+  background: radial-gradient(circle, var(--kivo-violet), transparent 70%);
+  animation: kivo-aurora-drift-b 26s ease-in-out infinite;
+}
+
+.kivo-aurora-blob--magenta {
+  top: 30%;
+  left: 30%;
+  width: 38%;
+  height: 45%;
+  opacity: 0.22;
+  background: radial-gradient(circle, var(--kivo-magenta), transparent 70%);
+  animation: kivo-aurora-drift-c 24s ease-in-out infinite;
+}
+
+@keyframes kivo-aurora-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6%, 8%) scale(1.1);
+  }
+}
+
+@keyframes kivo-aurora-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-8%, -6%) scale(1.08);
+  }
+}
+
+@keyframes kivo-aurora-drift-c {
+  0%,
+  100% {
+    transform: translate(-4%, 0) scale(0.95);
+  }
+  50% {
+    transform: translate(4%, -6%) scale(1.05);
+  }
+}

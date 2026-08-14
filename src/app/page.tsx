@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import { motion } from "motion/react";
 import kivoLogo from "../../public/brand/kivo-logo.png";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FeatureCard } from "@/components/marketing/feature-card";
@@ -54,35 +57,63 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-1 flex-col">
-        <section className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-6 py-20 text-center lg:py-32">
-          <FadeIn className="flex flex-col items-center gap-6">
-            <Image src={kivoLogo} alt="" width={200} height={200} className="h-36 w-36 lg:h-48 lg:w-48" priority />
-            <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
-              Football. Together. Live.
-            </span>
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground lg:text-6xl">
-              The football home built for how fans actually watch, argue and play.
-            </h1>
-            <p className="max-w-2xl text-base text-foreground-muted lg:text-lg">
-              Live scores and match intelligence, a social layer that feels alive during the game, an AI Copilot
-              grounded in real data, and fantasy that&apos;s actually fun to build. All in one place.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/home"
-                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition-opacity hover:opacity-90"
+        <section className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-6 overflow-hidden px-6 py-20 text-center lg:py-32">
+          <div className="kivo-aurora" aria-hidden="true">
+            <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
+            <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
+            <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
+          </div>
+
+          <div className="relative z-10 flex flex-col items-center gap-6">
+            <FadeIn delay={0}>
+              <motion.div
+                initial={{ y: 0 }}
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
               >
-                Get started
-                <ArrowRight className="h-4 w-4" strokeWidth={2} />
-              </Link>
-              <Link
-                href="/sign-in"
-                className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground"
-              >
-                Sign in
-              </Link>
-            </div>
-          </FadeIn>
+                <Image src={kivoLogo} alt="" width={200} height={200} className="h-36 w-36 lg:h-48 lg:w-48" priority />
+              </motion.div>
+            </FadeIn>
+
+            <FadeIn delay={0.08}>
+              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
+                Football. Together. Live.
+              </span>
+            </FadeIn>
+
+            <FadeIn delay={0.16}>
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground lg:text-6xl">
+                The football home built for how fans actually watch, argue and play.
+              </h1>
+            </FadeIn>
+
+            <FadeIn delay={0.24}>
+              <p className="max-w-2xl text-base text-foreground-muted lg:text-lg">
+                Live scores and match intelligence, a social layer that feels alive during the game, an AI Copilot
+                grounded in real data, and fantasy that&apos;s actually fun to build. All in one place.
+              </p>
+            </FadeIn>
+
+            <FadeIn delay={0.32} className="flex flex-col gap-3 sm:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/home"
+                  className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition-opacity hover:opacity-90"
+                >
+                  Get started
+                  <ArrowRight className="h-4 w-4" strokeWidth={2} />
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/sign-in"
+                  className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground"
+                >
+                  Sign in
+                </Link>
+              </motion.div>
+            </FadeIn>
+          </div>
         </section>
 
         <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 pb-24 sm:grid-cols-2 lg:px-12">
