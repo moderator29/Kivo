@@ -10,6 +10,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { TrackView } from "@/components/ui/track-view";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
@@ -84,9 +85,12 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
   const live = isLiveStatus(fixture.status);
 
   let resultClass = "text-foreground-muted";
-  if (fixture.status === "finished" && hasScore) {
-    const ownScore = isHome ? fixture.home_score! : fixture.away_score!;
-    const oppScore = isHome ? fixture.away_score! : fixture.home_score!;
+  // Checking both fields directly here (rather than via the `hasScore` bool
+  // above) lets TypeScript narrow them to `number` on its own, instead of
+  // asserting it with `!` — same condition either way.
+  if (fixture.status === "finished" && fixture.home_score !== null && fixture.away_score !== null) {
+    const ownScore = isHome ? fixture.home_score : fixture.away_score;
+    const oppScore = isHome ? fixture.away_score : fixture.home_score;
     if (ownScore > oppScore) resultClass = "text-live";
     else if (ownScore < oppScore) resultClass = "text-critical";
     else resultClass = "text-foreground-muted";
@@ -233,6 +237,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+      <TrackView type="team" id={team.id} name={team.name} imageUrl={team.crest_url} />
       <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
           <FadeIn delay={0} className="shrink-0">

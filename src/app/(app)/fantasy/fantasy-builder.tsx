@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Shield,
   UserRound,
   Crown,
   Star,
@@ -20,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { setGameweekRoster, setFantasyCaptain, searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
 import {
@@ -93,27 +93,57 @@ function useNow(intervalMs: number) {
   return now;
 }
 
-function TeamCrest({ crestUrl, name, size = 20 }: { crestUrl: string | null; name: string; size?: number }) {
-  if (crestUrl) {
-    return (
-      <Image
-        src={crestUrl}
-        alt={name}
-        width={size}
-        height={size}
-        className="shrink-0 object-contain"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-white/5"
-      style={{ width: size, height: size }}
-    >
-      <Shield className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
+/** Real focus trap + Escape-to-close + focus restore for the bottom-sheet
+ * dialogs below (PlayerActionSheet, PlayerPicker) — same pattern already
+ * used for the mobile "more" nav sheet: aria-modal="true" is a lie without
+ * this, since without it Tab past the last item lands on whatever's next in
+ * DOM order behind the backdrop, still visually covered but now receiving
+ * keyboard interaction. */
+function useDialogA11y(open: boolean, panelRef: RefObject<HTMLElement | null>, onClose: () => void) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const id = requestAnimationFrame(() => {
+      panelRef.current?.querySelector<HTMLElement>("a, button, input")?.focus();
+    });
+
+    function focusableItems() {
+      return Array.from(panelRef.current?.querySelectorAll<HTMLElement>("a, button, input") ?? []).filter(
+        (el) => !el.hasAttribute("disabled"),
+      );
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusableItems();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      cancelAnimationFrame(id);
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [open, panelRef]);
 }
 
 export function FantasyBuilder({
@@ -201,12 +231,17 @@ export function FantasyBuilder({
   }
 
   function handleSave() {
-    if (locked || saving || !validation.ok) return;
+    // `locked` is already `true` whenever `gameweek` is null (see its
+    // definition above), so this is redundant today — but checking `gameweek`
+    // directly here means TypeScript narrows it for us below instead of this
+    // relying on that indirection, and it stays safe even if `locked`'s
+    // definition ever changes.
+    if (locked || saving || !validation.ok || !gameweek) return;
     setSaveError(null);
     startSaving(async () => {
       const result = await setGameweekRoster(
         activeTeamId,
-        gameweek!.id,
+        gameweek.id,
         pending.map((p) => ({ playerId: p.playerId, isStarting: p.isStarting })),
       );
       if (result.error) {
@@ -590,6 +625,9 @@ function PlayerActionSheet({
   onMakeCaptain: () => void;
   onMakeViceCaptain: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(player !== null, panelRef, onClose);
+
   return (
     <AnimatePresence>
       {player && (
@@ -602,6 +640,7 @@ function PlayerActionSheet({
         >
           <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             initial={{ y: 24, opacity: 0 }}
@@ -719,6 +758,8 @@ function PlayerPicker({
   const [results, setResults] = useState<FantasyPlayerSearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searching, startSearching] = useTransition();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, panelRef, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -744,6 +785,7 @@ function PlayerPicker({
         >
           <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             initial={{ y: 40, opacity: 0 }}

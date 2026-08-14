@@ -139,25 +139,25 @@ export default async function LivePage() {
         </p>
       </FadeIn>
 
-      {hasLiveFixtures && (
+      {hasLiveFixtures && liveFixtures && (
         <FadeIn delay={0.05} className="kivo-glass-brand rounded-2xl p-5">
           <div className="mb-3 flex items-center gap-2">
             <Radio className="h-4 w-4 text-live" strokeWidth={2} />
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Live now</h2>
           </div>
           <div className="flex flex-col divide-y divide-white/5">
-            {liveFixtures!.map((fixture) => (
+            {liveFixtures.map((fixture) => (
               <FixtureRowCard key={fixture.id} fixture={fixture} />
             ))}
           </div>
         </FadeIn>
       )}
 
-      {!hasLiveFixtures && hasTodayFixtures && (
+      {!hasLiveFixtures && hasTodayFixtures && todayFixtures && (
         <FadeIn delay={0.05} className="kivo-glass rounded-2xl p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today&apos;s fixtures</h2>
           <div className="flex flex-col divide-y divide-white/5">
-            {todayFixtures!.map((fixture) => (
+            {todayFixtures.map((fixture) => (
               <FixtureRowCard key={fixture.id} fixture={fixture} />
             ))}
           </div>

@@ -5,6 +5,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
 import { AiTeaser } from "@/components/home/ai-teaser";
+import { RecentlyViewedStrip } from "@/components/home/recently-viewed-strip";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -61,7 +62,6 @@ export default async function HomePage() {
     ]);
 
   const totalXp = (xpEntries ?? []).reduce((sum, entry) => sum + entry.amount, 0);
-  const hasLiveOrTodayMatches = (todayFixtures?.length ?? 0) > 0;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">
@@ -69,6 +69,8 @@ export default async function HomePage() {
         <p className="text-sm font-medium text-foreground-subtle">{greeting()}</p>
         <h1 className="text-2xl font-semibold text-foreground">{firstName}, here&apos;s your football.</h1>
       </FadeIn>
+
+      <RecentlyViewedStrip />
 
       <FadeIn delay={0.08} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
@@ -79,9 +81,9 @@ export default async function HomePage() {
           </Link>
         </div>
 
-        {hasLiveOrTodayMatches ? (
+        {todayFixtures && todayFixtures.length > 0 ? (
           <div className="mt-3 flex flex-col gap-2">
-            {todayFixtures!.map((fixture, index) => {
+            {todayFixtures.map((fixture, index) => {
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
               const live = fixture.status === "live" || fixture.status === "halftime";
               return (
