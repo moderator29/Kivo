@@ -89,7 +89,7 @@ export default async function MatchesPage() {
                   {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
                 </span>
                 <span
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                     live
                       ? "border-live/30 bg-live/10 text-live"
                       : fixture.status === "finished"
@@ -97,6 +97,12 @@ export default async function MatchesPage() {
                         : "border-white/10 text-foreground-muted"
                   }`}
                 >
+                  {live && (
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-live opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
+                    </span>
+                  )}
                   {statusBadgeText(fixture.status, fixture.kickoff_at)}
                 </span>
               </div>

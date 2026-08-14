@@ -36,7 +36,7 @@ export default async function LeaguesPage() {
             <FadeIn key={competition.id} delay={Math.min(index * 0.03, 0.3)}>
               <Link
                 href={currentSeason ? `/leagues/${competition.id}` : "#"}
-                className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition hover:bg-white/5"
+                className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
               >
                 {competition.logo_url ? (
                   <Image src={competition.logo_url} alt={competition.name} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />

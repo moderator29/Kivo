@@ -31,8 +31,11 @@ export default async function PlayersPage() {
 
       <div className="flex flex-col gap-2">
         {players.map((player, index) => (
-          <FadeIn key={player.id} delay={Math.min(index * 0.02, 0.3)}>
-            <Link href={`/players/${player.id}`} className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition hover:bg-white/5">
+          <FadeIn key={player.id} delay={Math.min(index * 0.03, 0.3)}>
+            <Link
+              href={`/players/${player.id}`}
+              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
                 <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
               </div>

@@ -59,25 +59,31 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="flex items-center gap-3">
-        {competition.logo_url ? (
-          <Image src={competition.logo_url} alt={competition.name} width={36} height={36} className="h-9 w-9 shrink-0 object-contain" />
-        ) : (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
-            <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-3">
+        <FadeIn delay={0} className="shrink-0">
+          {competition.logo_url ? (
+            <Image src={competition.logo_url} alt={competition.name} width={36} height={36} className="h-9 w-9 shrink-0 object-contain" />
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+              <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
+            </div>
+          )}
+        </FadeIn>
+        <FadeIn delay={0.05} className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold text-foreground">{competition.name}</h1>
           <p className="text-xs text-foreground-subtle">
             {competition.country ?? "International"}
             {currentSeason ? ` · ${currentSeason.name}` : ""}
           </p>
-        </div>
-        {profile && <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} />}
-      </FadeIn>
+        </FadeIn>
+        {profile && (
+          <FadeIn delay={0.1}>
+            <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} />
+          </FadeIn>
+        )}
+      </div>
 
-      <FadeIn delay={0.05} className="flex flex-col gap-3">
+      <FadeIn delay={0.15} className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Standings</h2>
         {!standings || standings.length === 0 ? (
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
@@ -100,7 +106,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
               <Link
                 key={row.team_id}
                 href={row.team?.id ? `/teams/${row.team.id}` : "#"}
-                className="grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs transition hover:bg-white/5"
+                className="grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs transition-all hover:translate-x-1 hover:bg-white/5"
               >
                 <span className="text-foreground-subtle">{row.position ?? "-"}</span>
                 <span className="flex items-center gap-2 truncate text-foreground">
@@ -121,7 +127,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
         )}
       </FadeIn>
 
-      <FadeIn delay={0.1} className="flex flex-col gap-3">
+      <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Upcoming fixtures</h2>
         {!upcoming || upcoming.length === 0 ? (
           <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
@@ -143,13 +149,15 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
         )}
       </FadeIn>
 
-      <Link
-        href="/leagues"
-        className="flex items-center gap-1 self-center text-xs text-foreground-subtle underline decoration-white/20 underline-offset-4 hover:text-foreground-muted"
-      >
-        <ArrowLeft className="h-3 w-3" strokeWidth={2} />
-        Back to leagues
-      </Link>
+      <FadeIn delay={0.25} className="self-center">
+        <Link
+          href="/leagues"
+          className="flex items-center gap-1 text-xs text-foreground-subtle underline decoration-white/20 underline-offset-4 hover:text-foreground-muted"
+        >
+          <ArrowLeft className="h-3 w-3" strokeWidth={2} />
+          Back to leagues
+        </Link>
+      </FadeIn>
     </div>
   );
 }

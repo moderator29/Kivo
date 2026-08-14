@@ -31,10 +31,10 @@ export default async function TeamsPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {teams.map((team, index) => (
-          <FadeIn key={team.id} delay={Math.min(index * 0.02, 0.3)}>
+          <FadeIn key={team.id} delay={Math.min(index * 0.03, 0.3)}>
             <Link
               href={`/teams/${team.id}`}
-              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition hover:bg-white/5"
+              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
             >
               {team.crest_url ? (
                 <Image src={team.crest_url} alt={team.name} width={36} height={36} className="h-9 w-9 object-contain" />

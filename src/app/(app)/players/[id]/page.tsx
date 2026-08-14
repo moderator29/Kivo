@@ -112,12 +112,14 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass-brand rounded-2xl p-6">
+      <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/5">
-            <UserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-          </div>
-          <div className="min-w-0 flex-1">
+          <FadeIn delay={0} className="shrink-0">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/5">
+              <UserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.05} className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-semibold text-foreground">{displayName}</h1>
             {showFullNameSubtitle && <p className="truncate text-xs text-foreground-subtle">{player.full_name}</p>}
             {player.position && (
@@ -125,11 +127,15 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                 {player.position}
               </span>
             )}
-          </div>
-          {profile && <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} />}
+          </FadeIn>
+          {profile && (
+            <FadeIn delay={0.1}>
+              <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} />
+            </FadeIn>
+          )}
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
             <Flag className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
             {player.nationality ?? "Nationality not yet synced"}
@@ -140,10 +146,10 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               ? `${formatDate(player.date_of_birth)} (age ${calculateAge(player.date_of_birth)})`
               : "Date of birth not yet synced"}
           </div>
-        </div>
-      </FadeIn>
+        </FadeIn>
+      </div>
 
-      <FadeIn delay={0.05} className="flex flex-col gap-3">
+      <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Shield className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Current club
@@ -151,7 +157,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         {player.current_team ? (
           <Link
             href={`/teams/${player.current_team.id}`}
-            className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition hover:bg-white/5"
+            className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
           >
             <TeamCrest crestUrl={player.current_team.crest_url} name={player.current_team.name} />
             <div className="min-w-0">
@@ -168,7 +174,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         )}
       </FadeIn>
 
-      <FadeIn delay={0.1} className="flex flex-col gap-3">
+      <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Season stats
@@ -195,7 +201,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         )}
       </FadeIn>
 
-      <FadeIn delay={0.15} className="flex flex-col gap-3">
+      <FadeIn delay={0.3} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Transfer history
@@ -203,7 +209,10 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         {transfers && transfers.length > 0 ? (
           <div className="flex flex-col gap-2">
             {transfers.map((transfer) => (
-              <div key={transfer.id} className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
+              <div
+                key={transfer.id}
+                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+              >
                 <div className="flex items-center gap-2">
                   {transfer.from_team ? (
                     <Link

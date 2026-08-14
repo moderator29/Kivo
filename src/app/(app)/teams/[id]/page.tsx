@@ -139,7 +139,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+          className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
             live
               ? "border-live/30 bg-live/10 text-live"
               : fixture.status === "finished"
@@ -147,6 +147,12 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
                 : "border-white/10 text-foreground-muted"
           }`}
         >
+          {live && (
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-live opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
+            </span>
+          )}
           {statusBadgeText(fixture.status, fixture.kickoff_at)}
         </span>
         {hasScore && (
@@ -242,33 +248,41 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass-brand rounded-2xl p-6">
+      <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
-          <TeamCrest crestUrl={team.crest_url} name={team.name} size={56} />
-          <div className="min-w-0 flex-1">
+          <FadeIn delay={0} className="shrink-0">
+            <TeamCrest crestUrl={team.crest_url} name={team.name} size={56} />
+          </FadeIn>
+          <FadeIn delay={0.05} className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-semibold text-foreground">{team.name}</h1>
             {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>}
-          </div>
-          {profile && <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} />}
+          </FadeIn>
+          {profile && (
+            <FadeIn delay={0.1}>
+              <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} />
+            </FadeIn>
+          )}
         </div>
-        {team.venue ? (
-          <div className="mt-4 flex items-start gap-2 text-xs text-foreground-muted">
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
-            <span>
-              {team.venue.name}
-              {team.venue.city ? `, ${team.venue.city}` : ""}
-              {team.venue.capacity ? ` · Capacity ${team.venue.capacity.toLocaleString()}` : ""}
-            </span>
-          </div>
-        ) : (
-          <div className="mt-4 flex items-center gap-2 text-xs text-foreground-subtle">
-            <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            <span>Venue not yet synced</span>
-          </div>
-        )}
-      </FadeIn>
+        <FadeIn delay={0.15}>
+          {team.venue ? (
+            <div className="mt-4 flex items-start gap-2 text-xs text-foreground-muted">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+              <span>
+                {team.venue.name}
+                {team.venue.city ? `, ${team.venue.city}` : ""}
+                {team.venue.capacity ? ` · Capacity ${team.venue.capacity.toLocaleString()}` : ""}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-4 flex items-center gap-2 text-xs text-foreground-subtle">
+              <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <span>Venue not yet synced</span>
+            </div>
+          )}
+        </FadeIn>
+      </div>
 
-      <FadeIn delay={0.05} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+      <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           League position
@@ -306,7 +320,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         )}
       </FadeIn>
 
-      <FadeIn delay={0.1} className="flex flex-col gap-3">
+      <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <UserRound className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Manager
@@ -332,7 +346,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         )}
       </FadeIn>
 
-      <FadeIn delay={0.15} className="flex flex-col gap-3">
+      <FadeIn delay={0.3} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Users className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Squad
@@ -352,7 +366,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                       <Link
                         key={player.id}
                         href={`/players/${player.id}`}
-                        className="flex items-center gap-3 px-4 py-3 transition hover:bg-white/5"
+                        className="flex items-center gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-white/5"
                       >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
                           <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
@@ -380,7 +394,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         )}
       </FadeIn>
 
-      <FadeIn delay={0.2} className="flex flex-col gap-3">
+      <FadeIn delay={0.35} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <CalendarClock className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Upcoming fixtures
@@ -398,7 +412,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         )}
       </FadeIn>
 
-      <FadeIn delay={0.25} className="flex flex-col gap-3">
+      <FadeIn delay={0.4} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
           Recent results
