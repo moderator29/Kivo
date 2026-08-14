@@ -57,7 +57,7 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 24, opacity: 0 }}
               transition={{ type: "spring", stiffness: 420, damping: 36 }}
-              className="kivo-glass relative z-10 mb-[calc(env(safe-area-inset-bottom)+72px)] mx-3 rounded-2xl p-3"
+              className="kivo-glass relative z-10 mb-[calc(env(safe-area-inset-bottom)+76px)] mx-3 rounded-2xl p-3"
             >
               <div className="grid grid-cols-4 gap-2">
                 {moreItems.map((item) => {
@@ -102,52 +102,62 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
       </AnimatePresence>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-white/5 bg-kivo-obsidian/95 backdrop-blur-lg pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-30 lg:hidden"
         aria-label="Primary"
       >
-        {barItems.map((item) => {
-          const active = isActiveRoute(pathname, item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "relative flex flex-1 flex-col items-center gap-1 rounded-lg py-2.5 text-[11px] font-medium transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-                active ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted",
-              )}
-            >
-              <Icon className="h-5 w-5 transition-colors" strokeWidth={1.75} />
-              {item.label}
-              {active && (
-                <motion.span
-                  aria-hidden="true"
-                  layoutId="mobile-nav-active"
-                  className="absolute top-0 h-0.5 w-8 rounded-full bg-kivo-cyan"
-                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                />
-              )}
-            </Link>
-          );
-        })}
-        <button
-          ref={toggleButtonRef}
-          onClick={() => setMoreOpen((v) => !v)}
-          className={cn(
-            "flex flex-1 flex-col items-center gap-1 rounded-lg py-2.5 text-[11px] font-medium transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-            moreOpen ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted",
-          )}
-          aria-expanded={moreOpen}
-          aria-haspopup="dialog"
-        >
-          {moreOpen ? (
-            <X className="h-5 w-5 transition-colors" strokeWidth={1.75} />
-          ) : (
-            <Menu className="h-5 w-5 transition-colors" strokeWidth={1.75} />
-          )}
-          More
-        </button>
+        <div className="kivo-glass-brand flex items-center justify-around gap-1 rounded-full p-1.5 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)]">
+          {barItems.map((item) => {
+            const active = isActiveRoute(pathname, item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+                  active ? "text-kivo-white" : "text-foreground-subtle hover:text-foreground-muted",
+                )}
+              >
+                {active && (
+                  <motion.span
+                    aria-hidden="true"
+                    layoutId="mobile-nav-active"
+                    className="kivo-gradient-prime absolute inset-0 rounded-full shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                  />
+                )}
+                <Icon className="relative z-10 h-5 w-5 shrink-0 transition-colors" strokeWidth={1.75} />
+                {active && <span className="relative z-10 truncate">{item.label}</span>}
+              </Link>
+            );
+          })}
+          <button
+            ref={toggleButtonRef}
+            onClick={() => setMoreOpen((v) => !v)}
+            className={cn(
+              "relative flex flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+              moreOpen ? "text-kivo-white" : "text-foreground-subtle hover:text-foreground-muted",
+            )}
+            aria-expanded={moreOpen}
+            aria-haspopup="dialog"
+          >
+            {moreOpen && (
+              <motion.span
+                aria-hidden="true"
+                layoutId="mobile-nav-active"
+                className="kivo-gradient-prime absolute inset-0 rounded-full shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                transition={{ type: "spring", stiffness: 500, damping: 40 }}
+              />
+            )}
+            {moreOpen ? (
+              <X className="relative z-10 h-5 w-5 shrink-0 transition-colors" strokeWidth={1.75} />
+            ) : (
+              <Menu className="relative z-10 h-5 w-5 shrink-0 transition-colors" strokeWidth={1.75} />
+            )}
+            {moreOpen && <span className="relative z-10">Close</span>}
+          </button>
+        </div>
       </nav>
     </>
   );

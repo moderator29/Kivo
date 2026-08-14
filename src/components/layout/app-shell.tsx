@@ -26,7 +26,7 @@ export function AppShell({ children, signedIn }: { children: ReactNode; signedIn
         <div className="flex min-w-0 flex-1 flex-col">
           <OfflineBanner />
           <TopBar signedIn={signedIn} />
-          <main className="flex flex-1 flex-col pb-20 lg:pb-0">
+          <main className="flex flex-1 flex-col pb-24 lg:pb-0">
             <PageTransition>{children}</PageTransition>
           </main>
         </div>
