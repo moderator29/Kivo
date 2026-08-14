@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, MapPin, Trophy, Users, UserRound, CalendarClock, History } from "lucide-react";
+import { MapPin, Trophy, Users, UserRound, CalendarClock, History } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -10,6 +9,7 @@ import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { TeamCrest } from "@/components/ui/team-crest";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
@@ -63,29 +63,6 @@ function positionGroup(position: string | null): PositionGroup {
     return "Forwards";
   }
   return "Other";
-}
-
-function TeamCrest({ crestUrl, name, size = 28 }: { crestUrl: string | null; name: string; size?: number }) {
-  if (crestUrl) {
-    return (
-      <Image
-        src={crestUrl}
-        alt={name}
-        width={size}
-        height={size}
-        className="shrink-0 object-contain"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-white/5"
-      style={{ width: size, height: size }}
-    >
-      <Shield className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
 }
 
 type FixtureRow = {

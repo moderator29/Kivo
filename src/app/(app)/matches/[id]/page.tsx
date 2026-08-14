@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
+import { TeamCrest } from "@/components/ui/team-crest";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
@@ -25,29 +25,6 @@ const STATUS_LABEL: Record<FixtureStatus, string> = {
 
 function isLiveStatus(status: FixtureStatus): boolean {
   return status === "live" || status === "halftime";
-}
-
-function TeamCrest({ crestUrl, name, size = 20 }: { crestUrl: string | null; name: string; size?: number }) {
-  if (crestUrl) {
-    return (
-      <Image
-        src={crestUrl}
-        alt={name}
-        width={size}
-        height={size}
-        className="shrink-0 object-contain"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-white/5"
-      style={{ width: size, height: size }}
-    >
-      <Shield className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
-    </div>
-  );
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

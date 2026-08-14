@@ -18,6 +18,8 @@ export function CommandPalette() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const close = useCallback(() => {
@@ -25,6 +27,12 @@ export function CommandPalette() {
     setQuery("");
     setResults([]);
     setActiveIndex(0);
+    // Always return focus to the trigger: the backdrop covers the whole
+    // viewport while open (nothing else is clickable behind it), so unlike a
+    // lighter click-outside-anywhere dropdown, there's no competing element
+    // the user could have meant to focus instead — leaving focus to fall
+    // back to <body> would strand keyboard users after every close.
+    triggerRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -43,6 +51,31 @@ export function CommandPalette() {
       const id = requestAnimationFrame(() => inputRef.current?.focus());
       return () => cancelAnimationFrame(id);
     }
+  }, [open]);
+
+  // Real focus trap: aria-modal="true" is a lie without this (same pattern
+  // as the mobile "more" sheet) — without it, Tab past the last result lands
+  // on whatever's next in DOM order behind the backdrop, still visually
+  // covered by the overlay but now receiving keyboard interaction.
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("input, button") ?? []);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
   useEffect(() => {
@@ -93,6 +126,7 @@ export function CommandPalette() {
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
@@ -116,6 +150,7 @@ export function CommandPalette() {
             onClick={close}
           >
             <motion.div
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-label="Search"
