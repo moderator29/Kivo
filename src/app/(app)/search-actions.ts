@@ -49,19 +49,26 @@ export async function searchPlatform(query: string): Promise<SearchResult[]> {
   const supabase = createServerSupabaseClient();
   const pattern = `%${escapeLikePattern(trimmed)}%`;
 
-  const [{ data: teams }, { data: players }, { data: competitions }] = await Promise.all([
-    supabase.from("teams").select("id, name, country, crest_url").ilike("name", pattern).limit(RESULTS_PER_CATEGORY),
-    supabase
-      .from("players")
-      .select("id, full_name, known_as, position, current_team:teams(name)")
-      .or(`full_name.ilike.${pattern},known_as.ilike.${pattern}`)
-      .limit(RESULTS_PER_CATEGORY),
-    supabase
-      .from("competitions")
-      .select("id, name, country, logo_url")
-      .ilike("name", pattern)
-      .limit(RESULTS_PER_CATEGORY),
-  ]);
+  const playerColumns = "id, full_name, known_as, position, current_team:teams(name)";
+  const [{ data: teams }, { data: playersByFullName }, { data: playersByKnownAs }, { data: competitions }] =
+    await Promise.all([
+      supabase.from("teams").select("id, name, country, crest_url").ilike("name", pattern).limit(RESULTS_PER_CATEGORY),
+      // Two plain single-column ilike() calls instead of one .or("full_name.ilike.X,known_as.ilike.X") —
+      // .or() takes a raw PostgREST filter string built by string interpolation, and escapeLikePattern
+      // above only escapes LIKE's own metacharacters (%, _, \), not PostgREST filter-syntax ones (`,`,
+      // `(`, `)`). A search term containing those could inject an unintended extra filter clause. Plain
+      // .ilike() calls pass the value as a parameter, not raw filter syntax, so there's nothing to inject.
+      supabase.from("players").select(playerColumns).ilike("full_name", pattern).limit(RESULTS_PER_CATEGORY),
+      supabase.from("players").select(playerColumns).ilike("known_as", pattern).limit(RESULTS_PER_CATEGORY),
+      supabase
+        .from("competitions")
+        .select("id, name, country, logo_url")
+        .ilike("name", pattern)
+        .limit(RESULTS_PER_CATEGORY),
+    ]);
+
+  const playerById = new Map((playersByFullName ?? []).concat(playersByKnownAs ?? []).map((p) => [p.id, p]));
+  const players = [...playerById.values()].slice(0, RESULTS_PER_CATEGORY);
 
   const results: SearchResult[] = [];
 

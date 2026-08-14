@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Shield } from "lucide-react";
 import Image from "next/image";
 import { EVENT_LABEL } from "@/lib/football/event-labels";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 
 type MatchEvent = {
   id: string;
@@ -44,17 +46,28 @@ type StandingsRow = {
 type SyncDetailsAction = () => Promise<{ error: string | null; recordsProcessed?: number }>;
 
 type MatchCentreTabsProps = {
+  fixtureId: string;
   homeTeamId: string;
   awayTeamId: string;
   events: MatchEvent[];
   lineups: LineupEntry[];
   standings: StandingsRow[];
+  roomPosts: RoomPost[];
+  signedIn: boolean;
   canSyncDetails: boolean;
   syncDetailsAction: SyncDetailsAction;
 };
 
-const TABS = ["Details", "Lineups", "Standings"] as const;
+const TABS = ["Details", "Lineups", "Standings", "Room"] as const;
 type Tab = (typeof TABS)[number];
+
+function tabSlug(tab: Tab): string {
+  return tab.toLowerCase();
+}
+
+function tabFromSlug(slug: string | null): Tab {
+  return TABS.find((tab) => tabSlug(tab) === slug) ?? TABS[0];
+}
 
 function EmptyState({ message, action }: { message: string; action?: ReactNode }) {
   return (
@@ -231,26 +244,99 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
   );
 }
 
-export function MatchCentreTabs({
+export function MatchCentreTabs(props: MatchCentreTabsProps) {
+  // useSearchParams() needs a Suspense boundary so the rest of the page can
+  // still be server-prerendered around this — see
+  // node_modules/next/dist/docs/01-app/03-api-reference/04-functions/use-search-params.md.
+  return (
+    <Suspense fallback={<MatchCentreTabsFallback />}>
+      <MatchCentreTabsInner {...props} />
+    </Suspense>
+  );
+}
+
+function MatchCentreTabsFallback() {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="kivo-glass-sharp flex rounded-xl p-1">
+        {TABS.map((tab) => (
+          <div key={tab} className="relative flex-1 rounded-lg py-2 text-center text-xs font-semibold text-foreground-muted">
+            {tab}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchCentreTabsInner({
+  fixtureId,
   homeTeamId,
   awayTeamId,
   events,
   lineups,
   standings,
+  roomPosts,
+  signedIn,
   canSyncDetails,
   syncDetailsAction,
 }: MatchCentreTabsProps) {
-  const [active, setActive] = useState<Tab>("Details");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const active = tabFromSlug(searchParams.get("tab"));
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+
+  // Shallow URL update (no server round-trip re-fetching this page's match
+  // data): plain window.history so back/forward and bookmarking work, per
+  // node_modules/next/dist/docs/01-app/02-guides/single-page-applications.md
+  // ("Shallow routing on the client").
+  function setActive(tab: Tab) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === TABS[0]) {
+      params.delete("tab");
+    } else {
+      params.set("tab", tabSlug(tab));
+    }
+    const qs = params.toString();
+    window.history.pushState(null, "", qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  function handleTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const currentIndex = TABS.indexOf(active);
+    let nextIndex: number | null = null;
+    if (e.key === "ArrowRight") nextIndex = (currentIndex + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+    else if (e.key === "Home") nextIndex = 0;
+    else if (e.key === "End") nextIndex = TABS.length - 1;
+    if (nextIndex === null) return;
+    e.preventDefault();
+    const nextTab = TABS[nextIndex];
+    setActive(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="kivo-glass-sharp flex rounded-xl p-1">
+      <div
+        role="tablist"
+        aria-label="Match centre sections"
+        onKeyDown={handleTabKeyDown}
+        className="kivo-glass-sharp flex rounded-xl p-1"
+      >
         {TABS.map((tab) => (
           <button
             key={tab}
+            ref={(el) => {
+              tabRefs.current[tab] = el;
+            }}
             type="button"
+            role="tab"
+            id={`match-centre-tab-${tabSlug(tab)}`}
+            aria-selected={active === tab}
+            aria-controls={`match-centre-panel-${tabSlug(tab)}`}
+            tabIndex={active === tab ? 0 : -1}
             onClick={() => setActive(tab)}
-            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition"
+            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
             {active === tab && (
               <motion.span
@@ -267,6 +353,10 @@ export function MatchCentreTabs({
       <AnimatePresence mode="wait">
         <motion.div
           key={active}
+          role="tabpanel"
+          id={`match-centre-panel-${tabSlug(active)}`}
+          aria-labelledby={`match-centre-tab-${tabSlug(active)}`}
+          tabIndex={0}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
@@ -285,6 +375,7 @@ export function MatchCentreTabs({
             />
           )}
           {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+          {active === "Room" && <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} />}
         </motion.div>
       </AnimatePresence>
     </div>
