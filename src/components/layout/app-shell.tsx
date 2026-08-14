@@ -12,7 +12,16 @@ export function AppShell({ children, signedIn }: { children: ReactNode; signedIn
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="flex min-h-screen bg-background">
+      <div className="relative flex min-h-screen bg-background">
+        {/* Much quieter than the landing page's aurora — app pages are
+            information-dense, so this is just enough breathing motion behind
+            the glass containers to not read as a static screen, never
+            competing with real content for attention. */}
+        <div className="kivo-aurora-ambient" aria-hidden="true">
+          <span className="kivo-aurora-blob kivo-aurora-blob--cyan" style={{ opacity: 0.15 }} />
+          <span className="kivo-aurora-blob kivo-aurora-blob--violet" style={{ opacity: 0.12 }} />
+        </div>
+
         <DesktopSidebar aiConfigured={aiConfigured} />
         <div className="flex min-w-0 flex-1 flex-col">
           <OfflineBanner />

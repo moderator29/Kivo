@@ -5,8 +5,25 @@ import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
 import kivoLogo from "../../public/brand/kivo-logo.png";
+import kivoTrophyCrown from "../../public/brand/kivo-trophy-crown.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FeatureCard } from "@/components/marketing/feature-card";
+import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
+
+// Hand-placed, not tiled — a repeating grid of the mark read as a mistake.
+// Concentrated toward the left/edges per the brand direction, sized and
+// dimmed to sit well behind real content (each less than a quarter opaque).
+const SCATTERED_MARKS: { size: number; top: string; left?: string; right?: string; opacity: number; reverse?: boolean }[] = [
+  { size: 46, top: "8%", left: "4%", opacity: 0.16 },
+  { size: 28, top: "18%", left: "12%", opacity: 0.1, reverse: true },
+  { size: 60, top: "32%", left: "2%", opacity: 0.14, reverse: true },
+  { size: 34, top: "48%", left: "9%", opacity: 0.12 },
+  { size: 24, top: "58%", left: "3%", opacity: 0.09, reverse: true },
+  { size: 40, top: "72%", left: "7%", opacity: 0.13 },
+  { size: 30, top: "85%", left: "13%", opacity: 0.1, reverse: true },
+  { size: 22, top: "14%", right: "5%", opacity: 0.08 },
+  { size: 36, top: "62%", right: "8%", opacity: 0.11, reverse: true },
+];
 
 const PROOF_POINTS = [
   {
@@ -34,7 +51,27 @@ const PROOF_POINTS = [
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="relative flex min-h-screen flex-col bg-background">
+      <div className="kivo-aurora-page" aria-hidden="true">
+        <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
+        <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
+        <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
+      </div>
+
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+        {SCATTERED_MARKS.map((mark, index) => (
+          <KivoMarkGlyph
+            key={index}
+            size={mark.size}
+            opacity={mark.opacity}
+            reverse={mark.reverse}
+            className="absolute"
+            style={{ top: mark.top, left: mark.left, right: mark.right }}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 flex min-h-screen flex-col">
       <header className="flex items-center justify-between px-6 py-5 lg:px-12">
         <div className="flex items-center gap-2">
           <span className="kivo-gradient-prime h-8 w-8 rounded-lg" aria-hidden />
@@ -58,11 +95,29 @@ export default function LandingPage() {
 
       <main className="flex flex-1 flex-col">
         <section className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-6 overflow-hidden px-6 py-20 text-center lg:py-32">
-          <div className="kivo-aurora" aria-hidden="true">
-            <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
-            <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
-            <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
-          </div>
+          {/* The page-wide aurora above already covers this section. This is
+              the hero's real visual anchor: big, genuinely visible (not a
+              faint hint), fading into the page at its edges so it reads as
+              part of the background rather than a pasted-on rectangle. */}
+          <motion.div
+            initial={{ opacity: 0, y: 0 }}
+            animate={{ opacity: 1, y: [0, -10, 0] }}
+            transition={{ opacity: { duration: 1 }, y: { duration: 8, repeat: Infinity, ease: "easeInOut" } }}
+            className="pointer-events-none absolute -right-16 -top-10 h-[480px] w-[340px] sm:-right-8 sm:h-[600px] sm:w-[420px] lg:right-0 lg:h-[720px] lg:w-[500px]"
+            style={{
+              maskImage: "radial-gradient(ellipse 85% 75% at 60% 35%, black 45%, transparent 85%)",
+              WebkitMaskImage: "radial-gradient(ellipse 85% 75% at 60% 35%, black 45%, transparent 85%)",
+            }}
+            aria-hidden="true"
+          >
+            <Image src={kivoTrophyCrown} alt="" fill sizes="500px" className="object-contain object-top opacity-45" priority />
+          </motion.div>
+
+          <KivoMarkGlyph
+            size={360}
+            opacity={0.08}
+            className="absolute -left-20 -top-16 lg:-left-8"
+          />
 
           <div className="relative z-10 flex flex-col items-center gap-6">
             <FadeIn delay={0}>
@@ -135,6 +190,7 @@ export default function LandingPage() {
         <span>© {new Date().getFullYear()} KIVO</span>
         <span>Built for football lovers, starting in Nigeria.</span>
       </footer>
+      </div>
     </div>
   );
 }

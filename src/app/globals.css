@@ -260,3 +260,80 @@ body {
     transform: translate(4%, -6%) scale(1.05);
   }
 }
+
+/* Page-wide variant of the aurora above: fixed to the viewport instead of
+   absolute inside one section, so the glow keeps breathing behind the whole
+   scroll rather than stopping at the hero's box. Used on the landing page's
+   root wrapper. Same reduced-motion handling applies automatically since it
+   reuses the same keyframes/blob classes. */
+.kivo-aurora-page {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* A much quieter version for logged-in app pages: content has to stay the
+   priority, so this drops opacity and adds a slow overall breathing pulse
+   (scale) rather than the hero's bigger drift, and sits fixed behind the
+   app shell at the lowest z-index. */
+.kivo-aurora-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.5;
+  animation: kivo-aurora-breathe 14s ease-in-out infinite;
+}
+
+@keyframes kivo-aurora-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* Shared crop for the K-mark-only glyph (top portion of the square lockup,
+   mark-then-wordmark stacked) used by KivoMarkGlyph. Opacity is applied
+   inline per usage (see that component) rather than here, since it varies a
+   lot between the one large hero watermark and the small scattered accents.
+   Slow rotate+drift keeps every instance from feeling like a static sticker. */
+.kivo-mark-glyph {
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+  animation: kivo-mark-glyph-drift 40s ease-in-out infinite;
+}
+
+.kivo-mark-glyph img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+}
+
+.kivo-mark-glyph--reverse {
+  animation-direction: reverse;
+}
+
+@keyframes kivo-mark-glyph-drift {
+  0%,
+  100% {
+    transform: rotate(-3deg) scale(1);
+  }
+  50% {
+    transform: rotate(2deg) scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kivo-mark-glyph,
+  .kivo-aurora-ambient {
+    animation: none !important;
+  }
+}
