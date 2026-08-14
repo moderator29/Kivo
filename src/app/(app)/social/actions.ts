@@ -87,7 +87,11 @@ export async function toggleLike(postId: string, alreadyLiked: boolean) {
  */
 async function notifyPostLiked(postId: string, liker: { id: string; username: string; display_name: string | null }) {
   const supabase = createServerSupabaseClient();
-  const { data: post } = await supabase.from("posts").select("author_profile_id").eq("id", postId).maybeSingle();
+  const { data: post } = await supabase
+    .from("posts")
+    .select("author_profile_id, fixture_id")
+    .eq("id", postId)
+    .maybeSingle();
 
   if (!post || post.author_profile_id === liker.id) return;
 
@@ -95,7 +99,15 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   const { error } = await serviceClient.from("notifications").insert({
     profile_id: post.author_profile_id,
     type: "post_like",
-    payload: { post_id: postId, liker_username: liker.username, liker_display_name: liker.display_name },
+    // fixture_id (nullable) lets the bell/notifications page route back to the
+    // fixture's Match Centre Room tab for a room post, vs. /social for a
+    // general one — see notificationHref() in lib/notification-registry.ts.
+    payload: {
+      post_id: postId,
+      fixture_id: post.fixture_id,
+      liker_username: liker.username,
+      liker_display_name: liker.display_name,
+    },
   });
 
   if (error) console.error("Failed to create like notification", error);

@@ -120,11 +120,16 @@ export function PostCard({
 
   return (
     <motion.article
+      // Anchor target for notification click-through (see postHref() in
+      // lib/notification-registry.ts, `/social#post-<id>`). scroll-mt clears
+      // the sticky TopBar (and, on Match Centre, the sticky score card) so
+      // the post the link lands on isn't hidden underneath it.
+      id={`post-${id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
-      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
+      className="kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
     >
       <div className="flex items-center gap-2">
         <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white">
