@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { setGameweekRoster, setFantasyCaptain, searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
 import {
@@ -73,6 +74,14 @@ type FantasyBuilderProps = {
 const VIEW_TABS = ["Squad", "Leaderboard"] as const;
 type ViewTab = (typeof VIEW_TABS)[number];
 
+function viewTabId(tab: ViewTab): string {
+  return `fantasy-view-tab-${tab.toLowerCase()}`;
+}
+
+function viewPanelId(tab: ViewTab): string {
+  return `fantasy-view-panel-${tab.toLowerCase()}`;
+}
+
 // Pitch renders attacking end at the top: Forwards, Midfielders, Defenders,
 // Goalkeepers — mirrors the usual fantasy-app orientation.
 const PITCH_ROWS: PositionGroup[] = ["Forwards", "Midfielders", "Defenders", "Goalkeepers"];
@@ -91,59 +100,6 @@ function useNow(intervalMs: number) {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
-}
-
-/** Real focus trap + Escape-to-close + focus restore for the bottom-sheet
- * dialogs below (PlayerActionSheet, PlayerPicker) — same pattern already
- * used for the mobile "more" nav sheet: aria-modal="true" is a lie without
- * this, since without it Tab past the last item lands on whatever's next in
- * DOM order behind the backdrop, still visually covered but now receiving
- * keyboard interaction. */
-function useDialogA11y(open: boolean, panelRef: RefObject<HTMLElement | null>, onClose: () => void) {
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
-
-  useEffect(() => {
-    if (!open) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const id = requestAnimationFrame(() => {
-      panelRef.current?.querySelector<HTMLElement>("a, button, input")?.focus();
-    });
-
-    function focusableItems() {
-      return Array.from(panelRef.current?.querySelectorAll<HTMLElement>("a, button, input") ?? []).filter(
-        (el) => !el.hasAttribute("disabled"),
-      );
-    }
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onCloseRef.current();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const items = focusableItems();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      cancelAnimationFrame(id);
-      document.removeEventListener("keydown", onKeyDown);
-      previouslyFocused?.focus?.();
-    };
-  }, [open, panelRef]);
 }
 
 export function FantasyBuilder({
@@ -283,6 +239,22 @@ export function FantasyBuilder({
     });
   }
 
+  const viewTabRefs = useRef<Partial<Record<ViewTab, HTMLButtonElement | null>>>({});
+
+  function handleViewTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const currentIndex = VIEW_TABS.indexOf(view);
+    let nextIndex: number | null = null;
+    if (e.key === "ArrowRight") nextIndex = (currentIndex + 1) % VIEW_TABS.length;
+    else if (e.key === "ArrowLeft") nextIndex = (currentIndex - 1 + VIEW_TABS.length) % VIEW_TABS.length;
+    else if (e.key === "Home") nextIndex = 0;
+    else if (e.key === "End") nextIndex = VIEW_TABS.length - 1;
+    if (nextIndex === null) return;
+    e.preventDefault();
+    const nextTab = VIEW_TABS[nextIndex];
+    setView(nextTab);
+    viewTabRefs.current[nextTab]?.focus();
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-8 pb-28 lg:px-8">
       <FadeIn className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5">
@@ -322,13 +294,27 @@ export function FantasyBuilder({
         )}
       </FadeIn>
 
-      <FadeIn delay={0.02} className="kivo-glass-sharp flex rounded-xl p-1">
+      <FadeIn
+        delay={0.02}
+        role="tablist"
+        aria-label="Fantasy view"
+        onKeyDown={handleViewTabKeyDown}
+        className="kivo-glass-sharp flex rounded-xl p-1"
+      >
         {VIEW_TABS.map((tab) => (
           <button
             key={tab}
+            ref={(el) => {
+              viewTabRefs.current[tab] = el;
+            }}
             type="button"
+            role="tab"
+            id={viewTabId(tab)}
+            aria-selected={view === tab}
+            aria-controls={viewPanelId(tab)}
+            tabIndex={view === tab ? 0 : -1}
             onClick={() => setView(tab)}
-            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition"
+            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
             {view === tab && (
               <motion.span
@@ -343,7 +329,7 @@ export function FantasyBuilder({
       </FadeIn>
 
       {view === "Leaderboard" && (
-        <FadeIn delay={0.05}>
+        <FadeIn delay={0.05} role="tabpanel" id={viewPanelId("Leaderboard")} aria-labelledby={viewTabId("Leaderboard")} tabIndex={0}>
           <FantasyLeaderboard
             entries={leaderboard.entries}
             hasAnyScores={leaderboard.hasAnyScores}
@@ -353,13 +339,20 @@ export function FantasyBuilder({
       )}
 
       {view === "Squad" && (!gameweek ? (
-        <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-8 text-center">
+        <FadeIn
+          delay={0.05}
+          role="tabpanel"
+          id={viewPanelId("Squad")}
+          aria-labelledby={viewTabId("Squad")}
+          tabIndex={0}
+          className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-8 text-center"
+        >
           <Clock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">No gameweek is open yet for this season.</p>
           <p className="text-xs text-foreground-subtle">Check back once the schedule is set.</p>
         </FadeIn>
       ) : (
-        <>
+        <div role="tabpanel" id={viewPanelId("Squad")} aria-labelledby={viewTabId("Squad")} tabIndex={0} className="flex flex-col gap-5">
           <FadeIn delay={0.05} className="grid grid-cols-3 gap-3">
             <StatTile label={`Gameweek ${gameweek.number}`} value={formatDeadlineCountdown(gameweek.deadlineAt, now)} valueClass={locked ? "text-critical" : "text-foreground"} />
             <StatTile
@@ -489,7 +482,7 @@ export function FantasyBuilder({
               </motion.div>
             )}
           </AnimatePresence>
-        </>
+        </div>
       ))}
 
       <PlayerActionSheet
@@ -626,7 +619,7 @@ function PlayerActionSheet({
   onMakeViceCaptain: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  useDialogA11y(player !== null, panelRef, onClose);
+  useFocusTrap(player !== null, panelRef, onClose);
 
   return (
     <AnimatePresence>
@@ -643,6 +636,7 @@ function PlayerActionSheet({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
+            aria-label={`${player.name} actions`}
             initial={{ y: 24, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 24, opacity: 0 }}
@@ -759,7 +753,7 @@ function PlayerPicker({
   const [error, setError] = useState<string | null>(null);
   const [searching, startSearching] = useTransition();
   const panelRef = useRef<HTMLDivElement>(null);
-  useDialogA11y(open, panelRef, onClose);
+  useFocusTrap(open, panelRef, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -788,6 +782,7 @@ function PlayerPicker({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
+            aria-labelledby="player-picker-title"
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
@@ -795,7 +790,7 @@ function PlayerPicker({
             className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex max-h-[75vh] flex-col gap-3 rounded-2xl p-4"
           >
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-foreground">Add a player</h2>
+              <h2 id="player-picker-title" className="text-sm font-semibold text-foreground">Add a player</h2>
               <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5">
                 <X className="h-4 w-4" strokeWidth={1.75} />
               </button>

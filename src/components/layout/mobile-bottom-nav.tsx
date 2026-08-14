@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, Menu } from "lucide-react";
 import { NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 /** Deliberately curated, not derived from a "primary" flag: a mobile thumb-reach
  * bar only fits four destinations plus More, and that set is a UX call, not data. */
@@ -21,43 +22,13 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
   const barItems = NAV_ITEMS.filter((item) => BOTTOM_BAR_IDS.includes(item.id));
   const moreItems = NAV_ITEMS.filter((item) => !BOTTOM_BAR_IDS.includes(item.id));
 
+  useFocusTrap(moreOpen, panelRef, () => setMoreOpen(false), { restoreFocusRef: toggleButtonRef });
+
   useEffect(() => {
     if (!moreOpen) return;
-
     document.body.style.overflow = "hidden";
-    const focusable = () =>
-      Array.from(panelRef.current?.querySelectorAll<HTMLElement>("a, button") ?? []);
-    focusable()[0]?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setMoreOpen(false);
-        toggleButtonRef.current?.focus();
-        return;
-      }
-      // Real focus trap: aria-modal="true" is a lie without this — without it,
-      // Tab past the last item lands on whatever's next in DOM order behind
-      // the backdrop (e.g. the primary bottom-nav buttons), still visually
-      // covered by the overlay but now receiving keyboard interaction.
-      if (e.key === "Tab") {
-        const items = focusable();
-        if (items.length === 0) return;
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-
     return () => {
       document.body.style.overflow = "";
-      document.removeEventListener("keydown", onKeyDown);
     };
   }, [moreOpen]);
 

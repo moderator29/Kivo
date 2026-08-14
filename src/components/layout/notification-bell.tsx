@@ -7,6 +7,7 @@ import { markAllNotificationsRead, markNotificationRead } from "@/app/notificati
 import type { NotificationRow } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 function describe(notification: NotificationRow): string {
   const payload = notification.payload as Record<string, unknown>;
@@ -74,36 +75,17 @@ export function NotificationBell({
   const bellButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Trap + Escape-to-close + focus restore to the bell button, same shared
+  // pattern used across every dialog surface in the app.
+  useFocusTrap(open, dropdownRef, () => setOpen(false), { restoreFocusRef: bellButtonRef });
+
   useEffect(() => {
     if (!open) return;
     function onClickOutside(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
     }
-    function onEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        // Unlike click-outside (which may land on another real, focusable
-        // element the user meant to interact with), Escape has nowhere else
-        // for focus to go, so return it to the bell rather than stranding
-        // keyboard users on a now-hidden panel.
-        bellButtonRef.current?.focus();
-      }
-    }
     document.addEventListener("mousedown", onClickOutside);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-      document.removeEventListener("keydown", onEscape);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const id = requestAnimationFrame(() => {
-      const firstFocusable = dropdownRef.current?.querySelector<HTMLElement>("a, button");
-      firstFocusable?.focus();
-    });
-    return () => cancelAnimationFrame(id);
+    return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
   function handleItemClick(id: string) {

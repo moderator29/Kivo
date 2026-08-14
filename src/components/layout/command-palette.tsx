@@ -10,6 +10,12 @@ const TYPE_ICON = { team: Shield, player: UserRound, competition: Trophy } as co
 const TYPE_LABEL = { team: "Teams", player: "Players", competition: "Competitions" } as const;
 const TYPE_HREF = { team: "/teams", player: "/players", competition: "/leagues" } as const;
 
+const LISTBOX_ID = "command-palette-listbox";
+
+function optionId(result: SearchResult): string {
+  return `command-palette-option-${result.type}-${result.id}`;
+}
+
 export function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -21,6 +27,7 @@ export function CommandPalette() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeOptionRef = useRef<HTMLButtonElement | null>(null);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -52,6 +59,13 @@ export function CommandPalette() {
       return () => cancelAnimationFrame(id);
     }
   }, [open]);
+
+  // Keyboard highlight is only a visual affordance without this — arrowing
+  // past the fifth result in the max-h-80 scroll container would move
+  // `activeIndex` off-screen with nothing to bring it back into view.
+  useEffect(() => {
+    activeOptionRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
 
   // Real focus trap: aria-modal="true" is a lie without this (same pattern
   // as the mobile "more" sheet) — without it, Tab past the last result lands
@@ -166,6 +180,11 @@ export function CommandPalette() {
                 <input
                   ref={inputRef}
                   type="text"
+                  role="combobox"
+                  aria-expanded={results.length > 0}
+                  aria-controls={LISTBOX_ID}
+                  aria-autocomplete="list"
+                  aria-activedescendant={results[activeIndex] ? optionId(results[activeIndex]) : undefined}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -174,7 +193,7 @@ export function CommandPalette() {
                 />
               </div>
 
-              <div className="max-h-80 overflow-y-auto p-2">
+              <div id={LISTBOX_ID} role="listbox" aria-label="Search results" className="max-h-80 overflow-y-auto p-2">
                 {query.trim().length < 2 ? (
                   <p className="px-3 py-6 text-center text-xs text-foreground-subtle">
                     Type at least 2 characters to search.
@@ -192,7 +211,11 @@ export function CommandPalette() {
                     return (
                       <button
                         key={`${result.type}-${result.id}`}
+                        ref={active ? activeOptionRef : undefined}
                         type="button"
+                        role="option"
+                        id={optionId(result)}
+                        aria-selected={active}
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => navigateTo(result)}
                         className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 ${
