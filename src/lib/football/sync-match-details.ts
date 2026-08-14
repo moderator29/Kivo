@@ -151,7 +151,7 @@ async function processLineupSide(
 ): Promise<number> {
   const teamId = await findMappedId(supabase, providerName, "team", side.team.providerId);
   if (!teamId) {
-    unresolved.push(`team ${providerName}:${side.team.providerId} (${side.team.name}) has no KIVO mapping — its whole lineup was skipped`);
+    unresolved.push(`team ${providerName}:${side.team.providerId} (${side.team.name}) has no KIVO mapping. Its whole lineup was skipped`);
     return 0;
   }
 
@@ -162,7 +162,7 @@ async function processLineupSide(
     const playerId = await findMappedId(supabase, providerName, "player", entry.playerProviderId);
     if (!playerId) {
       unresolved.push(
-        `player ${providerName}:${entry.playerProviderId} (${entry.playerName}) on team ${side.team.name} is not in KIVO yet — lineup entry skipped`,
+        `player ${providerName}:${entry.playerProviderId} (${entry.playerName}) on team ${side.team.name} is not in KIVO yet. Lineup entry skipped`,
       );
       continue;
     }
@@ -197,14 +197,14 @@ async function processEvents(
     const eventType = event.eventType;
     if (!isKnownEventType(eventType)) {
       unresolved.push(
-        `event ${providerName}:${event.providerId} has an unrecognized type/detail ("${event.detail ?? "no detail"}") — skipped`,
+        `event ${providerName}:${event.providerId} has an unrecognized type/detail ("${event.detail ?? "no detail"}"). Skipped`,
       );
       continue;
     }
 
     const teamId = await findMappedId(supabase, providerName, "team", event.teamProviderId);
     if (!teamId) {
-      unresolved.push(`team ${providerName}:${event.teamProviderId} has no KIVO mapping — event skipped`);
+      unresolved.push(`team ${providerName}:${event.teamProviderId} has no KIVO mapping. Event skipped`);
       continue;
     }
 
@@ -213,7 +213,7 @@ async function processEvents(
       : null;
     if (event.playerProviderId && !playerId) {
       unresolved.push(
-        `player ${providerName}:${event.playerProviderId} (${event.playerName ?? "unknown"}) not in KIVO — event ${event.providerId} recorded without a player link`,
+        `player ${providerName}:${event.playerProviderId} (${event.playerName ?? "unknown"}) not in KIVO. Event ${event.providerId} recorded without a player link`,
       );
     }
     const relatedPlayerId = event.relatedPlayerProviderId
@@ -229,7 +229,7 @@ async function processEvents(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Fixture details sync: failed to upsert event ${providerName}:${event.providerId}`, err);
-      unresolved.push(`event ${providerName}:${event.providerId} — ${message}`);
+      unresolved.push(`event ${providerName}:${event.providerId}: ${message}`);
     }
   }
 
@@ -281,7 +281,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
 
   const fixtureProviderId = await findProviderEntityId(supabase, provider.name, "fixture", fixtureId);
   if (!fixtureProviderId) {
-    return fail(`Fixture ${fixtureId} has no ${provider.name} provider mapping yet — sync today's fixtures first.`);
+    return fail(`Fixture ${fixtureId} has no ${provider.name} provider mapping yet. Sync today's fixtures first.`);
   }
 
   let lineups: NormalizedLineups | null = null;
@@ -293,7 +293,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Fixture details sync: getLineups failed (continuing without lineups)", err);
-    unresolved.push(`lineups fetch — ${message}`);
+    unresolved.push(`lineups fetch: ${message}`);
   }
 
   try {
@@ -301,7 +301,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Fixture details sync: getMatchEvents failed (continuing without events)", err);
-    unresolved.push(`events fetch — ${message}`);
+    unresolved.push(`events fetch: ${message}`);
   }
 
   let processed = 0;
@@ -395,7 +395,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
   const leagueProviderId = await findProviderEntityId(supabase, provider.name, "competition", season.competition_id);
   if (!leagueProviderId) {
     return fail(
-      `Competition ${season.competition_id} has no ${provider.name} provider mapping yet — sync its fixtures first.`,
+      `Competition ${season.competition_id} has no ${provider.name} provider mapping yet. Sync its fixtures first.`,
     );
   }
 
@@ -434,7 +434,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Standings sync: failed to upsert standing for team ${provider.name}:${row.team.providerId}`, err);
-      errors.push(`team ${provider.name}:${row.team.providerId} (${row.team.name}) — ${message}`);
+      errors.push(`team ${provider.name}:${row.team.providerId} (${row.team.name}): ${message}`);
     }
   }
 

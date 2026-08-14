@@ -9,7 +9,7 @@ let cachedClient: Anthropic | null = null;
 
 export function getAnthropicClient(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not configured — check isAiConfigured() before calling this.");
+    throw new Error("ANTHROPIC_API_KEY is not configured. Check isAiConfigured() before calling this.");
   }
   if (!cachedClient) {
     cachedClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

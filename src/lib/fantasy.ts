@@ -43,10 +43,10 @@ export async function getOrCreateFantasyTeam(
         .eq("league_id", leagueId)
         .eq("owner_profile_id", profileId)
         .maybeSingle();
-      return { team: retried ?? null, error: retried ? null : "Couldn't create your fantasy team — try again." };
+      return { team: retried ?? null, error: retried ? null : "Couldn't create your fantasy team. Try again." };
     }
     console.error("Failed to create fantasy team", error);
-    return { team: null, error: "Couldn't create your fantasy team — try again." };
+    return { team: null, error: "Couldn't create your fantasy team. Try again." };
   }
 
   return { team: created, error: null };

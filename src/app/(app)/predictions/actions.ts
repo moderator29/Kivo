@@ -30,7 +30,7 @@ export async function submitPrediction(fixtureId: string, outcome: PredictionOut
     return { error: "That fixture no longer exists." };
   }
   if (fixture.status !== "scheduled" || new Date(fixture.kickoff_at) <= new Date()) {
-    return { error: "Predictions lock at kickoff — this match has already started." };
+    return { error: "Predictions lock at kickoff. This match has already started." };
   }
 
   const { error } = await supabase
@@ -42,7 +42,7 @@ export async function submitPrediction(fixtureId: string, outcome: PredictionOut
 
   if (error) {
     console.error("Failed to submit prediction", error);
-    return { error: "Couldn't save your prediction — try again." };
+    return { error: "Couldn't save your prediction. Try again." };
   }
 
   revalidatePath("/predictions");

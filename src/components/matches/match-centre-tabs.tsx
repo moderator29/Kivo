@@ -77,7 +77,7 @@ function DetailsTab({
   if (events.length === 0) {
     return (
       <EmptyState
-        message="No match events synced yet — the timeline appears once this fixture's details have been synced."
+        message="No match events synced yet. The timeline appears once this fixture's details have been synced."
         action={canSyncDetails && <InlineSyncButton label="Sync match details" action={syncDetailsAction} />}
       />
     );
@@ -223,7 +223,7 @@ export function MatchCentreTabs({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="kivo-glass flex rounded-xl p-1">
+      <div className="kivo-glass-sharp flex rounded-xl p-1">
         {TABS.map((tab) => (
           <button
             key={tab}

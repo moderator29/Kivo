@@ -18,7 +18,7 @@ export function FantasyOnboarding({ availableSeasons }: { availableSeasons: Seas
         </div>
         <h1 className="text-xl font-semibold text-foreground">Build your fantasy squad</h1>
         <p className="max-w-sm text-sm leading-relaxed text-foreground-muted">
-          You haven&apos;t joined a fantasy league yet — create one to start your own, or enter a friend&apos;s
+          You haven&apos;t joined a fantasy league yet. Create one to start your own, or enter a friend&apos;s
           invite code to join theirs.
         </p>
       </FadeIn>
@@ -74,7 +74,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
 
       {disabled ? (
         <p className="rounded-xl bg-white/5 px-3 py-3 text-xs leading-relaxed text-foreground-subtle">
-          No active season yet — fantasy leagues need a season to attach to. Check back once this season&apos;s
+          No active season yet. Fantasy leagues need a season to attach to. Check back once this season&apos;s
           competition calendar is synced.
         </p>
       ) : (

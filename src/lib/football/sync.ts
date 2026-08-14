@@ -262,7 +262,7 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Football sync: failed to sync fixture ${fixture.provider}:${fixture.providerId}`, err);
-      errors.push(`${fixture.provider}:${fixture.providerId} (${fixture.homeTeam.name} v ${fixture.awayTeam.name}) — ${message}`);
+      errors.push(`${fixture.provider}:${fixture.providerId} (${fixture.homeTeam.name} v ${fixture.awayTeam.name}): ${message}`);
     }
   }
 

@@ -90,18 +90,32 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
             >
               <div className="grid grid-cols-4 gap-2">
                 {moreItems.map((item) => {
+                  const active = isActiveRoute(pathname, item.href);
                   const Icon = item.icon;
                   const isComingSoon = item.status === "coming-soon" && !(item.id === "ai" && aiConfigured);
                   return (
                     <Link
                       key={item.id}
                       href={item.href}
-                      aria-current={isActiveRoute(pathname, item.href) ? "page" : undefined}
+                      aria-current={active ? "page" : undefined}
                       onClick={() => setMoreOpen(false)}
-                      className="flex flex-col items-center gap-2 rounded-xl px-2 py-3 text-center hover:bg-white/[0.06] active:scale-95 transition-transform"
+                      className="group flex flex-col items-center gap-2 rounded-xl px-2 py-3 text-center transition-transform hover:bg-white/[0.06] active:scale-95"
                     >
-                      <Icon className="h-5 w-5 text-foreground-muted" strokeWidth={1.75} />
-                      <span className="text-[11px] font-medium text-foreground-muted">{item.label}</span>
+                      <Icon
+                        className={cn(
+                          "h-5 w-5 transition-colors",
+                          active ? "text-kivo-cyan" : "text-foreground-subtle group-hover:text-foreground-muted",
+                        )}
+                        strokeWidth={1.75}
+                      />
+                      <span
+                        className={cn(
+                          "text-[11px] font-medium transition-colors",
+                          active ? "text-kivo-cyan" : "text-foreground-muted",
+                        )}
+                      >
+                        {item.label}
+                      </span>
                       {isComingSoon && (
                         <span className="text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
                           Soon
@@ -129,11 +143,11 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-transform active:scale-95",
-                active ? "text-kivo-cyan" : "text-foreground-subtle",
+                "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition active:scale-95",
+                active ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted",
               )}
             >
-              <Icon className="h-5 w-5" strokeWidth={1.75} />
+              <Icon className="h-5 w-5 transition-colors" strokeWidth={1.75} />
               {item.label}
               {active && (
                 <motion.span
@@ -149,13 +163,17 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
           ref={toggleButtonRef}
           onClick={() => setMoreOpen((v) => !v)}
           className={cn(
-            "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-transform active:scale-95",
-            moreOpen ? "text-kivo-cyan" : "text-foreground-subtle",
+            "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition active:scale-95",
+            moreOpen ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted",
           )}
           aria-expanded={moreOpen}
           aria-haspopup="dialog"
         >
-          {moreOpen ? <X className="h-5 w-5" strokeWidth={1.75} /> : <Menu className="h-5 w-5" strokeWidth={1.75} />}
+          {moreOpen ? (
+            <X className="h-5 w-5 transition-colors" strokeWidth={1.75} />
+          ) : (
+            <Menu className="h-5 w-5 transition-colors" strokeWidth={1.75} />
+          )}
           More
         </button>
       </nav>

@@ -47,9 +47,9 @@ export default async function AdminOverviewPage() {
   ]);
 
   const stats = [
-    { icon: Users, label: "Total users", value: canSeeUsers ? (userCount ?? 0) : "—" },
+    { icon: Users, label: "Total users", value: canSeeUsers ? (userCount ?? 0) : "-" },
     { icon: MessageSquare, label: "Total posts", value: postCount ?? 0 },
-    { icon: ShieldAlert, label: "Pending reports", value: canSeeReports ? (pendingReportCount ?? 0) : "—" },
+    { icon: ShieldAlert, label: "Pending reports", value: canSeeReports ? (pendingReportCount ?? 0) : "-" },
     { icon: Radio, label: "Football data providers live", value: 0 },
   ];
 
@@ -69,7 +69,7 @@ export default async function AdminOverviewPage() {
       <FadeIn delay={0.1} className="kivo-glass rounded-2xl p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">System status</h2>
         <p className="mt-2 text-sm text-foreground-muted">
-          No football data provider is connected yet (API-Football free tier is architected but not enabled — see
+          No football data provider is connected yet (API-Football free tier is architected but not enabled; see
           Data health). AI Copilot, notifications and fantasy scoring are not yet live. Social is fully operational.
         </p>
       </FadeIn>

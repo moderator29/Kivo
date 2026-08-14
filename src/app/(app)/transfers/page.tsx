@@ -97,7 +97,7 @@ export default async function TransfersPage() {
       <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Recorded transfers</h1>
         <p className="text-sm text-foreground-muted">
-          Real, already-completed moves for KIVO&apos;s synced players — newest first. No rumours or reports.
+          Real, already-completed moves for KIVO&apos;s synced players, newest first. No rumours or reports.
         </p>
       </FadeIn>
 

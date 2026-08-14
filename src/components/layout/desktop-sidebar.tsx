@@ -42,7 +42,7 @@ export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
               )}
               <Icon
                 className={cn(
-                  "relative z-10 h-[18px] w-[18px] shrink-0",
+                  "relative z-10 h-[18px] w-[18px] shrink-0 transition-colors",
                   active ? "text-kivo-cyan" : "text-foreground-subtle group-hover:text-foreground-muted",
                 )}
                 strokeWidth={1.75}

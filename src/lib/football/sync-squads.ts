@@ -174,7 +174,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
   const teamProviderId = await findMappedId(supabase, provider.name, "team", teamId);
   if (!teamProviderId) {
     return fail(
-      `Team ${teamId} has no ${provider.name} provider mapping yet — sync its competition's fixtures first.`,
+      `Team ${teamId} has no ${provider.name} provider mapping yet. Sync its competition's fixtures first.`,
     );
   }
 
@@ -194,7 +194,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Squad sync: getManager failed (continuing without manager)", err);
-    errors.push(`manager fetch — ${message}`);
+    errors.push(`manager fetch: ${message}`);
   }
 
   let processed = 0;
@@ -206,7 +206,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Squad sync: failed to upsert player ${provider.name}:${player.providerId}`, err);
-      errors.push(`player ${provider.name}:${player.providerId} (${player.fullName}) — ${message}`);
+      errors.push(`player ${provider.name}:${player.providerId} (${player.fullName}): ${message}`);
     }
   }
 
@@ -217,7 +217,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Squad sync: failed to upsert manager ${provider.name}:${manager.providerId}`, err);
-      errors.push(`manager ${provider.name}:${manager.providerId} (${manager.fullName}) — ${message}`);
+      errors.push(`manager ${provider.name}:${manager.providerId} (${manager.fullName}): ${message}`);
     }
   }
 

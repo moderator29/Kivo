@@ -161,7 +161,7 @@ export async function syncPlayerTransfers(playerId: string): Promise<SyncResult>
   const playerProviderId = await findProviderEntityId(supabase, provider.name, "player", playerId);
   if (!playerProviderId) {
     return fail(
-      `Player ${playerId} has no ${provider.name} provider mapping yet — sync its team's squad first.`,
+      `Player ${playerId} has no ${provider.name} provider mapping yet. Sync its team's squad first.`,
     );
   }
 
@@ -184,7 +184,7 @@ export async function syncPlayerTransfers(playerId: string): Promise<SyncResult>
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Transfer sync: failed to upsert transfer ${provider.name}:${transfer.providerId}`, err);
-      errors.push(`transfer ${provider.name}:${transfer.providerId} (${transfer.transferDate}) — ${message}`);
+      errors.push(`transfer ${provider.name}:${transfer.providerId} (${transfer.transferDate}): ${message}`);
     }
   }
 

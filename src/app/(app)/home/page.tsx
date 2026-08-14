@@ -112,7 +112,7 @@ export default async function HomePage() {
           </div>
         ) : (
           <p className="mt-3 text-sm text-foreground-muted">
-            No matches synced for today yet — the football data pipeline is admin-triggered, not automatic. Check{" "}
+            No matches synced for today yet. The football data pipeline is admin-triggered, not automatic. Check{" "}
             <Link href="/matches" className="text-kivo-cyan hover:text-kivo-cyan/80">
               Matches
             </Link>{" "}
@@ -126,21 +126,25 @@ export default async function HomePage() {
           {
             icon: Trophy,
             label: "Fantasy",
-            value: fantasyTeamCount ? "In league" : "—",
+            value: fantasyTeamCount ? "In league" : "–",
             href: "/fantasy",
+            brand: false,
           },
           {
             icon: Target,
             label: "Predictions",
-            value: predictionCount !== null ? String(predictionCount) : "—",
+            value: predictionCount !== null ? String(predictionCount) : "–",
             href: "/predictions",
+            brand: false,
           },
-          { icon: Flame, label: "XP", value: profile ? `${totalXp}` : "—", href: "/rewards" },
+          { icon: Flame, label: "XP", value: profile ? `${totalXp}` : "–", href: "/rewards", brand: true },
         ].map((stat) => (
           <Link
             key={stat.label}
             href={stat.href}
-            className="kivo-glass flex flex-col items-center gap-1.5 rounded-xl px-3 py-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            className={`flex flex-col items-center gap-1.5 rounded-xl px-3 py-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06] ${
+              stat.brand ? "kivo-glass-brand" : "kivo-glass-sharp"
+            }`}
           >
             <stat.icon className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
             <span className="text-lg font-semibold text-foreground">{stat.value}</span>
@@ -157,8 +161,8 @@ export default async function HomePage() {
           <Sparkles className="h-5 w-5 shrink-0 text-kivo-white" strokeWidth={1.75} />
           <p className="flex-1 text-sm font-medium text-kivo-white">
             {aiConfigured
-              ? "AI Copilot — ask anything about your teams, players and matches."
-              : "AI Copilot is coming — grounded answers about your teams, players and matches."}
+              ? "AI Copilot. Ask anything about your teams, players and matches."
+              : "AI Copilot is coming. Grounded answers about your teams, players and matches."}
           </p>
           <ArrowRight className="h-4 w-4 shrink-0 text-kivo-white/80 transition-transform group-hover:translate-x-0.5" />
         </Link>
@@ -172,7 +176,7 @@ export default async function HomePage() {
           </h2>
         </div>
         <p className="mt-3 text-sm text-foreground-muted">
-          The KIVO feed is live — share your take, react to posts, and follow the conversation.
+          The KIVO feed is live. Share your take, react to posts, and follow the conversation.
         </p>
         <Link
           href="/social"

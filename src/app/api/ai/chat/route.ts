@@ -111,7 +111,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("Anthropic request failed", err);
     return NextResponse.json(
-      { error: "AI Copilot is temporarily unavailable — try again in a moment." },
+      { error: "AI Copilot is temporarily unavailable. Try again in a moment." },
       { status: 502 },
     );
   }

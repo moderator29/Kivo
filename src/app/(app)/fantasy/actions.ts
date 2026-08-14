@@ -62,10 +62,10 @@ export async function createFantasyLeague(input: {
 
     if (error?.code === "23505") continue; // invite_code collision — retry with a fresh code
     console.error("Failed to create fantasy league", error);
-    return { error: "Couldn't create your league — try again.", leagueId: null };
+    return { error: "Couldn't create your league. Try again.", leagueId: null };
   }
 
-  return { error: "Couldn't generate a unique invite code — try again.", leagueId: null };
+  return { error: "Couldn't generate a unique invite code. Try again.", leagueId: null };
 }
 
 export async function joinFantasyLeague(inviteCode: string) {
@@ -81,7 +81,7 @@ export async function joinFantasyLeague(inviteCode: string) {
   if (error) {
     // redeem_invite_code raises plain, user-safe messages by design — pass
     // them straight through instead of a generic fallback.
-    return { error: error.message || "Couldn't join that league — try again." };
+    return { error: error.message || "Couldn't join that league. Try again." };
   }
 
   revalidatePath("/fantasy");
@@ -111,7 +111,7 @@ export async function setGameweekRoster(
     .maybeSingle();
   if (!gameweek) return { error: "That gameweek no longer exists." };
   if (new Date(gameweek.deadline_at) <= new Date()) {
-    return { error: "The deadline for this gameweek has passed — your squad is locked." };
+    return { error: "The deadline for this gameweek has passed. Your squad is locked." };
   }
 
   const { data: team } = await supabase
@@ -177,7 +177,7 @@ export async function setGameweekRoster(
       .in("player_id", toRemove);
     if (removeError) {
       console.error("Failed to remove dropped fantasy roster picks", removeError);
-      return { error: "Couldn't save your squad — try again." };
+      return { error: "Couldn't save your squad. Try again." };
     }
   }
 
@@ -196,7 +196,7 @@ export async function setGameweekRoster(
 
   if (upsertError) {
     console.error("Failed to save fantasy roster", upsertError);
-    return { error: "Couldn't save your squad — try again." };
+    return { error: "Couldn't save your squad. Try again." };
   }
 
   revalidatePath("/fantasy");
@@ -221,7 +221,7 @@ export async function setFantasyCaptain(
     .maybeSingle();
   if (!gameweek) return { error: "That gameweek no longer exists." };
   if (new Date(gameweek.deadline_at) <= new Date()) {
-    return { error: "The deadline for this gameweek has passed — your squad is locked." };
+    return { error: "The deadline for this gameweek has passed. Your squad is locked." };
   }
 
   const { data: team } = await supabase
@@ -245,7 +245,7 @@ export async function setFantasyCaptain(
   const targetHoldsOther = isCaptainRole ? target.is_vice_captain : target.is_captain;
   if (targetHoldsOther) {
     return {
-      error: `That player is already your ${isCaptainRole ? "vice-captain" : "captain"} — change that first.`,
+      error: `That player is already your ${isCaptainRole ? "vice-captain" : "captain"}. Change that first.`,
     };
   }
 
@@ -258,7 +258,7 @@ export async function setFantasyCaptain(
       : await supabase.from("fantasy_rosters").update({ is_vice_captain: false }).in("id", holderIds);
     if (clearError) {
       console.error("Failed to clear previous fantasy captain", clearError);
-      return { error: "Couldn't update captaincy — try again." };
+      return { error: "Couldn't update captaincy. Try again." };
     }
   }
 
@@ -267,7 +267,7 @@ export async function setFantasyCaptain(
     : await supabase.from("fantasy_rosters").update({ is_vice_captain: true }).eq("id", target.id);
   if (setError) {
     console.error("Failed to set fantasy captain", setError);
-    return { error: "Couldn't update captaincy — try again." };
+    return { error: "Couldn't update captaincy. Try again." };
   }
 
   revalidatePath("/fantasy");
@@ -308,7 +308,7 @@ export async function searchFantasyPlayers(
   const { data: players, error } = await request;
   if (error) {
     console.error("Failed to search players", error);
-    return { error: "Couldn't load players — try again.", players: [] };
+    return { error: "Couldn't load players. Try again.", players: [] };
   }
 
   const filtered = (players ?? []).filter((p) => position === "All" || positionGroup(p.position) === position);

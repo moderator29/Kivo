@@ -33,7 +33,7 @@ export default async function RewardsPage() {
         <p className="text-sm text-foreground-muted">XP and badges earned across KIVO.</p>
       </FadeIn>
 
-      <FadeIn delay={0.05} className="kivo-glass flex items-center gap-4 rounded-2xl p-5">
+      <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
         <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
           <Flame className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
         </div>

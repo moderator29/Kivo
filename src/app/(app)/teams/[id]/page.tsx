@@ -242,7 +242,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass rounded-2xl p-6">
+      <FadeIn className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
           <TeamCrest crestUrl={team.crest_url} name={team.name} size={56} />
           <div className="min-w-0 flex-1">

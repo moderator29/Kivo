@@ -34,7 +34,7 @@ export async function resolveReport(reportId: string, decision: Decision, note: 
 
   if (updateError) {
     console.error("Failed to resolve report", updateError);
-    return { error: "Couldn't update the report — try again." };
+    return { error: "Couldn't update the report. Try again." };
   }
 
   const { error: auditError } = await supabase.from("moderation_actions").insert({

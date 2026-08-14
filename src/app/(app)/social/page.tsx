@@ -42,7 +42,7 @@ export default async function SocialPage() {
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Users className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">
-            Nobody&apos;s posted yet — be the first to share your take on the game.
+            Nobody&apos;s posted yet. Be the first to share your take on the game.
           </p>
         </div>
       ) : (

@@ -20,7 +20,7 @@ export default function SignUpPage() {
         />
       ) : (
         <div className="kivo-glass max-w-sm rounded-2xl p-6 text-center text-sm text-foreground-muted">
-          Sign-up isn&apos;t configured in this environment yet — see ENVIRONMENT.md for the required Clerk keys.
+          Sign-up isn&apos;t configured in this environment yet. See ENVIRONMENT.md for the required Clerk keys.
         </div>
       )}
     </div>

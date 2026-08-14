@@ -23,7 +23,7 @@ export async function createPost(formData: FormData) {
 
   if (error) {
     console.error("Failed to create post", error);
-    return { error: "Couldn't publish your post — try again." };
+    return { error: "Couldn't publish your post. Try again." };
   }
 
   // awardBadge is a harmless no-op on repeat posts (unique constraint on

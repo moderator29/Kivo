@@ -15,8 +15,8 @@ export default async function ModerationPage() {
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Lock className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">
-            Moderation isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>) — this
-            isn&apos;t an empty queue, it&apos;s outside what your access covers.
+            Moderation isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>).
+            This isn&apos;t an empty queue, it&apos;s outside what your access covers.
           </p>
         </div>
       </div>
@@ -53,7 +53,7 @@ export default async function ModerationPage() {
       {!openReports || openReports.length === 0 ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <ShieldAlert className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-          <p className="text-sm text-foreground-muted">No reports yet — the queue is clear.</p>
+          <p className="text-sm text-foreground-muted">No reports yet. The queue is clear.</p>
         </FadeIn>
       ) : (
         <div className="flex flex-col gap-2">

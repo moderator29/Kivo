@@ -50,7 +50,7 @@ export function AiChat() {
       conversationId.current = data.conversationId;
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: data.reply }]);
     } catch {
-      setError("Couldn't reach KIVO's AI Copilot — check your connection and try again.");
+      setError("Couldn't reach KIVO's AI Copilot. Check your connection and try again.");
     } finally {
       setPending(false);
     }
@@ -69,7 +69,7 @@ export function AiChat() {
         {messages.length === 0 && (
           <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
             <p className="text-sm text-foreground-muted">
-              Ask me anything about football. I only state facts KIVO has actually verified — if the data isn&apos;t
+              Ask me anything about football. I only state facts KIVO has actually verified. If the data isn&apos;t
               synced yet, I&apos;ll say so instead of guessing.
             </p>
             <div className="flex flex-wrap gap-2">

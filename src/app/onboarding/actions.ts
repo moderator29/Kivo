@@ -29,10 +29,10 @@ export async function completeOnboarding(formData: FormData) {
 
   if (error) {
     if (error.code === "23505") {
-      return { error: "That username is taken — try another." };
+      return { error: "That username is taken. Try another." };
     }
     console.error("Failed to complete onboarding", error);
-    return { error: "Something went wrong — try again." };
+    return { error: "Something went wrong. Try again." };
   }
 
   await Promise.all([awardXp(profile.id, 10, "Completed onboarding"), awardBadge(profile.id, "welcome")]);

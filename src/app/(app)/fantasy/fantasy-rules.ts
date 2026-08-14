@@ -92,7 +92,7 @@ export function validateRoster(picks: RosterPick[]): RosterValidation {
     seen.add(pick.playerId);
 
     if (pick.positionGroup === "Other") {
-      return { ok: false, error: "One of your picks doesn't have a recognised position yet — try a different player." };
+      return { ok: false, error: "One of your picks doesn't have a recognised position yet. Try a different player." };
     }
 
     counts[pick.positionGroup]++;

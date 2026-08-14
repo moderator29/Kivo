@@ -27,7 +27,7 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
 
   if (error) {
     console.error("Failed to toggle follow", error);
-    return { error: "Couldn't update — try again.", following: currentlyFollowing };
+    return { error: "Couldn't update. Try again.", following: currentlyFollowing };
   }
 
   revalidatePath("/", "layout");

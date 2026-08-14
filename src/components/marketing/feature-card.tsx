@@ -21,9 +21,9 @@ export function FeatureCard({
       viewport={{ once: true, margin: "-80px" }}
       transition={{ duration: 0.4, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -4 }}
-      className="kivo-glass flex flex-col gap-3 rounded-2xl p-6 transition-shadow hover:shadow-[0_12px_40px_-12px_rgba(37,99,255,0.35)]"
+      className="kivo-glass-brand flex flex-col gap-3 rounded-2xl p-6 transition-shadow hover:shadow-[0_12px_40px_-12px_rgba(37,99,255,0.35)]"
     >
-      <Image src={icon} alt="" width={48} height={48} className="h-12 w-12" />
+      <Image src={icon} alt="" width={56} height={56} className="h-14 w-14 object-contain" />
       <h3 className="text-base font-semibold text-foreground">{title}</h3>
       <p className="text-sm leading-relaxed text-foreground-muted">{description}</p>
     </motion.div>

@@ -235,7 +235,7 @@ export function FantasyBuilder({ teams, activeTeamId, league, gameweek, initialR
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-8 pb-28 lg:px-8">
-      <FadeIn className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
+      <FadeIn className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-foreground">{league.name}</h1>
@@ -314,8 +314,8 @@ export function FantasyBuilder({ teams, activeTeamId, league, gameweek, initialR
               <div className="relative flex flex-col items-center gap-3 py-10 text-center">
                 <p className="text-sm text-foreground-muted">Your squad is empty.</p>
                 <p className="max-w-xs text-xs text-foreground-subtle">
-                  Pick {SQUAD_SIZE} players — {SQUAD_RULES.Goalkeepers} goalkeepers, {SQUAD_RULES.Defenders} defenders,{" "}
-                  {SQUAD_RULES.Midfielders} midfielders and {SQUAD_RULES.Forwards} forwards — within a{" "}
+                  Pick {SQUAD_SIZE} players: {SQUAD_RULES.Goalkeepers} goalkeepers, {SQUAD_RULES.Defenders} defenders,{" "}
+                  {SQUAD_RULES.Midfielders} midfielders and {SQUAD_RULES.Forwards} forwards, within a{" "}
                   {formatFantasyPrice(FANTASY_BUDGET_CAP)} budget.
                 </p>
                 <button
@@ -391,7 +391,7 @@ export function FantasyBuilder({ teams, activeTeamId, league, gameweek, initialR
                 )}
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-foreground-subtle">
-                    {locked ? "The deadline has passed — this gameweek is locked." : "You have unsaved squad changes."}
+                    {locked ? "The deadline has passed. This gameweek is locked." : "You have unsaved squad changes."}
                   </p>
                   <button
                     type="button"
@@ -716,14 +716,14 @@ function PlayerPicker({
 
             <div className="flex-1 overflow-y-auto">
               {locked ? (
-                <p className="py-8 text-center text-xs text-foreground-subtle">This gameweek is locked — changes are closed.</p>
+                <p className="py-8 text-center text-xs text-foreground-subtle">This gameweek is locked. Changes are closed.</p>
               ) : error ? (
                 <p className="py-8 text-center text-xs text-critical">{error}</p>
               ) : searching && results.length === 0 ? (
                 <p className="py-8 text-center text-xs text-foreground-subtle">Searching…</p>
               ) : results.length === 0 ? (
                 <p className="py-8 text-center text-xs text-foreground-subtle">
-                  No players synced yet — the picker fills in once KIVO&apos;s football data sync has run.
+                  No players synced yet. The picker fills in once KIVO&apos;s football data sync has run.
                 </p>
               ) : (
                 <div className="flex flex-col divide-y divide-white/5">

@@ -16,7 +16,7 @@ const STATUS_STYLE: Record<SyncStatus, { icon: typeof CheckCircle2; className: s
 };
 
 function formatTimestamp(value: string | null): string {
-  if (!value) return "—";
+  if (!value) return "-";
   return new Date(value).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
@@ -35,8 +35,8 @@ export default async function DataHealthPage() {
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Lock className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">
-            Football data isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>) — this
-            isn&apos;t empty, it&apos;s outside what your access covers.
+            Football data isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>).
+            This isn&apos;t empty, it&apos;s outside what your access covers.
           </p>
         </div>
       </div>
@@ -77,7 +77,7 @@ export default async function DataHealthPage() {
             </p>
             <p className="text-xs text-foreground-subtle">
               {providerConfigured
-                ? "API_FOOTBALL_KEY is set — sync writes real fixtures via the service-role client."
+                ? "API_FOOTBALL_KEY is set. Sync writes real fixtures via the service-role client."
                 : "Set API_FOOTBALL_KEY to enable syncing. The dev-only mock provider is never used here."}
             </p>
           </div>
@@ -91,7 +91,7 @@ export default async function DataHealthPage() {
         {!syncRuns || syncRuns.length === 0 ? (
           <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
             {providerConfigured
-              ? "No syncs have run yet — use Sync now above to pull today's fixtures."
+              ? "No syncs have run yet. Use Sync now above to pull today's fixtures."
               : "No syncs have run yet."}
           </div>
         ) : (

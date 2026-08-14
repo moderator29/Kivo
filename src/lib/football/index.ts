@@ -28,7 +28,7 @@ export function getFootballDataProvider(): FootballDataProvider {
     cachedProvider = new MockFootballProvider();
   } else {
     throw new Error(
-      "No football data provider configured. Set API_FOOTBALL_KEY (see ENVIRONMENT.md) — the mock provider is development-only.",
+      "No football data provider configured. Set API_FOOTBALL_KEY (see ENVIRONMENT.md). The mock provider is development-only.",
     );
   }
 

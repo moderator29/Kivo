@@ -17,7 +17,7 @@ export async function triggerFootballSync(): Promise<{ error: string | null; rec
   // Mirrors the guard in getFootballDataProvider(): never let a "sync" silently run
   // against the dev-only mock provider and look like a real, production sync happened.
   if (!process.env.API_FOOTBALL_KEY) {
-    return { error: "No real football data provider is configured — set API_FOOTBALL_KEY before syncing." };
+    return { error: "No real football data provider is configured. Set API_FOOTBALL_KEY before syncing." };
   }
 
   const result = await syncTodayFixtures();
@@ -26,7 +26,7 @@ export async function triggerFootballSync(): Promise<{ error: string | null; rec
   revalidatePath("/matches");
 
   if (result.status === "failed") {
-    return { error: result.error ?? "Sync failed — see the sync_runs row for details." };
+    return { error: result.error ?? "Sync failed. See the sync_runs row for details." };
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };
@@ -41,7 +41,7 @@ async function requireFootballDataAccess(): Promise<{ error: string } | null> {
     return { error: "You don't have football data admin access." };
   }
   if (!process.env.API_FOOTBALL_KEY) {
-    return { error: "No real football data provider is configured — set API_FOOTBALL_KEY before syncing." };
+    return { error: "No real football data provider is configured. Set API_FOOTBALL_KEY before syncing." };
   }
   return null;
 }
@@ -57,7 +57,7 @@ export async function triggerTeamSquadSync(teamId: string): Promise<{ error: str
   revalidatePath("/admin/data-health");
 
   if (result.status === "failed") {
-    return { error: result.error ?? "Squad sync failed — see the sync_runs row for details." };
+    return { error: result.error ?? "Squad sync failed. See the sync_runs row for details." };
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };
@@ -75,7 +75,7 @@ export async function triggerFixtureDetailsSync(
   revalidatePath("/admin/data-health");
 
   if (result.status === "failed") {
-    return { error: result.error ?? "Fixture details sync failed — see the sync_runs row for details." };
+    return { error: result.error ?? "Fixture details sync failed. See the sync_runs row for details." };
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };
@@ -91,7 +91,7 @@ export async function triggerStandingsSync(seasonId: string): Promise<{ error: s
   revalidatePath("/admin/data-health");
 
   if (result.status === "failed") {
-    return { error: result.error ?? "Standings sync failed — see the sync_runs row for details." };
+    return { error: result.error ?? "Standings sync failed. See the sync_runs row for details." };
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };
@@ -110,7 +110,7 @@ export async function triggerPlayerTransfersSync(playerId: string): Promise<{ er
   revalidatePath(`/players/${playerId}`);
 
   if (result.status === "failed") {
-    return { error: result.error ?? "Transfer sync failed — see the sync_runs row for details." };
+    return { error: result.error ?? "Transfer sync failed. See the sync_runs row for details." };
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };

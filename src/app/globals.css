@@ -83,6 +83,54 @@ body {
   background: var(--kivo-glass-hover);
 }
 
+/* Glass panel with a visible brand-gradient stroke around it, for moments
+   that should read as "premium" rather than ambient (hero cards, feature
+   highlights). The gradient lives on a masked ::before ring so the actual
+   glass background stays untouched and independently opaque/blurred —
+   stacking the gradient directly into .kivo-glass's own (mostly
+   transparent) background would just let the bright gradient dominate the
+   whole card instead of reading as a thin stroke. */
+.kivo-glass-brand {
+  position: relative;
+  background: var(--kivo-glass);
+  border: 1px solid transparent;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.kivo-glass-brand:hover {
+  background: var(--kivo-glass-hover);
+}
+
+.kivo-glass-brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-violet), var(--kivo-magenta));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Sharp-edged glass for buttons/controls: a crisp bright border instead of
+   the ambient low-opacity one on .kivo-glass, so it reads as interactive. */
+.kivo-glass-sharp {
+  background: var(--kivo-glass);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.kivo-glass-sharp:hover {
+  background: var(--kivo-glass-hover);
+  border-color: rgba(0, 217, 255, 0.6);
+}
+
 .kivo-gradient-prime {
   background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
 }

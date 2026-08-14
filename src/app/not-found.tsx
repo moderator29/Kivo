@@ -8,7 +8,7 @@ export default function NotFound() {
         <Compass className="h-8 w-8 text-kivo-white" strokeWidth={1.75} />
       </div>
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-foreground">Offside — this page doesn&apos;t exist.</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Offside. This page doesn&apos;t exist.</h1>
         <p className="max-w-md text-sm text-foreground-muted">
           The page you&apos;re looking for isn&apos;t here. Let&apos;s get you back to the game.
         </p>

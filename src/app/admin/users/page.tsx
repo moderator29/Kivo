@@ -13,8 +13,8 @@ export default async function AdminUsersPage() {
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Lock className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">
-            User data isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>) — this
-            isn&apos;t an empty list, it&apos;s outside what your access covers.
+            User data isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>).
+            This isn&apos;t an empty list, it&apos;s outside what your access covers.
           </p>
         </div>
       </div>
@@ -49,7 +49,7 @@ export default async function AdminUsersPage() {
             {(users ?? []).map((user) => (
               <tr key={user.id} className="border-b border-white/5 last:border-0">
                 <td className="px-4 py-3 text-foreground">{user.username}</td>
-                <td className="px-4 py-3 text-foreground-muted">{user.display_name ?? "—"}</td>
+                <td className="px-4 py-3 text-foreground-muted">{user.display_name ?? "-"}</td>
                 <td className="px-4 py-3 text-foreground-muted">{user.role}</td>
                 <td className="px-4 py-3 text-foreground-muted">
                   {new Date(user.created_at).toLocaleDateString()}

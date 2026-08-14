@@ -47,7 +47,7 @@ export default async function PredictionsPage() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Predictions</h1>
-        <p className="text-sm text-foreground-muted">Pick an outcome before kickoff — predictions lock the moment a match starts.</p>
+        <p className="text-sm text-foreground-muted">Pick an outcome before kickoff. Predictions lock the moment a match starts.</p>
       </FadeIn>
 
       <div className="flex flex-col gap-3">

@@ -112,7 +112,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass rounded-2xl p-6">
+      <FadeIn className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/5">
             <UserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />

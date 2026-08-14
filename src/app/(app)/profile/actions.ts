@@ -22,9 +22,9 @@ export async function updateUsername(formData: FormData) {
   const { error } = await supabase.from("profiles").update({ username }).eq("id", profile.id);
 
   if (error) {
-    if (error.code === "23505") return { error: "That username is taken — try another." };
+    if (error.code === "23505") return { error: "That username is taken. Try another." };
     console.error("Failed to update username", error);
-    return { error: "Something went wrong — try again." };
+    return { error: "Something went wrong. Try again." };
   }
 
   revalidatePath("/profile");

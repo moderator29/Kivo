@@ -16,7 +16,7 @@ export function OnboardingForm({ defaultUsername }: { defaultUsername: string })
           if (result?.error) setError(result.error);
         });
       }}
-      className="kivo-glass flex w-full max-w-sm flex-col gap-4 rounded-2xl p-5"
+      className="kivo-glass-brand flex w-full max-w-sm flex-col gap-4 rounded-2xl p-5"
     >
       <div className="flex flex-col gap-1.5">
         <label htmlFor="username" className="text-xs font-medium text-foreground-muted">

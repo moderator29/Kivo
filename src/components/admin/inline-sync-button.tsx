@@ -45,7 +45,7 @@ export function InlineSyncButton({ label, action }: InlineSyncButtonProps) {
           ) : (
             <>
               <Check className="h-3 w-3 shrink-0" strokeWidth={2} />
-              Synced {result.recordsProcessed ?? 0} record{result.recordsProcessed === 1 ? "" : "s"} — refresh to see it
+              Synced {result.recordsProcessed ?? 0} record{result.recordsProcessed === 1 ? "" : "s"}. Refresh to see it
             </>
           )}
         </p>

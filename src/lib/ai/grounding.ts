@@ -57,7 +57,7 @@ export async function buildGroundingContext(profile: Profile | null): Promise<Gr
     }
   } else {
     lines.push(
-      "No fixtures are synced into KIVO's database yet — the football data provider integration exists but no sync has populated real matches. Do not invent fixtures, scores, or standings.",
+      "No fixtures are synced into KIVO's database yet. The football data provider integration exists but no sync has populated real matches. Do not invent fixtures, scores, or standings.",
     );
   }
 
