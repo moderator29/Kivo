@@ -3,6 +3,7 @@ import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
 import kivoLogo from "../../../public/brand/kivo-logo.png";
 import { getOrCreateProfile } from "@/lib/profile";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 import { isClerkConfigured } from "@/lib/clerk";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -31,6 +32,16 @@ export default async function OnboardingPage() {
     redirect("/home");
   }
 
+  // Only offer the favourite-team step when there's real, synced data to
+  // pick from — an empty picker on a brand-new environment would be a dead
+  // end, not a personalization step.
+  const supabase = createServerSupabaseClient();
+  const { data: teams } = await supabase
+    .from("teams")
+    .select("id, name, short_name, crest_url")
+    .order("name", { ascending: true })
+    .limit(60);
+
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
       <div className="kivo-aurora" aria-hidden="true">
@@ -44,15 +55,8 @@ export default async function OnboardingPage() {
           <Image src={kivoLogo} alt="KIVO" width={96} height={96} className="h-24 w-24" priority />
         </FadeIn>
 
-        <FadeIn delay={0.08} className="flex w-full max-w-sm flex-col gap-2 text-center">
-          <h1 className="text-xl font-semibold text-foreground">Pick your KIVO handle</h1>
-          <p className="text-sm text-foreground-muted">
-            This is how other fans will see you in Match Rooms and the feed. You can change it later.
-          </p>
-        </FadeIn>
-
         <FadeIn delay={0.16} className="w-full max-w-sm">
-          <OnboardingForm defaultUsername={profile.username} />
+          <OnboardingForm defaultUsername={profile.username} availableTeams={teams ?? []} />
         </FadeIn>
       </div>
     </div>
