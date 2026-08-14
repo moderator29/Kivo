@@ -80,6 +80,8 @@ export function NotificationBell({
   );
   const [, startTransition] = useTransition();
   const panelRef = useRef<HTMLDivElement>(null);
+  const bellButtonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -87,7 +89,14 @@ export function NotificationBell({
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
     }
     function onEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        // Unlike click-outside (which may land on another real, focusable
+        // element the user meant to interact with), Escape has nowhere else
+        // for focus to go, so return it to the bell rather than stranding
+        // keyboard users on a now-hidden panel.
+        bellButtonRef.current?.focus();
+      }
     }
     document.addEventListener("mousedown", onClickOutside);
     document.addEventListener("keydown", onEscape);
@@ -95,6 +104,15 @@ export function NotificationBell({
       document.removeEventListener("mousedown", onClickOutside);
       document.removeEventListener("keydown", onEscape);
     };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => {
+      const firstFocusable = dropdownRef.current?.querySelector<HTMLElement>("a, button");
+      firstFocusable?.focus();
+    });
+    return () => cancelAnimationFrame(id);
   }, [open]);
 
   function handleItemClick(id: string) {
@@ -140,6 +158,7 @@ export function NotificationBell({
   return (
     <div ref={panelRef} className="relative">
       <button
+        ref={bellButtonRef}
         onClick={() => setOpen((v) => !v)}
         aria-label={state.unreadCount > 0 ? `Notifications, ${state.unreadCount} unread` : "Notifications"}
         aria-expanded={open}
@@ -160,6 +179,7 @@ export function NotificationBell({
       <AnimatePresence>
         {open && (
           <motion.div
+            ref={dropdownRef}
             role="dialog"
             aria-label="Notifications"
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
