@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp } from "@/lib/rewards";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_POST_LENGTH = 2000;
 
@@ -18,8 +19,16 @@ export async function createPost(formData: FormData) {
     return { error: "You must be signed in to post." };
   }
 
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "create_post", 5, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
+  // Optional match-room scoping: PostComposer includes this as a hidden field
+  // when it's rendered inside Match Centre's Room tab (see MatchRoomTab). Left
+  // unset, the insert lands as a normal, unscoped community post.
+  const fixtureId = String(formData.get("fixture_id") ?? "").trim() || null;
+
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase.from("posts").insert({ author_profile_id: profile.id, body });
+  const { error } = await supabase.from("posts").insert({ author_profile_id: profile.id, body, fixture_id: fixtureId });
 
   if (error) {
     console.error("Failed to create post", error);
@@ -31,12 +40,16 @@ export async function createPost(formData: FormData) {
   await Promise.all([awardXp(profile.id, 2, "Posted in the community"), awardBadge(profile.id, "first_post")]);
 
   revalidatePath("/social");
+  if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
   return { error: null };
 }
 
 export async function toggleLike(postId: string, alreadyLiked: boolean) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in to react." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "toggle_like", 30, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
 

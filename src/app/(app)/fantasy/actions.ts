@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { getOrCreateFantasyTeam, ensureFantasyPlayerPrices } from "@/lib/fantasy";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   generateInviteCode,
   positionGroup,
@@ -72,6 +73,10 @@ export async function joinFantasyLeague(inviteCode: string) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in to join a league." };
 
+  // Also guards against brute-forcing another league's invite code.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "join_fantasy_league", 5, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
   const code = inviteCode.trim().toUpperCase();
   if (!code) return { error: "Enter an invite code." };
 
@@ -101,6 +106,9 @@ export async function setGameweekRoster(
 ) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "set_gameweek_roster", 10, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
 

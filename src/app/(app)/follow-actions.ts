@@ -3,12 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 type FollowTargetType = "team" | "player" | "competition";
 
 export async function toggleFollow(targetType: FollowTargetType, targetId: string, currentlyFollowing: boolean) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in to follow.", following: currentlyFollowing };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "toggle_follow", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error, following: currentlyFollowing };
 
   const supabase = createServerSupabaseClient();
 

@@ -52,6 +52,12 @@ export async function getOrCreateFantasyTeam(
   return { team: created, error: null };
 }
 
+// Callers pass in whatever a search/picker query returned (up to 60 rows —
+// see searchFantasyPlayers' own .limit(60)); cap here too so a future caller
+// widening its own query can't turn this into an unbounded service-role
+// write on every debounced keystroke.
+const MAX_ENSURE_BATCH = 60;
+
 /**
  * Lazily backfills the flat, clearly-arbitrary default price for any of the
  * given players who don't yet have a fantasy_player_prices row for this
@@ -62,13 +68,31 @@ export async function getOrCreateFantasyTeam(
  * fallback-creation shape as getOrCreateProfile above. Never invents
  * per-player differentiation — every backfilled row gets the identical
  * default.
+ *
+ * Checks which players already have a row through the ordinary RLS-gated
+ * client first (fantasy_player_prices is public-read) and only upserts the
+ * missing delta through the service-role client — this is called on every
+ * debounced keystroke of the player picker, so a search whose results are
+ * already fully priced (the common case after the first backfill) does no
+ * service-role write at all.
  */
 export async function ensureFantasyPlayerPrices(seasonId: string, playerIds: string[]): Promise<void> {
-  const uniqueIds = Array.from(new Set(playerIds));
+  const uniqueIds = Array.from(new Set(playerIds)).slice(0, MAX_ENSURE_BATCH);
   if (uniqueIds.length === 0) return;
 
+  const supabase = createServerSupabaseClient();
+  const { data: existing } = await supabase
+    .from("fantasy_player_prices")
+    .select("player_id")
+    .eq("season_id", seasonId)
+    .in("player_id", uniqueIds);
+
+  const existingIds = new Set((existing ?? []).map((row) => row.player_id));
+  const missingIds = uniqueIds.filter((id) => !existingIds.has(id));
+  if (missingIds.length === 0) return;
+
   const service = createServiceRoleSupabaseClient();
-  const rows = uniqueIds.map((playerId) => ({
+  const rows = missingIds.map((playerId) => ({
     player_id: playerId,
     season_id: seasonId,
     price: DEFAULT_FANTASY_PRICE,

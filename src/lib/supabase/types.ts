@@ -1280,6 +1280,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_events: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          profile_id_or_ip: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          profile_id_or_ip: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          profile_id_or_ip?: string
+        }
+        Relationships: []
+      }
       reactions: {
         Row: {
           created_at: string
@@ -1717,15 +1738,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_public_profiles: {
-        Args: { p_ids: string[] }
-        Returns: {
-          avatar_url: string | null
-          display_name: string | null
-          id: string
-          username: string
-        }[]
-      }
       get_fantasy_league_leaderboard: {
         Args: { p_team_id: string }
         Returns: {
@@ -1734,15 +1746,6 @@ export type Database = {
           team_id: string
           team_name: string
           total_points: number
-        }[]
-      }
-      get_predictions_leaderboard: {
-        Args: { p_limit?: number }
-        Returns: {
-          display_name: string | null
-          profile_id: string
-          total_points: number
-          username: string
         }[]
       }
       get_fantasy_team_league: {
@@ -1755,6 +1758,24 @@ export type Database = {
           max_teams: number
           season_id: string
           team_count: number
+        }[]
+      }
+      get_predictions_leaderboard: {
+        Args: { p_limit?: number }
+        Returns: {
+          display_name: string
+          profile_id: string
+          total_points: number
+          username: string
+        }[]
+      }
+      get_public_profiles: {
+        Args: { p_ids: string[] }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+          username: string
         }[]
       }
       redeem_invite_code: {

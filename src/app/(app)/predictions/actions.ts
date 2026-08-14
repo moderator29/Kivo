@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 type PredictionOutcome = "home_win" | "draw" | "away_win";
 
@@ -18,6 +19,9 @@ export async function submitPrediction(fixtureId: string, outcome: PredictionOut
   if (!profile) {
     return { error: "You must be signed in to predict." };
   }
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "submit_prediction", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { data: fixture, error: fixtureError } = await supabase

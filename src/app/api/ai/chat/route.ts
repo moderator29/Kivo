@@ -3,9 +3,15 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured, getAnthropicClient, AI_MODEL } from "@/lib/ai/client";
 import { buildGroundingContext } from "@/lib/ai/grounding";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_MESSAGES = 20;
+
+// Each call costs real money against the Anthropic API, so this cap is
+// tighter than the app's other rate limits.
+const AI_CHAT_MAX_REQUESTS = 10;
+const AI_CHAT_WINDOW_SECONDS = 60;
 
 const SYSTEM_PROMPT = `You are KIVO's AI Copilot, a football intelligence assistant embedded in the KIVO app.
 
@@ -24,6 +30,16 @@ export async function POST(req: Request) {
 
   if (!isAiConfigured()) {
     return NextResponse.json({ error: "AI Copilot isn't configured in this environment yet." }, { status: 503 });
+  }
+
+  const rateLimit = await checkRateLimit(
+    `user:${profile.id}`,
+    "ai_chat",
+    AI_CHAT_MAX_REQUESTS,
+    AI_CHAT_WINDOW_SECONDS,
+  );
+  if (!rateLimit.ok) {
+    return NextResponse.json({ error: rateLimit.error }, { status: 429 });
   }
 
   let body: { conversationId?: string; message?: string };

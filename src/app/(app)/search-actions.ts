@@ -1,6 +1,8 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getOrCreateProfile } from "@/lib/profile";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export type SearchResult = {
   type: "team" | "player" | "competition";
@@ -11,6 +13,18 @@ export type SearchResult = {
 };
 
 const RESULTS_PER_CATEGORY = 5;
+const MAX_QUERY_LENGTH = 80;
+
+/**
+ * Escapes ilike's special characters (%, _) and its escape character itself
+ * (\) so a search term containing them is matched literally instead of
+ * silently altering the pattern — e.g. a user searching for "50%" or
+ * "under_18" shouldn't accidentally turn part of their own query into a
+ * wildcard.
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
 
 /**
  * Powers the global command palette (⌘K). Searches the three entity tables
@@ -18,13 +32,22 @@ const RESULTS_PER_CATEGORY = 5;
  * aren't included since "search for a match" is better served by browsing
  * /matches, and a name-based fixture search would mostly just re-surface
  * team results anyway.
+ *
+ * Guest-callable (no auth required), so it's rate-limited by profile when
+ * signed in and by IP otherwise — same reasoning as getClientIp's own
+ * doc-comment about why a spoofable header is an acceptable key here.
  */
 export async function searchPlatform(query: string): Promise<SearchResult[]> {
-  const trimmed = query.trim();
+  const trimmed = query.trim().slice(0, MAX_QUERY_LENGTH);
   if (trimmed.length < 2) return [];
 
+  const profile = await getOrCreateProfile();
+  const rateLimitKey = profile ? `user:${profile.id}` : `ip:${await getClientIp()}`;
+  const rateLimit = await checkRateLimit(rateLimitKey, "search_platform", 30, 60);
+  if (!rateLimit.ok) return [];
+
   const supabase = createServerSupabaseClient();
-  const pattern = `%${trimmed}%`;
+  const pattern = `%${escapeLikePattern(trimmed)}%`;
 
   const [{ data: teams }, { data: players }, { data: competitions }] = await Promise.all([
     supabase.from("teams").select("id, name, country, crest_url").ilike("name", pattern).limit(RESULTS_PER_CATEGORY),
