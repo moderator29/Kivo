@@ -73,7 +73,19 @@ async function upsertCompetition(
 
 /** Seasons aren't provider-mapped (the provider only reports a bare year, no
  * stable season id) — deduped instead on the table's own (competition_id, name)
- * unique constraint, same race-safe select/insert/re-select shape as profile.ts. */
+ * unique constraint, same race-safe select/insert/re-select shape as profile.ts.
+ *
+ * Every fixture sync only ever asks for *today's* fixtures (see
+ * syncTodayFixtures below), so whatever season year the provider reports for a
+ * competition right now is, by definition, that competition's current season —
+ * there is no other signal to use. Mark it current every time this runs, and
+ * unset every other season for the same competition first: the DB enforces at
+ * most one current season per competition (idx_seasons_one_current_per_competition),
+ * and unsetting-then-setting (rather than the reverse) never has both a old and
+ * a new row simultaneously true, so it can never trip that constraint mid-update.
+ * Without this, `is_current` stays permanently false forever (its column
+ * default), which is exactly what made "/fantasy" and every team's "League
+ * position" permanently empty — see RECOMMENDATIONS.md item 1. */
 async function upsertSeason(supabase: ServiceClient, competitionId: string, seasonYear: number): Promise<string> {
   const name = String(seasonYear);
 
@@ -84,29 +96,54 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
     .eq("name", name)
     .maybeSingle();
   if (selectError) throw selectError;
-  if (existing) return existing.id;
 
-  const { data: created, error: insertError } = await supabase
-    .from("seasons")
-    .insert({ competition_id: competitionId, name })
-    .select("id")
-    .single();
+  let seasonId: string;
+  if (existing) {
+    seasonId = existing.id;
+  } else {
+    const { data: created, error: insertError } = await supabase
+      .from("seasons")
+      .insert({ competition_id: competitionId, name })
+      .select("id")
+      .single();
 
-  if (insertError) {
-    if (insertError.code === "23505") {
-      const { data: retried, error: retryError } = await supabase
-        .from("seasons")
-        .select("id")
-        .eq("competition_id", competitionId)
-        .eq("name", name)
-        .maybeSingle();
-      if (retryError) throw retryError;
-      if (retried) return retried.id;
+    if (insertError) {
+      if (insertError.code === "23505") {
+        const { data: retried, error: retryError } = await supabase
+          .from("seasons")
+          .select("id")
+          .eq("competition_id", competitionId)
+          .eq("name", name)
+          .maybeSingle();
+        if (retryError) throw retryError;
+        if (!retried) throw insertError;
+        seasonId = retried.id;
+      } else {
+        throw insertError;
+      }
+    } else if (!created) {
+      throw new Error("Failed to insert season");
+    } else {
+      seasonId = created.id;
     }
-    throw insertError;
   }
-  if (!created) throw new Error("Failed to insert season");
-  return created.id;
+
+  const { error: unsetError } = await supabase
+    .from("seasons")
+    .update({ is_current: false })
+    .eq("competition_id", competitionId)
+    .eq("is_current", true)
+    .neq("id", seasonId);
+  if (unsetError) throw unsetError;
+
+  const { error: setCurrentError } = await supabase
+    .from("seasons")
+    .update({ is_current: true })
+    .eq("id", seasonId)
+    .eq("is_current", false);
+  if (setCurrentError) throw setCurrentError;
+
+  return seasonId;
 }
 
 async function upsertVenue(
