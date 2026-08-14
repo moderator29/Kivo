@@ -161,7 +161,7 @@ export function NotificationBell({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 500, damping: 40 }}
-            className="kivo-glass-brand absolute right-0 top-11 z-30 w-80 overflow-hidden rounded-2xl"
+            className="kivo-glass-brand fixed left-4 right-4 top-16 z-30 max-h-[70vh] overflow-hidden rounded-2xl sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:max-h-none sm:w-80"
           >
             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Notifications</span>

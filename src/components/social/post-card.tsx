@@ -67,8 +67,8 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
         <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white">
           {authorName.charAt(0).toUpperCase()}
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-foreground">{authorName}</span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium text-foreground">{authorName}</span>
           <span className="text-xs text-foreground-subtle">{timeAgo(createdAt)}</span>
         </div>
       </div>

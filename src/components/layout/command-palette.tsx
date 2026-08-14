@@ -98,7 +98,7 @@ export function CommandPalette() {
         className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-white/5"
       >
         <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-        <span className="flex-1 text-foreground-subtle">Search teams, players, competitions…</span>
+        <span className="min-w-0 flex-1 truncate text-foreground-subtle">Search teams, players, competitions…</span>
         <kbd className="hidden rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-foreground-subtle sm:inline-block">
           ⌘K
         </kbd>

@@ -18,7 +18,7 @@ export async function TopBar({ signedIn }: { signedIn: boolean }) {
         <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
 
-      <div className="ml-auto flex flex-1 items-center gap-3 lg:ml-0">
+      <div className="ml-auto flex min-w-0 flex-1 items-center gap-3 lg:ml-0">
         <CommandPalette />
       </div>
 
