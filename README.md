@@ -51,7 +51,9 @@ design/                — icon manifest + processed brand assets
 | `npm run dev` | Local dev server |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint |
-| `npx tsc --noEmit` | Typecheck |
+| `npm run typecheck` (or `npx tsc --noEmit`) | Typecheck |
+| `npm test` | Run unit tests (Vitest) |
+| `npm run test:watch` | Run unit tests in watch mode |
 
 ## Documentation index
 
