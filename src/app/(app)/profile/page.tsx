@@ -1,8 +1,9 @@
-import { currentUser } from "@clerk/nextjs/server";
 import { CircleUserRound } from "lucide-react";
+import { getOrCreateProfile } from "@/lib/profile";
+import { UsernameEditor } from "@/components/profile/username-editor";
 
 export default async function ProfilePage() {
-  const user = await currentUser();
+  const profile = await getOrCreateProfile();
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -10,11 +11,9 @@ export default async function ProfilePage() {
         <div className="kivo-gradient-prime flex h-16 w-16 shrink-0 items-center justify-center rounded-full">
           <CircleUserRound className="h-8 w-8 text-kivo-white" strokeWidth={1.5} />
         </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">
-            {user?.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : (user?.username ?? "Your profile")}
-          </h1>
-          <p className="text-sm text-foreground-muted">{user?.primaryEmailAddress?.emailAddress}</p>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold text-foreground">{profile?.display_name || "Your profile"}</h1>
+          {profile && <UsernameEditor username={profile.username} />}
         </div>
       </div>
 
