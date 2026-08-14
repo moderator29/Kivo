@@ -3,6 +3,9 @@ import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
+import { canManageFootballData } from "@/lib/admin";
+import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
+import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -150,24 +153,40 @@ export default async function FantasyPage({
     pointsAvailable = points !== null;
   }
 
+  // FantasyBuilder's own "No gameweek is open yet" empty state is honest but
+  // gives an admin no way forward — this banner is the only thing that can
+  // actually fix it, shown above the builder rather than inside it so it
+  // doesn't touch that component's own render logic.
+  const showGenerateGameweeks = !gameweek && canManageFootballData(profile.role);
+
   return (
-    <FantasyBuilder
-      teams={teams.map((t) => ({ id: t.id, name: t.name }))}
-      activeTeamId={activeTeam.id}
-      league={{
-        id: league.league_id,
-        name: league.league_name,
-        isPrivate: league.is_private,
-        inviteCode: league.invite_code,
-        maxTeams: league.max_teams,
-        teamCount: league.team_count,
-        seasonId: league.season_id,
-      }}
-      gameweek={gameweek ? { id: gameweek.id, number: gameweek.number, deadlineAt: gameweek.deadline_at } : null}
-      initialRoster={initialRoster}
-      points={points}
-      pointsAvailable={pointsAvailable}
-      leaderboard={leaderboard}
-    />
+    <div className="flex flex-col gap-3">
+      {showGenerateGameweeks && (
+        <div className="kivo-glass mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-2xl p-4">
+          <p className="text-xs text-foreground-subtle">
+            No gameweek is open for this season yet. Generate gameweeks from the season&apos;s synced fixtures.
+          </p>
+          <InlineSyncButton label="Generate gameweeks" action={generateFantasyGameweeks.bind(null, league.season_id)} />
+        </div>
+      )}
+      <FantasyBuilder
+        teams={teams.map((t) => ({ id: t.id, name: t.name }))}
+        activeTeamId={activeTeam.id}
+        league={{
+          id: league.league_id,
+          name: league.league_name,
+          isPrivate: league.is_private,
+          inviteCode: league.invite_code,
+          maxTeams: league.max_teams,
+          teamCount: league.team_count,
+          seasonId: league.season_id,
+        }}
+        gameweek={gameweek ? { id: gameweek.id, number: gameweek.number, deadlineAt: gameweek.deadline_at } : null}
+        initialRoster={initialRoster}
+        points={points}
+        pointsAvailable={pointsAvailable}
+        leaderboard={leaderboard}
+      />
+    </div>
   );
 }
