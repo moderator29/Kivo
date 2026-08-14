@@ -36,7 +36,7 @@ export function FeatureCard({
       />
       <div className="kivo-glass-brand relative flex flex-col gap-3 rounded-2xl p-6 transition-shadow duration-300 group-hover:shadow-[0_16px_50px_-14px_rgba(124,63,255,0.45)]">
         <Image src={icon} alt="" width={56} height={56} className="h-14 w-14 object-contain" />
-        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
         <p className="text-sm leading-relaxed text-foreground-muted">{description}</p>
       </div>
     </motion.div>

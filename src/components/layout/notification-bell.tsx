@@ -119,7 +119,7 @@ export function NotificationBell({
         key={notification.id}
         onClick={() => handleItemClick(notification.id)}
         className={cn(
-          "flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.04]",
+          "flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60",
           !notification.read_at && "bg-white/[0.03]",
         )}
       >
@@ -130,7 +130,9 @@ export function NotificationBell({
           <p className="text-sm text-foreground">{describe(notification)}</p>
           <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
         </div>
-        {!notification.read_at && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-kivo-cyan" />}
+        {!notification.read_at && (
+          <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-kivo-cyan" />
+        )}
       </button>
     );
   }
@@ -139,14 +141,17 @@ export function NotificationBell({
     <div ref={panelRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        aria-label="Notifications"
+        aria-label={state.unreadCount > 0 ? `Notifications, ${state.unreadCount} unread` : "Notifications"}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
         {state.unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[10px] font-semibold text-kivo-white">
+          <span
+            aria-hidden="true"
+            className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[10px] font-semibold text-kivo-white"
+          >
             {state.unreadCount > 9 ? "9+" : state.unreadCount}
           </span>
         )}
@@ -166,7 +171,10 @@ export function NotificationBell({
             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Notifications</span>
               {state.unreadCount > 0 && (
-                <button onClick={handleMarkAllRead} className="text-xs font-medium text-kivo-cyan hover:text-kivo-blue">
+                <button
+                  onClick={handleMarkAllRead}
+                  className="rounded text-xs font-medium text-kivo-cyan hover:text-kivo-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                >
                   Mark all read
                 </button>
               )}

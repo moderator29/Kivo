@@ -43,13 +43,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/sign-in"
-            className="rounded-xl px-4 py-2 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground"
+            className="rounded-xl px-4 py-2 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
             Sign in
           </Link>
           <Link
             href="/sign-up"
-            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90"
+            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
             Join KIVO
           </Link>
@@ -98,7 +98,7 @@ export default function LandingPage() {
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <Link
                   href="/home"
-                  className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition-opacity hover:opacity-90"
+                  className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
                 >
                   Get started
                   <ArrowRight className="h-4 w-4" strokeWidth={2} />
@@ -107,7 +107,7 @@ export default function LandingPage() {
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <Link
                   href="/sign-in"
-                  className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground"
+                  className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
                 >
                   Sign in
                 </Link>

@@ -80,7 +80,7 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
         aria-pressed={optimisticLiked}
         whileTap={{ scale: 0.88 }}
         className={cn(
-          "flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors disabled:opacity-70",
+          "flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-70",
           optimisticLiked ? "text-critical" : "text-foreground-subtle hover:text-foreground-muted",
         )}
       >

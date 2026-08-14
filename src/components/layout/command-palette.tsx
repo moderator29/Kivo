@@ -95,7 +95,9 @@ export function CommandPalette() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-white/5"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
       >
         <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         <span className="min-w-0 flex-1 truncate text-foreground-subtle">Search teams, players, competitions…</span>
@@ -114,6 +116,9 @@ export function CommandPalette() {
             onClick={close}
           >
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Search"
               initial={{ opacity: 0, y: -12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -155,7 +160,7 @@ export function CommandPalette() {
                         type="button"
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => navigateTo(result)}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 ${
                           active ? "bg-white/5" : ""
                         }`}
                       >

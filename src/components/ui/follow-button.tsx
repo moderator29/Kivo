@@ -38,7 +38,7 @@ export function FollowButton({ targetType, targetId, initialFollowing, size = "m
       onClick={handleClick}
       aria-pressed={following}
       aria-label={following ? "Unfollow" : "Follow"}
-      className={`flex shrink-0 items-center justify-center rounded-full border transition disabled:opacity-60 ${dimension} ${
+      className={`flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-60 ${dimension} ${
         following ? "border-achievement/40 bg-achievement/10" : "border-white/10 hover:bg-white/5"
       }`}
     >

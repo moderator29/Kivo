@@ -13,7 +13,10 @@ export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/5 bg-kivo-navy-deep/60 px-3 py-6 lg:flex">
-      <Link href="/home" className="flex items-center gap-2 px-3 pb-8">
+      <Link
+        href="/home"
+        className="flex items-center gap-2 rounded-lg px-3 pb-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+      >
         <Image src={kivoLogo} alt="" width={36} height={36} className="h-9 w-9 shrink-0" priority />
         <span className="text-lg font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
@@ -29,7 +32,7 @@ export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
                 active
                   ? "text-foreground"
                   : "text-foreground-muted hover:bg-white/[0.04] hover:text-foreground",
@@ -37,6 +40,7 @@ export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
             >
               {active && (
                 <motion.span
+                  aria-hidden="true"
                   layoutId="desktop-nav-active"
                   className="absolute inset-0 rounded-xl bg-white/[0.06]"
                   transition={{ type: "spring", stiffness: 500, damping: 40 }}

@@ -13,7 +13,10 @@ export async function TopBar({ signedIn }: { signedIn: boolean }) {
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-kivo-obsidian/90 px-4 py-3 backdrop-blur-lg lg:px-8">
-      <Link href="/home" className="flex items-center gap-2 lg:hidden">
+      <Link
+        href="/home"
+        className="flex items-center gap-2 rounded-lg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+      >
         <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
         <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
@@ -30,7 +33,7 @@ export async function TopBar({ signedIn }: { signedIn: boolean }) {
       ) : (
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
         >
           Sign up
         </Link>
