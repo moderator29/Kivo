@@ -3,6 +3,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
 import { PredictionCard } from "@/components/predictions/prediction-card";
+import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/predictions/predictions-leaderboard";
 import { NAV_ITEMS } from "@/lib/navigation";
 
 const item = NAV_ITEMS.find((i) => i.id === "predictions")!;
@@ -43,6 +44,41 @@ export default async function PredictionsPage() {
 
   const predictionByFixture = new Map((existingPredictions ?? []).map((p) => [p.fixture_id, p.predicted_outcome]));
 
+  // Aggregate real scored predictions into a leaderboard. `points_awarded` is
+  // nullable and nothing in this codebase writes it yet (resolution/scoring
+  // is a separate, out-of-scope backend feature) — until it does, this
+  // resolves to an empty list and the component shows an honest empty state
+  // rather than a fabricated or all-zero table.
+  //
+  // Note: `predictions` RLS (`predictions_select_own`) only ever lets a
+  // caller see their own rows, so even once scoring lands this query can't
+  // surface a true cross-user leaderboard through this client — that needs
+  // a follow-up migration (e.g. a SECURITY DEFINER RPC exposing just
+  // profile_id + summed points) which is out of scope here.
+  const { data: scoredPredictions } = await supabase
+    .from("predictions")
+    .select("profile_id, points_awarded, profile:profiles!predictions_profile_id_fkey(username, display_name)")
+    .not("points_awarded", "is", null);
+
+  const pointsByProfile = new Map<string, { name: string; points: number }>();
+  for (const row of scoredPredictions ?? []) {
+    if (row.points_awarded === null) continue;
+    const existing = pointsByProfile.get(row.profile_id);
+    if (existing) {
+      existing.points += row.points_awarded;
+    } else {
+      pointsByProfile.set(row.profile_id, {
+        name: row.profile?.display_name || row.profile?.username || "Unknown",
+        points: row.points_awarded,
+      });
+    }
+  }
+
+  const leaderboardEntries: LeaderboardEntry[] = Array.from(pointsByProfile.entries())
+    .map(([profileId, { name, points }]) => ({ profileId, name, points }))
+    .sort((a, b) => b.points - a.points)
+    .slice(0, 20);
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
@@ -72,6 +108,10 @@ export default async function PredictionsPage() {
           />
         ))}
       </div>
+
+      <FadeIn delay={0.1}>
+        <PredictionsLeaderboard entries={leaderboardEntries} viewerProfileId={profile?.id ?? null} />
+      </FadeIn>
     </div>
   );
 }
