@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { currentUser } from "@clerk/nextjs/server";
 import { Sparkles, Trophy, Target, Flame, Users, ArrowRight } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { getOrCreateProfile } from "@/lib/profile";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -11,8 +11,11 @@ function greeting() {
 }
 
 export default async function HomePage() {
-  const user = await currentUser();
-  const firstName = user?.firstName ?? user?.username ?? "there";
+  // Routed through KIVO's own profile rather than calling Clerk directly —
+  // consistent with the rest of the app, and never throws if Clerk/Supabase
+  // aren't configured (see lib/profile.ts), unlike currentUser() would.
+  const profile = await getOrCreateProfile();
+  const firstName = profile?.display_name?.split(" ")[0] || profile?.username || "there";
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">

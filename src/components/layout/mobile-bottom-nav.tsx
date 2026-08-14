@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * bar only fits four destinations plus More, and that set is a UX call, not data. */
 const BOTTOM_BAR_IDS = ["home", "live", "social", "fantasy"];
 
-export function MobileBottomNav() {
+export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
@@ -91,6 +91,7 @@ export function MobileBottomNav() {
               <div className="grid grid-cols-4 gap-2">
                 {moreItems.map((item) => {
                   const Icon = item.icon;
+                  const isComingSoon = item.status === "coming-soon" && !(item.id === "ai" && aiConfigured);
                   return (
                     <Link
                       key={item.id}
@@ -101,7 +102,7 @@ export function MobileBottomNav() {
                     >
                       <Icon className="h-5 w-5 text-foreground-muted" strokeWidth={1.75} />
                       <span className="text-[11px] font-medium text-foreground-muted">{item.label}</span>
-                      {item.status === "coming-soon" && (
+                      {isComingSoon && (
                         <span className="text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
                           Soon
                         </span>

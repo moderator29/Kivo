@@ -1,9 +1,15 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
 import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
+import { isClerkConfigured } from "@/lib/clerk";
+
+// See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
+// the auth check alone.
+export const dynamic = "force-dynamic";
 
 const ADMIN_NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -13,6 +19,13 @@ const ADMIN_NAV = [
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
+  // Resource-level auth boundary — see src/proxy.ts for why this isn't a middleware
+  // matcher. Unconfigured Clerk has no session to check, so skip straight to sign-in.
+  if (!isClerkConfigured()) {
+    redirect("/sign-in");
+  }
+  await auth.protect();
+
   const profile = await getOrCreateProfile();
 
   // Server-side authorization is the real boundary — RLS backs this up at

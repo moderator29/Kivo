@@ -2,8 +2,9 @@ import { Users, MessageSquare, ShieldAlert, Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewModerationData, canViewUserData } from "@/lib/admin";
+import { FadeIn } from "@/components/ui/fade-in";
 
-async function StatCard({
+function StatCard({
   icon: Icon,
   label,
   value,
@@ -45,27 +46,33 @@ export default async function AdminOverviewPage() {
       : Promise.resolve(null),
   ]);
 
+  const stats = [
+    { icon: Users, label: "Total users", value: canSeeUsers ? (userCount ?? 0) : "—" },
+    { icon: MessageSquare, label: "Total posts", value: postCount ?? 0 },
+    { icon: ShieldAlert, label: "Pending reports", value: canSeeReports ? (pendingReportCount ?? 0) : "—" },
+    { icon: Radio, label: "Football data providers live", value: 0 },
+  ];
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Platform overview</h1>
         <p className="text-sm text-foreground-muted">What&apos;s happening on KIVO right now.</p>
-      </div>
+      </FadeIn>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard icon={Users} label="Total users" value={canSeeUsers ? (userCount ?? 0) : "—"} />
-        <StatCard icon={MessageSquare} label="Total posts" value={postCount ?? 0} />
-        <StatCard icon={ShieldAlert} label="Pending reports" value={canSeeReports ? (pendingReportCount ?? 0) : "—"} />
-        <StatCard icon={Radio} label="Football data providers live" value={0} />
-      </div>
+      <FadeIn delay={0.05} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <StatCard key={stat.label} icon={stat.icon} label={stat.label} value={stat.value} />
+        ))}
+      </FadeIn>
 
-      <div className="kivo-glass rounded-2xl p-5">
+      <FadeIn delay={0.1} className="kivo-glass rounded-2xl p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">System status</h2>
         <p className="mt-2 text-sm text-foreground-muted">
           No football data provider is connected yet (API-Football free tier is architected but not enabled — see
           Data health). AI Copilot, notifications and fantasy scoring are not yet live. Social is fully operational.
         </p>
-      </div>
+      </FadeIn>
     </div>
   );
 }

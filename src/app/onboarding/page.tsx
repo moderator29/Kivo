@@ -1,12 +1,27 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
+import { auth } from "@clerk/nextjs/server";
 import kivoLogo from "../../../public/brand/kivo-logo.png";
 import { getOrCreateProfile } from "@/lib/profile";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
+import { isClerkConfigured } from "@/lib/clerk";
+
+// See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
+// the auth check alone.
+export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
+  // Resource-level auth boundary — see src/proxy.ts for why this isn't a middleware
+  // matcher. Unconfigured Clerk has no session to check, so skip straight to sign-in.
+  if (!isClerkConfigured()) {
+    redirect("/sign-in");
+  }
+  await auth.protect();
+
   const profile = await getOrCreateProfile();
 
+  // auth.protect() above already guarantees a signed-in user; a null profile here
+  // means row creation itself failed (see lib/profile.ts), not a missing session.
   if (!profile) {
     redirect("/sign-in");
   }

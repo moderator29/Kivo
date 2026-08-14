@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-export function DesktopSidebar() {
+export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -20,6 +20,7 @@ export function DesktopSidebar() {
         {NAV_ITEMS.map((item) => {
           const active = isActiveRoute(pathname, item.href);
           const Icon = item.icon;
+          const isComingSoon = item.status === "coming-soon" && !(item.id === "ai" && aiConfigured);
           return (
             <Link
               key={item.id}
@@ -47,7 +48,7 @@ export function DesktopSidebar() {
                 strokeWidth={1.75}
               />
               <span className="relative z-10 flex-1">{item.label}</span>
-              {item.status === "coming-soon" && (
+              {isComingSoon && (
                 <span className="relative z-10 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Soon
                 </span>

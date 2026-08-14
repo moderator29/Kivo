@@ -1,9 +1,10 @@
 import "server-only";
 import { currentUser } from "@clerk/nextjs/server";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "./supabase/server";
+import { isClerkConfigured } from "./clerk";
 import type { Database } from "./supabase/types";
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 /**
  * Guarantees the signed-in Clerk user has a KIVO profile row, creating one if
@@ -12,6 +13,13 @@ type Profile = Database["public"]["Tables"]["profiles"]["Row"];
  * unwired. Uses the service-role client only for this one fallback path.
  */
 export async function getOrCreateProfile(): Promise<Profile | null> {
+  // currentUser() throws if clerkMiddleware() never ran for this request (true
+  // whenever Clerk is unconfigured — see src/proxy.ts). Next.js renders a route
+  // segment's page in parallel with its layout, so a protected page can start
+  // rendering (and call this) before the layout's own redirect takes effect;
+  // returning null here instead of throwing keeps that a clean no-op.
+  if (!isClerkConfigured()) return null;
+
   const user = await currentUser();
   if (!user) return null;
 
