@@ -5,6 +5,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ComingSoon } from "@/components/ui/coming-soon";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { isLiveStatus } from "@/lib/football/fixture-status";
 import { NAV_ITEMS } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
@@ -13,29 +15,6 @@ type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 const item = NAV_ITEMS.find((i) => i.id === "live")!;
 
 export const metadata: Metadata = { title: item.label };
-
-const STATUS_LABEL: Record<FixtureStatus, string> = {
-  scheduled: "Scheduled",
-  live: "Live",
-  halftime: "HT",
-  finished: "FT",
-  postponed: "Postponed",
-  cancelled: "Cancelled",
-  abandoned: "Abandoned",
-};
-
-function isLiveStatus(status: FixtureStatus): boolean {
-  return status === "live" || status === "halftime";
-}
-
-function formatKickoff(kickoffAt: string): string {
-  return new Date(kickoffAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
-
-function statusBadgeText(status: FixtureStatus, kickoffAt: string): string {
-  if (status === "scheduled") return formatKickoff(kickoffAt);
-  return STATUS_LABEL[status];
-}
 
 type FixtureRow = {
   id: string;
@@ -61,17 +40,7 @@ function FixtureRowCard({ fixture }: { fixture: FixtureRow }) {
         <span className="text-xs text-foreground-subtle">
           {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
         </span>
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-            live
-              ? "border-live/30 bg-live/10 text-live"
-              : fixture.status === "finished"
-                ? "border-white/10 text-foreground-subtle"
-                : "border-white/10 text-foreground-muted"
-          }`}
-        >
-          {statusBadgeText(fixture.status, fixture.kickoff_at)}
-        </span>
+        <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} showLiveDot={false} />
       </div>
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">

@@ -9,23 +9,7 @@ import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
-import type { Database } from "@/lib/supabase/types";
-
-type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
-
-const STATUS_LABEL: Record<FixtureStatus, string> = {
-  scheduled: "Scheduled",
-  live: "Live",
-  halftime: "HT",
-  finished: "FT",
-  postponed: "Postponed",
-  cancelled: "Cancelled",
-  abandoned: "Abandoned",
-};
-
-function isLiveStatus(status: FixtureStatus): boolean {
-  return status === "live" || status === "halftime";
-}
+import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;

@@ -11,36 +11,10 @@ import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TrackView } from "@/components/ui/track-view";
+import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
-
-const STATUS_LABEL: Record<FixtureStatus, string> = {
-  scheduled: "Scheduled",
-  live: "Live",
-  halftime: "HT",
-  finished: "FT",
-  postponed: "Postponed",
-  cancelled: "Cancelled",
-  abandoned: "Abandoned",
-};
-
-function isLiveStatus(status: FixtureStatus): boolean {
-  return status === "live" || status === "halftime";
-}
-
-function formatKickoff(kickoffAt: string): string {
-  return new Date(kickoffAt).toLocaleString(undefined, {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function statusBadgeText(status: FixtureStatus, kickoffAt: string): string {
-  if (status === "scheduled") return formatKickoff(kickoffAt);
-  return STATUS_LABEL[status];
-}
 
 function calculateAge(dateOfBirth: string): number {
   const dob = new Date(dateOfBirth);
@@ -82,7 +56,6 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
   const own = isHome ? fixture.home_team : fixture.away_team;
   const opponent = isHome ? fixture.away_team : fixture.home_team;
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-  const live = isLiveStatus(fixture.status);
 
   let resultClass = "text-foreground-muted";
   // Checking both fields directly here (rather than via the `hasScore` bool
@@ -120,23 +93,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span
-          className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-            live
-              ? "border-live/30 bg-live/10 text-live"
-              : fixture.status === "finished"
-                ? "border-white/10 text-foreground-subtle"
-                : "border-white/10 text-foreground-muted"
-          }`}
-        >
-          {live && (
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-live opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
-            </span>
-          )}
-          {statusBadgeText(fixture.status, fixture.kickoff_at)}
-        </span>
+        <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} includeWeekday />
         {hasScore && (
           <span className={`text-sm font-semibold ${resultClass}`}>
             {own?.id === fixture.home_team?.id ? `${fixture.home_score} – ${fixture.away_score}` : `${fixture.away_score} – ${fixture.home_score}`}
