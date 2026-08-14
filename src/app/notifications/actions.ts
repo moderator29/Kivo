@@ -9,7 +9,11 @@ export async function markNotificationRead(notificationId: string) {
   if (!profile) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", notificationId);
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .eq("profile_id", profile.id);
   revalidatePath("/", "layout");
 }
 
@@ -18,6 +22,10 @@ export async function markAllNotificationsRead() {
   if (!profile) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("profile_id", profile.id)
+    .is("read_at", null);
   revalidatePath("/", "layout");
 }

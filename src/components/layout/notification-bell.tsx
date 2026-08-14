@@ -26,6 +26,28 @@ function describe(notification: NotificationRow): string {
   return notification.type.replace(/_/g, " ");
 }
 
+/** Same UTC-day-boundary pattern used elsewhere (e.g. home/page.tsx) so
+ * "Today" lines up with how the rest of the app buckets same-day activity. */
+function startOfTodayUTC(): number {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  return start.getTime();
+}
+
+function groupByRecency(notifications: NotificationRow[]): { today: NotificationRow[]; earlier: NotificationRow[] } {
+  const boundary = startOfTodayUTC();
+  const today: NotificationRow[] = [];
+  const earlier: NotificationRow[] = [];
+  for (const notification of notifications) {
+    if (new Date(notification.created_at).getTime() >= boundary) {
+      today.push(notification);
+    } else {
+      earlier.push(notification);
+    }
+  }
+  return { today, earlier };
+}
+
 type NotificationState = { notifications: NotificationRow[]; unreadCount: number };
 type ReadAction = { type: "read"; id: string } | { type: "read-all" };
 
@@ -89,6 +111,30 @@ export function NotificationBell({
     });
   }
 
+  const { today, earlier } = groupByRecency(state.notifications);
+
+  function renderItem(notification: NotificationRow) {
+    return (
+      <button
+        key={notification.id}
+        onClick={() => handleItemClick(notification.id)}
+        className={cn(
+          "flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.04]",
+          !notification.read_at && "bg-white/[0.03]",
+        )}
+      >
+        <div className="kivo-gradient-prime mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full">
+          <Heart className="h-3.5 w-3.5 text-kivo-white" strokeWidth={2} />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm text-foreground">{describe(notification)}</p>
+          <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
+        </div>
+        {!notification.read_at && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-kivo-cyan" />}
+      </button>
+    );
+  }
+
   return (
     <div ref={panelRef} className="relative">
       <button
@@ -115,7 +161,7 @@ export function NotificationBell({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 500, damping: 40 }}
-            className="kivo-glass absolute right-0 top-11 z-30 w-80 overflow-hidden rounded-2xl"
+            className="kivo-glass-brand absolute right-0 top-11 z-30 w-80 overflow-hidden rounded-2xl"
           >
             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Notifications</span>
@@ -129,25 +175,24 @@ export function NotificationBell({
               {state.notifications.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-foreground-muted">You&apos;re all caught up.</p>
               ) : (
-                state.notifications.map((notification) => (
-                  <button
-                    key={notification.id}
-                    onClick={() => handleItemClick(notification.id)}
-                    className={cn(
-                      "flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.04]",
-                      !notification.read_at && "bg-white/[0.03]",
-                    )}
-                  >
-                    <div className="kivo-gradient-prime mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full">
-                      <Heart className="h-3.5 w-3.5 text-kivo-white" strokeWidth={2} />
+                <>
+                  {today.length > 0 && (
+                    <div>
+                      <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                        Today
+                      </p>
+                      {today.map(renderItem)}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-foreground">{describe(notification)}</p>
-                      <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
+                  )}
+                  {earlier.length > 0 && (
+                    <div>
+                      <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                        Earlier
+                      </p>
+                      {earlier.map(renderItem)}
                     </div>
-                    {!notification.read_at && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-kivo-cyan" />}
-                  </button>
-                ))
+                  )}
+                </>
               )}
             </div>
           </motion.div>
