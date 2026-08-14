@@ -43,15 +43,19 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
     // the button is also disabled while pending, this is defense in depth.
     if (pending) return;
 
+    const previousCount = optimisticCount;
     const nextLiked = !optimisticLiked;
     setOptimisticLiked(nextLiked);
     setOptimisticCount((c) => c + (nextLiked ? 1 : -1));
     startTransition(async () => {
       const result = await toggleLike(id, optimisticLiked);
       if (result.error) {
-        // Revert on failure — never leave the UI claiming a reaction that didn't persist.
+        // Revert on failure — never leave the UI claiming a reaction that didn't
+        // persist. Reverts to the pre-click optimistic count, not the original
+        // server-rendered `likeCount` prop, which can be stale after an earlier
+        // successful toggle in the same session.
         setOptimisticLiked(optimisticLiked);
-        setOptimisticCount(likeCount);
+        setOptimisticCount(previousCount);
       }
     });
   }

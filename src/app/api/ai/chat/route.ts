@@ -64,12 +64,19 @@ export async function POST(req: Request) {
     conversationId = created.id;
   }
 
-  const { data: history } = await supabase
+  // Fetch the most recent MAX_HISTORY_MESSAGES (newest first via the
+  // descending order + limit), then reverse back to chronological order —
+  // the model needs oldest-first in the prompt. Ordering ascending before
+  // the limit would instead return the oldest messages in the conversation,
+  // which is wrong past message twenty.
+  const { data: recentHistory } = await supabase
     .from("ai_messages")
     .select("role, content")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(MAX_HISTORY_MESSAGES);
+
+  const history = recentHistory ? [...recentHistory].reverse() : recentHistory;
 
   const { error: insertUserError } = await supabase
     .from("ai_messages")

@@ -27,7 +27,7 @@ export default async function DiscoverPage() {
   const transfers = transferCount ?? 0;
 
   if (leagues === 0 && teams === 0 && players === 0 && transfers === 0) {
-    return <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription!} />;
+    return <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />;
   }
 
   const surfaces = [

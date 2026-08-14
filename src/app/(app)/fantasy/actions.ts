@@ -299,13 +299,29 @@ export async function searchFantasyPlayers(
   let request = supabase
     .from("players")
     .select("id, full_name, known_as, position, current_team_id, team:teams(id, name, short_name, crest_url)")
-    .order("full_name", { ascending: true })
-    .limit(60);
+    .order("full_name", { ascending: true });
 
   const trimmed = query.trim();
   if (trimmed) request = request.ilike("full_name", `%${trimmed}%`);
 
-  const { data: players, error } = await request;
+  // Mirrors positionGroup()'s free-text classification in fantasy-rules.ts
+  // exactly, so the DB-level filter and the client-facing group never drift.
+  // Applied before `.limit(60)` below — filtering by position in JS after
+  // the limit only searches whichever players of that position happened to
+  // fall in the first 60 alphabetical names, which makes the picker
+  // unusable for any position at real squad/database size.
+  if (position !== "All") {
+    const POSITION_FILTERS: Record<PositionGroup, string> = {
+      Goalkeepers: "position.ilike.%keeper%,position.ilike.gk",
+      Defenders: "position.ilike.%back%,position.ilike.%defen%,position.ilike.df",
+      Midfielders: "position.ilike.%mid%,position.ilike.mf",
+      Forwards:
+        "position.ilike.%forward%,position.ilike.%striker%,position.ilike.%wing%,position.ilike.fw,position.ilike.st",
+    };
+    request = request.or(POSITION_FILTERS[position]);
+  }
+
+  const { data: players, error } = await request.limit(60);
   if (error) {
     console.error("Failed to search players", error);
     return { error: "Couldn't load players. Try again.", players: [] };

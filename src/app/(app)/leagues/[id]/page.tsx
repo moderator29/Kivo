@@ -10,6 +10,7 @@ import { triggerStandingsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { TrackView } from "@/components/ui/track-view";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -71,6 +72,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+      <TrackView type="league" id={competition.id} name={competition.name} imageUrl={competition.logo_url} />
       <div className="flex items-center gap-3">
         <FadeIn delay={0} className="shrink-0">
           {competition.logo_url ? (

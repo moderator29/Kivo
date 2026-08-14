@@ -10,6 +10,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { TrackView } from "@/components/ui/track-view";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
@@ -109,6 +110,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+      <TrackView type="player" id={player.id} name={displayName} imageUrl={null} />
       <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
           <FadeIn delay={0} className="shrink-0">
