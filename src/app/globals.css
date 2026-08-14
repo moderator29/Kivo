@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+:root {
+  --kivo-obsidian: #05060a;
+  --kivo-navy-deep: #0a1020;
+  --kivo-navy: #0d1630;
+  --kivo-blue: #2563ff;
+  --kivo-cyan: #00d9ff;
+  --kivo-violet: #7c3fff;
+  --kivo-magenta: #d946ef;
+  --kivo-white: #f8faff;
+  --kivo-white-soft: #cbd5e1;
+  --kivo-slate: #64748b;
+  /* Lighter than --kivo-slate specifically for text-on-obsidian: #64748b only
+     hits ~4.25:1 on #05060a, short of WCAG AA's 4.5:1 for normal-size text. */
+  --kivo-slate-text: #8592a8;
+
+  --kivo-live: #22c55e;
+  --kivo-critical: #ff3b4a;
+  --kivo-warning: #facc15;
+  --kivo-info: #38bdf8;
+  --kivo-achievement: #f5c451;
+
+  --kivo-glass: rgba(255, 255, 255, 0.04);
+  --kivo-glass-border: rgba(255, 255, 255, 0.08);
+  --kivo-glass-hover: rgba(255, 255, 255, 0.07);
+
+  --background: var(--kivo-obsidian);
+  --background-secondary: var(--kivo-navy-deep);
+  --surface: var(--kivo-navy);
+  --foreground: var(--kivo-white);
+  --foreground-muted: var(--kivo-white-soft);
+  --foreground-subtle: var(--kivo-slate-text);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+
+  --color-kivo-obsidian: var(--kivo-obsidian);
+  --color-kivo-navy-deep: var(--kivo-navy-deep);
+  --color-kivo-navy: var(--kivo-navy);
+  --color-kivo-blue: var(--kivo-blue);
+  --color-kivo-cyan: var(--kivo-cyan);
+  --color-kivo-violet: var(--kivo-violet);
+  --color-kivo-magenta: var(--kivo-magenta);
+  --color-kivo-white: var(--kivo-white);
+  --color-kivo-white-soft: var(--kivo-white-soft);
+  --color-kivo-slate: var(--kivo-slate);
+
+  --color-live: var(--kivo-live);
+  --color-critical: var(--kivo-critical);
+  --color-warning: var(--kivo-warning);
+  --color-info: var(--kivo-info);
+  --color-achievement: var(--kivo-achievement);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+::selection {
+  background: var(--kivo-blue);
+  color: var(--kivo-white);
+}
+
+.kivo-glass {
+  background: var(--kivo-glass);
+  border: 1px solid var(--kivo-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.kivo-glass:hover {
+  background: var(--kivo-glass-hover);
+}
+
+.kivo-gradient-prime {
+  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
+}
+
+.kivo-gradient-intelligence {
+  background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-blue), var(--kivo-cyan));
+}
+
+.kivo-gradient-pulse {
+  background-image: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-blue));
+}
+
+.kivo-gradient-premium {
+  background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-magenta));
+}
+
+.kivo-gradient-victory {
+  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-violet), var(--kivo-achievement));
+}
+
+.kivo-text-gradient-prime {
+  /* Fallback in case background-clip: text doesn't paint — never fully transparent. */
+  color: var(--kivo-cyan);
+  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .kivo-text-gradient-prime {
+    color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
