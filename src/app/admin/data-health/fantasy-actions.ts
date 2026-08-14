@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -117,6 +118,11 @@ export async function generateFantasyGameweeks(
 
     await supabase.from("fantasy_gameweeks").update({ is_current: true }).eq("id", target.id).eq("is_current", false);
   }
+
+  await logAudit(profile.id, "generate_fantasy_gameweeks", "fantasy_gameweeks", {
+    seasonId,
+    recordsProcessed: toInsert.length,
+  });
 
   revalidatePath("/fantasy");
   revalidatePath("/admin/data-health");

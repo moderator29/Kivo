@@ -5,6 +5,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { awardXp } from "@/lib/rewards";
+import { logAudit } from "@/lib/audit";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 
 type PredictionOutcome = "home_win" | "draw" | "away_win";
@@ -97,6 +98,11 @@ export async function scorePredictions(): Promise<{ error: string | null; record
       await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction");
     }
   }
+
+  await logAudit(profile.id, "score_predictions", "predictions", {
+    fixturesConsidered: scoredFixtures.length,
+    recordsProcessed: processed,
+  });
 
   revalidatePath("/predictions");
   revalidatePath("/admin/data-health");
