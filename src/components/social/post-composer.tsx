@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { createPost } from "@/app/(app)/social/actions";
 
@@ -9,6 +9,7 @@ const MAX_LENGTH = 2000;
 
 export function PostComposer({ signedIn }: { signedIn: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -18,7 +19,7 @@ export function PostComposer({ signedIn }: { signedIn: boolean }) {
       ref={formRef}
       action={(formData) => {
         if (!signedIn) {
-          router.push("/sign-up");
+          router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
           return;
         }
         setError(null);

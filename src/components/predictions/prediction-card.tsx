@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -33,13 +33,14 @@ export function PredictionCard({
   signedIn,
 }: PredictionCardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [prediction, setPrediction] = useState<Outcome | null>(initialPrediction);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function handlePick(outcome: Outcome) {
     if (!signedIn) {
-      router.push("/sign-up");
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
       return;
     }
     if (pending || outcome === prediction) return;

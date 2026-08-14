@@ -1,10 +1,22 @@
 import Image from "next/image";
 import { SignUp } from "@clerk/nextjs";
 import { FadeIn } from "@/components/ui/fade-in";
+import { sanitizeRedirectPath } from "@/lib/clerk";
 import kivoLogo from "../../../../public/brand/kivo-logo.png";
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect_url?: string | string[] }>;
+}) {
   const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  // Guest-gated actions (like, predict, send, post) send guests here with
+  // ?redirect_url=<the page they were on> so signing up actually returns
+  // them to what they were doing instead of dumping them on the generic
+  // post-sign-up destination. Also threaded into signInForceRedirectUrl so
+  // the redirect survives a guest clicking "Already have an account?"
+  // inside the widget instead of completing sign-up.
+  const redirectUrl = sanitizeRedirectPath((await searchParams).redirect_url);
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
@@ -22,6 +34,8 @@ export default function SignUpPage() {
         {clerkConfigured ? (
           <FadeIn delay={0.12}>
             <SignUp
+              forceRedirectUrl={redirectUrl}
+              signInForceRedirectUrl={redirectUrl}
               appearance={{
                 elements: {
                   card: "kivo-glass-brand shadow-none",

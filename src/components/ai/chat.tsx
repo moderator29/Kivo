@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { Sparkles, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ const SUGGESTIONS = [
 
 export function AiChat({ signedIn }: { signedIn: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -31,7 +32,7 @@ export function AiChat({ signedIn }: { signedIn: boolean }) {
     if (!trimmed || pending) return;
 
     if (!signedIn) {
-      router.push("/sign-up");
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
       return;
     }
 
