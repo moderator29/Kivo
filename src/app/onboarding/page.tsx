@@ -5,6 +5,7 @@ import kivoLogo from "../../../public/brand/kivo-logo.png";
 import { getOrCreateProfile } from "@/lib/profile";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 import { isClerkConfigured } from "@/lib/clerk";
+import { FadeIn } from "@/components/ui/fade-in";
 
 // See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
 // the auth check alone.
@@ -31,15 +32,29 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-4 py-12">
-      <Image src={kivoLogo} alt="KIVO" width={96} height={96} className="h-24 w-24" priority />
-      <div className="flex w-full max-w-sm flex-col gap-2 text-center">
-        <h1 className="text-xl font-semibold text-foreground">Pick your KIVO handle</h1>
-        <p className="text-sm text-foreground-muted">
-          This is how other fans will see you in Match Rooms and the feed. You can change it later.
-        </p>
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
+      <div className="kivo-aurora" aria-hidden="true">
+        <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
+        <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
+        <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
       </div>
-      <OnboardingForm defaultUsername={profile.username} />
+
+      <div className="relative z-10 flex flex-col items-center gap-8">
+        <FadeIn>
+          <Image src={kivoLogo} alt="KIVO" width={96} height={96} className="h-24 w-24" priority />
+        </FadeIn>
+
+        <FadeIn delay={0.08} className="flex w-full max-w-sm flex-col gap-2 text-center">
+          <h1 className="text-xl font-semibold text-foreground">Pick your KIVO handle</h1>
+          <p className="text-sm text-foreground-muted">
+            This is how other fans will see you in Match Rooms and the feed. You can change it later.
+          </p>
+        </FadeIn>
+
+        <FadeIn delay={0.16} className="w-full max-w-sm">
+          <OnboardingForm defaultUsername={profile.username} />
+        </FadeIn>
+      </div>
     </div>
   );
 }

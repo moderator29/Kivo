@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { completeOnboarding, skipOnboarding } from "@/app/onboarding/actions";
 
 export function OnboardingForm({ defaultUsername }: { defaultUsername: string }) {
@@ -33,16 +34,30 @@ export function OnboardingForm({ defaultUsername }: { defaultUsername: string })
           placeholder="e.g. lagos_ultra"
           className="rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
         />
-        {error && <span className="text-xs text-critical">{error}</span>}
+        <AnimatePresence>
+          {error && (
+            <motion.span
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2 }}
+              className="text-xs text-critical"
+            >
+              {error}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
 
-      <button
+      <motion.button
         type="submit"
         disabled={pending}
+        whileHover={pending ? undefined : { scale: 1.02 }}
+        whileTap={pending ? undefined : { scale: 0.97 }}
         className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {pending ? "Saving…" : "Continue"}
-      </button>
+      </motion.button>
 
       <button
         type="button"
