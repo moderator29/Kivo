@@ -36,7 +36,7 @@ export function PostComposer({ signedIn }: { signedIn: boolean }) {
     >
       <textarea
         name="body"
-        required
+        required={signedIn}
         maxLength={MAX_LENGTH}
         rows={3}
         placeholder={signedIn ? "What's your take?" : "Sign up to share your take."}
