@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { MotionConfig } from "motion/react";
@@ -31,14 +31,23 @@ export const metadata: Metadata = {
     type: "website",
     url: siteUrl,
     siteName: "KIVO",
-    images: [{ url: "/brand/kivo-logo.png", width: 1254, height: 1254, alt: "KIVO" }],
+    // Image itself comes from opengraph-image.tsx (file-based metadata takes
+    // priority over this object per Next's docs), so no `images` entry here.
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "KIVO: Football. Together. Live.",
     description,
-    images: ["/brand/kivo-logo.png"],
+    // Same story as openGraph above — twitter-image.tsx supplies the image.
   },
+};
+
+// Matches the obsidian background (--kivo-obsidian in globals.css) so iOS
+// Safari's chrome and Android's toolbar tint match the app instead of
+// defaulting to white.
+export const viewport: Viewport = {
+  themeColor: "#05060a",
+  colorScheme: "dark",
 };
 
 const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);

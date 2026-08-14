@@ -20,7 +20,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .select("name, short_name")
     .eq("id", id)
     .maybeSingle();
-  return { title: (competition?.short_name ?? competition?.name) || "League" };
+  const name = (competition?.short_name ?? competition?.name) || null;
+  if (!name) return { title: "League" };
+
+  const description = `${name} standings, fixtures, and results on KIVO.`;
+  return {
+    title: name,
+    description,
+    openGraph: { title: name, description },
+    twitter: { title: name, description },
+  };
 }
 
 export default async function LeagueDetailPage({ params }: { params: Promise<{ id: string }> }) {

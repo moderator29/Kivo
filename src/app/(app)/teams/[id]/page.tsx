@@ -108,7 +108,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const supabase = createServerSupabaseClient();
   const { data: team } = await supabase.from("teams").select("name").eq("id", id).maybeSingle();
-  return { title: team?.name ?? "Team" };
+  if (!team) return { title: "Team" };
+
+  const description = `Follow ${team.name} on KIVO: live scores, fixtures, squad, and results.`;
+  return {
+    title: team.name,
+    description,
+    openGraph: { title: team.name, description },
+    twitter: { title: team.name, description },
+  };
 }
 
 export default async function TeamProfilePage({ params }: { params: Promise<{ id: string }> }) {

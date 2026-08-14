@@ -47,7 +47,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const supabase = createServerSupabaseClient();
   const { data: player } = await supabase.from("players").select("known_as, full_name").eq("id", id).maybeSingle();
-  return { title: (player?.known_as ?? player?.full_name) || "Player" };
+  const name = (player?.known_as ?? player?.full_name) || null;
+  if (!name) return { title: "Player" };
+
+  const description = `${name}'s profile on KIVO: stats, current club, and transfer history.`;
+  return {
+    title: name,
+    description,
+    openGraph: { title: name, description },
+    twitter: { title: name, description },
+  };
 }
 
 export default async function PlayerProfilePage({ params }: { params: Promise<{ id: string }> }) {

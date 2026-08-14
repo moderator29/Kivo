@@ -24,7 +24,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     .maybeSingle();
 
   if (!fixture?.home_team?.name || !fixture?.away_team?.name) return { title: "Match" };
-  return { title: `${fixture.home_team.name} vs ${fixture.away_team.name}` };
+
+  const title = `${fixture.home_team.name} vs ${fixture.away_team.name}`;
+  const description = `${title}, live on KIVO: score, lineups, and match centre.`;
+  return {
+    title,
+    description,
+    openGraph: { title, description },
+    twitter: { title, description },
+  };
 }
 
 export default async function MatchCentrePage({ params }: { params: Promise<{ id: string }> }) {
