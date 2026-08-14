@@ -35,6 +35,23 @@ export default async function RewardsPage() {
   const totalXp = (xpEntries ?? []).reduce((sum, entry) => sum + entry.amount, 0);
   const earnedBadgeIds = new Set((earnedBadges ?? []).map((b) => b.badge_id));
 
+  // Discrete count-up keyframes for the XP number: each step resets the
+  // `kivo-xp-count` counter to the real running value, landing exactly on
+  // totalXp at 100% every time. Capped step count keeps the generated CSS
+  // small for large totals without changing the true final value. Pure CSS
+  // (no client component needed) so this page can stay a Server Component
+  // and fetch its own data directly, same reasoning as the transfers page's
+  // inline keyframes and the landing page's kivo-aurora.
+  const xpCountSteps = totalXp > 0 ? Math.min(totalXp, 40) : 0;
+  const xpCountKeyframes =
+    xpCountSteps > 0
+      ? Array.from({ length: xpCountSteps + 1 }, (_, i) => {
+          const percent = ((i / xpCountSteps) * 100).toFixed(2);
+          const value = Math.round((totalXp * i) / xpCountSteps);
+          return `${percent}% { counter-reset: kivo-xp-count ${value}; }`;
+        }).join("\n")
+      : "";
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
@@ -47,7 +64,28 @@ export default async function RewardsPage() {
           <Flame className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
         </div>
         <div>
-          <span className="text-2xl font-semibold text-foreground">{totalXp} XP</span>
+          {totalXp > 0 ? (
+            <span className="text-2xl font-semibold text-foreground">
+              {/* Real value, always in the DOM and correct even if the
+                  counter animation below doesn't render for some reason
+                  (no CSS support, reduced motion, etc). */}
+              <style>{`
+                @keyframes kivo-xp-count-up {
+                  ${xpCountKeyframes}
+                }
+                .kivo-xp-count-up::before {
+                  content: counter(kivo-xp-count);
+                }
+              `}</style>
+              <span
+                aria-hidden="true"
+                className="kivo-xp-count-up inline-block animate-[kivo-xp-count-up_1.2s_cubic-bezier(0.22,1,0.36,1)_0.25s_forwards]"
+              />
+              <span className="sr-only">{totalXp}</span> XP
+            </span>
+          ) : (
+            <span className="text-2xl font-semibold text-foreground">0 XP</span>
+          )}
           <p className="text-xs text-foreground-subtle">Earned from onboarding, posts and community activity</p>
         </div>
       </FadeIn>
@@ -64,24 +102,35 @@ export default async function RewardsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {allBadges.map((badge) => {
+            {allBadges.map((badge, index) => {
               const earned = earnedBadgeIds.has(badge.id);
               return (
-                <div
-                  key={badge.id}
-                  className={`kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ${earned ? "" : "opacity-40"}`}
-                >
-                  {badge.icon_url && (
-                    <Image src={badge.icon_url} alt="" width={40} height={40} className="h-10 w-10" />
-                  )}
-                  <span className="text-xs font-semibold text-foreground">{badge.name}</span>
-                  <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
-                  {!earned && (
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
-                      Locked
-                    </span>
-                  )}
-                </div>
+                <FadeIn key={badge.id} delay={0.12 + Math.min(index * 0.03, 0.3)}>
+                  <div
+                    className={`kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ${
+                      earned
+                        ? "transition ring-1 ring-inset ring-kivo-cyan/25 hover:-translate-y-0.5"
+                        : "opacity-40 grayscale"
+                    }`}
+                  >
+                    {badge.icon_url && (
+                      <Image
+                        src={badge.icon_url}
+                        alt=""
+                        width={40}
+                        height={40}
+                        className={`h-10 w-10 ${earned ? "drop-shadow-[0_0_10px_rgba(0,217,255,0.35)]" : ""}`}
+                      />
+                    )}
+                    <span className="text-xs font-semibold text-foreground">{badge.name}</span>
+                    <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
+                    {!earned && (
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                        Locked
+                      </span>
+                    )}
+                  </div>
+                </FadeIn>
               );
             })}
           </div>

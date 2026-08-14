@@ -64,10 +64,10 @@ function TeamLink({ team }: { team: TeamRef | null }) {
   return (
     <Link
       href={`/teams/${team.id}`}
-      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-kivo-cyan"
+      className="group -mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-xs text-foreground transition hover:bg-white/5 hover:text-kivo-cyan"
     >
       <TeamCrest crestUrl={team.crest_url} name={team.name} />
-      <span className="truncate">{team.short_name ?? team.name}</span>
+      <span className="truncate transition-transform group-hover:translate-x-0.5">{team.short_name ?? team.name}</span>
     </Link>
   );
 }
@@ -94,6 +94,20 @@ export default async function TransfersPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+      {/* Transfers-only keyframe: a very subtle idle left-right nudge on the
+          from/to arrow, just enough to read as "in motion" without calling
+          attention to itself. Scoped here rather than globals.css since it's
+          only used on this page; the sitewide prefers-reduced-motion block in
+          globals.css (`* { animation-duration: 0.01ms !important }`) already
+          clamps it too, same as kivo-aurora on the landing page. */}
+      <style>{`
+        @keyframes kivo-transfer-arrow-nudge {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(2px); }
+          75% { transform: translateX(-2px); }
+        }
+      `}</style>
+
       <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Recorded transfers</h1>
         <p className="text-sm text-foreground-muted">
@@ -130,7 +144,10 @@ export default async function TransfersPage() {
 
                 <div className="flex items-center gap-2">
                   <TeamLink team={transfer.from_team} />
-                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                  <ArrowLeftRight
+                    className="h-3.5 w-3.5 shrink-0 animate-[kivo-transfer-arrow-nudge_3.4s_ease-in-out_infinite] text-foreground-subtle"
+                    strokeWidth={1.75}
+                  />
                   <TeamLink team={transfer.to_team} />
                 </div>
 
