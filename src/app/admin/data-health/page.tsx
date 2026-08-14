@@ -1,4 +1,4 @@
-import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy } from "lucide-react";
+import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Activity } from "lucide-react";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -79,6 +79,16 @@ export default async function DataHealthPage() {
     unscoredPredictions = count ?? 0;
   }
 
+  // Data Health's own list below only ever shows the last 10 runs — this is
+  // the only place any run-level aggregate exists, so it goes over every
+  // sync_runs row rather than reusing that capped list. Just status and
+  // records_processed, cheap enough to not need a dedicated summary table.
+  const { data: allRuns } = await supabase.from("sync_runs").select("status, records_processed");
+  const totalRuns = allRuns?.length ?? 0;
+  const successfulRuns = (allRuns ?? []).filter((r) => r.status === "success").length;
+  const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : null;
+  const totalRecordsProcessed = (allRuns ?? []).reduce((sum, r) => sum + (r.records_processed ?? 0), 0);
+
   return (
     <div className="flex flex-col gap-8">
       <FadeIn className="flex flex-col gap-1">
@@ -134,6 +144,30 @@ export default async function DataHealthPage() {
         </div>
         <ScorePredictionsButton />
       </FadeIn>
+
+      {totalRuns > 0 && (
+        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-3 gap-3 rounded-2xl p-5">
+          <div className="flex flex-col items-center gap-1 text-center">
+            <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <span className="text-lg font-semibold text-foreground">{totalRuns}</span>
+            <span className="text-[11px] text-foreground-subtle">Total syncs</span>
+          </div>
+          <div className="flex flex-col items-center gap-1 border-x border-white/5 text-center">
+            <span
+              className={`text-lg font-semibold ${
+                successRate === null ? "text-foreground" : successRate >= 90 ? "text-live" : successRate >= 60 ? "text-warning" : "text-critical"
+              }`}
+            >
+              {successRate}%
+            </span>
+            <span className="text-[11px] text-foreground-subtle">Success rate</span>
+          </div>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <span className="text-lg font-semibold text-foreground">{totalRecordsProcessed.toLocaleString()}</span>
+            <span className="text-[11px] text-foreground-subtle">Records synced</span>
+          </div>
+        </FadeIn>
+      )}
 
       <div className="flex flex-col gap-3">
         <FadeIn delay={0.16}>
