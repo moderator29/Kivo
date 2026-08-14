@@ -71,7 +71,15 @@ export default function LandingPage() {
                 animate={{ y: [0, -6, 0] }}
                 transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
               >
-                <Image src={kivoLogo} alt="" width={200} height={200} className="h-36 w-36 lg:h-48 lg:w-48" priority />
+                <Image
+                  src={kivoLogo}
+                  alt=""
+                  width={200}
+                  height={200}
+                  className="h-36 w-36 lg:h-48 lg:w-48"
+                  sizes="(min-width: 1024px) 204px, 153px"
+                  priority
+                />
               </motion.div>
             </FadeIn>
 
