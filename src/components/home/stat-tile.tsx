@@ -35,7 +35,7 @@ export function StatTile({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -3, scale: 1.03 }}
+      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.96 }}
       className={cn(
         "flex flex-col items-center gap-1.5 rounded-xl px-3 py-4 text-center transition-colors hover:bg-white/[0.06]",

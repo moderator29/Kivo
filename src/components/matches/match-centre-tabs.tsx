@@ -89,7 +89,7 @@ function DetailsTab({
           key={event.id}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
           className="kivo-glass flex items-center gap-3 rounded-xl p-3"
         >
           <span className="w-10 shrink-0 text-right text-xs font-semibold text-foreground-subtle">
@@ -146,7 +146,7 @@ function LineupsTab({
                 key={p.playerId || p.playerName}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(index * 0.025, 0.25), ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-center gap-2 text-sm text-foreground"
               >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
@@ -164,7 +164,7 @@ function LineupsTab({
                 key={p.playerId || p.playerName}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(0.1 + index * 0.025, 0.35), ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.2, delay: Math.min(0.1 + index * 0.03, 0.4), ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-center gap-2 text-sm text-foreground-muted"
               >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
@@ -206,7 +206,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
             key={row.teamId}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: Math.min(index * 0.02, 0.3), ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
             className={`grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs ${
               highlighted ? "bg-kivo-cyan/5" : ""
             }`}
