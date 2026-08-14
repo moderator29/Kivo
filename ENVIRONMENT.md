@@ -18,8 +18,9 @@ Until this is done, every RLS-gated query will be rejected (the JWT won't be tru
 
 | Variable | Purpose | Required | Notes |
 |---|---|---|---|
-| `NEXT_PUBLIC_APP_URL` | Canonical app URL, used for OG metadata / absolute links | Optional | Defaults to `http://localhost:3000` in dev |
-| `NEXT_PUBLIC_APP_NAME` | Display name | Optional | Defaults to `KIVO` |
+| `NEXT_PUBLIC_APP_URL` | Canonical app URL, used for OG metadata / absolute links. Read in `src/app/layout.tsx`, `src/app/robots.ts`, `src/app/sitemap.ts` | Optional | Defaults to `http://localhost:3000` in dev |
+
+`NEXT_PUBLIC_APP_NAME` also appears in `.env.example` but is not read anywhere in `src/` today — see "Reserved / not currently read by the app" below.
 
 ## Clerk — identity & authentication (primary auth provider)
 
@@ -47,29 +48,30 @@ Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a s
 
 | Variable | Purpose | Required | Notes |
 |---|---|---|---|
-| `API_FOOTBALL_KEY` | API-Football key (free tier for MVP — $0 budget, see DECISIONS.md) | Optional | [dashboard.api-football.com](https://dashboard.api-football.com) — without this, a development-only mock provider is used automatically (never in production) |
-| `SPORTMONKS_API_TOKEN` | Reserved for the future primary provider once budget allows | Optional, not yet implemented | Not required — the `FootballDataProvider` interface is ready for this adapter |
-| `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
+| `API_FOOTBALL_KEY` | API-Football key (free tier for MVP — $0 budget, see DECISIONS.md). Read in `src/lib/football/index.ts` and `src/app/admin/data-health/*` | Optional | [dashboard.api-football.com](https://dashboard.api-football.com) — without this, a development-only mock provider is used automatically (never in production) |
+| `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts` — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
 
 ## AI Copilot
 
 | Variable | Purpose | Required | Notes |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Powers the AI Copilot's grounded responses | Optional | Without it, `/ai` stays in its Coming Soon state — nothing breaks |
+| `ANTHROPIC_API_KEY` | Powers the AI Copilot's grounded responses. Read in `src/lib/ai/client.ts` | Optional | Without it, `/ai` stays in its Coming Soon state — nothing breaks. When set, `/ai` and `src/app/api/ai/chat/route.ts` are fully live |
+| `AI_MODEL` | Overrides the Claude model id used for Copilot responses. Read in `src/lib/ai/client.ts` | Optional | Defaults to `claude-sonnet-4-5` if unset |
 
-## Email
+---
 
-| Variable | Purpose | Required | Notes |
-|---|---|---|---|
-| `RESEND_API_KEY` | Transactional email (not auth — Clerk handles verification/reset emails itself) | Optional, not yet wired | [resend.com](https://resend.com) |
-| `RESEND_FROM_EMAIL` | Sending address | Optional, not yet wired | Requires a verified sending domain before production |
+## Reserved / not currently read by the app
 
-## Jobs / webhooks
+These are declared in `.env.example` for a feature that's designed but not built yet. Nothing in `src/` calls `process.env` for any of them today — setting them has no effect. Confirmed by grepping every `process.env.` reference in `src/`.
 
-| Variable | Purpose | Required |
+| Variable | Purpose once built | Status |
 |---|---|---|
-| `CRON_SECRET` | Authorizes scheduled job endpoints once background sync jobs exist | Not yet used |
-| `WEBHOOK_SECRET` | Reserved for future non-Clerk webhook consumers | Not yet used |
+| `NEXT_PUBLIC_APP_NAME` | Would override the "KIVO" display name in metadata/UI | Not implemented — "KIVO" is hardcoded instead; setting this has no effect |
+| `SPORTMONKS_API_TOKEN` | Reserved for a future second/primary football provider once budget allows | Not implemented — the `FootballDataProvider` interface is ready for this adapter, but nothing reads this variable yet |
+| `RESEND_API_KEY` | Transactional email (not auth — Clerk handles verification/reset emails itself) | Not wired — [resend.com](https://resend.com) |
+| `RESEND_FROM_EMAIL` | Sending address for transactional email | Not wired — requires a verified sending domain before production |
+| `CRON_SECRET` | Would authorize scheduled job endpoints if/when background sync jobs exist | Not used — all football syncs today are admin-triggered on demand, not cron |
+| `WEBHOOK_SECRET` | Reserved for future non-Clerk webhook consumers | Not used — `CLERK_WEBHOOK_SECRET` is the only webhook secret actually read |
 
 ---
 
