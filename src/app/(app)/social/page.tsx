@@ -25,7 +25,7 @@ export default async function SocialPage() {
   // reasoning as the fantasy leaderboard RPC. Real author identity, not a
   // fabricated placeholder.
   const authorIds = [...new Set((posts ?? []).map((p) => p.author_profile_id))];
-  const [{ data: reactions }, { data: authors }] = await Promise.all([
+  const [{ data: reactions }, { data: authors }, { data: comments }] = await Promise.all([
     postIds.length
       ? supabase
           .from("reactions")
@@ -35,6 +35,10 @@ export default async function SocialPage() {
           .in("target_id", postIds)
       : Promise.resolve({ data: [] }),
     authorIds.length ? supabase.rpc("get_public_profiles", { p_ids: authorIds }) : Promise.resolve({ data: [] }),
+    // Just the post_id column to keep this a cheap count, not a full thread
+    // fetch — full comment bodies are lazy-loaded per post on expand (see
+    // comment-actions.ts / comment-thread.tsx).
+    postIds.length ? supabase.from("comments").select("post_id").in("post_id", postIds) : Promise.resolve({ data: [] }),
   ]);
 
   const authorById = new Map((authors ?? []).map((a) => [a.id, a]));
@@ -45,6 +49,11 @@ export default async function SocialPage() {
     entry.count += 1;
     if (profile && reaction.profile_id === profile.id) entry.likedByViewer = true;
     likesByPost.set(reaction.target_id, entry);
+  }
+
+  const commentCountByPost = new Map<string, number>();
+  for (const comment of comments ?? []) {
+    commentCountByPost.set(comment.post_id, (commentCountByPost.get(comment.post_id) ?? 0) + 1);
   }
 
   return (
@@ -79,6 +88,7 @@ export default async function SocialPage() {
                 authorName={authorName}
                 likeCount={likes.count}
                 likedByViewer={likes.likedByViewer}
+                commentCount={commentCountByPost.get(post.id) ?? 0}
                 signedIn={Boolean(profile)}
                 index={index}
               />

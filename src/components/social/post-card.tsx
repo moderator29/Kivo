@@ -6,6 +6,7 @@ import { Heart, Flag, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toggleLike } from "@/app/(app)/social/actions";
 import { reportContent } from "@/app/(app)/social/report-actions";
+import { CommentThread } from "@/components/social/comment-thread";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 
@@ -18,11 +19,22 @@ interface PostCardProps {
   authorName: string;
   likeCount: number;
   likedByViewer: boolean;
+  commentCount: number;
   signedIn: boolean;
   index?: number;
 }
 
-export function PostCard({ id, body, createdAt, authorName, likeCount, likedByViewer, signedIn, index = 0 }: PostCardProps) {
+export function PostCard({
+  id,
+  body,
+  createdAt,
+  authorName,
+  likeCount,
+  likedByViewer,
+  commentCount,
+  signedIn,
+  index = 0,
+}: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [optimisticLiked, setOptimisticLiked] = useState(likedByViewer);
@@ -210,6 +222,8 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
           </AnimatePresence>
         </div>
       </div>
+
+      <CommentThread postId={id} initialCount={commentCount} signedIn={signedIn} />
     </motion.article>
   );
 }
