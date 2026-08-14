@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Flame, Award } from "lucide-react";
+import { Flame, Award, History } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { timeAgo } from "@/lib/format";
 
 const item = NAV_ITEMS.find((i) => i.id === "rewards")!;
 
@@ -29,10 +30,11 @@ export default async function RewardsPage() {
   }
 
   const supabase = createServerSupabaseClient();
-  const [{ data: xpEntries }, { data: earnedBadges }, { data: allBadges }] = await Promise.all([
+  const [{ data: xpEntries }, { data: earnedBadges }, { data: allBadges }, { data: xpHistory }] = await Promise.all([
     supabase.from("xp_ledger").select("amount"),
     supabase.from("user_badges").select("badge_id, awarded_at, badge:badges(code, name, description, icon_url)"),
     supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
+    supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
   ]);
 
   const totalXp = (xpEntries ?? []).reduce((sum, entry) => sum + entry.amount, 0);
@@ -136,6 +138,31 @@ export default async function RewardsPage() {
                 </FadeIn>
               );
             })}
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.15} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          XP history
+        </h2>
+
+        {!xpHistory || xpHistory.length === 0 ? (
+          <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
+            No XP earned yet. Complete onboarding or post in the community to get started.
+          </div>
+        ) : (
+          <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+            {xpHistory.map((entry, index) => (
+              <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="text-xs font-medium text-foreground">{entry.reason}</p>
+                  <p className="text-[11px] text-foreground-subtle">{timeAgo(entry.created_at)}</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-live">+{entry.amount} XP</span>
+              </div>
+            ))}
           </div>
         )}
       </FadeIn>
