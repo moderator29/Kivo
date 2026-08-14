@@ -7,7 +7,16 @@ import { createPost } from "@/app/(app)/social/actions";
 
 const MAX_LENGTH = 2000;
 
-export function PostComposer({ signedIn }: { signedIn: boolean }) {
+export function PostComposer({
+  signedIn,
+  fixtureId,
+  placeholder = "What's your take?",
+}: {
+  signedIn: boolean;
+  /** Scopes the created post to a fixture's Match Room (see match-room.tsx) instead of the general feed. */
+  fixtureId?: string;
+  placeholder?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +43,13 @@ export function PostComposer({ signedIn }: { signedIn: boolean }) {
       }}
       className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 focus-within:shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.35)]"
     >
+      {fixtureId && <input type="hidden" name="fixture_id" value={fixtureId} />}
       <textarea
         name="body"
         required={signedIn}
         maxLength={MAX_LENGTH}
         rows={3}
-        placeholder={signedIn ? "What's your take?" : "Sign up to share your take."}
+        placeholder={signedIn ? placeholder : "Sign up to share your take."}
         onFocus={(e) => {
           if (!signedIn) e.currentTarget.blur();
         }}
