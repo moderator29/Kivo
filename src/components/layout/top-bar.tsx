@@ -1,16 +1,42 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
+import { Bell } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { getRecentNotifications } from "@/lib/notifications";
 import { NotificationBell } from "./notification-bell";
 import { CommandPalette } from "./command-palette";
 import kivoLogo from "../../../public/brand/kivo-logo.png";
 
-export async function TopBar({ signedIn }: { signedIn: boolean }) {
-  const { notifications, unreadCount } = signedIn
-    ? await getRecentNotifications()
-    : { notifications: [], unreadCount: 0 };
+/**
+ * Static stand-in for the notification bell while its data streams in below —
+ * same box size and icon as the real button's closed state, so nothing shifts
+ * when it's replaced; the only visible change on resolve is the unread badge
+ * (if any) popping in, same as any other "streams in when ready" affordance
+ * elsewhere in the app.
+ */
+function NotificationBellFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-9 w-9 items-center justify-center rounded-full text-foreground-muted"
+    >
+      <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
+    </div>
+  );
+}
 
+/**
+ * The actual data fetch, isolated in its own async Server Component so it can
+ * be wrapped in <Suspense> below — a Suspense boundary only suspends on an
+ * async component within it, not on an await in its parent.
+ */
+async function NotificationBellData() {
+  const { notifications, unreadCount } = await getRecentNotifications();
+  return <NotificationBell initialNotifications={notifications} initialUnreadCount={unreadCount} />;
+}
+
+export function TopBar({ signedIn }: { signedIn: boolean }) {
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-kivo-obsidian/90 px-4 py-3 backdrop-blur-lg lg:px-8">
       <Link
@@ -27,7 +53,9 @@ export async function TopBar({ signedIn }: { signedIn: boolean }) {
 
       {signedIn ? (
         <>
-          <NotificationBell initialNotifications={notifications} initialUnreadCount={unreadCount} />
+          <Suspense fallback={<NotificationBellFallback />}>
+            <NotificationBellData />
+          </Suspense>
           <UserButton />
         </>
       ) : (

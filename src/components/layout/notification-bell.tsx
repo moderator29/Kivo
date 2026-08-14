@@ -6,16 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { markAllNotificationsRead, markNotificationRead } from "@/app/notifications/actions";
 import type { NotificationRow } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
-
-function timeAgo(isoDate: string) {
-  const seconds = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
+import { timeAgo } from "@/lib/format";
 
 function describe(notification: NotificationRow): string {
   const payload = notification.payload as Record<string, unknown>;

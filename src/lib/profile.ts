@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { currentUser } from "@clerk/nextjs/server";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "./supabase/server";
 import { isClerkConfigured } from "./clerk";
@@ -11,8 +12,16 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
  * the Clerk webhook hasn't fired yet (e.g. CLERK_WEBHOOK_SECRET not configured
  * in this environment) — the app must not break just because a webhook is
  * unwired. Uses the service-role client only for this one fallback path.
+ *
+ * Wrapped in React's `cache()`: this is called from `(app)/layout.tsx` and
+ * again independently in nearly every page/action under it, so without this
+ * a single request would repeat Clerk's `currentUser()` plus a `profiles`
+ * SELECT two to four times. `cache()` only memoizes within a single request
+ * (a fresh request gets a fresh cache) — it never persists across requests,
+ * so nothing about data freshness changes, only redundant work within one
+ * render is collapsed. See https://react.dev/reference/react/cache.
  */
-export async function getOrCreateProfile(): Promise<Profile | null> {
+export const getOrCreateProfile = cache(async (): Promise<Profile | null> => {
   // currentUser() throws if clerkMiddleware() never ran for this request (true
   // whenever Clerk is unconfigured — see src/proxy.ts). Next.js renders a route
   // segment's page in parallel with its layout, so a protected page can start
@@ -54,4 +63,4 @@ export async function getOrCreateProfile(): Promise<Profile | null> {
   }
 
   return created;
-}
+});
