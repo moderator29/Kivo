@@ -1736,6 +1736,15 @@ export type Database = {
           total_points: number
         }[]
       }
+      get_predictions_leaderboard: {
+        Args: { p_limit?: number }
+        Returns: {
+          display_name: string | null
+          profile_id: string
+          total_points: number
+          username: string
+        }[]
+      }
       get_fantasy_team_league: {
         Args: { p_team_id: string }
         Returns: {

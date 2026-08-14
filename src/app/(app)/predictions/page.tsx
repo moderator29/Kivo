@@ -47,40 +47,21 @@ export default async function PredictionsPage() {
 
   const predictionByFixture = new Map((existingPredictions ?? []).map((p) => [p.fixture_id, p.predicted_outcome]));
 
-  // Aggregate real scored predictions into a leaderboard. `points_awarded` is
-  // nullable and nothing in this codebase writes it yet (resolution/scoring
-  // is a separate, out-of-scope backend feature) — until it does, this
-  // resolves to an empty list and the component shows an honest empty state
-  // rather than a fabricated or all-zero table.
-  //
-  // Note: `predictions` RLS (`predictions_select_own`) only ever lets a
-  // caller see their own rows, so even once scoring lands this query can't
-  // surface a true cross-user leaderboard through this client — that needs
-  // a follow-up migration (e.g. a SECURITY DEFINER RPC exposing just
-  // profile_id + summed points) which is out of scope here.
-  const { data: scoredPredictions } = await supabase
-    .from("predictions")
-    .select("profile_id, points_awarded, profile:profiles!predictions_profile_id_fkey(username, display_name)")
-    .not("points_awarded", "is", null);
+  // `predictions_select_own` restricts a plain select to the caller's own
+  // rows, so a cross-user aggregate can't be built from a plain client query
+  // — same reasoning as get_public_profiles / get_fantasy_league_leaderboard.
+  // get_predictions_leaderboard (SECURITY DEFINER) exposes only the narrow
+  // aggregate needed: profile_id + username + display_name + summed points
+  // over scored predictions (points_awarded is null until an admin-triggered
+  // scoring pass resolves a fixture). With no scored predictions yet, this
+  // resolves to an empty list and the component shows an honest empty state.
+  const { data: leaderboardRows } = await supabase.rpc("get_predictions_leaderboard", { p_limit: 20 });
 
-  const pointsByProfile = new Map<string, { name: string; points: number }>();
-  for (const row of scoredPredictions ?? []) {
-    if (row.points_awarded === null) continue;
-    const existing = pointsByProfile.get(row.profile_id);
-    if (existing) {
-      existing.points += row.points_awarded;
-    } else {
-      pointsByProfile.set(row.profile_id, {
-        name: row.profile?.display_name || row.profile?.username || "Unknown",
-        points: row.points_awarded,
-      });
-    }
-  }
-
-  const leaderboardEntries: LeaderboardEntry[] = Array.from(pointsByProfile.entries())
-    .map(([profileId, { name, points }]) => ({ profileId, name, points }))
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 20);
+  const leaderboardEntries: LeaderboardEntry[] = (leaderboardRows ?? []).map((row) => ({
+    profileId: row.profile_id,
+    name: row.display_name || row.username || "Unknown",
+    points: row.total_points,
+  }));
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
