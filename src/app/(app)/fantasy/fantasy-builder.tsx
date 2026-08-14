@@ -17,6 +17,7 @@ import {
   ArrowUpFromLine,
   ArrowDownToLine,
   Trash2,
+  History,
 } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -69,6 +70,11 @@ type FantasyBuilderProps = {
   points: number | null;
   pointsAvailable: boolean;
   leaderboard: { entries: LeaderboardEntry[]; hasAnyScores: boolean };
+  /** Set only on the page load where a previous gameweek's squad was just
+   * copied forward into this one — see carryForwardFantasyRoster. Deliberately
+   * transient (not re-derived on every later load) so it reads as "here's why
+   * your squad wasn't empty just now" rather than a permanent label. */
+  carriedForwardFromGameweek: number | null;
 };
 
 const VIEW_TABS = ["Squad", "Leaderboard"] as const;
@@ -111,6 +117,7 @@ export function FantasyBuilder({
   points,
   pointsAvailable,
   leaderboard,
+  carriedForwardFromGameweek,
 }: FantasyBuilderProps) {
   const [view, setView] = useState<ViewTab>("Squad");
   const [savedRoster, setSavedRoster] = useState(initialRoster);
@@ -353,6 +360,15 @@ export function FantasyBuilder({
         </FadeIn>
       ) : (
         <div role="tabpanel" id={viewPanelId("Squad")} aria-labelledby={viewTabId("Squad")} tabIndex={0} className="flex flex-col gap-5">
+          {carriedForwardFromGameweek !== null && (
+            <FadeIn
+              delay={0.02}
+              className="flex w-fit items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-foreground-subtle"
+            >
+              <History className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              Carried forward from GW{carriedForwardFromGameweek}
+            </FadeIn>
+          )}
           <FadeIn delay={0.05} className="grid grid-cols-3 gap-3">
             <StatTile label={`Gameweek ${gameweek.number}`} value={formatDeadlineCountdown(gameweek.deadlineAt, now)} valueClass={locked ? "text-critical" : "text-foreground"} />
             <StatTile

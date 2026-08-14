@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
+import { carryForwardFantasyRoster, ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
 import { canManageFootballData } from "@/lib/admin";
 import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
@@ -112,16 +112,39 @@ export default async function FantasyPage({
   }[] = [];
   let points: number | null = null;
   let pointsAvailable = false;
+  let carriedForwardFromGameweek: number | null = null;
+
+  // Shared shape between the initial load and the re-fetch after a lazy
+  // carry-forward insert (see below) — kept as one query so the two never
+  // drift out of sync with each other.
+  const ROSTER_SELECT = `player_id, is_starting, is_captain, is_vice_captain,
+         player:players(id, full_name, known_as, position, current_team_id, team:teams(id, name, short_name, crest_url))`;
 
   if (gameweek) {
-    const { data: roster } = await supabase
+    let { data: roster } = await supabase
       .from("fantasy_rosters")
-      .select(
-        `player_id, is_starting, is_captain, is_vice_captain,
-         player:players(id, full_name, known_as, position, current_team_id, team:teams(id, name, short_name, crest_url))`,
-      )
+      .select(ROSTER_SELECT)
       .eq("fantasy_team_id", activeTeam.id)
       .eq("gameweek_id", gameweek.id);
+
+    // A new gameweek starts with zero roster rows for every team — carry the
+    // team's most recent earlier squad forward instead of showing an empty
+    // pitch that has to be rebuilt from scratch (see carryForwardFantasyRoster
+    // for the idempotency + eligibility reasoning). Only attempted when this
+    // team genuinely has nothing yet for this gameweek, so a team that has
+    // already built (or edited) its own squad here is never touched.
+    if (!roster || roster.length === 0) {
+      const carry = await carryForwardFantasyRoster(activeTeam.id, league.season_id, gameweek.id, gameweek.number);
+      if (carry.carriedFromGameweekNumber !== null) {
+        carriedForwardFromGameweek = carry.carriedFromGameweekNumber;
+        const { data: refetched } = await supabase
+          .from("fantasy_rosters")
+          .select(ROSTER_SELECT)
+          .eq("fantasy_team_id", activeTeam.id)
+          .eq("gameweek_id", gameweek.id);
+        roster = refetched;
+      }
+    }
 
     const rosterPlayerIds = (roster ?? []).map((r) => r.player_id);
     if (rosterPlayerIds.length > 0) await ensureFantasyPlayerPrices(league.season_id, rosterPlayerIds);
@@ -186,6 +209,7 @@ export default async function FantasyPage({
         points={points}
         pointsAvailable={pointsAvailable}
         leaderboard={leaderboard}
+        carriedForwardFromGameweek={carriedForwardFromGameweek}
       />
     </div>
   );
