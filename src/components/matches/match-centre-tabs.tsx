@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Shield } from "lucide-react";
 import Image from "next/image";
 import { EVENT_LABEL } from "@/lib/football/event-labels";
@@ -84,8 +84,14 @@ function DetailsTab({
   }
   return (
     <div className="flex flex-col gap-2">
-      {events.map((event) => (
-        <div key={event.id} className="kivo-glass flex items-center gap-3 rounded-xl p-3">
+      {events.map((event, index) => (
+        <motion.div
+          key={event.id}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
+          className="kivo-glass flex items-center gap-3 rounded-xl p-3"
+        >
           <span className="w-10 shrink-0 text-right text-xs font-semibold text-foreground-subtle">
             {event.minute}
             {event.addedTime ? `+${event.addedTime}` : ""}&apos;
@@ -98,7 +104,7 @@ function DetailsTab({
               {event.detail ? ` · ${event.detail}` : ""}
             </span>
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -135,23 +141,35 @@ function LineupsTab({
         {starters.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Starting XI</span>
-            {starters.map((p) => (
-              <div key={p.playerId || p.playerName} className="flex items-center gap-2 text-sm text-foreground">
+            {starters.map((p, index) => (
+              <motion.div
+                key={p.playerId || p.playerName}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, delay: Math.min(index * 0.025, 0.25), ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-center gap-2 text-sm text-foreground"
+              >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
                 <span className="truncate">{p.playerName}</span>
                 {p.position && <span className="text-xs text-foreground-subtle">{p.position}</span>}
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
         {bench.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Substitutes</span>
-            {bench.map((p) => (
-              <div key={p.playerId || p.playerName} className="flex items-center gap-2 text-sm text-foreground-muted">
+            {bench.map((p, index) => (
+              <motion.div
+                key={p.playerId || p.playerName}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, delay: Math.min(0.1 + index * 0.025, 0.35), ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-center gap-2 text-sm text-foreground-muted"
+              >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
                 <span className="truncate">{p.playerName}</span>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
@@ -181,11 +199,14 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
         <span className="text-right">Pts</span>
         <span></span>
       </div>
-      {standings.map((row) => {
+      {standings.map((row, index) => {
         const highlighted = row.teamId === homeTeamId || row.teamId === awayTeamId;
         return (
-          <div
+          <motion.div
             key={row.teamId}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: Math.min(index * 0.02, 0.3), ease: [0.22, 1, 0.36, 1] }}
             className={`grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs ${
               highlighted ? "bg-kivo-cyan/5" : ""
             }`}
@@ -203,7 +224,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
             <span className="text-right text-foreground-muted">{row.goalsFor - row.goalsAgainst}</span>
             <span className="text-right font-semibold text-foreground">{row.points}</span>
             <span />
-          </div>
+          </motion.div>
         );
       })}
     </div>
@@ -243,19 +264,29 @@ export function MatchCentreTabs({
         ))}
       </div>
 
-      {active === "Details" && (
-        <DetailsTab events={events} canSyncDetails={canSyncDetails} syncDetailsAction={syncDetailsAction} />
-      )}
-      {active === "Lineups" && (
-        <LineupsTab
-          homeTeamId={homeTeamId}
-          awayTeamId={awayTeamId}
-          lineups={lineups}
-          canSyncDetails={canSyncDetails}
-          syncDetailsAction={syncDetailsAction}
-        />
-      )}
-      {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={active}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {active === "Details" && (
+            <DetailsTab events={events} canSyncDetails={canSyncDetails} syncDetailsAction={syncDetailsAction} />
+          )}
+          {active === "Lineups" && (
+            <LineupsTab
+              homeTeamId={homeTeamId}
+              awayTeamId={awayTeamId}
+              lineups={lineups}
+              canSyncDetails={canSyncDetails}
+              syncDetailsAction={syncDetailsAction}
+            />
+          )}
+          {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

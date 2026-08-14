@@ -94,7 +94,29 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass sticky top-2 z-10 flex flex-col gap-4 rounded-2xl p-5">
+      <FadeIn className="kivo-glass-brand sticky top-2 z-10 flex flex-col gap-4 rounded-2xl p-5">
+        {/* Match-centre-only keyframes: a breathing live badge, an expanding
+            "on air" ring on its dot, and a brief scale-in for the score on
+            load. Scoped here (not globals.css) since this page is the only
+            place they're used; the sitewide prefers-reduced-motion block in
+            globals.css (`* { animation-duration: 0.01ms !important }`)
+            already clamps these too, same as kivo-aurora. */}
+        <style>{`
+          @keyframes kivo-live-breathe {
+            0%, 100% { opacity: 0.88; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.04); }
+          }
+          @keyframes kivo-live-ring {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
+            70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+          }
+          @keyframes kivo-score-reveal {
+            0% { opacity: 0; transform: scale(0.82); }
+            100% { opacity: 1; transform: scale(1); }
+          }
+        `}</style>
+
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
           <span>{fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}</span>
           {fixture.venue?.name && (
@@ -107,20 +129,25 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-1 flex-col items-center gap-2">
+          <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={40} />
             <span className="text-center text-sm font-medium text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
-          </div>
+          </FadeIn>
 
           <div className="flex shrink-0 flex-col items-center gap-1">
-            <span className="text-2xl font-semibold text-foreground">
+            <span className="animate-[kivo-score-reveal_0.5s_ease-out_0.1s_both] text-2xl font-semibold text-foreground">
               {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
             </span>
             <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                live ? "border-live/30 bg-live/10 text-live" : "border-white/10 text-foreground-subtle"
+              className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                live
+                  ? "animate-[kivo-live-breathe_2.2s_ease-in-out_infinite] border-live/30 bg-live/10 text-live"
+                  : "border-white/10 text-foreground-subtle"
               }`}
             >
+              {live && (
+                <span className="h-1.5 w-1.5 shrink-0 animate-[kivo-live-ring_2s_ease-out_infinite] rounded-full bg-live" />
+              )}
               {fixture.status === "scheduled"
                 ? new Date(fixture.kickoff_at).toLocaleString(undefined, {
                     month: "short",
@@ -132,50 +159,52 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             </span>
           </div>
 
-          <div className="flex flex-1 flex-col items-center gap-2">
+          <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={40} />
             <span className="text-center text-sm font-medium text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
-          </div>
+          </FadeIn>
         </div>
       </FadeIn>
 
-      <MatchCentreTabs
-        homeTeamId={fixture.home_team?.id ?? ""}
-        awayTeamId={fixture.away_team?.id ?? ""}
-        canSyncDetails={canManageFootballData(profile?.role)}
-        syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
-        events={(events ?? []).map((e) => ({
-          id: e.id,
-          eventType: e.event_type,
-          minute: e.minute,
-          addedTime: e.added_time,
-          detail: e.detail,
-          teamId: e.team_id,
-          playerName: e.player?.known_as ?? e.player?.full_name ?? null,
-          relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
-        }))}
-        lineups={(lineups ?? []).map((l) => ({
-          teamId: l.team_id,
-          isStarting: l.is_starting,
-          shirtNumber: l.shirt_number,
-          position: l.position,
-          playerId: l.player?.id ?? "",
-          playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
-        }))}
-        standings={(standings ?? []).map((s) => ({
-          teamId: s.team_id,
-          teamName: s.team?.name ?? "Unknown team",
-          crestUrl: s.team?.crest_url ?? null,
-          played: s.played,
-          won: s.won,
-          drawn: s.drawn,
-          lost: s.lost,
-          goalsFor: s.goals_for,
-          goalsAgainst: s.goals_against,
-          points: s.points,
-          position: s.position,
-        }))}
-      />
+      <FadeIn delay={0.14}>
+        <MatchCentreTabs
+          homeTeamId={fixture.home_team?.id ?? ""}
+          awayTeamId={fixture.away_team?.id ?? ""}
+          canSyncDetails={canManageFootballData(profile?.role)}
+          syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
+          events={(events ?? []).map((e) => ({
+            id: e.id,
+            eventType: e.event_type,
+            minute: e.minute,
+            addedTime: e.added_time,
+            detail: e.detail,
+            teamId: e.team_id,
+            playerName: e.player?.known_as ?? e.player?.full_name ?? null,
+            relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
+          }))}
+          lineups={(lineups ?? []).map((l) => ({
+            teamId: l.team_id,
+            isStarting: l.is_starting,
+            shirtNumber: l.shirt_number,
+            position: l.position,
+            playerId: l.player?.id ?? "",
+            playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
+          }))}
+          standings={(standings ?? []).map((s) => ({
+            teamId: s.team_id,
+            teamName: s.team?.name ?? "Unknown team",
+            crestUrl: s.team?.crest_url ?? null,
+            played: s.played,
+            won: s.won,
+            drawn: s.drawn,
+            lost: s.lost,
+            goalsFor: s.goals_for,
+            goalsAgainst: s.goals_against,
+            points: s.points,
+            position: s.position,
+          }))}
+        />
+      </FadeIn>
 
       <Link
         href="/matches"
