@@ -4,11 +4,12 @@ import { useState, useTransition } from "react";
 import { motion } from "motion/react";
 import { Shield } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
 
 type Outcome = "home_win" | "draw" | "away_win";
 
-type Team = { name: string; crest_url: string | null };
+type Team = { id: string | null; name: string; crest_url: string | null };
 
 type PredictionCardProps = {
   fixtureId: string;
@@ -74,11 +75,26 @@ export function PredictionCard({
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">
           <TeamCrest crestUrl={homeTeam.crest_url} name={homeTeam.name} />
-          <span className="truncate text-sm text-foreground">{homeTeam.name}</span>
+          {homeTeam.id ? (
+            <Link href={`/teams/${homeTeam.id}`} className="truncate text-sm text-foreground hover:text-kivo-cyan">
+              {homeTeam.name}
+            </Link>
+          ) : (
+            <span className="truncate text-sm text-foreground">{homeTeam.name}</span>
+          )}
         </div>
         <span className="shrink-0 text-xs text-foreground-subtle">vs</span>
         <div className="flex flex-1 items-center justify-end gap-2">
-          <span className="truncate text-right text-sm text-foreground">{awayTeam.name}</span>
+          {awayTeam.id ? (
+            <Link
+              href={`/teams/${awayTeam.id}`}
+              className="truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+            >
+              {awayTeam.name}
+            </Link>
+          ) : (
+            <span className="truncate text-right text-sm text-foreground">{awayTeam.name}</span>
+          )}
           <TeamCrest crestUrl={awayTeam.crest_url} name={awayTeam.name} />
         </div>
       </div>

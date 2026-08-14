@@ -15,8 +15,8 @@ export default async function PredictionsPage() {
     .from("fixtures")
     .select(
       `id, kickoff_at, status,
-       home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
-       away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
+       home_team:teams!fixtures_home_team_id_fkey(id, name, crest_url),
+       away_team:teams!fixtures_away_team_id_fkey(id, name, crest_url),
        competition:competitions(name, short_name)`,
     )
     .eq("status", "scheduled")
@@ -57,8 +57,16 @@ export default async function PredictionsPage() {
             fixtureId={fixture.id}
             kickoffAt={fixture.kickoff_at}
             competitionName={fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
-            homeTeam={{ name: fixture.home_team?.name ?? "Home team", crest_url: fixture.home_team?.crest_url ?? null }}
-            awayTeam={{ name: fixture.away_team?.name ?? "Away team", crest_url: fixture.away_team?.crest_url ?? null }}
+            homeTeam={{
+              id: fixture.home_team?.id ?? null,
+              name: fixture.home_team?.name ?? "Home team",
+              crest_url: fixture.home_team?.crest_url ?? null,
+            }}
+            awayTeam={{
+              id: fixture.away_team?.id ?? null,
+              name: fixture.away_team?.name ?? "Away team",
+              crest_url: fixture.away_team?.crest_url ?? null,
+            }}
             initialPrediction={predictionByFixture.get(fixture.id) ?? null}
           />
         ))}

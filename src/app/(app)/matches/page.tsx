@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Shield } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -56,8 +57,8 @@ export default async function MatchesPage() {
     .from("fixtures")
     .select(
       `id, kickoff_at, status, home_score, away_score,
-       home_team:teams!fixtures_home_team_id_fkey(name, short_name, crest_url),
-       away_team:teams!fixtures_away_team_id_fkey(name, short_name, crest_url),
+       home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+       away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
        competition:competitions(name, short_name)`,
     )
     .gte("kickoff_at", startOfDay.toISOString())
@@ -102,13 +103,31 @@ export default async function MatchesPage() {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex flex-1 items-center gap-2">
                   <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-                  <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+                  {fixture.home_team?.id ? (
+                    <Link
+                      href={`/teams/${fixture.home_team.id}`}
+                      className="truncate text-sm text-foreground hover:text-kivo-cyan"
+                    >
+                      {fixture.home_team.name}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+                  )}
                 </div>
                 <span className="shrink-0 text-sm font-semibold text-foreground">
                   {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
                 </span>
                 <div className="flex flex-1 items-center justify-end gap-2">
-                  <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+                  {fixture.away_team?.id ? (
+                    <Link
+                      href={`/teams/${fixture.away_team.id}`}
+                      className="truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+                    >
+                      {fixture.away_team.name}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+                  )}
                   <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
                 </div>
               </div>
