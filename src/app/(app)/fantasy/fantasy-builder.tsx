@@ -353,10 +353,10 @@ export function FantasyBuilder({
             ))}
           </FadeIn>
 
-          <FadeIn delay={0.15} className="kivo-glass relative flex flex-col gap-4 overflow-hidden rounded-3xl p-4">
+          <div className="kivo-glass relative flex flex-col gap-4 overflow-hidden rounded-3xl p-4">
             <PitchLines />
             {pending.length === 0 ? (
-              <div className="relative flex flex-col items-center gap-3 py-10 text-center">
+              <FadeIn delay={0.15} className="relative flex flex-col items-center gap-3 py-10 text-center">
                 <p className="text-sm text-foreground-muted">Your squad is empty.</p>
                 <p className="max-w-xs text-xs text-foreground-subtle">
                   Pick {SQUAD_SIZE} players: {SQUAD_RULES.Goalkeepers} goalkeepers, {SQUAD_RULES.Defenders} defenders,{" "}
@@ -374,26 +374,30 @@ export function FantasyBuilder({
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   Add players
                 </button>
-              </div>
+              </FadeIn>
             ) : (
               <div className="relative flex flex-col gap-5 py-2">
-                {PITCH_ROWS.map((group) => {
+                {PITCH_ROWS.map((group, rowIndex) => {
                   const groupPlayers = startingXI.filter((p) => p.positionGroup === group);
                   if (groupPlayers.length === 0) return null;
                   return (
-                    <div key={group} className="flex flex-wrap items-start justify-center gap-3">
+                    <FadeIn
+                      key={group}
+                      delay={0.15 + rowIndex * 0.06}
+                      className="flex flex-wrap items-start justify-center gap-3"
+                    >
                       {groupPlayers.map((p) => (
                         <PlayerToken key={p.playerId} player={p} onClick={() => setSelectedPlayerId(p.playerId)} />
                       ))}
-                    </div>
+                    </FadeIn>
                   );
                 })}
               </div>
             )}
-          </FadeIn>
+          </div>
 
           {bench.length > 0 && (
-            <FadeIn delay={0.2} className="flex flex-col gap-2">
+            <FadeIn delay={0.4} className="flex flex-col gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Bench</span>
               <div className="kivo-glass flex gap-3 overflow-x-auto rounded-2xl p-4">
                 {bench.map((p) => (
@@ -404,7 +408,7 @@ export function FantasyBuilder({
           )}
 
           {pending.length > 0 && pending.length < SQUAD_SIZE && (
-            <FadeIn delay={0.25}>
+            <FadeIn delay={0.45}>
               <button
                 type="button"
                 onClick={() => {
@@ -511,10 +515,13 @@ function PitchLines() {
 function PlayerToken({ player, onClick, compact = false }: { player: RosterEntry; onClick: () => void; compact?: boolean }) {
   const size = compact ? 40 : 48;
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
-      className="group flex flex-col items-center gap-1 transition active:scale-95"
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      className="group flex flex-col items-center gap-1"
       style={{ width: compact ? 64 : 76 }}
     >
       <div className="relative">
@@ -529,20 +536,36 @@ function PlayerToken({ player, onClick, compact = false }: { player: RosterEntry
             <Image src={player.teamCrestUrl} alt="" width={12} height={12} className="object-contain" />
           </div>
         )}
-        {player.isCaptain && (
-          <div className="kivo-gradient-victory absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-kivo-white ring-2 ring-kivo-obsidian">
-            C
-          </div>
-        )}
-        {player.isViceCaptain && (
-          <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-achievement/40 bg-achievement/15 text-[10px] font-bold text-achievement ring-2 ring-kivo-obsidian">
-            V
-          </div>
-        )}
+        <AnimatePresence>
+          {player.isCaptain && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 22 }}
+              className="kivo-gradient-victory absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-kivo-white ring-2 ring-kivo-obsidian"
+            >
+              C
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {player.isViceCaptain && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 22 }}
+              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-achievement/40 bg-achievement/15 text-[10px] font-bold text-achievement ring-2 ring-kivo-obsidian"
+            >
+              V
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <span className="w-full truncate text-center text-[11px] font-medium text-foreground">{player.name}</span>
       <span className="text-[10px] font-semibold tabular-nums text-foreground-subtle">{formatFantasyPrice(player.price)}</span>
-    </button>
+    </motion.button>
   );
 }
 
@@ -650,11 +673,13 @@ function ActionRow({
   onClick: () => void;
 }) {
   return (
-    <button
+    <motion.button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition disabled:opacity-40 ${
+      whileTap={disabled ? undefined : { scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-40 ${
         tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-white/5"
       }`}
     >
@@ -663,7 +688,7 @@ function ActionRow({
         {label}
       </span>
       {hint && <span className="text-[10px] text-foreground-subtle">{hint}</span>}
-    </button>
+    </motion.button>
   );
 }
 

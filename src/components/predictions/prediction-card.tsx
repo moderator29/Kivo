@@ -111,12 +111,15 @@ export function PredictionCard({
         {(["home_win", "draw", "away_win"] as const).map((outcome) => {
           const active = prediction === outcome;
           return (
-            <button
+            <motion.button
               key={outcome}
               type="button"
               disabled={pending}
               onClick={() => handlePick(outcome)}
-              className={`relative overflow-hidden rounded-lg border py-2 text-xs font-semibold transition disabled:opacity-60 ${
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              className={`relative overflow-hidden rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-60 ${
                 active ? "border-transparent" : "border-white/10 hover:bg-white/5"
               }`}
             >
@@ -130,7 +133,7 @@ export function PredictionCard({
               <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
                 {OUTCOME_LABEL[outcome]}
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>

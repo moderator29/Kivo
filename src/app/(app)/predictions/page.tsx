@@ -87,29 +87,30 @@ export default async function PredictionsPage() {
       </FadeIn>
 
       <div className="flex flex-col gap-3">
-        {fixtures.map((fixture) => (
-          <PredictionCard
-            key={fixture.id}
-            fixtureId={fixture.id}
-            kickoffAt={fixture.kickoff_at}
-            competitionName={fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
-            homeTeam={{
-              id: fixture.home_team?.id ?? null,
-              name: fixture.home_team?.name ?? "Home team",
-              crest_url: fixture.home_team?.crest_url ?? null,
-            }}
-            awayTeam={{
-              id: fixture.away_team?.id ?? null,
-              name: fixture.away_team?.name ?? "Away team",
-              crest_url: fixture.away_team?.crest_url ?? null,
-            }}
-            initialPrediction={predictionByFixture.get(fixture.id) ?? null}
-            signedIn={Boolean(profile)}
-          />
+        {fixtures.map((fixture, index) => (
+          <FadeIn key={fixture.id} delay={Math.min(index * 0.03, 0.3)}>
+            <PredictionCard
+              fixtureId={fixture.id}
+              kickoffAt={fixture.kickoff_at}
+              competitionName={fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+              homeTeam={{
+                id: fixture.home_team?.id ?? null,
+                name: fixture.home_team?.name ?? "Home team",
+                crest_url: fixture.home_team?.crest_url ?? null,
+              }}
+              awayTeam={{
+                id: fixture.away_team?.id ?? null,
+                name: fixture.away_team?.name ?? "Away team",
+                crest_url: fixture.away_team?.crest_url ?? null,
+              }}
+              initialPrediction={predictionByFixture.get(fixture.id) ?? null}
+              signedIn={Boolean(profile)}
+            />
+          </FadeIn>
         ))}
       </div>
 
-      <FadeIn delay={0.1}>
+      <FadeIn delay={0.35}>
         <PredictionsLeaderboard entries={leaderboardEntries} viewerProfileId={profile?.id ?? null} />
       </FadeIn>
     </div>
