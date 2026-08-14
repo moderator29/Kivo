@@ -1,5 +1,13 @@
 import "server-only";
-import type { FootballDataProvider, NormalizedFixture, NormalizedStandingRow } from "../types";
+import type {
+  FootballDataProvider,
+  NormalizedFixture,
+  NormalizedLineups,
+  NormalizedManager,
+  NormalizedMatchEvent,
+  NormalizedPlayer,
+  NormalizedStandingRow,
+} from "../types";
 
 /**
  * Development-only fixture data so UI can be built without spending API-Football's
@@ -25,6 +33,106 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
   },
 ];
 
+/** Deliberately mirrors the real provider's limitation: no dateOfBirth/nationality
+ * from a squads-style listing — see the doc comment on getSquad() in api-football.ts. */
+const MOCK_SQUADS: Record<string, NormalizedPlayer[]> = {
+  "mock-team-1": [
+    { providerId: "mock-player-1", fullName: "Chidi Okafor", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper" },
+    { providerId: "mock-player-2", fullName: "Tunde Bakare", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender" },
+    { providerId: "mock-player-3", fullName: "Femi Adisa", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder" },
+    { providerId: "mock-player-4", fullName: "Kelechi Uzo", knownAs: "K. Uzo", dateOfBirth: null, nationality: null, position: "Attacker" },
+  ],
+  "mock-team-2": [
+    { providerId: "mock-player-5", fullName: "Emeka Nwosu", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper" },
+    { providerId: "mock-player-6", fullName: "Yusuf Danladi", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender" },
+    { providerId: "mock-player-7", fullName: "Obinna Chukwu", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder" },
+    { providerId: "mock-player-8", fullName: "Ahmed Musa Jr", knownAs: null, dateOfBirth: null, nationality: null, position: "Attacker" },
+  ],
+};
+
+const MOCK_MANAGERS: Record<string, NormalizedManager | null> = {
+  "mock-team-1": { providerId: "mock-manager-1", fullName: "Segun Adewale", nationality: "Nigeria", dateOfBirth: "1975-04-02" },
+  "mock-team-2": { providerId: "mock-manager-2", fullName: "Ifeanyi Eze", nationality: "Nigeria", dateOfBirth: "1980-09-15" },
+};
+
+const MOCK_LINEUPS: NormalizedLineups = {
+  fixtureProviderId: "mock-1",
+  teams: [
+    {
+      team: { providerId: "mock-team-1", name: "Remo Stars", shortName: "REM", crestUrl: null },
+      entries: [
+        { playerProviderId: "mock-player-1", playerName: "Chidi Okafor", isStarting: true, shirtNumber: 1, position: "G" },
+        { playerProviderId: "mock-player-2", playerName: "Tunde Bakare", isStarting: true, shirtNumber: 4, position: "D" },
+        { playerProviderId: "mock-player-3", playerName: "Femi Adisa", isStarting: true, shirtNumber: 8, position: "M" },
+        { playerProviderId: "mock-player-4", playerName: "Kelechi Uzo", isStarting: false, shirtNumber: 11, position: "F" },
+      ],
+    },
+    {
+      team: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
+      entries: [
+        { playerProviderId: "mock-player-5", playerName: "Emeka Nwosu", isStarting: true, shirtNumber: 1, position: "G" },
+        { playerProviderId: "mock-player-6", playerName: "Yusuf Danladi", isStarting: true, shirtNumber: 5, position: "D" },
+        { playerProviderId: "mock-player-7", playerName: "Obinna Chukwu", isStarting: true, shirtNumber: 6, position: "M" },
+        { playerProviderId: "mock-player-8", playerName: "Ahmed Musa Jr", isStarting: false, shirtNumber: 9, position: "F" },
+      ],
+    },
+  ],
+};
+
+const MOCK_EVENTS: NormalizedMatchEvent[] = [
+  {
+    providerId: "mock-1:mock-team-1:mock-player-4:63:0:Goal:Normal Goal",
+    teamProviderId: "mock-team-1",
+    playerProviderId: "mock-player-4",
+    playerName: "Kelechi Uzo",
+    relatedPlayerProviderId: null,
+    relatedPlayerName: null,
+    eventType: "goal",
+    minute: 63,
+    addedTime: null,
+    detail: "Normal Goal",
+  },
+  {
+    providerId: "mock-1:mock-team-2:mock-player-6:78:0:Card:Yellow Card",
+    teamProviderId: "mock-team-2",
+    playerProviderId: "mock-player-6",
+    playerName: "Yusuf Danladi",
+    relatedPlayerProviderId: null,
+    relatedPlayerName: null,
+    eventType: "yellow_card",
+    minute: 78,
+    addedTime: null,
+    detail: "Yellow Card",
+  },
+];
+
+const MOCK_STANDINGS: NormalizedStandingRow[] = [
+  {
+    provider: "mock",
+    team: { providerId: "mock-team-1", name: "Remo Stars", shortName: "REM", crestUrl: null },
+    rank: 1,
+    played: 10,
+    won: 7,
+    drawn: 2,
+    lost: 1,
+    goalsFor: 20,
+    goalsAgainst: 8,
+    points: 23,
+  },
+  {
+    provider: "mock",
+    team: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
+    rank: 2,
+    played: 10,
+    won: 6,
+    drawn: 2,
+    lost: 2,
+    goalsFor: 17,
+    goalsAgainst: 10,
+    points: 20,
+  },
+];
+
 export class MockFootballProvider implements FootballDataProvider {
   readonly name = "mock";
 
@@ -37,6 +145,22 @@ export class MockFootballProvider implements FootballDataProvider {
   }
 
   async getStandings(): Promise<NormalizedStandingRow[]> {
-    return [];
+    return MOCK_STANDINGS;
+  }
+
+  async getSquad(teamProviderId: string): Promise<NormalizedPlayer[]> {
+    return MOCK_SQUADS[teamProviderId] ?? [];
+  }
+
+  async getManager(teamProviderId: string): Promise<NormalizedManager | null> {
+    return MOCK_MANAGERS[teamProviderId] ?? null;
+  }
+
+  async getLineups(fixtureProviderId: string): Promise<NormalizedLineups | null> {
+    return fixtureProviderId === MOCK_LINEUPS.fixtureProviderId ? MOCK_LINEUPS : null;
+  }
+
+  async getMatchEvents(fixtureProviderId: string): Promise<NormalizedMatchEvent[]> {
+    return fixtureProviderId === "mock-1" ? MOCK_EVENTS : [];
   }
 }
