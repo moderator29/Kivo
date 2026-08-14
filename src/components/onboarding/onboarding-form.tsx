@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Check } from "lucide-react";
-import { saveUsernameStep, finishOnboarding, skipOnboarding } from "@/app/onboarding/actions";
+import { Check, X } from "lucide-react";
+import { saveUsernameStep, finishOnboarding, skipOnboarding, checkUsername } from "@/app/onboarding/actions";
 import { TeamCrest } from "@/components/ui/team-crest";
+
+const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
+const AVAILABILITY_DEBOUNCE_MS = 450;
 
 type Team = {
   id: string;
@@ -24,6 +27,51 @@ export function OnboardingForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+
+  const [usernameValue, setUsernameValue] = useState(
+    defaultUsername.startsWith("user_") ? "" : defaultUsername,
+  );
+  const [availability, setAvailability] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const availabilityRequestId = useRef(0);
+  const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced from the onChange handler itself, not a `usernameValue` effect
+  // — an effect would need to call setAvailability("idle") synchronously for
+  // an invalid candidate, which is exactly the "derive state via effect"
+  // anti-pattern (see https://react.dev/learn/you-might-not-need-an-effect).
+  // Driving it from the event handler keeps every setAvailability call
+  // inside a callback (this handler, the debounce timer, or the check's
+  // response), never synchronously inside an effect body.
+  function handleUsernameChange(value: string) {
+    setUsernameValue(value);
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+
+    const candidate = value.trim().toLowerCase();
+    if (!USERNAME_PATTERN.test(candidate)) {
+      setAvailability("idle");
+      return;
+    }
+
+    setAvailability("checking");
+    const requestId = ++availabilityRequestId.current;
+    debounceTimeout.current = setTimeout(() => {
+      checkUsername(candidate).then((result) => {
+        // A newer keystroke may have already kicked off another check —
+        // ignore a stale response landing after it so the indicator never
+        // flickers back to reflect an outdated candidate.
+        if (availabilityRequestId.current !== requestId) return;
+        setAvailability(result.available === null ? "idle" : result.available ? "available" : "taken");
+      });
+    }, AVAILABILITY_DEBOUNCE_MS);
+  }
+
+  // Only cleans up the pending timer on unmount — never calls setState, so
+  // this doesn't trip the "no setState directly in an effect" rule above.
+  useEffect(() => {
+    return () => {
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    };
+  }, []);
 
   function handleUsernameSubmit(formData: FormData) {
     setError(null);
@@ -112,19 +160,29 @@ export function OnboardingForm({
           <label htmlFor="username" className="text-xs font-medium text-foreground-muted">
             Username
           </label>
-          <input
-            id="username"
-            name="username"
-            required
-            minLength={3}
-            maxLength={24}
-            pattern="[a-z0-9_]+"
-            defaultValue={defaultUsername.startsWith("user_") ? "" : defaultUsername}
-            placeholder="e.g. lagos_ultra"
-            className="rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2.5 text-sm text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
-          />
+          <div className="relative">
+            <input
+              id="username"
+              name="username"
+              required
+              minLength={3}
+              maxLength={24}
+              pattern="[a-z0-9_]+"
+              value={usernameValue}
+              onChange={(e) => handleUsernameChange(e.target.value)}
+              placeholder="e.g. lagos_ultra"
+              className="w-full rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2.5 pr-9 text-sm text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+              {availability === "checking" && (
+                <span className="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
+              )}
+              {availability === "available" && <Check className="h-4 w-4 text-live" strokeWidth={2.5} />}
+              {availability === "taken" && <X className="h-4 w-4 text-critical" strokeWidth={2.5} />}
+            </span>
+          </div>
           <AnimatePresence>
-            {error && (
+            {error ? (
               <motion.span
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -134,15 +192,35 @@ export function OnboardingForm({
               >
                 {error}
               </motion.span>
-            )}
+            ) : availability === "available" ? (
+              <motion.span
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="text-xs text-live"
+              >
+                Available
+              </motion.span>
+            ) : availability === "taken" ? (
+              <motion.span
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="text-xs text-critical"
+              >
+                Taken. Try another.
+              </motion.span>
+            ) : null}
           </AnimatePresence>
         </div>
 
         <motion.button
           type="submit"
-          disabled={pending}
-          whileHover={pending ? undefined : { scale: 1.02 }}
-          whileTap={pending ? undefined : { scale: 0.97 }}
+          disabled={pending || availability === "taken"}
+          whileHover={pending || availability === "taken" ? undefined : { scale: 1.02 }}
+          whileTap={pending || availability === "taken" ? undefined : { scale: 0.97 }}
           className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {pending ? "Saving…" : "Continue"}

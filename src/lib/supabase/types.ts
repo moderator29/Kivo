@@ -1794,6 +1794,10 @@ export type Database = {
           username: string
         }[]
       }
+      is_username_available: {
+        Args: { p_exclude_profile_id?: string; p_username: string }
+        Returns: boolean
+      }
       redeem_invite_code: {
         Args: { p_invite_code: string }
         Returns: {

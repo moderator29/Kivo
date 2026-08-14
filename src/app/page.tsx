@@ -11,8 +11,8 @@ import { FeatureCard } from "@/components/marketing/feature-card";
 const PROOF_POINTS = [
   {
     icon: "/assets/icons/navigation/live-scores.webp",
-    title: "Live football, instantly",
-    description: "Scores, events and match intelligence that update the moment they happen. No refresh, no lag.",
+    title: "Real football, verified",
+    description: "Real fixtures, real scores, synced from live football data. Nothing invented, nothing guessed.",
   },
   {
     icon: "/assets/icons/navigation/ai-copilot.webp",
@@ -51,7 +51,7 @@ export default function LandingPage() {
             href="/sign-up"
             className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
-            Join KIVO
+            Sign up
           </Link>
         </div>
       </header>

@@ -156,9 +156,9 @@ export default async function HomePage() {
         {!profile ? (
           <p className="mt-3 text-sm text-foreground-muted">
             <Link href="/sign-up?redirect_url=%2Fhome" className="text-kivo-cyan hover:text-kivo-cyan/80">
-              Sign up
+              Sign up to follow a team
             </Link>{" "}
-            and follow a team to see their upcoming fixtures here.
+            and see their fixtures here.
           </p>
         ) : followedTeamIds.length === 0 ? (
           <p className="mt-3 text-sm text-foreground-muted">
