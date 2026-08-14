@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
+import { getRecentNotifications } from "@/lib/notifications";
+import { NotificationBell } from "./notification-bell";
 
-export function TopBar() {
+export async function TopBar() {
+  const { notifications, unreadCount } = await getRecentNotifications();
+
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-kivo-obsidian/90 px-4 py-3 backdrop-blur-lg lg:px-8">
       <Link href="/home" className="flex items-center gap-2 lg:hidden">
@@ -21,6 +25,7 @@ export function TopBar() {
         </label>
       </div>
 
+      <NotificationBell initialNotifications={notifications} initialUnreadCount={unreadCount} />
       <UserButton />
     </header>
   );

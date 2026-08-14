@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "motion/react";
 import { NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
@@ -25,19 +26,29 @@ export function DesktopSidebar() {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 active
-                  ? "bg-white/[0.06] text-foreground"
+                  ? "text-foreground"
                   : "text-foreground-muted hover:bg-white/[0.04] hover:text-foreground",
               )}
             >
+              {active && (
+                <motion.span
+                  layoutId="desktop-nav-active"
+                  className="absolute inset-0 rounded-xl bg-white/[0.06]"
+                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                />
+              )}
               <Icon
-                className={cn("h-[18px] w-[18px] shrink-0", active ? "text-kivo-cyan" : "text-foreground-subtle group-hover:text-foreground-muted")}
+                className={cn(
+                  "relative z-10 h-[18px] w-[18px] shrink-0",
+                  active ? "text-kivo-cyan" : "text-foreground-subtle group-hover:text-foreground-muted",
+                )}
                 strokeWidth={1.75}
               />
-              <span className="flex-1">{item.label}</span>
+              <span className="relative z-10 flex-1">{item.label}</span>
               {item.status === "coming-soon" && (
-                <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                <span className="relative z-10 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Soon
                 </span>
               )}

@@ -16,7 +16,12 @@ export default async function SocialPage() {
 
   const postIds = posts?.map((p) => p.id) ?? [];
   const { data: reactions } = postIds.length
-    ? await supabase.from("reactions").select("target_id, profile_id").eq("target_type", "post").in("target_id", postIds)
+    ? await supabase
+        .from("reactions")
+        .select("target_id, profile_id")
+        .eq("target_type", "post")
+        .eq("reaction_type", "like")
+        .in("target_id", postIds)
     : { data: [] };
 
   const likesByPost = new Map<string, { count: number; likedByViewer: boolean }>();
@@ -42,7 +47,7 @@ export default async function SocialPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {posts.map((post) => {
+          {posts.map((post, index) => {
             const likes = likesByPost.get(post.id) ?? { count: 0, likedByViewer: false };
             const author = post.author;
             const authorName = author?.display_name || author?.username || "KIVO fan";
@@ -55,6 +60,7 @@ export default async function SocialPage() {
                 authorName={authorName}
                 likeCount={likes.count}
                 likedByViewer={likes.likedByViewer}
+                index={index}
               />
             );
           })}

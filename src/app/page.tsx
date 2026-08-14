@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import kivoLogo from "../../public/brand/kivo-logo.png";
+import { FadeIn } from "@/components/ui/fade-in";
+import { FeatureCard } from "@/components/marketing/feature-card";
 
 const PROOF_POINTS = [
   {
@@ -53,41 +55,39 @@ export default function LandingPage() {
 
       <main className="flex flex-1 flex-col">
         <section className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-6 py-20 text-center lg:py-32">
-          <Image src={kivoLogo} alt="" width={96} height={96} className="h-24 w-24" priority />
-          <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
-            Football. Together. Live.
-          </span>
-          <h1 className="text-4xl font-semibold tracking-tight text-foreground lg:text-6xl">
-            The football home built for how fans actually watch, argue and play.
-          </h1>
-          <p className="max-w-2xl text-base text-foreground-muted lg:text-lg">
-            Live scores and match intelligence, a social layer that feels alive during the game, an AI Copilot grounded
-            in real data, and fantasy that&apos;s actually fun to build — all in one place.
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/sign-up"
-              className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
-            >
-              Get started
-              <ArrowRight className="h-4 w-4" strokeWidth={2} />
-            </Link>
-            <Link
-              href="/sign-in"
-              className="kivo-glass flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-white/[0.07]"
-            >
-              Sign in
-            </Link>
-          </div>
+          <FadeIn className="flex flex-col items-center gap-6">
+            <Image src={kivoLogo} alt="" width={96} height={96} className="h-24 w-24" priority />
+            <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
+              Football. Together. Live.
+            </span>
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground lg:text-6xl">
+              The football home built for how fans actually watch, argue and play.
+            </h1>
+            <p className="max-w-2xl text-base text-foreground-muted lg:text-lg">
+              Live scores and match intelligence, a social layer that feels alive during the game, an AI Copilot
+              grounded in real data, and fantasy that&apos;s actually fun to build — all in one place.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/sign-up"
+                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+              >
+                Get started
+                <ArrowRight className="h-4 w-4" strokeWidth={2} />
+              </Link>
+              <Link
+                href="/sign-in"
+                className="kivo-glass flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-white/[0.07]"
+              >
+                Sign in
+              </Link>
+            </div>
+          </FadeIn>
         </section>
 
         <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 pb-24 sm:grid-cols-2 lg:px-12">
-          {PROOF_POINTS.map((point) => (
-            <div key={point.title} className="kivo-glass flex flex-col gap-3 rounded-2xl p-6">
-              <Image src={point.icon} alt="" width={48} height={48} className="h-12 w-12" />
-              <h3 className="text-base font-semibold text-foreground">{point.title}</h3>
-              <p className="text-sm leading-relaxed text-foreground-muted">{point.description}</p>
-            </div>
+          {PROOF_POINTS.map((point, index) => (
+            <FeatureCard key={point.title} icon={point.icon} title={point.title} description={point.description} index={index} />
           ))}
         </section>
       </main>

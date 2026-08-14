@@ -44,3 +44,6 @@ next-env.d.ts
 # raw design uploads — source PNGs already preserved in main's history from
 # the original GitHub upload; only the processed /public assets ship here.
 /design/raw-uploads/
+
+# Claude Code session state and background-agent worktrees — never repo content.
+/.claude/

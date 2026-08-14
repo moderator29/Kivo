@@ -33,6 +33,14 @@ export async function getOrCreateProfile(): Promise<Profile | null> {
     .single();
 
   if (error) {
+    // Concurrent requests (two tabs, two route segments) can both miss the
+    // SELECT above and race to insert — the loser hits a unique violation,
+    // same as the webhook's retry path. Re-fetch instead of treating a
+    // signed-in user as profile-less.
+    if (error.code === "23505") {
+      const { data: retried } = await supabase.from("profiles").select("*").eq("clerk_user_id", user.id).maybeSingle();
+      return retried;
+    }
     console.error("Failed to fallback-create profile", error);
     return null;
   }

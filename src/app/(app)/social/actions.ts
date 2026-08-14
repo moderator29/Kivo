@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 
 const MAX_POST_LENGTH = 2000;
@@ -54,6 +54,31 @@ export async function toggleLike(postId: string, alreadyLiked: boolean) {
     return { error: "Couldn't update your reaction." };
   }
 
+  if (!alreadyLiked) {
+    await notifyPostLiked(postId, profile);
+  }
+
   revalidatePath("/social");
   return { error: null };
+}
+
+/**
+ * notifications has no client-facing insert policy by design (system-generated
+ * only) — this is the system doing the generating, so it goes through the
+ * service-role client deliberately, not as an RLS workaround.
+ */
+async function notifyPostLiked(postId: string, liker: { id: string; username: string; display_name: string | null }) {
+  const supabase = createServerSupabaseClient();
+  const { data: post } = await supabase.from("posts").select("author_profile_id").eq("id", postId).maybeSingle();
+
+  if (!post || post.author_profile_id === liker.id) return;
+
+  const serviceClient = createServiceRoleSupabaseClient();
+  const { error } = await serviceClient.from("notifications").insert({
+    profile_id: post.author_profile_id,
+    type: "post_like",
+    payload: { post_id: postId, liker_username: liker.username, liker_display_name: liker.display_name },
+  });
+
+  if (error) console.error("Failed to create like notification", error);
 }

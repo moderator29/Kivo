@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Git worktrees used by background agents — not part of this tree's source.
+    ".claude/**",
   ]),
 ]);
 

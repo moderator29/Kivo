@@ -1,7 +1,26 @@
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getOrCreateProfile } from "@/lib/profile";
+import { canViewModerationData } from "@/lib/admin";
 
 export default async function ModerationPage() {
+  const profile = await getOrCreateProfile();
+
+  if (!canViewModerationData(profile?.role)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-xl font-semibold text-foreground">Moderation queue</h1>
+        <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
+          <Lock className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
+          <p className="text-sm text-foreground-muted">
+            Moderation isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>) — this
+            isn&apos;t an empty queue, it&apos;s outside what your access covers.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const supabase = createServerSupabaseClient();
   const { data: reports } = await supabase
     .from("reports")

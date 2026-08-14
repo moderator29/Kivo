@@ -1,5 +1,7 @@
 import { Users, MessageSquare, ShieldAlert, Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getOrCreateProfile } from "@/lib/profile";
+import { canViewModerationData, canViewUserData } from "@/lib/admin";
 
 async function StatCard({
   icon: Icon,
@@ -20,12 +22,27 @@ async function StatCard({
 }
 
 export default async function AdminOverviewPage() {
+  const profile = await getOrCreateProfile();
   const supabase = createServerSupabaseClient();
+  const canSeeUsers = canViewUserData(profile?.role);
+  const canSeeReports = canViewModerationData(profile?.role);
 
-  const [{ count: userCount }, { count: postCount }, { count: pendingReportCount }] = await Promise.all([
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
+  // Posts are publicly readable, so that count is real for every admin role.
+  // Users/reports are RLS-gated to specific roles — querying them for a role
+  // that can't see the rows would silently return 0, which reads as "there
+  // are none" rather than "you can't see this." Show "—" instead.
+  const [{ count: postCount }, userCount, pendingReportCount] = await Promise.all([
     supabase.from("posts").select("*", { count: "exact", head: true }),
-    supabase.from("reports").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    canSeeUsers
+      ? supabase.from("profiles").select("*", { count: "exact", head: true }).then((r) => r.count)
+      : Promise.resolve(null),
+    canSeeReports
+      ? supabase
+          .from("reports")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending")
+          .then((r) => r.count)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -36,9 +53,9 @@ export default async function AdminOverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard icon={Users} label="Total users" value={userCount ?? 0} />
+        <StatCard icon={Users} label="Total users" value={canSeeUsers ? (userCount ?? 0) : "—"} />
         <StatCard icon={MessageSquare} label="Total posts" value={postCount ?? 0} />
-        <StatCard icon={ShieldAlert} label="Pending reports" value={pendingReportCount ?? 0} />
+        <StatCard icon={ShieldAlert} label="Pending reports" value={canSeeReports ? (pendingReportCount ?? 0) : "—"} />
         <StatCard icon={Radio} label="Football data providers live" value={0} />
       </div>
 
