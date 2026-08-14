@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { Heart, Flag, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toggleLike } from "@/app/(app)/social/actions";
@@ -17,6 +18,9 @@ interface PostCardProps {
   body: string;
   createdAt: string;
   authorName: string;
+  /** Optional so existing call sites that haven't wired author identity through
+   * yet still type-check; the name simply doesn't link without it. */
+  authorUsername?: string | null;
   likeCount: number;
   likedByViewer: boolean;
   commentCount: number;
@@ -29,6 +33,7 @@ export function PostCard({
   body,
   createdAt,
   authorName,
+  authorUsername = null,
   likeCount,
   likedByViewer,
   commentCount,
@@ -126,7 +131,16 @@ export function PostCard({
           {authorName.charAt(0).toUpperCase()}
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-sm font-medium text-foreground">{authorName}</span>
+          {authorUsername ? (
+            <Link
+              href={`/u/${authorUsername}`}
+              className="w-fit truncate text-sm font-medium text-foreground hover:text-kivo-cyan"
+            >
+              {authorName}
+            </Link>
+          ) : (
+            <span className="truncate text-sm font-medium text-foreground">{authorName}</span>
+          )}
           <span className="text-xs text-foreground-subtle">{timeAgo(createdAt)}</span>
         </div>
       </div>

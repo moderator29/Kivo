@@ -1769,6 +1769,22 @@ export type Database = {
           username: string
         }[]
       }
+      get_public_profile_by_username: {
+        Args: { p_username: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+          username: string
+        }[]
+      }
+      get_public_profile_stats: {
+        Args: { p_profile_id: string }
+        Returns: {
+          badges: Json
+          total_xp: number
+        }[]
+      }
       get_public_profiles: {
         Args: { p_ids: string[] }
         Returns: {

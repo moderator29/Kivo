@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Trophy } from "lucide-react";
 
 export type LeaderboardEntry = {
@@ -54,7 +55,12 @@ export function FantasyLeaderboard({
                     </span>
                   )}
                 </p>
-                <p className="truncate text-xs text-foreground-subtle">@{entry.ownerUsername}</p>
+                <Link
+                  href={`/u/${entry.ownerUsername}`}
+                  className="block truncate text-xs text-foreground-subtle hover:text-kivo-cyan"
+                >
+                  @{entry.ownerUsername}
+                </Link>
               </div>
               <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                 {entry.hasScores ? entry.totalPoints : "–"}

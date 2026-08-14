@@ -86,6 +86,7 @@ export default async function SocialPage() {
                 body={post.body}
                 createdAt={post.created_at}
                 authorName={authorName}
+                authorUsername={author?.username ?? null}
                 likeCount={likes.count}
                 likedByViewer={likes.likedByViewer}
                 commentCount={commentCountByPost.get(post.id) ?? 0}

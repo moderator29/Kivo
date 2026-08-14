@@ -15,6 +15,7 @@ export type CommentDTO = {
   body: string;
   createdAt: string;
   authorName: string;
+  authorUsername: string | null;
 };
 
 /**
@@ -56,6 +57,7 @@ export async function getComments(postId: string): Promise<{ comments: CommentDT
         body: c.body,
         createdAt: c.created_at,
         authorName: author?.display_name || author?.username || "KIVO fan",
+        authorUsername: author?.username ?? null,
       };
     }),
     error: null,
@@ -106,6 +108,7 @@ export async function createComment(postId: string, body: string, parentCommentI
     body: trimmed,
     createdAt: inserted.created_at,
     authorName: profile.display_name || profile.username,
+    authorUsername: profile.username,
   };
 
   return { error: null, comment };

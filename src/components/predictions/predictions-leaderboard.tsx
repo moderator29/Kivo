@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { CORRECT_PREDICTION_POINTS } from "@/lib/predictions";
 
 export interface LeaderboardEntry {
   profileId: string;
   name: string;
+  username: string | null;
   points: number;
 }
 
@@ -43,10 +45,20 @@ export function PredictionsLeaderboard({
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-5 shrink-0 text-right text-sm font-semibold text-foreground-subtle">{rank}</span>
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {entry.name}
-                    {isViewer && <span className="ml-1.5 text-xs font-normal text-kivo-cyan">(you)</span>}
-                  </span>
+                  {entry.username ? (
+                    <Link
+                      href={`/u/${entry.username}`}
+                      className="truncate text-sm font-medium text-foreground hover:text-kivo-cyan"
+                    >
+                      {entry.name}
+                      {isViewer && <span className="ml-1.5 text-xs font-normal text-kivo-cyan">(you)</span>}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {entry.name}
+                      {isViewer && <span className="ml-1.5 text-xs font-normal text-kivo-cyan">(you)</span>}
+                    </span>
+                  )}
                 </div>
                 <span className="shrink-0 text-sm font-semibold text-foreground">{entry.points} pts</span>
               </li>

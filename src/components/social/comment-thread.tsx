@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageCircle, CornerDownRight } from "lucide-react";
 import { getComments, createComment, type CommentDTO } from "@/app/(app)/social/comment-actions";
@@ -13,7 +14,16 @@ function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () =
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline gap-2">
-        <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
+        {comment.authorUsername ? (
+          <Link
+            href={`/u/${comment.authorUsername}`}
+            className="text-xs font-medium text-foreground hover:text-kivo-cyan"
+          >
+            {comment.authorName}
+          </Link>
+        ) : (
+          <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
+        )}
         <span className="text-[10px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
       </div>
       <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>

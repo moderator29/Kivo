@@ -60,6 +60,7 @@ export default async function PredictionsPage() {
   const leaderboardEntries: LeaderboardEntry[] = (leaderboardRows ?? []).map((row) => ({
     profileId: row.profile_id,
     name: row.display_name || row.username || "Unknown",
+    username: row.username ?? null,
     points: row.total_points,
   }));
 
