@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeftRight, Shield, UserRound } from "lucide-react";
@@ -8,6 +9,8 @@ import { NAV_ITEMS } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
 const item = NAV_ITEMS.find((i) => i.id === "transfers")!;
+
+export const metadata: Metadata = { title: item.label };
 
 type TransferType = Database["public"]["Enums"]["transfer_type"];
 

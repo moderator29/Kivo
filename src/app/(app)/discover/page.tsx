@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Compass } from "lucide-react";
 import { ComingSoon } from "@/components/ui/coming-soon";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -6,6 +7,8 @@ import { NAV_ITEMS } from "@/lib/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const item = NAV_ITEMS.find((i) => i.id === "discover")!;
+
+export const metadata: Metadata = { title: item.label };
 
 export default async function DiscoverPage() {
   const supabase = createServerSupabaseClient();

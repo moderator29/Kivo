@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Flame, Award } from "lucide-react";
@@ -7,6 +8,8 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { NAV_ITEMS } from "@/lib/navigation";
 
 const item = NAV_ITEMS.find((i) => i.id === "rewards")!;
+
+export const metadata: Metadata = { title: item.label };
 
 export default async function RewardsPage() {
   const profile = await getOrCreateProfile();

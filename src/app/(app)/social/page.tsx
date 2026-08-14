@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { PostComposer } from "@/components/social/post-composer";
 import { PostCard } from "@/components/social/post-card";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Users } from "lucide-react";
+
+export const metadata: Metadata = { title: "Social" };
 
 export default async function SocialPage() {
   const profile = await getOrCreateProfile();

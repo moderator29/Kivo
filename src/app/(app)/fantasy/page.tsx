@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -5,6 +6,8 @@ import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
+
+export const metadata: Metadata = { title: "Fantasy" };
 
 export default async function FantasyPage({
   searchParams,

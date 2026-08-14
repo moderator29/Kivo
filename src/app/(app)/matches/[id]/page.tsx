@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -47,6 +48,22 @@ function TeamCrest({ crestUrl, name, size = 20 }: { crestUrl: string | null; nam
       <Shield className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
     </div>
   );
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = createServerSupabaseClient();
+  const { data: fixture } = await supabase
+    .from("fixtures")
+    .select(
+      `home_team:teams!fixtures_home_team_id_fkey(name),
+       away_team:teams!fixtures_away_team_id_fkey(name)`,
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!fixture?.home_team?.name || !fixture?.away_team?.name) return { title: "Match" };
+  return { title: `${fixture.home_team.name} vs ${fixture.away_team.name}` };
 }
 
 export default async function MatchCentrePage({ params }: { params: Promise<{ id: string }> }) {

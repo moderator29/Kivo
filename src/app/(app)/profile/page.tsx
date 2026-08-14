@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { CircleUserRound } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { FadeIn } from "@/components/ui/fade-in";
+
+export const metadata: Metadata = { title: "Profile" };
 
 export default async function ProfilePage() {
   const profile = await getOrCreateProfile();

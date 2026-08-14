@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Shield } from "lucide-react";
@@ -7,6 +8,8 @@ import { ComingSoon } from "@/components/ui/coming-soon";
 import { NAV_ITEMS } from "@/lib/navigation";
 
 const item = NAV_ITEMS.find((i) => i.id === "teams")!;
+
+export const metadata: Metadata = { title: item.label };
 
 export default async function TeamsPage() {
   const supabase = createServerSupabaseClient();

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -7,6 +8,8 @@ import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/pred
 import { NAV_ITEMS } from "@/lib/navigation";
 
 const item = NAV_ITEMS.find((i) => i.id === "predictions")!;
+
+export const metadata: Metadata = { title: item.label };
 
 export default async function PredictionsPage() {
   const profile = await getOrCreateProfile();

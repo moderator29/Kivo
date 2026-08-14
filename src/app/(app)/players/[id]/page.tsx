@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -50,6 +51,13 @@ function TeamCrest({ crestUrl, name }: { crestUrl: string | null; name: string }
       <Shield className="h-3.5 w-3.5 text-foreground-subtle" strokeWidth={1.75} />
     </div>
   );
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = createServerSupabaseClient();
+  const { data: player } = await supabase.from("players").select("known_as, full_name").eq("id", id).maybeSingle();
+  return { title: (player?.known_as ?? player?.full_name) || "Player" };
 }
 
 export default async function PlayerProfilePage({ params }: { params: Promise<{ id: string }> }) {

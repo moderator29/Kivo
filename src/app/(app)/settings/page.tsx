@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { SignOutButton } from "@clerk/nextjs";
@@ -5,6 +6,8 @@ import { CircleUserRound, LogOut, Mail, AtSign } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { FadeIn } from "@/components/ui/fade-in";
+
+export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const profile = await getOrCreateProfile();

@@ -14,10 +14,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const description =
+  "KIVO is a premium football fan platform: live scores, an AI Copilot grounded in real data, match rooms, fantasy, and predictions. Built for football lovers.";
+
 export const metadata: Metadata = {
-  title: "KIVO: Football. Together. Live.",
-  description:
-    "KIVO is a premium football fan platform: live scores, an AI Copilot grounded in real data, match rooms, fantasy, and predictions. Built for football lovers.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "KIVO: Football. Together. Live.",
+    template: "%s | KIVO",
+  },
+  description,
+  openGraph: {
+    title: "KIVO: Football. Together. Live.",
+    description,
+    type: "website",
+    url: siteUrl,
+    siteName: "KIVO",
+    images: [{ url: "/brand/kivo-logo.png", width: 1254, height: 1254, alt: "KIVO" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "KIVO: Football. Together. Live.",
+    description,
+    images: ["/brand/kivo-logo.png"],
+  },
 };
 
 const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);

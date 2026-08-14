@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Radio, Shield } from "lucide-react";
@@ -10,6 +11,8 @@ import type { Database } from "@/lib/supabase/types";
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
 const item = NAV_ITEMS.find((i) => i.id === "live")!;
+
+export const metadata: Metadata = { title: item.label };
 
 const STATUS_LABEL: Record<FixtureStatus, string> = {
   scheduled: "Scheduled",

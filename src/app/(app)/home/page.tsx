@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Trophy, Target, Flame, Users, ArrowRight, Shield } from "lucide-react";
 import Image from "next/image";
@@ -26,6 +27,8 @@ function TeamCrest({ crestUrl, name }: { crestUrl: string | null; name: string }
     </div>
   );
 }
+
+export const metadata: Metadata = { title: "Home" };
 
 export default async function HomePage() {
   // Routed through KIVO's own profile rather than calling Clerk directly —

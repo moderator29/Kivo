@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { UserRound } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -6,6 +7,8 @@ import { ComingSoon } from "@/components/ui/coming-soon";
 import { NAV_ITEMS } from "@/lib/navigation";
 
 const item = NAV_ITEMS.find((i) => i.id === "players")!;
+
+export const metadata: Metadata = { title: item.label };
 
 export default async function PlayersPage() {
   const supabase = createServerSupabaseClient();
