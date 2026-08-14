@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import { createPost } from "@/app/(app)/social/actions";
 
 const MAX_LENGTH = 2000;
@@ -30,7 +31,7 @@ export function PostComposer({ signedIn }: { signedIn: boolean }) {
           }
         });
       }}
-      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4"
+      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 focus-within:shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.35)]"
     >
       <textarea
         name="body"
@@ -45,13 +46,15 @@ export function PostComposer({ signedIn }: { signedIn: boolean }) {
       />
       <div className="flex items-center justify-between">
         {error ? <span className="text-xs text-critical">{error}</span> : <span />}
-        <button
+        <motion.button
           type="submit"
           disabled={pending}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.96 }}
           className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {pending ? "Posting…" : signedIn ? "Post" : "Sign up to post"}
-        </button>
+        </motion.button>
       </div>
     </form>
   );

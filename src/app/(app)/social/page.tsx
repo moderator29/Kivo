@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { PostComposer } from "@/components/social/post-composer";
 import { PostCard } from "@/components/social/post-card";
+import { FadeIn } from "@/components/ui/fade-in";
 import { Users } from "lucide-react";
 
 export default async function SocialPage() {
@@ -34,17 +35,21 @@ export default async function SocialPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 lg:px-8">
-      <h1 className="text-xl font-semibold text-foreground">Community</h1>
+      <FadeIn>
+        <h1 className="text-xl font-semibold text-foreground">Community</h1>
+      </FadeIn>
 
-      <PostComposer signedIn={Boolean(profile)} />
+      <FadeIn delay={0.06}>
+        <PostComposer signedIn={Boolean(profile)} />
+      </FadeIn>
 
       {!posts || posts.length === 0 ? (
-        <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
+        <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Users className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">
             Nobody&apos;s posted yet. Be the first to share your take on the game.
           </p>
-        </div>
+        </FadeIn>
       ) : (
         <div className="flex flex-col gap-3">
           {posts.map((post, index) => {

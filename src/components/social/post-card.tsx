@@ -61,7 +61,8 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
-      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4"
+      whileHover={{ y: -2, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
     >
       <div className="flex items-center gap-2">
         <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white">
@@ -73,10 +74,11 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
         </div>
       </div>
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{body}</p>
-      <button
+      <motion.button
         onClick={handleLike}
         disabled={pending}
         aria-pressed={optimisticLiked}
+        whileTap={{ scale: 0.88 }}
         className={cn(
           "flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors disabled:opacity-70",
           optimisticLiked ? "text-critical" : "text-foreground-subtle hover:text-foreground-muted",
@@ -84,15 +86,15 @@ export function PostCard({ id, body, createdAt, authorName, likeCount, likedByVi
       >
         <motion.span
           key={optimisticLiked ? "liked" : "unliked"}
-          initial={{ scale: 0.6 }}
+          initial={{ scale: 0.5 }}
           animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 500, damping: 15 }}
+          transition={{ type: "spring", stiffness: 600, damping: 12 }}
           className="flex items-center"
         >
           <Heart className="h-4 w-4" strokeWidth={1.75} fill={optimisticLiked ? "currentColor" : "none"} />
         </motion.span>
         {optimisticCount > 0 ? optimisticCount : "Like"}
-      </button>
+      </motion.button>
     </motion.article>
   );
 }
