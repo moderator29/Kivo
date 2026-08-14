@@ -132,6 +132,34 @@ export interface NormalizedMatchEvent {
   detail: string | null;
 }
 
+// Must line up with the `transfer_type` Postgres enum (supabase/migrations/0006_transfers)
+// — "unknown" is used whenever the provider's raw fee text doesn't map cleanly onto one
+// of the other buckets. The sync pipeline writes exactly this inferred value, never a guess.
+export type NormalizedTransferType = "transfer" | "loan" | "free" | "end_of_loan" | "unknown";
+
+export interface NormalizedTransfer {
+  /** Synthetic composite id — API-Football's /transfers response has no stable per-move
+   * id, so the provider derives a deterministic key (player + date + teams) that stays
+   * stable across re-fetches. Deduped through provider_mappings under entity_type
+   * 'transfer', same pattern as fixture_event's synthetic id. */
+  providerId: string;
+  playerProviderId: string;
+  /** Null when the provider doesn't report a stable team id for this side of the move
+   * (e.g. a club outside its coverage) — the sync pipeline leaves the FK null rather
+   * than dedupe-by-name, same rationale as NormalizedFixture.venueProviderId. */
+  fromTeamProviderId: string | null;
+  fromTeamName: string | null;
+  toTeamProviderId: string | null;
+  toTeamName: string | null;
+  transferDate: string;
+  /** Raw provider string — e.g. "€45M", "Free", "Loan", "N/A" — stored verbatim
+   * (see transfers.fee_text doc comment in the migration) rather than parsed into a number. */
+  feeText: string | null;
+  /** Inferred from feeText at the normalization layer so every provider implementation
+   * (including mock) produces this consistently; sync-transfers.ts writes it as-is. */
+  transferType: NormalizedTransferType;
+}
+
 export interface FootballDataProvider {
   readonly name: string;
   getFixturesByDate(date: string): Promise<NormalizedFixture[]>;
@@ -145,4 +173,8 @@ export interface FootballDataProvider {
   /** Null when the provider has no lineups published yet for this fixture. */
   getLineups(fixtureProviderId: string): Promise<NormalizedLineups | null>;
   getMatchEvents(fixtureProviderId: string): Promise<NormalizedMatchEvent[]>;
+  /** Full recorded transfer history for one player — real, already-happened moves only
+   * (see AGENTS.md: no rumour/reported tier exists on the free tier). Newest-first is
+   * not guaranteed by the provider; sync-transfers.ts does not assume an order. */
+  getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]>;
 }

@@ -6,6 +6,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { syncTodayFixtures } from "@/lib/football/sync";
 import { syncTeamSquad } from "@/lib/football/sync-squads";
 import { syncFixtureDetails, syncStandings } from "@/lib/football/sync-match-details";
+import { syncPlayerTransfers } from "@/lib/football/sync-transfers";
 
 export async function triggerFootballSync(): Promise<{ error: string | null; recordsProcessed?: number }> {
   const profile = await getOrCreateProfile();
@@ -91,6 +92,25 @@ export async function triggerStandingsSync(seasonId: string): Promise<{ error: s
 
   if (result.status === "failed") {
     return { error: result.error ?? "Standings sync failed — see the sync_runs row for details." };
+  }
+
+  return { error: null, recordsProcessed: result.recordsProcessed };
+}
+
+/** Triggered from a player profile's Transfer history section to pull that
+ * player's recorded transfer history. */
+export async function triggerPlayerTransfersSync(playerId: string): Promise<{ error: string | null; recordsProcessed?: number }> {
+  const denied = await requireFootballDataAccess();
+  if (denied) return denied;
+
+  const result = await syncPlayerTransfers(playerId);
+
+  revalidatePath("/admin/data-health");
+  revalidatePath("/transfers");
+  revalidatePath(`/players/${playerId}`);
+
+  if (result.status === "failed") {
+    return { error: result.error ?? "Transfer sync failed — see the sync_runs row for details." };
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };

@@ -9,6 +9,8 @@ import type {
   NormalizedMatchEventType,
   NormalizedPlayer,
   NormalizedStandingRow,
+  NormalizedTransfer,
+  NormalizedTransferType,
 } from "../types";
 
 const BASE_URL = "https://v3.football.api-sports.io";
@@ -29,6 +31,10 @@ const LINEUP_CACHE_SECONDS = 120;
 const EVENTS_CACHE_SECONDS = 120;
 /** Standings settle slowly outside of matchdays — an hour is plenty fresh. */
 const STANDINGS_CACHE_SECONDS = 3_600;
+/** Transfer history is append-only and barely changes day to day — cache well beyond
+ * a single day so re-visiting a player's profile never burns fresh quota for data
+ * that's already historical fact. */
+const TRANSFERS_CACHE_SECONDS = 172_800;
 
 function mapStatus(shortStatus: string): FixtureStatus {
   if (["1H", "2H", "ET", "P", "LIVE", "BT"].includes(shortStatus)) return "live";
@@ -135,6 +141,40 @@ function mapEventType(type: string, detail: string): NormalizedMatchEventType {
   if (t === "subst") return "substitution";
   if (t === "var") return "var_review";
   return "unknown";
+}
+
+/**
+ * Infers our transfer_type enum from API-Football's free-text `type` field on a
+ * transfer record (e.g. "€45M", "$20M", "Free", "Loan", "N/A"). Never a guess:
+ * anything that doesn't clearly match one of the known buckets returns "unknown"
+ * rather than being assumed to be a paid transfer (see sync-transfers.ts).
+ */
+function mapTransferType(feeText: string | null): NormalizedTransferType {
+  if (!feeText) return "unknown";
+  const t = feeText.trim().toLowerCase();
+  if (t.length === 0 || t === "n/a") return "unknown";
+  if (t.includes("end of loan")) return "end_of_loan";
+  if (t.includes("loan")) return "loan";
+  if (t.includes("free")) return "free";
+  // A fee-bearing move reports an amount ("€45M", "$20M", "45000000", ...) — any
+  // digit is a reliable enough signal that this is a genuine paid transfer.
+  if (/\d/.test(t)) return "transfer";
+  return "unknown";
+}
+
+interface ApiFootballTransfersResponse {
+  response: Array<{
+    player: { id: number; name: string };
+    update: string | null;
+    transfers: Array<{
+      date: string;
+      type: string | null;
+      teams: {
+        in: { id: number | null; name: string | null; logo: string | null } | null;
+        out: { id: number | null; name: string | null; logo: string | null } | null;
+      };
+    }>;
+  }>;
 }
 
 interface ApiFootballFixtureResponse {
@@ -386,6 +426,45 @@ export class ApiFootballProvider implements FootballDataProvider {
         minute: item.time.elapsed,
         addedTime: item.time.extra,
         detail: item.detail,
+      };
+    });
+  }
+
+  /**
+   * `/transfers?player={id}` returns this player's full recorded transfer history —
+   * real, already-happened moves only, no rumour/reported tier on any API-Football
+   * plan (see AGENTS.md). Response is one entry per player with a nested `transfers`
+   * array; order isn't documented as newest-first, so callers must not assume one.
+   */
+  async getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]> {
+    const data = await this.request<ApiFootballTransfersResponse>(
+      `/transfers?player=${playerProviderId}`,
+      TRANSFERS_CACHE_SECONDS,
+    );
+    const entry = data.response[0];
+    if (!entry) return [];
+
+    return entry.transfers.map((t) => {
+      const feeText = t.type && t.type.trim().length > 0 ? t.type : null;
+      // Synthetic composite key — see NormalizedTransfer.providerId doc comment.
+      const providerId = [
+        playerProviderId,
+        t.date,
+        t.teams.out?.id ?? "x",
+        t.teams.in?.id ?? "x",
+        feeText ?? "x",
+      ].join(":");
+
+      return {
+        providerId,
+        playerProviderId,
+        fromTeamProviderId: t.teams.out?.id != null ? String(t.teams.out.id) : null,
+        fromTeamName: t.teams.out?.name ?? null,
+        toTeamProviderId: t.teams.in?.id != null ? String(t.teams.in.id) : null,
+        toTeamName: t.teams.in?.name ?? null,
+        transferDate: t.date,
+        feeText,
+        transferType: mapTransferType(feeText),
       };
     });
   }

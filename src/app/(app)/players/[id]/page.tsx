@@ -1,14 +1,28 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { UserRound, Shield, Flag, Cake, Activity } from "lucide-react";
+import { UserRound, Shield, Flag, Cake, Activity, ArrowLeftRight } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { canManageFootballData } from "@/lib/admin";
+import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
+type TransferType = Database["public"]["Enums"]["transfer_type"];
+
+// Same honesty rule as /transfers — API-Football's transfer data is real,
+// already-completed moves only, so labels stay plain, no rumour/confidence tiers.
+const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
+  transfer: "Transfer",
+  loan: "Loan",
+  free: "Free transfer",
+  end_of_loan: "End of loan",
+  unknown: "Fee undisclosed",
+};
 
 // A lineup row against a fixture in any of these statuses means the player has
 // actually taken the pitch — "scheduled" fixtures don't count as an appearance yet.
@@ -43,7 +57,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, isFollowing] = await Promise.all([
+  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing] = await Promise.all([
     supabase
       .from("players")
       .select(
@@ -60,6 +74,15 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       .from("fixture_events")
       .select("event_type")
       .eq("player_id", id),
+    supabase
+      .from("transfers")
+      .select(
+        `id, transfer_date, fee_text, transfer_type,
+         from_team:teams!transfers_from_team_id_fkey(id, name, short_name, crest_url),
+         to_team:teams!transfers_to_team_id_fkey(id, name, short_name, crest_url)`,
+      )
+      .eq("player_id", id)
+      .order("transfer_date", { ascending: false }),
     profile
       ? supabase
           .from("follows")
@@ -168,6 +191,68 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No match data yet.
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.15} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Transfer history
+        </h2>
+        {transfers && transfers.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {transfers.map((transfer) => (
+              <div key={transfer.id} className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
+                <div className="flex items-center gap-2">
+                  {transfer.from_team ? (
+                    <Link
+                      href={`/teams/${transfer.from_team.id}`}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-kivo-cyan"
+                    >
+                      <TeamCrest crestUrl={transfer.from_team.crest_url} name={transfer.from_team.name} />
+                      <span className="truncate">{transfer.from_team.short_name ?? transfer.from_team.name}</span>
+                    </Link>
+                  ) : (
+                    <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
+                      <TeamCrest crestUrl={null} name="" />
+                      Club not synced
+                    </span>
+                  )}
+                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                  {transfer.to_team ? (
+                    <Link
+                      href={`/teams/${transfer.to_team.id}`}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-kivo-cyan"
+                    >
+                      <TeamCrest crestUrl={transfer.to_team.crest_url} name={transfer.to_team.name} />
+                      <span className="truncate">{transfer.to_team.short_name ?? transfer.to_team.name}</span>
+                    </Link>
+                  ) : (
+                    <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
+                      <TeamCrest crestUrl={null} name="" />
+                      Club not synced
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+                      {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
+                    </span>
+                    <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transfer_date)}</span>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-5 text-center text-sm text-foreground-muted">
+            No transfer history synced for this player yet.
+            {canManageFootballData(profile?.role) && (
+              <InlineSyncButton label="Sync transfers" action={triggerPlayerTransfersSync.bind(null, player.id)} />
+            )}
           </div>
         )}
       </FadeIn>

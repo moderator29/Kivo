@@ -7,6 +7,7 @@ import type {
   NormalizedMatchEvent,
   NormalizedPlayer,
   NormalizedStandingRow,
+  NormalizedTransfer,
 } from "../types";
 
 /**
@@ -133,6 +134,69 @@ const MOCK_STANDINGS: NormalizedStandingRow[] = [
   },
 ];
 
+/** Real-shaped mock transfer history for mock-player-4 (Kelechi Uzo) — deliberately
+ * covers all four known transfer_type buckets plus one "N/A" fee to exercise the
+ * "unknown" fallback, same intent as the other MOCK_* fixtures in this file. */
+const MOCK_TRANSFERS: Record<string, NormalizedTransfer[]> = {
+  "mock-player-4": [
+    {
+      providerId: "mock-player-4:2025-07-01:mock-team-2:mock-team-1:€2.5M",
+      playerProviderId: "mock-player-4",
+      fromTeamProviderId: "mock-team-2",
+      fromTeamName: "Enyimba",
+      toTeamProviderId: "mock-team-1",
+      toTeamName: "Remo Stars",
+      transferDate: "2025-07-01",
+      feeText: "€2.5M",
+      transferType: "transfer",
+    },
+    {
+      providerId: "mock-player-4:2024-01-15:mock-team-3:mock-team-2:Loan",
+      playerProviderId: "mock-player-4",
+      fromTeamProviderId: "mock-team-3",
+      fromTeamName: "Rivers United",
+      toTeamProviderId: "mock-team-2",
+      toTeamName: "Enyimba",
+      transferDate: "2024-01-15",
+      feeText: "Loan",
+      transferType: "loan",
+    },
+    {
+      providerId: "mock-player-4:2023-06-30:mock-team-2:mock-team-3:End of loan",
+      playerProviderId: "mock-player-4",
+      fromTeamProviderId: "mock-team-2",
+      fromTeamName: "Enyimba",
+      toTeamProviderId: "mock-team-3",
+      toTeamName: "Rivers United",
+      transferDate: "2023-06-30",
+      feeText: "End of loan",
+      transferType: "end_of_loan",
+    },
+    {
+      providerId: "mock-player-4:2022-08-01:x:mock-team-3:Free",
+      playerProviderId: "mock-player-4",
+      fromTeamProviderId: null,
+      fromTeamName: null,
+      toTeamProviderId: "mock-team-3",
+      toTeamName: "Rivers United",
+      transferDate: "2022-08-01",
+      feeText: "Free",
+      transferType: "free",
+    },
+    {
+      providerId: "mock-player-4:2021-02-10:x:mock-team-2:N/A",
+      playerProviderId: "mock-player-4",
+      fromTeamProviderId: null,
+      fromTeamName: "Youth academy",
+      toTeamProviderId: "mock-team-2",
+      toTeamName: "Enyimba",
+      transferDate: "2021-02-10",
+      feeText: "N/A",
+      transferType: "unknown",
+    },
+  ],
+};
+
 export class MockFootballProvider implements FootballDataProvider {
   readonly name = "mock";
 
@@ -162,5 +226,9 @@ export class MockFootballProvider implements FootballDataProvider {
 
   async getMatchEvents(fixtureProviderId: string): Promise<NormalizedMatchEvent[]> {
     return fixtureProviderId === "mock-1" ? MOCK_EVENTS : [];
+  }
+
+  async getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]> {
+    return MOCK_TRANSFERS[playerProviderId] ?? [];
   }
 }
