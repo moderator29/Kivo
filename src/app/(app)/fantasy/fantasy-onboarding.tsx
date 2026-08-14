@@ -12,7 +12,7 @@ const MAX_TEAMS_DEFAULT = 12;
 export function FantasyOnboarding({ availableSeasons }: { availableSeasons: SeasonOption[] }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
+      <FadeIn className="kivo-glass-brand flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
         <div className="kivo-gradient-victory flex h-14 w-14 items-center justify-center rounded-2xl">
           <Trophy className="h-7 w-7 text-kivo-white" strokeWidth={1.75} />
         </div>
