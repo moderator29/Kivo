@@ -48,9 +48,8 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Live",
     href: "/live",
     icon: Radio,
-    status: "coming-soon",
-    comingSoonDescription:
-      "Real-time scores, minute-by-minute events and live filters across every competition KIVO covers.",
+    status: "live",
+    comingSoonDescription: "Nothing is live and nothing is synced for today yet. Check back once a match kicks off.",
     comingSoonImage: "/assets/icons/navigation/live-scores.webp",
   },
   {
@@ -67,8 +66,8 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Discover",
     href: "/discover",
     icon: Compass,
-    status: "coming-soon",
-    comingSoonDescription: "Leagues, clubs, players and AI-curated football discovery in one place.",
+    status: "live",
+    comingSoonDescription: "Nothing synced yet across leagues, teams, players or transfers. Check back soon.",
   },
   { id: "social", label: "Social", href: "/social", icon: Users, status: "live" },
   { id: "fantasy", label: "Fantasy", href: "/fantasy", icon: Trophy, status: "live" },

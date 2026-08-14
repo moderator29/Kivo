@@ -24,7 +24,7 @@ export default async function DiscoverPage() {
   const transfers = transferCount ?? 0;
 
   if (leagues === 0 && teams === 0 && players === 0 && transfers === 0) {
-    return <ComingSoon icon={item.icon} title={item.label} description={item.comingSoonDescription!} />;
+    return <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription!} />;
   }
 
   const surfaces = [
@@ -78,16 +78,16 @@ export default async function DiscoverPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {surfaces.map((surface, index) => (
-          <FadeIn key={surface.href} delay={Math.min(index * 0.06, 0.3)}>
-            <DiscoverCard
-              href={surface.href}
-              icon={surface.icon}
-              label={surface.label}
-              count={surface.count}
-              countLabel={surface.countLabel}
-              description={surface.description}
-            />
-          </FadeIn>
+          <DiscoverCard
+            key={surface.href}
+            href={surface.href}
+            icon={surface.icon}
+            label={surface.label}
+            count={surface.count}
+            countLabel={surface.countLabel}
+            description={surface.description}
+            delay={0.1 + Math.min(index * 0.06, 0.3)}
+          />
         ))}
       </div>
     </div>

@@ -1,11 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { motion } from "motion/react";
 
 interface ComingSoonProps {
-  icon: LucideIcon;
+  /** Pre-rendered icon element (e.g. `<SomeIcon className="..." strokeWidth={1.75} />`),
+   * not a component reference — this is a Client Component, and passing a
+   * component/function down from a Server Component caller across that
+   * boundary is illegal in RSC. Callers render the icon themselves and pass
+   * the resulting element, same pattern as Home's StatTile/FixtureRow. */
+  icon: ReactNode;
   /** 3D icon path from the sliced asset library — used in place of the vector
    * icon when a manifest icon unambiguously matches this feature. */
   image?: string;
@@ -13,7 +18,7 @@ interface ComingSoonProps {
   description: string;
 }
 
-export function ComingSoon({ icon: Icon, image, title, description }: ComingSoonProps) {
+export function ComingSoon({ icon, image, title, description }: ComingSoonProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-24 text-center">
       <motion.div
@@ -37,7 +42,7 @@ export function ComingSoon({ icon: Icon, image, title, description }: ComingSoon
             />
           ) : (
             <div className="kivo-gradient-intelligence relative flex h-20 w-20 items-center justify-center rounded-2xl shadow-[0_8px_24px_rgba(37,99,255,0.35)]">
-              <Icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />
+              {icon}
             </div>
           )}
         </div>

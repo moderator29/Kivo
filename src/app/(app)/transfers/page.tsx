@@ -88,7 +88,7 @@ export default async function TransfersPage() {
 
   if (!transfers || transfers.length === 0) {
     return (
-      <ComingSoon icon={item.icon} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription!} />
+      <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription!} />
     );
   }
 
@@ -120,7 +120,7 @@ export default async function TransfersPage() {
           const playerName = transfer.player ? (transfer.player.known_as ?? transfer.player.full_name) : null;
 
           return (
-            <FadeIn key={transfer.id} delay={Math.min(index * 0.02, 0.3)}>
+            <FadeIn key={transfer.id} delay={Math.min(index * 0.03, 0.3)}>
               <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
                 <div className="flex items-center justify-between gap-3">
                   {transfer.player && playerName ? (
