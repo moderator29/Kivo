@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { awardBadge, awardXp } from "@/lib/rewards";
 
 const MAX_POST_LENGTH = 2000;
 
@@ -24,6 +25,10 @@ export async function createPost(formData: FormData) {
     console.error("Failed to create post", error);
     return { error: "Couldn't publish your post — try again." };
   }
+
+  // awardBadge is a harmless no-op on repeat posts (unique constraint on
+  // user_badges swallows the duplicate) — no need to check "is this their first."
+  await Promise.all([awardXp(profile.id, 2, "Posted in the community"), awardBadge(profile.id, "first_post")]);
 
   revalidatePath("/social");
   return { error: null };

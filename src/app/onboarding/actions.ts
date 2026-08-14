@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { awardBadge, awardXp } from "@/lib/rewards";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 
@@ -34,6 +35,8 @@ export async function completeOnboarding(formData: FormData) {
     return { error: "Something went wrong — try again." };
   }
 
+  await Promise.all([awardXp(profile.id, 10, "Completed onboarding"), awardBadge(profile.id, "welcome")]);
+
   redirect("/home");
 }
 
@@ -43,5 +46,6 @@ export async function skipOnboarding() {
 
   const supabase = createServerSupabaseClient();
   await supabase.from("profiles").update({ onboarding_completed: true }).eq("id", profile.id);
+  await Promise.all([awardXp(profile.id, 10, "Completed onboarding"), awardBadge(profile.id, "welcome")]);
   redirect("/home");
 }
