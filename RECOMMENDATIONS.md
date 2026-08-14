@@ -54,6 +54,12 @@ Status values: `Proposed`, `Accepted`, `Implemented`, `Deferred`, `Rejected`.
 
 ---
 
+## Architecture / Infra (continued)
+
+24. **Security** — Clerk's `createRouteMatcher` (used in `src/proxy.ts`) is now deprecated in this SDK version; Clerk's own warning is specific: path-matching in middleware "can diverge from how Next.js routes requests and leave protected resources reachable," and recommends resource-based auth checks in each page/layout/route instead. **Recommendation**: migrate route protection into each authenticated route (or a shared server-side guard called from each layout) rather than relying solely on the middleware matcher. **Status**: Not yet done — proxy.ts still works today, but this is a real security-relevant deprecation, not cosmetic, and shouldn't sit for long. **Priority**: Next.
+
+---
+
 ## Architecture / Infra
 
 21. **Backend** — Founder has $0 football-data budget currently. **Recommendation**: build the full `FootballDataProvider` abstraction now against API-Football's free tier, keep live polling feature-flagged off by default, dev-only mock adapter behind the same interface for UI work. **Status**: Accepted — see `DECISIONS.md`.

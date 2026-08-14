@@ -19,7 +19,19 @@ export const metadata: Metadata = {
     "KIVO is a premium football fan platform: live scores, an AI Copilot grounded in real data, match rooms, fantasy, and predictions — built for football lovers.",
 };
 
+const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const body = (
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
+    </html>
+  );
+
+  // ClerkProvider throws immediately without a publishable key — public pages
+  // like the marketing landing page shouldn't depend on Clerk being configured.
+  if (!clerkConfigured) return body;
+
   return (
     <ClerkProvider
       appearance={{
@@ -34,12 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         },
       }}
     >
-      <html
-        lang="en"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
-      </html>
+      {body}
     </ClerkProvider>
   );
 }
