@@ -1,12 +1,11 @@
+import Image from "next/image";
 import { SignIn } from "@clerk/nextjs";
+import kivoLogo from "../../../../public/brand/kivo-logo.png";
 
 export default function SignInPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-4 py-12">
-      <div className="flex items-center gap-2">
-        <span className="kivo-gradient-prime h-8 w-8 rounded-lg" aria-hidden />
-        <span className="text-xl font-semibold tracking-tight text-foreground">KIVO</span>
-      </div>
+      <Image src={kivoLogo} alt="KIVO" width={112} height={112} className="h-28 w-28" priority />
       <SignIn
         appearance={{
           elements: {

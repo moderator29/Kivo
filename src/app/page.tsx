@@ -1,25 +1,27 @@
 import Link from "next/link";
-import { Radio, Sparkles, Users, Trophy, ArrowRight } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight } from "lucide-react";
+import kivoLogo from "../../public/brand/kivo-logo.png";
 
 const PROOF_POINTS = [
   {
-    icon: Radio,
+    icon: "/assets/icons/navigation/live-scores.webp",
     title: "Live football, instantly",
     description: "Scores, events and match intelligence that update the moment they happen — no refresh, no lag.",
   },
   {
-    icon: Sparkles,
+    icon: "/assets/icons/navigation/ai-copilot.webp",
     title: "AI Copilot, grounded",
     description:
       "Ask why a match turned, compare players, or get a fantasy pick — answered from KIVO's verified data, never guessed.",
   },
   {
-    icon: Users,
+    icon: "/assets/icons/social/chat-social.webp",
     title: "Match Rooms, alive",
     description: "Every fixture has a home for fans — react to goals in real time, not a comment section bolted on.",
   },
   {
-    icon: Trophy,
+    icon: "/assets/icons/fantasy-rewards/fantasy.webp",
     title: "Fantasy & predictions",
     description: "Build your squad, back your instincts, climb the leaderboard — with your friends, not against a house.",
   },
@@ -51,6 +53,7 @@ export default function LandingPage() {
 
       <main className="flex flex-1 flex-col">
         <section className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-6 py-20 text-center lg:py-32">
+          <Image src={kivoLogo} alt="" width={96} height={96} className="h-24 w-24" priority />
           <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
             Football. Together. Live.
           </span>
@@ -81,9 +84,7 @@ export default function LandingPage() {
         <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 pb-24 sm:grid-cols-2 lg:px-12">
           {PROOF_POINTS.map((point) => (
             <div key={point.title} className="kivo-glass flex flex-col gap-3 rounded-2xl p-6">
-              <div className="kivo-gradient-intelligence flex h-10 w-10 items-center justify-center rounded-xl">
-                <point.icon className="h-5 w-5 text-kivo-white" strokeWidth={1.75} />
-              </div>
+              <Image src={point.icon} alt="" width={48} height={48} className="h-12 w-12" />
               <h3 className="text-base font-semibold text-foreground">{point.title}</h3>
               <p className="text-sm leading-relaxed text-foreground-muted">{point.description}</p>
             </div>
