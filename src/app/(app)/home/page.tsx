@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { Sparkles, Trophy, Target, Flame, Users, ArrowRight, Shield } from "lucide-react";
+import { Trophy, Target, Flame, Users, ArrowRight, Shield } from "lucide-react";
 import Image from "next/image";
 import { FadeIn } from "@/components/ui/fade-in";
+import { StatTile } from "@/components/home/stat-tile";
+import { FixtureRow } from "@/components/home/fixture-row";
+import { AiTeaser } from "@/components/home/ai-teaser";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured } from "@/lib/ai/client";
@@ -75,7 +78,7 @@ export default async function HomePage() {
         <h1 className="text-2xl font-semibold text-foreground">{firstName}, here&apos;s your football.</h1>
       </FadeIn>
 
-      <FadeIn delay={0.05} className="kivo-glass rounded-2xl p-5">
+      <FadeIn delay={0.08} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today</h2>
           <Link href="/matches" className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
@@ -86,27 +89,21 @@ export default async function HomePage() {
 
         {hasLiveOrTodayMatches ? (
           <div className="mt-3 flex flex-col gap-2">
-            {todayFixtures!.map((fixture) => {
+            {todayFixtures!.map((fixture, index) => {
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
               const live = fixture.status === "live" || fixture.status === "halftime";
               return (
-                <Link
+                <FixtureRow
                   key={fixture.id}
                   href={`/matches/${fixture.id}`}
-                  className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition hover:bg-white/5"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-                    <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home"}</span>
-                  </div>
-                  <span className={`shrink-0 text-xs font-semibold ${live ? "text-live" : "text-foreground-subtle"}`}>
-                    {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-                  </span>
-                  <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-                    <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away"}</span>
-                    <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
-                  </div>
-                </Link>
+                  homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />}
+                  homeName={fixture.home_team?.name ?? "Home"}
+                  awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />}
+                  awayName={fixture.away_team?.name ?? "Away"}
+                  scoreLabel={hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
+                  live={live}
+                  index={index}
+                />
               );
             })}
           </div>
@@ -121,54 +118,47 @@ export default async function HomePage() {
         )}
       </FadeIn>
 
-      <FadeIn delay={0.1} className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {[
           {
-            icon: Trophy,
+            icon: <Trophy className="h-4 w-4" strokeWidth={1.75} />,
             label: "Fantasy",
             value: fantasyTeamCount ? "In league" : "–",
             href: "/fantasy",
             brand: false,
           },
           {
-            icon: Target,
+            icon: <Target className="h-4 w-4" strokeWidth={1.75} />,
             label: "Predictions",
             value: predictionCount !== null ? String(predictionCount) : "–",
             href: "/predictions",
             brand: false,
           },
-          { icon: Flame, label: "XP", value: profile ? `${totalXp}` : "–", href: "/rewards", brand: true },
-        ].map((stat) => (
-          <Link
+          {
+            icon: <Flame className="h-4 w-4" strokeWidth={1.75} />,
+            label: "XP",
+            value: profile ? `${totalXp}` : "–",
+            href: "/rewards",
+            brand: true,
+          },
+        ].map((stat, index) => (
+          <StatTile
             key={stat.label}
             href={stat.href}
-            className={`flex flex-col items-center gap-1.5 rounded-xl px-3 py-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06] ${
-              stat.brand ? "kivo-glass-brand" : "kivo-glass-sharp"
-            }`}
-          >
-            <stat.icon className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-            <span className="text-lg font-semibold text-foreground">{stat.value}</span>
-            <span className="text-[11px] font-medium text-foreground-subtle">{stat.label}</span>
-          </Link>
+            icon={stat.icon}
+            value={stat.value}
+            label={stat.label}
+            brand={stat.brand}
+            delay={0.2 + index * 0.06}
+          />
         ))}
+      </div>
+
+      <FadeIn delay={0.4}>
+        <AiTeaser aiConfigured={aiConfigured} />
       </FadeIn>
 
-      <FadeIn delay={0.15}>
-        <Link
-          href="/ai"
-          className="kivo-gradient-intelligence group flex items-center gap-3 rounded-2xl p-4 transition-opacity hover:opacity-90"
-        >
-          <Sparkles className="h-5 w-5 shrink-0 text-kivo-white" strokeWidth={1.75} />
-          <p className="flex-1 text-sm font-medium text-kivo-white">
-            {aiConfigured
-              ? "AI Copilot. Ask anything about your teams, players and matches."
-              : "AI Copilot is coming. Grounded answers about your teams, players and matches."}
-          </p>
-          <ArrowRight className="h-4 w-4 shrink-0 text-kivo-white/80 transition-transform group-hover:translate-x-0.5" />
-        </Link>
-      </FadeIn>
-
-      <FadeIn delay={0.2} className="kivo-glass rounded-2xl p-5">
+      <FadeIn delay={0.48} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             <Users className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
