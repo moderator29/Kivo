@@ -678,6 +678,7 @@ export type Database = {
           id: string
           kickoff_at: string
           matchday: number | null
+          minute_elapsed: number | null
           season_id: string
           status: Database["public"]["Enums"]["fixture_status"]
           updated_at: string
@@ -695,6 +696,7 @@ export type Database = {
           id?: string
           kickoff_at: string
           matchday?: number | null
+          minute_elapsed?: number | null
           season_id: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -712,6 +714,7 @@ export type Database = {
           id?: string
           kickoff_at?: string
           matchday?: number | null
+          minute_elapsed?: number | null
           season_id?: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -1509,6 +1512,7 @@ export type Database = {
           id: string
           last_synced_at: string | null
           provider: string
+          provider_quota_remaining: number | null
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
@@ -1521,6 +1525,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           provider: string
+          provider_quota_remaining?: number | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1533,6 +1538,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           provider?: string
+          provider_quota_remaining?: number | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1854,11 +1860,14 @@ export type Database = {
       upsert_fixture_with_mapping: {
         Args: {
           p_away_score?: number
+          p_away_score_ht?: number
           p_away_team_id: string
           p_competition_id: string
           p_home_score?: number
+          p_home_score_ht?: number
           p_home_team_id: string
           p_kickoff_at: string
+          p_minute_elapsed?: number
           p_provider: string
           p_provider_entity_id: string
           p_season_id: string

@@ -29,6 +29,8 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
     awayTeam: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
     homeScore: null,
     awayScore: null,
+    homeScoreHt: null,
+    awayScoreHt: null,
     venueProviderId: "mock-venue-1",
     venueName: "Remo Stars Stadium",
     retrievedAt: new Date().toISOString(),
@@ -249,6 +251,13 @@ const MOCK_TRANSFERS: Record<string, NormalizedTransfer[]> = {
 
 export class MockFootballProvider implements FootballDataProvider {
   readonly name = "mock";
+
+  /** The mock never talks to a real provider, so there's no real quota header
+   * to report — null, not a fabricated number (see FootballDataProvider's doc
+   * comment on this method). */
+  getQuotaRemaining(): number | null {
+    return null;
+  }
 
   async getFixturesByDate(): Promise<NormalizedFixture[]> {
     return MOCK_FIXTURES;

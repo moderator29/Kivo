@@ -255,7 +255,7 @@ async function processStatistics(
  */
 export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = getFootballDataProvider();
+  const provider = await getFootballDataProvider();
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -280,6 +280,8 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
         finished_at: new Date().toISOString(),
         records_processed: 0,
         error_message: message,
+        // RECOMMENDATIONS.md item 53: real quota data even on a hard failure.
+        provider_quota_remaining: provider.getQuotaRemaining(),
       })
       .eq("id", syncRun.id);
     return { status: "failed", recordsProcessed: 0, error: message };
@@ -347,6 +349,9 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
       last_synced_at: finishedAt,
       records_processed: processed,
       error_message: errorMessage,
+      // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
+      // not an estimate — see ApiFootballProvider.getQuotaRemaining().
+      provider_quota_remaining: provider.getQuotaRemaining(),
     })
     .eq("id", syncRun.id);
 
@@ -366,7 +371,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
  */
 export async function syncStandings(seasonId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = getFootballDataProvider();
+  const provider = await getFootballDataProvider();
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -391,6 +396,8 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
         finished_at: new Date().toISOString(),
         records_processed: 0,
         error_message: message,
+        // RECOMMENDATIONS.md item 53: real quota data even on a hard failure.
+        provider_quota_remaining: provider.getQuotaRemaining(),
       })
       .eq("id", syncRun.id);
     return { status: "failed", recordsProcessed: 0, error: message };
@@ -470,6 +477,9 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
       last_synced_at: finishedAt,
       records_processed: processed,
       error_message: errorMessage,
+      // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
+      // not an estimate — see ApiFootballProvider.getQuotaRemaining().
+      provider_quota_remaining: provider.getQuotaRemaining(),
     })
     .eq("id", syncRun.id);
 

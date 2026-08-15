@@ -22,6 +22,7 @@ type FixtureRow = {
   status: FixtureStatus;
   home_score: number | null;
   away_score: number | null;
+  minute_elapsed: number | null;
   home_team: { name: string; crest_url: string | null } | null;
   away_team: { name: string; crest_url: string | null } | null;
   competition: { name: string; short_name: string | null } | null;
@@ -40,7 +41,12 @@ function FixtureRowCard({ fixture }: { fixture: FixtureRow }) {
         <span className="text-xs text-foreground-subtle">
           {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
         </span>
-        <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} showLiveDot={false} />
+        <FixtureStatusBadge
+          status={fixture.status}
+          kickoffAt={fixture.kickoff_at}
+          showLiveDot={false}
+          minuteElapsed={fixture.minute_elapsed}
+        />
       </div>
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">
@@ -67,7 +73,7 @@ export default async function LivePage() {
   const endOfDay = new Date(startOfDay);
   endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
 
-  const fixtureSelect = `id, kickoff_at, status, home_score, away_score,
+  const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
        competition:competitions(name, short_name)`;

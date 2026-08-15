@@ -11,6 +11,7 @@ import type {
   NormalizedTransfer,
 } from "../types";
 import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
+import { ApiFootballError, requestWithRetry } from "./api-football-request";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 
@@ -143,6 +144,11 @@ interface ApiFootballFixtureResponse {
       away: { id: number; name: string; logo: string | null };
     };
     goals: { home: number | null; away: number | null };
+    // `score.halftime` is always present on a real /fixtures response (alongside
+    // fulltime/extratime/penalty siblings, none of which KIVO models yet) — both
+    // sides are null until half-time has actually happened for this fixture, the
+    // same "not reported yet" convention as goals.home/away pre-kickoff.
+    score: { halftime: { home: number | null; away: number | null } };
   }>;
 }
 
@@ -154,19 +160,46 @@ interface ApiFootballFixtureResponse {
 export class ApiFootballProvider implements FootballDataProvider {
   readonly name = "api-football";
 
+  /** Most recent `x-ratelimit-requests-remaining` value seen on any response
+   * from this provider instance (RECOMMENDATIONS item 53) — updated on both
+   * successful and failed responses (the header is sent either way), never on
+   * a network error (no response to read it from). Null until the first
+   * request completes. */
+  private quotaRemaining: number | null = null;
+
   constructor(private readonly apiKey: string) {}
 
+  /**
+   * Distinguishes 429 (quota exhausted) from 403 (bad key) from other 4xx/5xx
+   * (RECOMMENDATIONS item 54), retries exactly once with jitter for a network
+   * error or 5xx and never for a 429 (item 55), and records the provider's own
+   * remaining-quota header (item 53). The actual fetch/retry/classify logic
+   * lives in ./api-football-request so it can be unit-tested with a mocked
+   * fetch without importing this server-only module.
+   */
   private async request<T>(path: string, revalidateSeconds: number): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      headers: { "x-apisports-key": this.apiKey },
-      next: { revalidate: revalidateSeconds },
-    });
-
-    if (!res.ok) {
-      throw new Error(`API-Football request failed (${res.status}): ${path}`);
+    try {
+      const { response, quotaRemaining } = await requestWithRetry({
+        path,
+        url: `${BASE_URL}${path}`,
+        headers: { "x-apisports-key": this.apiKey },
+        revalidateSeconds,
+      });
+      if (quotaRemaining !== null) this.quotaRemaining = quotaRemaining;
+      return (await response.json()) as T;
+    } catch (err) {
+      if (err instanceof ApiFootballError && err.quotaRemaining !== null) {
+        this.quotaRemaining = err.quotaRemaining;
+      }
+      throw err;
     }
+  }
 
-    return res.json() as Promise<T>;
+  /** Surfaced on Data Health via sync_runs.provider_quota_remaining — real
+   * provider data, not an estimate (RECOMMENDATIONS item 53). Null until at
+   * least one request has completed. */
+  getQuotaRemaining(): number | null {
+    return this.quotaRemaining;
   }
 
   async getFixturesByDate(date: string): Promise<NormalizedFixture[]> {
@@ -196,6 +229,8 @@ export class ApiFootballProvider implements FootballDataProvider {
       },
       homeScore: item.goals.home,
       awayScore: item.goals.away,
+      homeScoreHt: item.score.halftime.home,
+      awayScoreHt: item.score.halftime.away,
       venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
@@ -231,6 +266,8 @@ export class ApiFootballProvider implements FootballDataProvider {
       },
       homeScore: item.goals.home,
       awayScore: item.goals.away,
+      homeScoreHt: item.score.halftime.home,
+      awayScoreHt: item.score.halftime.away,
       venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,

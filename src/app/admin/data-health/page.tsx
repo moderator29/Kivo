@@ -56,9 +56,24 @@ export default async function DataHealthPage() {
   const supabase = createServerSupabaseClient();
   const { data: syncRuns } = await supabase
     .from("sync_runs")
-    .select("id, provider, entity_type, status, started_at, finished_at, records_processed, error_message")
+    .select(
+      "id, provider, entity_type, status, started_at, finished_at, records_processed, error_message, provider_quota_remaining",
+    )
     .order("started_at", { ascending: false })
     .limit(10);
+
+  // RECOMMENDATIONS.md item 53: the provider's own x-ratelimit-requests-remaining
+  // header, persisted on whichever sync_runs row last saw a response — real data,
+  // not an estimate. Read separately from the capped 10-row list above since the
+  // most recent run with a known quota isn't necessarily within the last 10 (a run
+  // that failed before any provider call leaves this column null).
+  const { data: latestQuotaRun } = await supabase
+    .from("sync_runs")
+    .select("provider_quota_remaining, started_at")
+    .not("provider_quota_remaining", "is", null)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   // predictions_select_own means an admin's own client can't see other
   // users' rows, so this count (like the scoring pass itself) goes through
@@ -137,7 +152,22 @@ export default async function DataHealthPage() {
             </p>
           </div>
         </div>
-        {providerConfigured && <FootballSyncButton />}
+        <div className="flex items-center gap-3">
+          {latestQuotaRun && (
+            <span
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                latestQuotaRun.provider_quota_remaining !== null && latestQuotaRun.provider_quota_remaining <= 10
+                  ? "border-warning/30 bg-warning/10 text-warning"
+                  : "border-white/10 text-foreground-muted"
+              }`}
+              title="API-Football's own x-ratelimit-requests-remaining header from the most recent sync, not an estimate."
+            >
+              {latestQuotaRun.provider_quota_remaining} request{latestQuotaRun.provider_quota_remaining === 1 ? "" : "s"}{" "}
+              left today
+            </span>
+          )}
+          {providerConfigured && <FootballSyncButton />}
+        </div>
       </FadeIn>
 
       <FadeIn delay={0.1} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
@@ -284,6 +314,7 @@ export default async function DataHealthPage() {
                         Started {formatTimestamp(run.started_at)}
                         {run.finished_at ? ` · finished ${formatTimestamp(run.finished_at)}` : ""}
                         {run.records_processed !== null ? ` · ${run.records_processed} record${run.records_processed === 1 ? "" : "s"}` : ""}
+                        {run.provider_quota_remaining !== null ? ` · ${run.provider_quota_remaining} quota left` : ""}
                       </p>
                     </div>
                     <span

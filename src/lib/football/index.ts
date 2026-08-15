@@ -1,7 +1,6 @@
 import "server-only";
 import type { FootballDataProvider } from "./types";
 import { ApiFootballProvider } from "./providers/api-football";
-import { MockFootballProvider } from "./providers/mock";
 
 /**
  * Feature flag — live polling/websocket connections must stay off until a paid
@@ -16,8 +15,15 @@ let cachedProvider: FootballDataProvider | null = null;
  * Single entry point for all football data access. Every consumer (routes, server
  * components, future sync jobs) goes through this — never import a concrete provider
  * class directly, so swapping or adding providers never touches calling code.
+ *
+ * Async (rather than a plain sync lookup) specifically so the mock provider import
+ * below can be dynamic: it's a server-only module so it never reached the browser,
+ * but a static top-level import still pulled its dev-only Nigerian-league mock
+ * fixtures/squads into every production server bundle that imports this file. Gating
+ * it behind NODE_ENV + a dynamic import keeps it out of a production build entirely
+ * (RECOMMENDATIONS.md item 63) instead of just being unreachable at runtime.
  */
-export function getFootballDataProvider(): FootballDataProvider {
+export async function getFootballDataProvider(): Promise<FootballDataProvider> {
   if (cachedProvider) return cachedProvider;
 
   const apiKey = process.env.API_FOOTBALL_KEY;
@@ -25,6 +31,7 @@ export function getFootballDataProvider(): FootballDataProvider {
   if (apiKey) {
     cachedProvider = new ApiFootballProvider(apiKey);
   } else if (process.env.NODE_ENV !== "production") {
+    const { MockFootballProvider } = await import("./providers/mock");
     cachedProvider = new MockFootballProvider();
   } else {
     throw new Error(

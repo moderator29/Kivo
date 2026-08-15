@@ -35,6 +35,12 @@ export interface NormalizedFixture {
   awayTeam: NormalizedTeam;
   homeScore: number | null;
   awayScore: number | null;
+  /** Half-time score, mirrors fixtures.home_score_ht/away_score_ht — null until
+   * half-time has actually happened for this fixture (pre-kickoff, or a fixture
+   * that never reached HT), same "not reported yet" convention as homeScore/
+   * awayScore pre-kickoff. Never estimated from the full-time score. */
+  homeScoreHt: number | null;
+  awayScoreHt: number | null;
   /** Null when the provider doesn't report a stable venue id for this fixture — the sync
    * pipeline leaves fixtures.venue_id null in that case rather than dedupe-by-name. */
   venueProviderId: string | null;
@@ -192,6 +198,11 @@ export interface NormalizedTransfer {
 
 export interface FootballDataProvider {
   readonly name: string;
+  /** Most recent remaining-quota count the provider itself reported, or null if
+   * no request has completed yet (or the provider doesn't report one at all —
+   * see MockFootballProvider). Real provider data, not an estimate
+   * (RECOMMENDATIONS.md item 53). */
+  getQuotaRemaining(): number | null;
   getFixturesByDate(date: string): Promise<NormalizedFixture[]>;
   getFixtureById(providerId: string): Promise<NormalizedFixture | null>;
   getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]>;

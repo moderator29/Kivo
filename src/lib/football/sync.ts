@@ -281,12 +281,18 @@ async function upsertFixture(
   fixture: NormalizedFixture,
   refs: ResolvedFixtureRefs,
 ): Promise<void> {
-  // p_venue_id/p_home_score/p_away_score are optional RPC args for the same
-  // reason as upsert_venue_with_mapping's p_name — see its comment. Omitting
-  // them (rather than passing null explicitly) still lands as null inside the
+  // p_venue_id/p_home_score/p_away_score/p_home_score_ht/p_away_score_ht/
+  // p_minute_elapsed are optional RPC args for the same reason as
+  // upsert_venue_with_mapping's p_name — see its comment. Omitting them
+  // (rather than passing null explicitly) still lands as null inside the
   // function once Postgres substitutes each parameter's `default null`, so
   // this is exactly equivalent to the old payload object always carrying
   // fixture.homeScore/awayScore/refs.venueId verbatim, null or not.
+  //
+  // home_score_ht/away_score_ht/minute_elapsed (migration 0028,
+  // RECOMMENDATIONS.md items 57/58) are wired through the same way: real
+  // provider data when the provider reports it, left null (never guessed)
+  // otherwise — see the doc comments on NormalizedFixture in types.ts.
   const args: Database["public"]["Functions"]["upsert_fixture_with_mapping"]["Args"] = {
     p_provider: provider,
     p_provider_entity_id: fixture.providerId,
@@ -300,6 +306,9 @@ async function upsertFixture(
   if (refs.venueId !== null) args.p_venue_id = refs.venueId;
   if (fixture.homeScore !== null) args.p_home_score = fixture.homeScore;
   if (fixture.awayScore !== null) args.p_away_score = fixture.awayScore;
+  if (fixture.homeScoreHt !== null) args.p_home_score_ht = fixture.homeScoreHt;
+  if (fixture.awayScoreHt !== null) args.p_away_score_ht = fixture.awayScoreHt;
+  if (fixture.minute !== null) args.p_minute_elapsed = fixture.minute;
 
   const { error } = await supabase.rpc("upsert_fixture_with_mapping", args);
   if (error) throw error;
@@ -326,7 +335,7 @@ function todayIsoDate(): string {
  */
 export async function syncTodayFixtures(): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = getFootballDataProvider();
+  const provider = await getFootballDataProvider();
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -356,6 +365,10 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
         finished_at: new Date().toISOString(),
         records_processed: 0,
         error_message: message,
+        // RECOMMENDATIONS.md item 53: real quota data even on a hard failure —
+        // a rate-limited or otherwise non-OK response still updates this via
+        // ApiFootballError.quotaRemaining (see api-football-request.ts).
+        provider_quota_remaining: provider.getQuotaRemaining(),
       })
       .eq("id", syncRun.id);
     return { status: "failed", recordsProcessed: 0, error: message };
@@ -427,6 +440,9 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
       last_synced_at: finishedAt,
       records_processed: processed,
       error_message: errorMessage,
+      // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
+      // not an estimate — see ApiFootballProvider.getQuotaRemaining().
+      provider_quota_remaining: provider.getQuotaRemaining(),
     })
     .eq("id", syncRun.id);
 
