@@ -55,6 +55,8 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          input_tokens: number | null
+          output_tokens: number | null
           role: Database["public"]["Enums"]["ai_message_role"]
         }
         Insert: {
@@ -62,6 +64,8 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
           role: Database["public"]["Enums"]["ai_message_role"]
         }
         Update: {
@@ -69,6 +73,8 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
           role?: Database["public"]["Enums"]["ai_message_role"]
         }
         Relationships: [

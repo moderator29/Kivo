@@ -24,7 +24,12 @@ export async function buildGroundingContext(profile: Profile | null): Promise<Gr
   const today = new Date().toISOString().slice(0, 10);
 
   const [{ data: follows }, { data: favouriteTeam }, { data: todaysFixtures }] = await Promise.all([
-    supabase.from("follows").select("followed_type, followed_id").eq("follower_profile_id", profile.id).limit(20),
+    supabase
+      .from("follows")
+      .select("followed_type, followed_id")
+      .eq("follower_profile_id", profile.id)
+      .in("followed_type", ["team", "player", "competition"])
+      .limit(20),
     profile.favourite_team_id
       ? supabase.from("teams").select("name").eq("id", profile.favourite_team_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -37,11 +42,41 @@ export async function buildGroundingContext(profile: Profile | null): Promise<Gr
       .limit(30),
   ]);
 
+  // Resolve the polymorphic follows rows to real names. follows.followed_id
+  // has no DB-level FK (see 0001_kivo_core_schema.sql's comment on the
+  // `follows` table), so this is the same two-step "collect ids per type,
+  // then batch-fetch each entity table" pattern already used by
+  // src/app/(app)/profile/following/page.tsx for the same reason.
+  const teamIds = (follows ?? []).filter((f) => f.followed_type === "team").map((f) => f.followed_id);
+  const playerIds = (follows ?? []).filter((f) => f.followed_type === "player").map((f) => f.followed_id);
+  const competitionIds = (follows ?? []).filter((f) => f.followed_type === "competition").map((f) => f.followed_id);
+
+  const [{ data: followedTeams }, { data: followedPlayers }, { data: followedCompetitions }] = await Promise.all([
+    teamIds.length
+      ? supabase.from("teams").select("name").in("id", teamIds)
+      : Promise.resolve({ data: [] as { name: string }[] }),
+    playerIds.length
+      ? supabase.from("players").select("full_name, known_as").in("id", playerIds)
+      : Promise.resolve({ data: [] as { full_name: string; known_as: string | null }[] }),
+    competitionIds.length
+      ? supabase.from("competitions").select("name").in("id", competitionIds)
+      : Promise.resolve({ data: [] as { name: string }[] }),
+  ]);
+
   const lines: string[] = [];
   lines.push(`User: @${profile.username}${favouriteTeam ? `, favourite team: ${favouriteTeam.name}` : ""}.`);
 
-  if (follows && follows.length > 0) {
-    lines.push(`Follows ${follows.length} team(s)/player(s)/competition(s) (internal IDs only, no names resolved here).`);
+  // A followed row whose target was since deleted resolves to nothing here
+  // (same caveat as the following page) and is simply dropped rather than
+  // listed as a broken reference.
+  const followedNames = [
+    ...(followedTeams ?? []).map((t) => `${t.name} (team)`),
+    ...(followedPlayers ?? []).map((p) => `${p.known_as ?? p.full_name} (player)`),
+    ...(followedCompetitions ?? []).map((c) => `${c.name} (competition)`),
+  ];
+
+  if (followedNames.length > 0) {
+    lines.push(`Follows: ${followedNames.join(", ")}.`);
   } else {
     lines.push("Has not followed any teams, players or competitions yet.");
   }
@@ -63,7 +98,7 @@ export async function buildGroundingContext(profile: Profile | null): Promise<Gr
 
   return {
     summary: lines.join("\n"),
-    hasFollowedEntities: !!follows && follows.length > 0,
+    hasFollowedEntities: followedNames.length > 0,
     hasSyncedFixtures: !!todaysFixtures && todaysFixtures.length > 0,
   };
 }
