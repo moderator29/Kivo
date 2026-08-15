@@ -72,6 +72,7 @@ export function SocialFeed({
           signedIn={signedIn}
           index={index}
           poll={post.poll}
+          viewerSaved={post.viewerSaved}
         />
       ))}
 
