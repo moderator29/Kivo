@@ -40,7 +40,7 @@ export default async function SignInPage({
         ) : (
           <FadeIn
             delay={0.12}
-            className="kivo-glass-brand max-w-sm rounded-2xl p-6 text-center text-sm text-foreground-muted"
+            className="kivo-glass-brand max-w-sm rounded-3xl p-6 text-center text-sm text-foreground-muted"
           >
             Sign-in isn&apos;t configured in this environment yet. See ENVIRONMENT.md for the required Clerk keys.
           </FadeIn>

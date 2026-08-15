@@ -128,7 +128,11 @@ function ConversationRow({
           </p>
         )}
         <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(conversation.updated_at)}</p>
-        {rowError && <p className="mt-0.5 text-xs text-critical">{rowError}</p>}
+        {rowError && (
+          <p className="mt-0.5 text-xs text-critical" role="status" aria-live="polite">
+            {rowError}
+          </p>
+        )}
       </div>
 
       <div className={cn("flex shrink-0 items-center gap-1 transition-opacity", confirmingDelete ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")}>
@@ -137,6 +141,7 @@ function ConversationRow({
             type="button"
             onClick={startEditing}
             disabled={pending}
+            aria-busy={pending}
             aria-label="Rename conversation"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50"
           >
@@ -147,6 +152,7 @@ function ConversationRow({
           type="button"
           onClick={handleDeleteClick}
           disabled={pending}
+          aria-busy={pending}
           aria-label={confirmingDelete ? "Confirm delete conversation" : "Delete conversation"}
           className={cn(
             "flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:opacity-50",
@@ -202,8 +208,8 @@ export function ConversationHistoryPanel({
         aria-haspopup="dialog"
         whileTap={{ scale: 0.92 }}
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-          open && "bg-white/[0.06] text-foreground",
+          "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+          open && "text-foreground",
         )}
       >
         <History className="h-4 w-4" strokeWidth={1.75} />

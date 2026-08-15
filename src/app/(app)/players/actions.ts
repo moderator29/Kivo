@@ -3,6 +3,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { positionGroup, type PositionGroup } from "@/app/(app)/fantasy/fantasy-rules";
 import { escapeLikePattern } from "@/lib/text";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getOrCreateProfile } from "@/lib/profile";
 
 export type PlayerSearchResult = {
   id: string;
@@ -45,6 +47,15 @@ export async function searchPlayers(
   position: PositionGroup | "All",
   teamId: string | "All",
 ): Promise<{ error: string | null; players: PlayerSearchResult[] }> {
+  // RECOMMENDATIONS.md item 198/199: /players is guest-viewable (see
+  // README's "(app)" description), so this is reachable by unauthenticated
+  // callers the same way searchPlatform is — keyed by profile when signed
+  // in, by IP otherwise, same rationale as getClientIp's own doc comment.
+  const profile = await getOrCreateProfile();
+  const rateLimitKey = profile ? `user:${profile.id}` : `ip:${await getClientIp()}`;
+  const rateLimit = await checkRateLimit(rateLimitKey, "search_players", 30, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error, players: [] };
+
   const supabase = createServerSupabaseClient();
 
   let request = supabase

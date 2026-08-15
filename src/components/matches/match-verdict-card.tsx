@@ -76,13 +76,13 @@ export function MatchVerdictCard({
       <div className="flex items-center gap-6">
         {hasRealRatingAvg && (
           <div className="flex flex-col gap-0.5">
-            <span className="text-2xl font-semibold text-foreground">{fanRatingAvg!.toFixed(1)}</span>
+            <span className="text-3xl font-bold text-foreground">{fanRatingAvg!.toFixed(1)}</span>
             <span className="text-[11px] text-foreground-subtle">/5 · {fanRatingCount} fan ratings</span>
           </div>
         )}
         {hasRoomActivity && (
           <div className="flex flex-col gap-0.5">
-            <span className="text-2xl font-semibold text-foreground">{roomReactionCount}</span>
+            <span className="text-3xl font-bold text-foreground">{roomReactionCount}</span>
             <span className="text-[11px] text-foreground-subtle">
               reaction{roomReactionCount === 1 ? "" : "s"} in the Room
             </span>

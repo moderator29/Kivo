@@ -135,6 +135,7 @@ export function UsernameEditor({ username }: { username: string }) {
         <button
           type="submit"
           disabled={pending || availability === "taken"}
+          aria-busy={pending}
           className="text-live disabled:opacity-50"
           aria-label="Save"
         >
@@ -152,13 +153,15 @@ export function UsernameEditor({ username }: { username: string }) {
           <X className="h-4 w-4" strokeWidth={2} />
         </button>
       </div>
-      {error ? (
-        <span className="text-xs text-critical">{error}</span>
-      ) : availability === "taken" ? (
-        <span className="text-xs text-critical">Taken. Try another.</span>
-      ) : availability === "available" ? (
-        <span className="text-xs text-live">Available</span>
-      ) : null}
+      <span role="status" aria-live="polite">
+        {error ? (
+          <span className="text-xs text-critical">{error}</span>
+        ) : availability === "taken" ? (
+          <span className="text-xs text-critical">Taken. Try another.</span>
+        ) : availability === "available" ? (
+          <span className="text-xs text-live">Available</span>
+        ) : null}
+      </span>
     </form>
   );
 }

@@ -1,0 +1,12 @@
+-- RECOMMENDATIONS.md item 119: the "new posts" live banner on /social needs
+-- a real signal that a post was inserted since the feed last loaded — same
+-- Supabase Realtime distribution pattern migration 0038 already established
+-- for fixtures/fixture_events (see src/hooks/use-realtime-fixtures.ts), just
+-- INSERT instead of UPDATE and a different table.
+--
+-- posts is already public-select (RLS: "select to authenticated, anon using
+-- (true))", migration 0001's posts_select_public) — Realtime respects the
+-- same RLS policies for postgres_changes subscriptions, so this does not
+-- widen read access at all, it only adds a push channel for data a client
+-- could already read.
+alter publication supabase_realtime add table public.posts;

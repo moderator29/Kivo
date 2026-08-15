@@ -1,6 +1,7 @@
 import "server-only";
 import type { FootballDataProvider } from "./types";
 import { ApiFootballProvider } from "./providers/api-football";
+import { TheSportsDbProvider } from "./providers/thesportsdb";
 
 /**
  * Feature flag — live polling/websocket connections must stay off until a paid
@@ -31,19 +32,52 @@ let cachedProvider: FootballDataProvider | null = null;
  * it behind NODE_ENV + a dynamic import keeps it out of a production build entirely
  * (RECOMMENDATIONS.md item 63) instead of just being unreachable at runtime.
  */
+/**
+ * Config-selectable provider choice (2026-08-15 directive, part 2 of the
+ * Sportmonks-removal/TheSportsDB pass — see DECISIONS.md). `FOOTBALL_DATA_PROVIDER`
+ * defaults to `"api-football"` — API-Football stays the primary provider per the
+ * founder's own standing directive; TheSportsDB is additive/future-optional, not
+ * a replacement. An unrecognized value falls back to the default rather than
+ * failing the build, same "degrade, don't crash" posture as every other optional
+ * env var in this file.
+ *
+ * A single env-var switch (rather than e.g. automatic fallback/failover between
+ * providers) was a deliberate judgment call: this codebase has no multi-provider
+ * merge/reconciliation logic anywhere (provider_mappings is keyed per-provider,
+ * not "best available"), and building real failover would mean deciding how to
+ * reconcile two providers' IDs for the same real-world entity — a genuinely
+ * separate, larger feature, not a scope this pass should absorb. A plain switch
+ * is honest about what actually exists today: one active provider at a time,
+ * chosen deliberately, not two racing each other.
+ */
+function resolveProviderChoice(): "api-football" | "thesportsdb" {
+  return process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" ? "thesportsdb" : "api-football";
+}
+
 export async function getFootballDataProvider(): Promise<FootballDataProvider> {
   if (cachedProvider) return cachedProvider;
 
-  const apiKey = process.env.API_FOOTBALL_KEY;
+  const providerChoice = resolveProviderChoice();
+  const apiFootballKey = process.env.API_FOOTBALL_KEY;
+  const theSportsDbKey = process.env.THE_SPORTS_DB_API_KEY;
 
-  if (apiKey) {
-    cachedProvider = new ApiFootballProvider(apiKey);
+  if (providerChoice === "thesportsdb" && theSportsDbKey) {
+    cachedProvider = new TheSportsDbProvider(theSportsDbKey);
+  } else if (apiFootballKey) {
+    if (providerChoice === "thesportsdb") {
+      // Requested but not configured — fail loud in the server log rather than
+      // silently serving API-Football data under a "TheSportsDB" expectation.
+      console.error(
+        "FOOTBALL_DATA_PROVIDER=thesportsdb but THE_SPORTS_DB_API_KEY is unset — falling back to API-Football.",
+      );
+    }
+    cachedProvider = new ApiFootballProvider(apiFootballKey);
   } else if (process.env.NODE_ENV !== "production") {
     const { MockFootballProvider } = await import("./providers/mock");
     cachedProvider = new MockFootballProvider();
   } else {
     throw new Error(
-      "No football data provider configured. Set API_FOOTBALL_KEY (see ENVIRONMENT.md). The mock provider is development-only.",
+      "No football data provider configured. Set API_FOOTBALL_KEY, or THE_SPORTS_DB_API_KEY plus FOOTBALL_DATA_PROVIDER=thesportsdb (see ENVIRONMENT.md). The mock provider is development-only.",
     );
   }
 

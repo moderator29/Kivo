@@ -179,7 +179,7 @@ export function NotificationBell({
         aria-label={displayUnreadCount > 0 ? `Notifications, ${displayUnreadCount} unread` : "Notifications"}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="kivo-glass-sharp relative flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
         {displayUnreadCount > 0 && (

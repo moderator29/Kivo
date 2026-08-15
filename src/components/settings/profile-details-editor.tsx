@@ -117,12 +117,17 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
         </select>
       </div>
 
-      {error && <span className="text-xs text-critical">{error}</span>}
+      {error && (
+        <span className="text-xs text-critical" role="status" aria-live="polite">
+          {error}
+        </span>
+      )}
 
       <div className="flex items-center gap-2">
         <button
           type="submit"
           disabled={pending}
+          aria-busy={pending}
           className="kivo-gradient-prime flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           <Check className="h-3.5 w-3.5" strokeWidth={2.5} />

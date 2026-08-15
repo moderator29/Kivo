@@ -49,7 +49,7 @@ export function NotificationPreferencesPanel({
       {PREFERENCE_ROWS.map((row, index) => (
         <div
           key={row.column}
-          className={`flex items-center justify-between gap-4 ${index > 0 ? "border-t border-white/5 pt-4" : ""}`}
+          className={`flex items-center justify-between gap-4 py-3 ${index > 0 ? "border-t border-white/5" : ""}`}
         >
           <div className="flex flex-col gap-0.5">
             <span className="text-sm text-foreground">{row.label}</span>
@@ -63,7 +63,11 @@ export function NotificationPreferencesPanel({
           />
         </div>
       ))}
-      {error && <p className="text-xs text-critical">{error}</p>}
+      {error && (
+        <p className="text-xs text-critical" role="status" aria-live="polite">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

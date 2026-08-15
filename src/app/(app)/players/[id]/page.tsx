@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, LineChart } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -11,12 +11,15 @@ import { FollowButton } from "@/components/ui/follow-button";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
+import { FormBadges } from "@/components/teams/form-badges";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
+import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { calculateAge, formatDate } from "@/lib/format";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -51,7 +54,10 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       .maybeSingle(),
     supabase
       .from("lineups")
-      .select("id, is_starting, fixture:fixtures(status)")
+      .select(
+        `id, is_starting, team_id,
+         fixture:fixtures(id, status, kickoff_at, home_team_id, away_team_id, home_score, away_score)`,
+      )
       .eq("player_id", id),
     supabase
       .from("fixture_events")
@@ -95,6 +101,34 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
   const hasMatchData = stats.appearances > 0;
+
+  // KIVO Form Engine (src/lib/football/form-engine.ts): each lineups row
+  // already carries the team_id this player was named for in that fixture,
+  // so it resolves to the same "own vs opponent score" shape team form uses
+  // (teams/[id]/page.tsx) rather than a per-player individual result, which
+  // doesn't exist in football — a player shares their team's real result.
+  // Sorted newest-first client-side (bounded row count: one per fixture this
+  // player has ever been named in a lineup for) rather than a second
+  // DB round trip just to order by a joined column.
+  const playerResultsNewestFirst: ResolvedResult[] = (lineupRows ?? [])
+    .flatMap((row) => {
+      if (!row.fixture) return [];
+      const resolved = resolveFixtureResult(
+        {
+          id: row.fixture.id,
+          kickoff_at: row.fixture.kickoff_at,
+          status: row.fixture.status,
+          home_score: row.fixture.home_score,
+          away_score: row.fixture.away_score,
+          home_team_id: row.fixture.home_team_id,
+          away_team_id: row.fixture.away_team_id,
+        },
+        row.team_id,
+      );
+      return resolved ? [resolved] : [];
+    })
+    .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
+  const recentForm = computePlayerForm(playerResultsNewestFirst, "last5");
 
   const displayName = player.known_as ?? player.full_name;
   const showFullNameSubtitle = Boolean(player.known_as) && player.known_as !== player.full_name;
@@ -142,6 +176,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             Compare with another player
           </Link>
+        </FadeIn>
+        {/* RECOMMENDATIONS.md items 184/185: real, player-scoped AI grounding
+            entry point — see ask-ai-link.tsx. */}
+        <FadeIn delay={0.2}>
+          <AskAiLink ctx="player" id={player.id} label={`Ask AI about ${displayName}`} />
         </FadeIn>
       </div>
 
@@ -193,6 +232,30 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No match data yet.
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.28} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <LineChart className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Recent form
+        </h2>
+        {recentForm.isSufficientSample ? (
+          <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+            <FormBadges form={recentForm.sequence} />
+            <p className="text-xs text-foreground-subtle">
+              {displayName}&apos;s team in the {recentForm.sampleSize} most recent finished match
+              {recentForm.sampleSize === 1 ? "" : "es"} they were named in the squad for:{" "}
+              {recentForm.wins}W {recentForm.draws}D {recentForm.losses}L · {recentForm.goalsScored} scored,{" "}
+              {recentForm.goalsConceded} conceded.
+            </p>
+          </div>
+        ) : (
+          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
+            {playerResultsNewestFirst.length > 0
+              ? `Only ${playerResultsNewestFirst.length} finished match${playerResultsNewestFirst.length === 1 ? "" : "es"} synced for ${displayName} so far — not enough real matches yet for a reliable form trend.`
+              : `No finished matches synced yet for ${displayName}.`}
           </div>
         )}
       </FadeIn>

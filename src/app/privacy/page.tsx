@@ -40,7 +40,7 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mx-auto w-full max-w-3xl px-4 pb-16 sm:px-6 lg:px-12 lg:pb-24">
-        <FadeIn className="kivo-glass-brand flex flex-col gap-10 rounded-2xl p-6 sm:p-8 lg:p-10">
+        <FadeIn className="kivo-glass-brand flex flex-col gap-10 rounded-3xl p-6 sm:p-8 lg:p-10">
           <div className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">1. The short version</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">

@@ -331,6 +331,13 @@ export async function searchFantasyPlayers(
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in.", players: [] };
 
+  // RECOMMENDATIONS.md item 198: called on every debounced keystroke of the
+  // player picker and (via ensureFantasyPlayerPrices) can drive service-role
+  // writes, so it gets the same per-profile sliding window as the other
+  // search endpoints even though the caller is always signed in.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "search_fantasy_players", 30, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error, players: [] };
+
   const supabase = createServerSupabaseClient();
   let request = supabase
     .from("players")

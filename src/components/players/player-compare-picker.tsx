@@ -170,7 +170,9 @@ export function PlayerComparePicker({
       </div>
 
       {a && b && a.id === b.id && (
-        <p className="text-center text-xs text-critical">Choose two different players to compare.</p>
+        <p className="text-center text-xs text-critical" role="status" aria-live="polite">
+          Choose two different players to compare.
+        </p>
       )}
 
       <button

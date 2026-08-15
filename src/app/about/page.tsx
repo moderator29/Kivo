@@ -58,7 +58,7 @@ export default function AboutPage() {
       </section>
 
       <section className="mx-auto w-full max-w-4xl px-4 pb-14 sm:px-6 lg:px-12 lg:pb-20">
-        <FadeIn className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-6 sm:p-8">
+        <FadeIn className="kivo-glass-brand flex flex-col gap-4 rounded-3xl p-6 sm:p-8">
           <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Why we&apos;re building it</h2>
           <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
             Football is followed hardest in places the big platforms treat as an afterthought. KIVO starts in
@@ -90,7 +90,7 @@ export default function AboutPage() {
       </section>
 
       <section className="mx-auto w-full max-w-4xl px-4 pb-14 sm:px-6 lg:px-12 lg:pb-20">
-        <FadeIn className="kivo-glass-brand relative flex flex-col gap-4 rounded-2xl p-6 sm:p-8">
+        <FadeIn className="kivo-glass-brand relative flex flex-col gap-4 rounded-3xl p-6 sm:p-8">
           <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Our one hard rule</span>
           <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             We will never invent a stat, a rumor, or a ranking to fill space.

@@ -248,7 +248,7 @@ export default function LandingPage() {
           </FadeIn>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {HOW_IT_WORKS.map((step, index) => (
-              <FadeIn key={step.title} delay={index * 0.08} className="kivo-glass-brand flex flex-col gap-3 rounded-2xl p-6">
+              <FadeIn key={step.title} delay={index * 0.08} className="kivo-glass-brand flex flex-col gap-3 rounded-3xl p-6">
                 <step.icon className="h-8 w-8 text-kivo-cyan" strokeWidth={1.75} />
                 <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
                 <p className="text-sm leading-relaxed text-foreground-muted">{step.description}</p>

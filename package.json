@@ -12,12 +12,14 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "calibrate:ratings": "tsx scripts/calibrate-rating-engine.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
     "@clerk/nextjs": "^7.7.5",
     "@supabase/supabase-js": "^2.112.3",
+    "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.31.0",
@@ -36,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

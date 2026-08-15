@@ -31,22 +31,24 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
           filter is a real navigation to a different query, not client-only
           UI state, matching how /transfers' filters work. */}
       {profile && (
-        <FadeIn delay={0.08} className="kivo-glass-sharp flex w-fit rounded-xl p-1">
+        <FadeIn delay={0.08} className="flex w-fit gap-4 border-b border-white/10">
           <Link
             href="/social"
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-              followingOnly ? "text-foreground-subtle hover:text-foreground-muted" : "bg-white/10 text-foreground"
+            className={`relative px-1 py-2.5 text-xs font-semibold transition-colors ${
+              followingOnly ? "text-foreground-subtle hover:text-foreground-muted" : "text-foreground"
             }`}
           >
             All
+            {!followingOnly && <span className="kivo-gradient-prime absolute inset-x-0 -bottom-px h-0.5 rounded-full" />}
           </Link>
           <Link
             href="/social?filter=following"
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-              followingOnly ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
+            className={`relative px-1 py-2.5 text-xs font-semibold transition-colors ${
+              followingOnly ? "text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
             }`}
           >
             Following
+            {followingOnly && <span className="kivo-gradient-prime absolute inset-x-0 -bottom-px h-0.5 rounded-full" />}
           </Link>
         </FadeIn>
       )}

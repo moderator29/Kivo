@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getOrCreateProfile } from "@/lib/profile";
 import { isClerkConfigured } from "@/lib/clerk";
 import { hasAdminAccess } from "@/lib/admin";
+import { isPreviewModeActive } from "@/lib/preview-mode";
 
 // Every route here renders differently for a guest vs a signed-in profile
 // (and, for a signed-in user, per-user data), so nothing under (app) is safe
@@ -28,8 +29,19 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
     redirect("/onboarding");
   }
 
+  // Admin-only, opt-in-only (see src/lib/preview-mode.ts) — false for every
+  // guest and every non-admin, full stop, regardless of what's in the URL.
+  const previewMode = await isPreviewModeActive(profile);
+
   return (
-    <AppShell signedIn={Boolean(profile)} isAdmin={hasAdminAccess(profile?.role)}>
+    <AppShell
+      signedIn={Boolean(profile)}
+      isAdmin={hasAdminAccess(profile?.role)}
+      previewMode={previewMode}
+      viewerProfile={
+        profile ? { username: profile.username, displayName: profile.display_name, avatarUrl: profile.avatar_url } : null
+      }
+    >
       {children}
     </AppShell>
   );

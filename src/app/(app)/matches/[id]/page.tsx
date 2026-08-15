@@ -8,12 +8,13 @@ import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
-import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
+import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
@@ -50,7 +51,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   const { data: fixture } = await supabase
     .from("fixtures")
     .select(
-      `id, kickoff_at, status, home_score, away_score, season_id,
+      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
        competition:competitions(name, short_name),
@@ -78,19 +79,20 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     headToHead,
     ownFanRating,
     fanRatingSummary,
+    { data: managers },
   ] = await Promise.all([
     supabase
       .from("fixture_events")
       .select(
         `id, event_type, minute, added_time, detail, team_id,
-         player:players!fixture_events_player_id_fkey(full_name, known_as),
-         related_player:players!fixture_events_related_player_id_fkey(full_name, known_as)`,
+         player:players!fixture_events_player_id_fkey(id, full_name, known_as),
+         related_player:players!fixture_events_related_player_id_fkey(id, full_name, known_as)`,
       )
       .eq("fixture_id", id)
       .order("minute", { ascending: true }),
     supabase
       .from("lineups")
-      .select("team_id, is_starting, shirt_number, position, player:players(id, full_name, known_as)")
+      .select("team_id, is_starting, shirt_number, position, formation, player:players(id, full_name, known_as)")
       .eq("fixture_id", id),
     supabase
       .from("fixture_statistics")
@@ -128,6 +130,16 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     isFinished
       ? supabase.rpc("get_fan_rating_summary", { p_fixture_id: id })
       : Promise.resolve({ data: null }),
+    // Each team's current manager, already synced by syncTeamSquad/getManager
+    // (the `managers` table) — zero new provider calls, just a join against
+    // data already in the database, per this task's item 1.
+    fixture.home_team?.id && fixture.away_team?.id
+      ? supabase
+          .from("managers")
+          .select("id, full_name, current_team_id, updated_at")
+          .in("current_team_id", [fixture.home_team.id, fixture.away_team.id])
+          .order("updated_at", { ascending: false })
+      : Promise.resolve({ data: null }),
   ]);
 
   const statsForTab = (stats ?? []).map((s) => ({
@@ -162,7 +174,6 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-  const live = isLiveStatus(fixture.status);
   const fanRatingSummaryRow = fanRatingSummary.data?.[0] ?? null;
   const fanRatingCount = fanRatingSummaryRow ? Number(fanRatingSummaryRow.rating_count) : 0;
   const fanRatingAvg =
@@ -174,6 +185,15 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   // tab (roomPosts) — no new query, just a sum of numbers that were already
   // real.
   const roomReactionCount = roomPosts.reduce((sum, post) => sum + post.reactionCount, 0);
+
+  // Each team's current manager. A team can in principle have more than one
+  // `managers` row pointing at it (a managerial change leaves the old coach's
+  // current_team_id stale rather than clearing it — see upsertManager in
+  // sync-squads.ts), so this takes the most-recently-synced row per team
+  // (query above is already ordered updated_at desc) rather than assuming
+  // exactly one.
+  const homeManager = (managers ?? []).find((m) => m.current_team_id === fixture.home_team?.id) ?? null;
+  const awayManager = (managers ?? []).find((m) => m.current_team_id === fixture.away_team?.id) ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -217,38 +237,43 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={40} />
             <span className="text-center text-sm font-medium text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+            {homeManager && (
+              <Link
+                href={`/managers/${homeManager.id}`}
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+              >
+                {homeManager.full_name}
+              </Link>
+            )}
           </FadeIn>
 
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <span className="animate-[kivo-score-reveal_0.5s_ease-out_0.1s_both] text-2xl font-semibold text-foreground">
-              {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-            </span>
-            <span
-              className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                live
-                  ? "animate-[kivo-live-breathe_2.2s_ease-in-out_infinite] border-live/30 bg-live/10 text-live"
-                  : "border-white/10 text-foreground-subtle"
-              }`}
-            >
-              {live && (
-                <span className="h-1.5 w-1.5 shrink-0 animate-[kivo-live-ring_2s_ease-out_infinite] rounded-full bg-live" />
-              )}
-              {fixture.status === "scheduled"
-                ? new Date(fixture.kickoff_at).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : STATUS_LABEL[fixture.status]}
-            </span>
-          </div>
+          <MatchScoreDisplay
+            fixtureId={fixture.id}
+            status={fixture.status}
+            homeScore={fixture.home_score}
+            awayScore={fixture.away_score}
+            minuteElapsed={fixture.minute_elapsed}
+            kickoffAt={fixture.kickoff_at}
+          />
 
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={40} />
             <span className="text-center text-sm font-medium text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+            {awayManager && (
+              <Link
+                href={`/managers/${awayManager.id}`}
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+              >
+                {awayManager.full_name}
+              </Link>
+            )}
           </FadeIn>
         </div>
+
+        {/* RECOMMENDATIONS.md items 184/185: real, fixture-scoped AI
+            grounding entry point — deep-links into /ai with this exact
+            fixture pre-loaded as context, see ask-ai-link.tsx. */}
+        <AskAiLink ctx="fixture" id={fixture.id} label="Ask AI about this match" />
       </FadeIn>
 
       {/* RECOMMENDATIONS.md item 170: only shown once the match is actually
@@ -302,6 +327,8 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           fixtureId={fixture.id}
           homeTeamId={fixture.home_team?.id ?? ""}
           awayTeamId={fixture.away_team?.id ?? ""}
+          homeTeamName={fixture.home_team?.name ?? "Home team"}
+          awayTeamName={fixture.away_team?.name ?? "Away team"}
           roomPosts={roomPostsForTab}
           stats={statsForTab}
           signedIn={Boolean(profile)}
@@ -315,7 +342,9 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             addedTime: e.added_time,
             detail: e.detail,
             teamId: e.team_id,
+            playerId: e.player?.id ?? null,
             playerName: e.player?.known_as ?? e.player?.full_name ?? null,
+            relatedPlayerId: e.related_player?.id ?? null,
             relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
           }))}
           lineups={(lineups ?? []).map((l) => ({
@@ -323,6 +352,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             isStarting: l.is_starting,
             shirtNumber: l.shirt_number,
             position: l.position,
+            formation: l.formation,
             playerId: l.player?.id ?? "",
             playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
           }))}

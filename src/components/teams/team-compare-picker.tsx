@@ -92,7 +92,9 @@ export function TeamComparePicker({
       </div>
 
       {teamA && teamB && teamA === teamB && (
-        <p className="text-center text-xs text-critical">Choose two different teams to compare.</p>
+        <p className="text-center text-xs text-critical" role="status" aria-live="polite">
+          Choose two different teams to compare.
+        </p>
       )}
 
       <motion.button

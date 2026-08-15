@@ -2,8 +2,25 @@ import { NextResponse } from "next/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured, getAnthropicClient, AI_MODEL } from "@/lib/ai/client";
-import { buildGroundingContext } from "@/lib/ai/grounding";
+import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+// RECOMMENDATIONS.md items 184/185: the three entity types Match Centre/team
+// pages/player pages can deep-link in with (see ask-ai-link.tsx). Validated
+// here rather than trusted from the client — an unrecognized type/a
+// malformed id is just dropped (falls back to no focus) rather than 400ing
+// the whole turn, since a stale/tampered focus value shouldn't break an
+// otherwise-normal chat message.
+const FOCUS_TYPES = new Set(["fixture", "team", "player"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseFocus(raw: unknown): GroundingFocus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { type, id } = raw as { type?: unknown; id?: unknown };
+  if (typeof type !== "string" || typeof id !== "string") return null;
+  if (!FOCUS_TYPES.has(type) || !UUID_RE.test(id)) return null;
+  return { type: type as GroundingFocus["type"], id };
+}
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_MESSAGES = 20;
@@ -31,7 +48,9 @@ Grounding rules — these override any instinct to be maximally helpful:
 - If the KIVO CONTEXT says no fixtures are synced, or doesn't mention something the user asks about, say plainly that KIVO doesn't have that data yet — never fill the gap from general knowledge, and never state a specific current score, standing, squad, or transfer as if it were verified fact.
 - You MAY answer general, evergreen football knowledge (rules, tactics concepts, what xG means, historical facts you're confident are stable) — but if a claim could plausibly have changed recently (current form, current squad, current manager, this season's standings), say you're not certain and that KIVO doesn't have it synced, rather than guessing from training data.
 - Distinguish explicitly between: verified KIVO data, general football knowledge, and your own inference/opinion — don't blur these together.
-- Be concise. This is a chat interface, not an essay generator.`;
+- Be concise. This is a chat interface, not an essay generator.
+
+Provenance tagging (RECOMMENDATIONS.md item 188) — the KIVO CONTEXT block below is split into two labelled sections, "VERIFIED KIVO DATA" (raw facts synced from the football data provider) and "KIVO-CALCULATED" (real stats KIVO's own Form Engine / Match Intelligence derived from that verified data — genuine, not fabricated, but computed rather than a raw provider fact). When a sentence you write states a specific fact drawn from the VERIFIED section, prefix that sentence with the literal tag [[KIVO-VERIFIED]]. When a sentence states a specific fact drawn from the KIVO-CALCULATED section (a form trend, a goal-timing split, an H2H aggregate), prefix that sentence with the literal tag [[KIVO-CALCULATED]]. Use the tags inline, immediately before the sentence they apply to — never as a separate list, never around general football knowledge, and never around your own inference or opinion.`;
 
 /** One line per NDJSON frame written to the response body. See the streaming
  * contract note above the POST handler for what each `type` means. */
@@ -74,15 +93,28 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { conversationId?: string; message?: string };
+  let body: { conversationId?: string; message?: string; regenerate?: boolean; focus?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  // RECOMMENDATIONS.md items 184/185: the client resends the same focus on
+  // every turn of a conversation that started from a deep link (see
+  // chat.tsx) rather than this being persisted server-side — see grounding.ts's
+  // doc comment on GroundingFocus for why that's an acceptable, honest
+  // trade-off for this pass's scope.
+  const focus = parseFocus(body.focus);
+
+  // RECOMMENDATIONS.md item 194: "regenerate" re-runs the model against the
+  // same existing history instead of appending a new user turn. It never
+  // accepts free-text `message` — only an existing conversationId owned by
+  // this profile, which must already have a prior assistant reply to redo.
+  const isRegenerate = body.regenerate === true;
+
   const message = (body.message ?? "").trim();
-  if (!message || message.length > MAX_MESSAGE_LENGTH) {
+  if (!isRegenerate && (!message || message.length > MAX_MESSAGE_LENGTH)) {
     return NextResponse.json({ error: `Message must be 1-${MAX_MESSAGE_LENGTH} characters.` }, { status: 400 });
   }
 
@@ -99,6 +131,10 @@ export async function POST(req: Request) {
     if (!owned) conversationId = undefined;
   }
 
+  if (isRegenerate && !conversationId) {
+    return NextResponse.json({ error: "No conversation to regenerate." }, { status: 400 });
+  }
+
   if (!conversationId) {
     const { data: created, error } = await supabase
       .from("ai_conversations")
@@ -110,6 +146,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Couldn't start a conversation." }, { status: 500 });
     }
     conversationId = created.id;
+  }
+
+  if (isRegenerate) {
+    // Delete only the most recent assistant reply so regenerating doesn't
+    // leave two answers stacked for the same user turn — the last user
+    // message stays in place and gets reused as-is via the history fetch
+    // below.
+    const { data: lastAssistant } = await supabase
+      .from("ai_messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastAssistant) {
+      await supabase.from("ai_messages").delete().eq("id", lastAssistant.id);
+    }
   }
 
   // Fetch the most recent MAX_HISTORY_MESSAGES (newest first via the
@@ -126,14 +180,16 @@ export async function POST(req: Request) {
 
   const history = recentHistory ? [...recentHistory].reverse() : recentHistory;
 
-  const { error: insertUserError } = await supabase
-    .from("ai_messages")
-    .insert({ conversation_id: conversationId, role: "user", content: message });
-  if (insertUserError) {
-    console.error("Failed to persist user message", insertUserError);
+  if (!isRegenerate) {
+    const { error: insertUserError } = await supabase
+      .from("ai_messages")
+      .insert({ conversation_id: conversationId, role: "user", content: message });
+    if (insertUserError) {
+      console.error("Failed to persist user message", insertUserError);
+    }
   }
 
-  const grounding = await buildGroundingContext(profile);
+  const grounding = await buildGroundingContext(profile, focus);
   const anthropic = getAnthropicClient();
   const finalConversationId = conversationId;
 
@@ -173,7 +229,10 @@ export async function POST(req: Request) {
             ...(history ?? [])
               .filter((m) => m.role === "user" || m.role === "assistant")
               .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-            { role: "user" as const, content: message },
+            // Regenerate reuses the last user message already present in
+            // `history` above (only the trailing assistant reply was
+            // deleted) — appending it again here would double it up.
+            ...(isRegenerate ? [] : [{ role: "user" as const, content: message }]),
           ],
         });
 

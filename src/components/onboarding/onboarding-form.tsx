@@ -129,6 +129,7 @@ export function OnboardingForm({
         <motion.button
           type="button"
           disabled={pending || !selectedTeamId}
+          aria-busy={pending}
           onClick={() => handleFinish(selectedTeamId)}
           whileHover={pending || !selectedTeamId ? undefined : { scale: 1.02 }}
           whileTap={pending || !selectedTeamId ? undefined : { scale: 0.97 }}
@@ -219,6 +220,7 @@ export function OnboardingForm({
         <motion.button
           type="submit"
           disabled={pending || availability === "taken"}
+          aria-busy={pending}
           whileHover={pending || availability === "taken" ? undefined : { scale: 1.02 }}
           whileTap={pending || availability === "taken" ? undefined : { scale: 0.97 }}
           className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"

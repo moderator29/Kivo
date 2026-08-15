@@ -6,6 +6,7 @@ import { getFootballDataProvider } from "./index";
 import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
+import { notifyFixtureEvent } from "./match-notifications";
 import type {
   NormalizedFixtureStatistics,
   NormalizedLineups,
@@ -36,11 +37,21 @@ function isKnownEventType(t: NormalizedMatchEventType): t is Exclude<NormalizedM
   return t !== "unknown";
 }
 
+/** Real name lookup for both sides of one fixture — fetched once per sync
+ * (see syncFixtureDetails) and threaded through so upsertFixtureEvent can
+ * label a notification ("Goal for Arsenal vs Chelsea") without a per-event
+ * query. Absent/unmapped entirely if the fixture's own team names can't be
+ * resolved — notifyFixtureEvent degrades to a generic label rather than
+ * guessing a name (see its own summary-building code). */
+export type FixtureTeamNames = Map<string, { name: string; opponentName: string }>;
+
 /** Fixture events aren't provider-mapped-by-nature (the provider gives events no id
  * of their own) but are still deduped through provider_mappings under entity_type
  * 'fixture_event', keyed on the synthetic composite id built in api-football.ts —
  * this makes syncFixtureDetails safe to call repeatedly for a live match without
- * writing duplicate event rows. */
+ * writing duplicate event rows. The update branch deliberately does NOT
+ * re-notify — a notification fires once, off the real first-ever insert of this
+ * event, never again on a later re-sync of the same match. */
 async function upsertFixtureEvent(
   supabase: ServiceClient,
   providerName: string,
@@ -49,6 +60,7 @@ async function upsertFixtureEvent(
   playerId: string | null,
   relatedPlayerId: string | null,
   event: NormalizedMatchEvent & { eventType: Exclude<NormalizedMatchEventType, "unknown"> },
+  teamNames: FixtureTeamNames,
 ): Promise<void> {
   const payload: Database["public"]["Tables"]["fixture_events"]["Insert"] = {
     fixture_id: fixtureId,
@@ -72,6 +84,22 @@ async function upsertFixtureEvent(
   if (error || !data) throw error ?? new Error("Failed to insert fixture event");
 
   await createMapping(supabase, providerName, "fixture_event", event.providerId, data.id);
+
+  // RECOMMENDATIONS.md notification items: goal / red card / a followed
+  // player's involvement — real event, first-ever insert only (see the doc
+  // comment above). A team whose name couldn't be resolved this run just
+  // gets a generic label rather than blocking the notification outright.
+  const names = teamNames.get(teamId);
+  await notifyFixtureEvent(supabase, {
+    fixtureId,
+    teamId,
+    teamName: names?.name ?? "Their team",
+    opponentName: names?.opponentName ?? "the opposition",
+    eventType: event.eventType,
+    minute: event.minute,
+    playerId,
+    playerName: event.playerName,
+  });
 }
 
 async function teamHasSquad(supabase: ServiceClient, teamId: string): Promise<boolean> {
@@ -152,6 +180,7 @@ async function processLineupSide(
         is_starting: entry.isStarting,
         shirt_number: entry.shirtNumber,
         position: entry.position,
+        formation: side.formation,
       },
       { onConflict: "fixture_id,team_id,player_id" },
     );
@@ -167,6 +196,7 @@ async function processEvents(
   fixtureId: string,
   events: NormalizedMatchEvent[],
   unresolved: string[],
+  teamNames: FixtureTeamNames,
 ): Promise<number> {
   let processed = 0;
 
@@ -198,10 +228,16 @@ async function processEvents(
       : null;
 
     try {
-      await upsertFixtureEvent(supabase, providerName, fixtureId, teamId, playerId, relatedPlayerId, {
-        ...event,
-        eventType,
-      });
+      await upsertFixtureEvent(
+        supabase,
+        providerName,
+        fixtureId,
+        teamId,
+        playerId,
+        relatedPlayerId,
+        { ...event, eventType },
+        teamNames,
+      );
       processed += 1;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -326,6 +362,31 @@ export async function syncFixtureDetails(
     return fail(`Fixture ${fixtureId} has no ${provider.name} provider mapping yet. Sync today's fixtures first.`);
   }
 
+  // RECOMMENDATIONS.md notification items: real team names for this fixture's
+  // two sides, fetched once so upsertFixtureEvent can label a goal/red-card
+  // notification without a per-event query. Absent (empty map) degrades to a
+  // generic label in notifyFixtureEvent rather than blocking the notification.
+  const { data: fixtureTeamsRow } = await supabase
+    .from("fixtures")
+    .select(
+      `home_team_id, away_team_id,
+       home_team:teams!fixtures_home_team_id_fkey(name),
+       away_team:teams!fixtures_away_team_id_fkey(name)`,
+    )
+    .eq("id", fixtureId)
+    .maybeSingle();
+  const teamNames: FixtureTeamNames = new Map();
+  if (fixtureTeamsRow?.home_team?.name && fixtureTeamsRow.away_team?.name) {
+    teamNames.set(fixtureTeamsRow.home_team_id, {
+      name: fixtureTeamsRow.home_team.name,
+      opponentName: fixtureTeamsRow.away_team.name,
+    });
+    teamNames.set(fixtureTeamsRow.away_team_id, {
+      name: fixtureTeamsRow.away_team.name,
+      opponentName: fixtureTeamsRow.home_team.name,
+    });
+  }
+
   let lineups: NormalizedLineups | null = null;
   let events: NormalizedMatchEvent[] = [];
   let statistics: NormalizedFixtureStatistics | null = null;
@@ -363,7 +424,7 @@ export async function syncFixtureDetails(
     }
   }
 
-  processed += await processEvents(supabase, provider.name, fixtureId, events, unresolved);
+  processed += await processEvents(supabase, provider.name, fixtureId, events, unresolved, teamNames);
   processed += await processStatistics(supabase, provider.name, fixtureId, statistics, unresolved);
 
   const finishedAt = new Date().toISOString();

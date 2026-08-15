@@ -2,12 +2,60 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { motion } from "motion/react";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check } from "lucide-react";
+import Image from "next/image";
+import { motion, AnimatePresence } from "motion/react";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info } from "lucide-react";
+import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
 import { cn } from "@/lib/utils";
-import { formatClockTime } from "@/lib/format";
+import { formatClockTime, timeAgo } from "@/lib/format";
 import { ConversationHistoryPanel } from "@/components/ai/conversation-history";
 import { loadConversationMessages, renameConversation, deleteConversation, type ConversationSummary } from "@/app/(app)/ai/actions";
+
+/** RECOMMENDATIONS.md items 184/185: mirrors `GroundingFocus` in
+ * `src/lib/ai/grounding.ts` — kept as a plain local type (not imported) since
+ * that module is `server-only` and this is a client component. */
+type ChatFocus = { type: "fixture" | "team" | "player"; id: string } | null;
+
+/** RECOMMENDATIONS.md item 188: the exact literal tags the system prompt
+ * (`/api/ai/chat/route.ts`) instructs the model to prefix its own claims
+ * with — kept in sync with that prompt text by convention, not by a shared
+ * constant, since one lives in a server-only route and the other in a
+ * client component. */
+const PROVENANCE_VERIFIED = "[[KIVO-VERIFIED]]";
+const PROVENANCE_CALCULATED = "[[KIVO-CALCULATED]]";
+const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\])/g;
+
+/** Turns an assistant reply's inline provenance tags into small visible
+ * chips instead of raw bracket text — degrades honestly if the model never
+ * emits a tag on a given turn (plain text renders exactly as before, no
+ * chips, nothing broken). */
+function renderMessageContent(content: string) {
+  return content.split(PROVENANCE_SPLIT_RE).map((part, i) => {
+    if (part === PROVENANCE_VERIFIED) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-kivo-cyan"
+        >
+          <ShieldCheck className="h-2.5 w-2.5" strokeWidth={2} />
+          Verified
+        </span>
+      );
+    }
+    if (part === PROVENANCE_CALCULATED) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-violet-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-violet-300"
+        >
+          <Calculator className="h-2.5 w-2.5" strokeWidth={2} />
+          KIVO-calculated
+        </span>
+      );
+    }
+    return part;
+  });
+}
 
 interface ChatMessage {
   id: string;
@@ -45,22 +93,56 @@ export function AiChat({
   initialConversations = [],
   hasFollowedEntities = false,
   hasSyncedFixtures = false,
+  initialFocus = null,
+  focusLabel = null,
+  groundingSummary = "",
+  lastSyncedAt = null,
+  quotaRemaining = null,
 }: {
   signedIn: boolean;
   initialConversations?: ConversationSummary[];
   hasFollowedEntities?: boolean;
   hasSyncedFixtures?: boolean;
+  /** RECOMMENDATIONS.md items 184/185: resolved server-side from `?ctx=&id=`
+   * (see `src/app/(app)/ai/page.tsx`) — resent on every turn of this session
+   * (see `streamAssistantReply`) so the deep-linked entity keeps grounding
+   * the conversation, not just its first turn. */
+  initialFocus?: ChatFocus;
+  /** Real, human-readable name for `initialFocus` — e.g. "Arsenal vs
+   * Chelsea" — same value `grounding.disclosureLabel` resolved server-side,
+   * never invented client-side. */
+  focusLabel?: string | null;
+  /** RECOMMENDATIONS.md item 189: `grounding.summary` verbatim — the exact
+   * text sent to the model on page load, shown in the disclosure panel
+   * below unmodified. */
+  groundingSummary?: string;
+  lastSyncedAt?: string | null;
+  quotaRemaining?: number | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  // RECOMMENDATIONS.md items 184/185: a lazy initializer (runs once, on
+  // mount, before the first paint) rather than an effect that calls
+  // setInput — this is real initial state, not a synchronization concern,
+  // so it never needs to re-run or fight a later effect. Never auto-sent
+  // (see `send`) — opening the Copilot from a match/team/player page should
+  // never spend a model call the user didn't ask for.
+  const [input, setInput] = useState(() => (initialFocus && focusLabel ? `Tell me about ${focusLabel}.` : ""));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  // RECOMMENDATIONS.md items 184/185: the active deep-linked focus, if any —
+  // dismissible (the user can clear it without losing the conversation) and
+  // otherwise resent on every turn, see streamAssistantReply below.
+  const [focus, setFocus] = useState<ChatFocus>(initialFocus);
+  // RECOMMENDATIONS.md item 189: collapsed by default so it never competes
+  // with the conversation itself — this is a disclosure the user opts into,
+  // not something pushed at them.
+  const [showDisclosure, setShowDisclosure] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -95,26 +177,14 @@ export function AiChat({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [input]);
 
-  async function send(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || pending) return;
-
-    if (!signedIn) {
-      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
-      return;
-    }
-
-    setError(null);
-    setInput("");
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setPending(true);
-
+  // Shared by send() and regenerate() below — everything from the fetch to
+  // the conversations-list bookkeeping is identical between "send a new
+  // message" and "redo the last reply"; only how the request body is built
+  // and what gets prepended to `messages` beforehand differs.
+  async function streamAssistantReply(
+    requestBody: { conversationId?: string; message?: string; regenerate?: boolean; focus?: ChatFocus },
+    titleFallback: string,
+  ) {
     const isNewConversation = !activeConversationId;
     const assistantMessageId = crypto.randomUUID();
     let assistantText = "";
@@ -136,7 +206,7 @@ export function AiChat({
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeConversationId, message: trimmed }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!res.ok || !res.body) {
@@ -196,10 +266,10 @@ export function AiChat({
         const finalId = returnedId;
         setConversations((prev) => {
           if (isNewConversation) {
-            return [{ id: finalId, title: trimmed.slice(0, 80), updated_at: now }, ...prev];
+            return [{ id: finalId, title: titleFallback.slice(0, 80), updated_at: now }, ...prev];
           }
           return [
-            { ...(prev.find((c) => c.id === finalId) ?? { id: finalId, title: trimmed.slice(0, 80) }), updated_at: now },
+            { ...(prev.find((c) => c.id === finalId) ?? { id: finalId, title: titleFallback.slice(0, 80) }), updated_at: now },
             ...prev.filter((c) => c.id !== finalId),
           ];
         });
@@ -209,6 +279,51 @@ export function AiChat({
     } finally {
       setPending(false);
     }
+  }
+
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || pending) return;
+
+    if (!signedIn) {
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
+      return;
+    }
+
+    setError(null);
+    setInput("");
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setPending(true);
+
+    await streamAssistantReply({ conversationId: activeConversationId, message: trimmed, focus }, trimmed);
+  }
+
+  // RECOMMENDATIONS.md item 194: regenerate the last assistant reply without
+  // re-asking the question. Drops the stale reply from local state and asks
+  // the server to redo it against the same conversation history — the
+  // server deletes the corresponding row and reuses the last real user
+  // message rather than inserting a duplicate (see route.ts's
+  // `isRegenerate` handling).
+  async function regenerate() {
+    if (pending || !activeConversationId) return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== "assistant") return;
+
+    setError(null);
+    setMessages((prev) => prev.slice(0, -1));
+    setPending(true);
+
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+    await streamAssistantReply(
+      { conversationId: activeConversationId, regenerate: true, focus },
+      lastUserMessage?.content ?? "Conversation",
+    );
   }
 
   async function handleCopy(id: string, content: string) {
@@ -310,6 +425,22 @@ export function AiChat({
         </motion.div>
         <h1 className="flex-1 text-lg font-semibold text-foreground">AI Copilot</h1>
 
+        {/* RECOMMENDATIONS.md item 189: "what KIVO knows right now" — a real
+            disclosure the user opts into, not a badge pushed at them. */}
+        <motion.button
+          type="button"
+          onClick={() => setShowDisclosure((v) => !v)}
+          aria-label="What KIVO knows right now"
+          aria-expanded={showDisclosure}
+          whileTap={{ scale: 0.92 }}
+          className={cn(
+            "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+            showDisclosure ? "text-kivo-cyan" : "text-foreground-muted hover:text-foreground",
+          )}
+        >
+          <Info className="h-4 w-4" strokeWidth={1.75} />
+        </motion.button>
+
         {signedIn && (
           <div className="flex items-center gap-1.5">
             <motion.button
@@ -318,7 +449,7 @@ export function AiChat({
               disabled={messages.length === 0 && !activeConversationId}
               aria-label="New conversation"
               whileTap={{ scale: 0.92 }}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+              className="kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
             >
               <SquarePen className="h-4 w-4" strokeWidth={1.75} />
             </motion.button>
@@ -332,6 +463,56 @@ export function AiChat({
           </div>
         )}
       </motion.div>
+
+      {/* RECOMMENDATIONS.md item 189: `groundingSummary` is `grounding.summary`
+          verbatim — the exact text sent to the model — plus the same
+          freshness numbers `/transparency` shows, reused via
+          getTransparencyFreshness() rather than recomputed here. */}
+      <AnimatePresence initial={false}>
+        {showDisclosure && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">What KIVO knows right now</p>
+              <p className="text-xs text-foreground-muted">
+                Last provider sync: <span className="text-foreground">{lastSyncedAt ? timeAgo(lastSyncedAt) : "nothing synced yet"}</span>
+                {" · "}
+                Provider quota remaining today:{" "}
+                <span className="text-foreground">{quotaRemaining !== null ? quotaRemaining : "not yet reported"}</span>
+              </p>
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-black/20 p-3 text-[11px] leading-relaxed text-foreground-muted">
+                {groundingSummary || "No grounding context available."}
+              </pre>
+              <p className="text-[11px] text-foreground-subtle">
+                This is the exact context KIVO hands the model before every reply — nothing outside it is treated as verified.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* RECOMMENDATIONS.md items 184/185: the active deep-linked focus, if
+          any — dismissible so the user can fall back to an unscoped session
+          without losing the conversation already in progress. */}
+      {focus && focusLabel && (
+        <div className="flex items-center gap-1.5 self-start rounded-full border border-kivo-cyan/30 bg-kivo-cyan/10 py-1 pl-3 pr-1 text-xs text-kivo-cyan">
+          <Sparkles className="h-3 w-3" strokeWidth={2} />
+          Focused on {focusLabel}
+          <button
+            type="button"
+            onClick={() => setFocus(null)}
+            aria-label="Clear focus"
+            className="flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-kivo-cyan/20"
+          >
+            <X className="h-3 w-3" strokeWidth={2} />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-3" role="log" aria-live="polite" aria-relevant="additions">
         {loadingConversation && (
@@ -352,36 +533,57 @@ export function AiChat({
         )}
 
         {!loadingConversation && messages.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-            className="kivo-glass flex flex-col gap-3 rounded-2xl p-5"
-          >
-            <p className="text-sm text-foreground-muted">
-              Ask me anything about football. I only state facts KIVO has actually verified. If the data isn&apos;t
-              synced yet, I&apos;ll say so instead of guessing.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((s, i) => (
-                <motion.button
-                  key={s}
-                  onClick={() => send(s)}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.14 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                  whileHover={{ y: -2, transition: { duration: 0.15 } }}
-                  whileTap={{ scale: 0.96 }}
-                  className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-kivo-cyan/40 hover:bg-white/[0.06] hover:text-foreground"
-                >
-                  {s}
-                </motion.button>
-              ))}
-            </div>
-          </motion.div>
+          <>
+            {/* Third of the three commissioned KIVO artwork pieces placed off
+                the landing page this session (see the hero's placement
+                comment in src/app/page.tsx for the trademark check they went
+                through) — a "command center" composite that reads naturally
+                as the Copilot's own welcome visual. Same edge-masked,
+                floating treatment as the hero, only shown before a
+                conversation actually starts so it never competes with real
+                chat messages. */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="flex justify-center"
+            >
+              <div className="kivo-artwork-float kivo-artwork-mask relative h-40 w-64 sm:h-48 sm:w-80">
+                <Image src={kivoCommandArtwork} alt="" fill className="object-contain" sizes="320px" />
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+              className="kivo-glass flex flex-col gap-3 rounded-2xl p-5"
+            >
+              <p className="text-sm text-foreground-muted">
+                Ask me anything about football. I only state facts KIVO has actually verified. If the data isn&apos;t
+                synced yet, I&apos;ll say so instead of guessing.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s, i) => (
+                  <motion.button
+                    key={s}
+                    onClick={() => send(s)}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.14 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                    whileHover={{ y: -2, transition: { duration: 0.15 } }}
+                    whileTap={{ scale: 0.96 }}
+                    className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-kivo-cyan/40 hover:bg-white/[0.06] hover:text-foreground"
+                  >
+                    {s}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          </>
         )}
 
-        {messages.map((m) => (
+        {messages.map((m, index) => (
           <motion.div
             key={m.id}
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -395,7 +597,7 @@ export function AiChat({
                 m.role === "user" ? "kivo-gradient-prime text-kivo-white" : "kivo-glass text-foreground",
               )}
             >
-              {m.content}
+              {m.role === "assistant" ? renderMessageContent(m.content) : m.content}
             </div>
 
             {m.role === "assistant" && m.content && (
@@ -412,6 +614,22 @@ export function AiChat({
                     <Copy className="h-3 w-3" strokeWidth={1.75} />
                   )}
                 </button>
+                {/* Item 194: regenerate only ever applies to the single most
+                    recent reply — redoing an older one would leave the
+                    conversation's later turns grounded in an answer that no
+                    longer exists. */}
+                {index === messages.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => regenerate()}
+                    disabled={pending}
+                    aria-label="Regenerate response"
+                    title="Regenerate response"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40"
+                  >
+                    <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
+                  </button>
+                )}
                 {m.createdAt && <span className="text-[11px]">{formatClockTime(m.createdAt)}</span>}
               </div>
             )}
@@ -473,7 +691,7 @@ export function AiChat({
           aria-busy={pending}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.92 }}
-          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-kivo-white transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-kivo-white transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
           aria-label="Send"
         >
           <ArrowUp className="h-4 w-4" strokeWidth={2} />

@@ -65,6 +65,11 @@ const MOCK_LINEUPS: NormalizedLineups = {
   teams: [
     {
       team: { providerId: "mock-team-1", name: "Remo Stars", shortName: "REM", crestUrl: null },
+      // Only 4 mock entries (not a full XI) — deliberately too few to trigger the
+      // real formation pitch view, which requires all 11 real starters resolved.
+      // This "formation" string is included only so the mock's shape matches the
+      // real provider's; the UI still falls back to the plain list for this fixture.
+      formation: "4-3-3",
       entries: [
         { playerProviderId: "mock-player-1", playerName: "Chidi Okafor", isStarting: true, shirtNumber: 1, position: "G" },
         { playerProviderId: "mock-player-2", playerName: "Tunde Bakare", isStarting: true, shirtNumber: 4, position: "D" },
@@ -74,6 +79,7 @@ const MOCK_LINEUPS: NormalizedLineups = {
     },
     {
       team: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
+      formation: "4-4-2",
       entries: [
         { playerProviderId: "mock-player-5", playerName: "Emeka Nwosu", isStarting: true, shirtNumber: 1, position: "G" },
         { playerProviderId: "mock-player-6", playerName: "Yusuf Danladi", isStarting: true, shirtNumber: 5, position: "D" },
@@ -257,6 +263,12 @@ export class MockFootballProvider implements FootballDataProvider {
    * to report — null, not a fabricated number (see FootballDataProvider's doc
    * comment on this method). */
   getQuotaRemaining(): number | null {
+    return null;
+  }
+
+  /** RECOMMENDATIONS.md item 65: no real upstream response ever exists to
+   * sample — null, honestly, same rationale as getQuotaRemaining above. */
+  getLastRawResponseSample(): unknown | null {
     return null;
   }
 

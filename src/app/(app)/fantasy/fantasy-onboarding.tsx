@@ -171,6 +171,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
           <button
             type="submit"
             disabled={pending || !name.trim()}
+            aria-busy={pending}
             className="kivo-gradient-victory rounded-xl py-2.5 text-sm font-semibold text-kivo-white transition disabled:opacity-50"
           >
             {pending ? "Creating…" : "Create league"}
@@ -228,6 +229,7 @@ function JoinLeagueCard() {
       <button
         type="submit"
         disabled={pending || !code.trim()}
+        aria-busy={pending}
         className="rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-foreground transition hover:bg-white/5 disabled:opacity-50"
       >
         {pending ? "Joining…" : "Join league"}

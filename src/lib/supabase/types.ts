@@ -842,8 +842,10 @@ export type Database = {
         Row: {
           created_at: string
           fixture_id: string
+          formation: string | null
           id: string
           is_starting: boolean
+          pitch_heatmap: Json | null
           player_id: string
           position: string | null
           shirt_number: number | null
@@ -852,8 +854,10 @@ export type Database = {
         Insert: {
           created_at?: string
           fixture_id: string
+          formation?: string | null
           id?: string
           is_starting?: boolean
+          pitch_heatmap?: Json | null
           player_id: string
           position?: string | null
           shirt_number?: number | null
@@ -862,8 +866,10 @@ export type Database = {
         Update: {
           created_at?: string
           fixture_id?: string
+          formation?: string | null
           id?: string
           is_starting?: boolean
+          pitch_heatmap?: Json | null
           player_id?: string
           position?: string | null
           shirt_number?: number | null
@@ -1674,6 +1680,7 @@ export type Database = {
           last_synced_at: string | null
           provider: string
           provider_quota_remaining: number | null
+          raw_response_sample: Json | null
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
@@ -1687,6 +1694,7 @@ export type Database = {
           last_synced_at?: string | null
           provider: string
           provider_quota_remaining?: number | null
+          raw_response_sample?: Json | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1700,6 +1708,7 @@ export type Database = {
           last_synced_at?: string | null
           provider?: string
           provider_quota_remaining?: number | null
+          raw_response_sample?: Json | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1917,6 +1926,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_activity_streak: {
+        Args: { p_profile_id: string }
+        Returns: {
+          current_streak: number
+          longest_streak: number
+        }[]
+      }
       get_fan_rating_summary: {
         Args: { p_fixture_id: string }
         Returns: {
@@ -1944,6 +1960,13 @@ export type Database = {
           max_teams: number
           season_id: string
           team_count: number
+        }[]
+      }
+      get_most_followed_teams: {
+        Args: { p_limit?: number }
+        Returns: {
+          follower_count: number
+          team_id: string
         }[]
       }
       get_poll_results: {

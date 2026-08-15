@@ -38,7 +38,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
       <Link
         href={`/matches?date=${dateKey(addDays(selected, -1))}`}
         aria-label="Previous day"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition hover:bg-white/[0.06] hover:text-foreground"
+        className="kivo-glass-sharp flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
       </Link>
@@ -75,7 +75,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
       <Link
         href={`/matches?date=${dateKey(addDays(selected, 1))}`}
         aria-label="Next day"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition hover:bg-white/[0.06] hover:text-foreground"
+        className="kivo-glass-sharp flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition hover:text-foreground"
       >
         <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
       </Link>
@@ -83,7 +83,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
       {selectedKey !== todayKey && (
         <Link
           href="/matches"
-          className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-white/[0.06] hover:text-foreground"
+          className="kivo-glass-sharp shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground"
         >
           Today
         </Link>

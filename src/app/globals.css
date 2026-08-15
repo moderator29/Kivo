@@ -21,9 +21,9 @@
   --kivo-info: #38bdf8;
   --kivo-achievement: #f5c451;
 
-  --kivo-glass: rgba(255, 255, 255, 0.04);
-  --kivo-glass-border: rgba(255, 255, 255, 0.08);
-  --kivo-glass-hover: rgba(255, 255, 255, 0.07);
+  --kivo-glass: rgba(255, 255, 255, 0.05);
+  --kivo-glass-border: rgba(255, 255, 255, 0.06);
+  --kivo-glass-hover: rgba(255, 255, 255, 0.08);
 
   --background: var(--kivo-obsidian);
   --background-secondary: var(--kivo-navy-deep);
@@ -70,6 +70,14 @@ html {
      (WCAG 1.4.4). 106.25% of the 16px default renders the same 17px this
      replaced. RECOMMENDATIONS.md item 153. */
   font-size: 106.25%;
+  /* RECOMMENDATIONS.md item 154: without this, native controls (the season
+     <select> in the fantasy create-league card, date/number inputs, the
+     browser's own scrollbar) render with light chrome on KIVO's dark page —
+     the `className="bg-kivo-navy"` on that <select>'s <option> elements is
+     ignored by most browsers, so the dropdown itself was likely white-on-
+     white. KIVO is dark-only (no light theme to opt into), so this is a
+     static declaration, not a media-query toggle. */
+  color-scheme: dark;
 }
 
 body {
@@ -209,6 +217,31 @@ body {
 
 .kivo-fade-in {
   animation: kivo-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Shared treatment for the commissioned KIVO artwork pieces (public/brand/
+   kivo-artwork-*.webp) wherever they're used past the landing hero: a slow
+   float plus a radial mask so the image's own soft glow dissolves into the
+   page background at its edges instead of showing a hard rectangle. Same
+   values as the hero's inline version in src/app/page.tsx, pulled out here
+   since more than one page now reuses it. */
+@keyframes kivo-artwork-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.kivo-artwork-float {
+  animation: kivo-artwork-float 7s ease-in-out infinite;
+}
+
+.kivo-artwork-mask {
+  mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+  -webkit-mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

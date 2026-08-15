@@ -101,6 +101,9 @@ export interface NormalizedLineupEntry {
 export interface NormalizedTeamLineup {
   team: NormalizedTeam;
   entries: NormalizedLineupEntry[];
+  /** e.g. "4-3-3" — null when the provider hasn't published a formation yet
+   * for this fixture (common before lineups are officially confirmed). */
+  formation: string | null;
 }
 
 /** One fixture's lineups — one entry per side (normally exactly two). */
@@ -208,6 +211,12 @@ export interface FootballDataProvider {
    * see MockFootballProvider). Real provider data, not an estimate
    * (RECOMMENDATIONS.md item 53). */
   getQuotaRemaining(): number | null;
+  /** RECOMMENDATIONS.md item 65: a bounded sample of the last raw response
+   * (success or failure) this provider instance actually received — see
+   * `raw-response-sample.ts`. Null until at least one request has completed,
+   * or always null for a provider with no real upstream to sample (see
+   * MockFootballProvider), same honesty convention as getQuotaRemaining. */
+  getLastRawResponseSample(): unknown | null;
   getFixturesByDate(date: string): Promise<NormalizedFixture[]>;
   getFixtureById(providerId: string): Promise<NormalizedFixture | null>;
   getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]>;

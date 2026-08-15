@@ -104,6 +104,7 @@ export function ReactionPicker({
         type="button"
         onClick={handleTriggerClick}
         disabled={pending}
+        aria-busy={pending}
         aria-haspopup="menu"
         aria-expanded={pickerOpen}
         aria-pressed={Boolean(optimisticReaction)}
@@ -149,7 +150,7 @@ export function ReactionPicker({
                 role="menuitem"
                 aria-label={reaction.label}
                 onClick={() => applyReaction(reaction.type)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-base leading-none transition-transform hover:scale-125 hover:bg-white/5"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-base leading-none transition-transform hover:scale-125 hover:bg-white/5"
               >
                 {reaction.emoji}
               </button>

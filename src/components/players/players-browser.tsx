@@ -103,7 +103,9 @@ export function PlayersBrowser({
       </FadeIn>
 
       {error ? (
-        <p className="py-10 text-center text-sm text-critical">{error}</p>
+        <p className="py-10 text-center text-sm text-critical" role="status" aria-live="polite">
+          {error}
+        </p>
       ) : players.length === 0 ? (
         <p className="py-10 text-center text-sm text-foreground-muted">
           {searching ? "Searching…" : "No players match those filters."}

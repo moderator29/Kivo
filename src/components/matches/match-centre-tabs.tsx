@@ -5,11 +5,14 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Shield } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { EVENT_LABEL } from "@/lib/football/event-labels";
 import { staggerDelay } from "@/lib/stagger";
 import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-sync-control";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
+import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
+import { HeatmapView } from "@/components/matches/heatmap-view";
 
 type MatchEvent = {
   id: string;
@@ -18,7 +21,9 @@ type MatchEvent = {
   addedTime: number | null;
   detail: string | null;
   teamId: string;
+  playerId: string | null;
   playerName: string | null;
+  relatedPlayerId: string | null;
   relatedPlayerName: string | null;
 };
 
@@ -27,6 +32,11 @@ type LineupEntry = {
   isStarting: boolean;
   shirtNumber: number | null;
   position: string | null;
+  /** e.g. "4-3-3" — real formation string synced from the provider's
+   * /fixtures/lineups response (see migration 0035), null when not yet
+   * published for this fixture. Same value repeated across every row for
+   * this team_id (denormalized, matching how team_id itself repeats). */
+  formation: string | null;
   playerId: string;
   playerName: string;
 };
@@ -74,6 +84,12 @@ type MatchCentreTabsProps = {
   fixtureId: string;
   homeTeamId: string;
   awayTeamId: string;
+  /** Real team names (`fixtures.home_team`/`away_team` join in the page),
+   * used only for the Heatmap tab's per-side labels ("<name>'s on-pitch
+   * movement") — every other tab already resolves team identity from
+   * `standings`/`lineups` rows themselves. */
+  homeTeamName: string;
+  awayTeamName: string;
   events: MatchEvent[];
   lineups: LineupEntry[];
   stats: TeamStats[];
@@ -88,7 +104,7 @@ type MatchCentreTabsProps = {
   detailsLastSyncedAt: string | null;
 };
 
-const TABS = ["Details", "Stats", "Lineups", "Standings", "Room"] as const;
+const TABS = ["Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"] as const;
 type Tab = (typeof TABS)[number];
 
 function tabSlug(tab: Tab): string {
@@ -97,6 +113,15 @@ function tabSlug(tab: Tab): string {
 
 function tabFromSlug(slug: string | null): Tab {
   return TABS.find((tab) => tabSlug(tab) === slug) ?? TABS[0];
+}
+
+function PlayerNameLink({ playerId, playerName, className }: { playerId: string; playerName: string; className?: string }) {
+  if (!playerId) return <span className={className}>{playerName}</span>;
+  return (
+    <Link href={`/players/${playerId}`} className={`${className ?? ""} hover:text-kivo-cyan hover:underline`.trim()}>
+      {playerName}
+    </Link>
+  );
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -128,8 +153,25 @@ function DetailsTab({ events }: { events: MatchEvent[] }) {
           <div className="flex flex-col">
             <span className="text-sm text-foreground">{EVENT_LABEL[event.eventType]}</span>
             <span className="text-xs text-foreground-subtle">
-              {event.playerName ?? "Unknown player"}
-              {event.relatedPlayerName ? ` · ${event.relatedPlayerName}` : ""}
+              {event.playerId ? (
+                <Link href={`/players/${event.playerId}`} className="hover:text-kivo-cyan hover:underline">
+                  {event.playerName ?? "Unknown player"}
+                </Link>
+              ) : (
+                event.playerName ?? "Unknown player"
+              )}
+              {event.relatedPlayerName ? (
+                <>
+                  {" · "}
+                  {event.relatedPlayerId ? (
+                    <Link href={`/players/${event.relatedPlayerId}`} className="hover:text-kivo-cyan hover:underline">
+                      {event.relatedPlayerName}
+                    </Link>
+                  ) : (
+                    event.relatedPlayerName
+                  )}
+                </>
+              ) : null}
               {event.detail ? ` · ${event.detail}` : ""}
             </span>
           </div>
@@ -156,25 +198,35 @@ function LineupsTab({
     const teamLineup = lineups.filter((l) => l.teamId === teamId);
     const starters = teamLineup.filter((l) => l.isStarting);
     const bench = teamLineup.filter((l) => !l.isStarting);
+    // Real formation, positioned pitch view when the data is clean enough to
+    // draw one honestly (see buildPitchRows' doc comment) — otherwise the
+    // plain list below, never a guessed layout.
+    const pitchRows = buildPitchRows(starters);
+    const formation = starters[0]?.formation ?? null;
+
     return (
       <div className="flex flex-col gap-3">
-        {starters.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Starting XI</span>
-            {starters.map((p, index) => (
-              <motion.div
-                key={p.playerId || p.playerName}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-                className="flex items-center gap-2 text-sm text-foreground"
-              >
-                <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
-                <span className="truncate">{p.playerName}</span>
-                {p.position && <span className="text-xs text-foreground-subtle">{p.position}</span>}
-              </motion.div>
-            ))}
-          </div>
+        {pitchRows ? (
+          <LineupPitch formation={formation} rows={pitchRows} />
+        ) : (
+          starters.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Starting XI</span>
+              {starters.map((p, index) => (
+                <motion.div
+                  key={p.playerId || p.playerName}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
+                  className="flex items-center gap-2 text-sm text-foreground"
+                >
+                  <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
+                  <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
+                  {p.position && <span className="text-xs text-foreground-subtle">{p.position}</span>}
+                </motion.div>
+              ))}
+            </div>
+          )
         )}
         {bench.length > 0 && (
           <div className="flex flex-col gap-1">
@@ -188,7 +240,7 @@ function LineupsTab({
                 className="flex items-center gap-2 text-sm text-foreground-muted"
               >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
-                <span className="truncate">{p.playerName}</span>
+                <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
               </motion.div>
             ))}
           </div>
@@ -198,9 +250,36 @@ function LineupsTab({
   };
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div className="kivo-glass rounded-2xl p-4">{renderTeam(homeTeamId)}</div>
       <div className="kivo-glass rounded-2xl p-4">{renderTeam(awayTeamId)}</div>
+    </div>
+  );
+}
+
+/**
+ * RECOMMENDATIONS.md item 228: `HeatmapView`/`HeatmapEngine` were already
+ * built and tested; this tab is the "add it as a tab" half of that item now
+ * that the product decision has been made. No `PositionalDataProvider` is
+ * connected anywhere in KIVO (`positional-types.ts`) — both calls below
+ * always pass an empty `observations` array, so `HeatmapView` always renders
+ * its own honest "Positional data unavailable for this match" empty state.
+ * That is the correct, expected behaviour for every real fixture today, not
+ * a bug to paper over with sample/fake data.
+ */
+function HeatmapTab({
+  fixtureId,
+  homeTeamName,
+  awayTeamName,
+}: {
+  fixtureId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <HeatmapView observations={[]} matchId={fixtureId} subjectLabel={homeTeamName} />
+      <HeatmapView observations={[]} matchId={fixtureId} subjectLabel={awayTeamName} />
     </div>
   );
 }
@@ -337,9 +416,9 @@ export function MatchCentreTabs(props: MatchCentreTabsProps) {
 function MatchCentreTabsFallback() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="kivo-glass-sharp flex rounded-xl p-1">
+      <div className="flex gap-1 border-b border-white/10">
         {TABS.map((tab) => (
-          <div key={tab} className="relative flex-1 rounded-lg py-2 text-center text-xs font-semibold text-foreground-muted">
+          <div key={tab} className="relative flex-1 px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted">
             {tab}
           </div>
         ))}
@@ -352,6 +431,8 @@ function MatchCentreTabsInner({
   fixtureId,
   homeTeamId,
   awayTeamId,
+  homeTeamName,
+  awayTeamName,
   events,
   lineups,
   stats,
@@ -402,7 +483,7 @@ function MatchCentreTabsInner({
         role="tablist"
         aria-label="Match centre sections"
         onKeyDown={handleTabKeyDown}
-        className="kivo-glass-sharp flex rounded-xl p-1"
+        className="flex gap-1 border-b border-white/10"
       >
         {TABS.map((tab) => (
           <button
@@ -417,16 +498,16 @@ function MatchCentreTabsInner({
             aria-controls={`match-centre-panel-${tabSlug(tab)}`}
             tabIndex={active === tab ? 0 : -1}
             onClick={() => setActive(tab)}
-            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
+            <span className={`relative ${active === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
             {active === tab && (
               <motion.span
                 layoutId="match-centre-active-tab"
-                className="kivo-gradient-victory absolute inset-0 rounded-lg"
+                className="kivo-gradient-prime absolute inset-x-1 -bottom-px h-0.5 rounded-full"
                 transition={{ type: "spring", stiffness: 400, damping: 32 }}
               />
             )}
-            <span className={`relative ${active === tab ? "text-kivo-white" : "text-foreground-muted"}`}>{tab}</span>
           </button>
         ))}
       </div>
@@ -460,6 +541,7 @@ function MatchCentreTabsInner({
           {active === "Details" && <DetailsTab events={events} />}
           {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Lineups" && <LineupsTab homeTeamId={homeTeamId} awayTeamId={awayTeamId} lineups={lineups} />}
+          {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
           {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Room" && <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} />}
         </motion.div>
