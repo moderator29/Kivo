@@ -59,10 +59,10 @@
 --
 -- READING THE OUTPUT
 -- -------------------
--- Sections 2-5 each end in one SELECT returning (check_name, passed) rows —
--- every `passed` must be `t`. Section 6's statements are each expected to
--- ERROR with SQLSTATE 42501 ("new row violates row-level security policy");
--- that error IS the passing outcome and is called out inline.
+-- Sections 2-5 and 6c-6d each end in one SELECT returning (check_name, passed)
+-- rows — every `passed` must be `t`. Section 6a/6b's statements are each
+-- expected to ERROR with SQLSTATE 42501 ("new row violates row-level security
+-- policy"); that error IS the passing outcome and is called out inline.
 --
 -- HOW TO RUN
 -- ----------
@@ -76,8 +76,8 @@
 -- each independent (own BEGIN block, own transaction-local id lookups —
 -- nothing carries over between sections or depends on call/section order),
 -- so run: (a) sections 0-1 together as one call to seed, (b) each of
--- 2/3/4/5/6a/6b as its own call — 6a and 6b are EXPECTED to come back as a
--- tool error, that error is the pass signal — then (c) section 7 as its own
+-- 2/3/4/5/6a/6b/6c/6d as its own call — 6a and 6b are EXPECTED to come back as
+-- a tool error, that error is the pass signal — then (c) section 7 as its own
 -- final call regardless of how section 6 went, so cleanup always happens.
 -- =============================================================================
 
@@ -107,8 +107,8 @@ insert into profiles (username, clerk_user_id, display_name) values
 
 insert into competitions (name) values ('ZZ RLS Test Competition');
 
-insert into seasons (competition_id, name, is_current)
-select id, 'ZZ RLS Test Season', true from competitions where name = 'ZZ RLS Test Competition';
+insert into seasons (competition_id, name, provider_year, is_current)
+select id, 'ZZ RLS Test Season', 2025, true from competitions where name = 'ZZ RLS Test Competition';
 
 insert into teams (name) values ('ZZ RLS Test Team A'), ('ZZ RLS Test Team B');
 
@@ -171,6 +171,12 @@ select id, 'zzrlstest public post by alice' from profiles where username = 'zzrl
 
 insert into posts (author_profile_id, body)
 select id, 'zzrlstest public post by bob' from profiles where username = 'zzrlstest_bob';
+
+insert into xp_ledger (profile_id, amount, reason)
+select id, 100, 'zzrlstest xp' from profiles where username = 'zzrlstest_alice';
+
+insert into xp_ledger (profile_id, amount, reason)
+select id, 50, 'zzrlstest xp' from profiles where username = 'zzrlstest_bob';
 
 
 -- -----------------------------------------------------------------------------
@@ -429,6 +435,77 @@ select set_config('rls_test.alice_id', (select id::text from profiles where user
 set local role anon;
 insert into notifications (profile_id, type)
 values (current_setting('rls_test.alice_id')::uuid, 'zzrlstest_forged');
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6c. get_xp_total(uuid) self-scoping: it bypasses RLS as SECURITY DEFINER,
+-- so its own internal ownership check (p_profile_id = current_profile_id())
+-- is the only thing standing between "sum my own ledger" and "sum anyone's
+-- ledger by passing their id" — worth its own explicit check.
+-- -----------------------------------------------------------------------------
+
+begin;
+
+select
+  set_config('rls_test.alice_id', (select id::text from profiles where username = 'zzrlstest_alice'), true),
+  set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+select check_name, passed from (
+  select 'get_xp_total: alice gets her own real total (100)' as check_name,
+    public.get_xp_total(current_setting('rls_test.alice_id')::uuid) = 100 as passed
+  union all
+  select 'get_xp_total: alice querying bob''s id returns 0, not bob''s real total (50)',
+    public.get_xp_total(current_setting('rls_test.bob_id')::uuid) = 0
+) checks
+order by check_name;
+
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6d. mark_notifications_read(uuid[]) ownership scoping: replaced the old
+-- notifications_update_own RLS policy (RECOMMENDATIONS item 38), so this is
+-- the only remaining write path onto notifications.read_at for authenticated
+-- users — worth verifying directly rather than trusting the RLS-policy
+-- checks in section 5/6 to cover it, since it's a function, not a policy.
+-- -----------------------------------------------------------------------------
+
+begin;
+
+select set_config('rls_test.alice_notif_id',
+  (select n.id::text from notifications n join profiles p on p.id = n.profile_id
+     where p.username = 'zzrlstest_alice' and n.type = 'zzrlstest_marker'),
+  true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+
+select public.mark_notifications_read(array[current_setting('rls_test.alice_notif_id')::uuid]);
+
+select 'mark_notifications_read: bob calling it on alice''s notification id does not mark it read' as check_name,
+  (select read_at from notifications where id = current_setting('rls_test.alice_notif_id')::uuid) is null as passed;
+
+rollback;
+
+begin;
+
+select set_config('rls_test.alice_notif_id',
+  (select n.id::text from notifications n join profiles p on p.id = n.profile_id
+     where p.username = 'zzrlstest_alice' and n.type = 'zzrlstest_marker'),
+  true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+select public.mark_notifications_read(array[current_setting('rls_test.alice_notif_id')::uuid]);
+
+select 'mark_notifications_read: alice marking her own notification does set read_at' as check_name,
+  (select read_at from notifications where id = current_setting('rls_test.alice_notif_id')::uuid) is not null as passed;
+
 rollback;
 
 
