@@ -11,7 +11,18 @@ import { isAiConfigured } from "@/lib/ai/client";
 // setting reaches every `motion` component under it via context regardless
 // of DOM nesting depth. A second one here was redundant. RECOMMENDATIONS.md
 // item 74.
-export function AppShell({ children, signedIn }: { children: ReactNode; signedIn: boolean }) {
+export function AppShell({
+  children,
+  signedIn,
+  isAdmin,
+}: {
+  children: ReactNode;
+  signedIn: boolean;
+  /** Item 134: gates the /admin link in both nav surfaces. Computed
+   * server-side in (app)/layout.tsx via hasAdminAccess(profile.role) —
+   * always false for a guest, since there's no profile/role to check. */
+  isAdmin: boolean;
+}) {
   const aiConfigured = isAiConfigured();
 
   return (
@@ -25,7 +36,7 @@ export function AppShell({ children, signedIn }: { children: ReactNode; signedIn
         <span className="kivo-aurora-blob kivo-aurora-blob--violet" style={{ opacity: 0.12 }} />
       </div>
 
-      <DesktopSidebar aiConfigured={aiConfigured} />
+      <DesktopSidebar aiConfigured={aiConfigured} isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <OfflineBanner />
         <TopBar signedIn={signedIn} />
@@ -33,7 +44,7 @@ export function AppShell({ children, signedIn }: { children: ReactNode; signedIn
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
-      <MobileBottomNav aiConfigured={aiConfigured} />
+      <MobileBottomNav aiConfigured={aiConfigured} isAdmin={isAdmin} />
     </div>
   );
 }

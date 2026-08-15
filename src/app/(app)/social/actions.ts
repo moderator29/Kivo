@@ -10,6 +10,15 @@ import { fetchPostsPage, type PostListItem } from "./posts";
 
 const MAX_POST_LENGTH = 2000;
 
+// Item 141: create_post's own rate limit (5/60s below) only throttles
+// posting speed, not XP over a full day — someone posting every couple of
+// minutes all day would still farm unlimited XP. This is a second,
+// XP-specific check on the same rate_limit_events/checkRateLimit machinery,
+// keyed separately so it never blocks the post itself, only whether this one
+// awards XP: past the cap, checkRateLimit still records the attempt (so the
+// window keeps sliding) but posting keeps working with no XP.
+const MAX_XP_POSTS_PER_DAY = 10;
+
 export async function createPost(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!body || body.length > MAX_POST_LENGTH) {
@@ -39,7 +48,14 @@ export async function createPost(formData: FormData) {
 
   // awardBadge is a harmless no-op on repeat posts (unique constraint on
   // user_badges swallows the duplicate) — no need to check "is this their first."
-  await Promise.all([awardXp(profile.id, 2, "Posted in the community"), awardBadge(profile.id, "first_post")]);
+  // Item 141: XP itself is capped separately from the post succeeding — a
+  // user past today's XP cap keeps posting normally, they just stop earning
+  // XP for it until the 24h window rolls over.
+  const xpAllowance = await checkRateLimit(`user:${profile.id}`, "create_post_xp", MAX_XP_POSTS_PER_DAY, 60 * 60 * 24);
+  await Promise.all([
+    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community") : Promise.resolve(),
+    awardBadge(profile.id, "first_post"),
+  ]);
 
   // Real running total, not a separate counter — counts this user's actual
   // posts rows straight from the table that was just inserted into.

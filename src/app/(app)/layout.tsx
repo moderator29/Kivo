@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { getOrCreateProfile } from "@/lib/profile";
 import { isClerkConfigured } from "@/lib/clerk";
+import { hasAdminAccess } from "@/lib/admin";
 
 // Every route here renders differently for a guest vs a signed-in profile
 // (and, for a signed-in user, per-user data), so nothing under (app) is safe
@@ -27,5 +28,9 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
     redirect("/onboarding");
   }
 
-  return <AppShell signedIn={Boolean(profile)}>{children}</AppShell>;
+  return (
+    <AppShell signedIn={Boolean(profile)} isAdmin={hasAdminAccess(profile?.role)}>
+      {children}
+    </AppShell>
+  );
 }

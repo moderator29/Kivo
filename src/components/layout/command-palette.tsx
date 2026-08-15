@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Search, Shield, UserRound, Trophy, CornerDownLeft } from "lucide-react";
+import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft } from "lucide-react";
 import { searchPlatform, type SearchResult } from "@/app/(app)/search-actions";
 
 const TYPE_ICON = { team: Shield, player: UserRound, competition: Trophy } as const;
@@ -12,12 +20,49 @@ const TYPE_HREF = { team: "/teams", player: "/players", competition: "/leagues" 
 
 const LISTBOX_ID = "command-palette-listbox";
 
+// Item 128: an empty query used to be a dead end ("Type at least 2
+// characters to search") with nothing to click — these give a new user
+// (empty database or not) somewhere to go immediately instead of a second
+// dead end once they do type ("No matches"). Reuses the same three entity
+// types searchPlatform already covers plus Matches, the one other browse
+// surface a command palette user would reasonably reach for.
+const QUICK_LINKS = [
+  { label: "Teams", href: "/teams", icon: Shield },
+  { label: "Players", href: "/players", icon: UserRound },
+  { label: "Competitions", href: "/leagues", icon: Trophy },
+  { label: "Matches", href: "/matches", icon: CalendarDays },
+] as const;
+
+/**
+ * Item 127: the palette's own Ctrl/Cmd keydown handler already accepts either
+ * modifier (`e.metaKey || e.ctrlKey`), so only the displayed hint was ever
+ * Mac-only. `navigator.platform` doesn't change at runtime, so this is a
+ * one-shot read of an external value, not state React owns — the same
+ * `useSyncExternalStore` shape (and the same reasoning) as OfflineBanner's
+ * `navigator.onLine` read, with a no-op subscribe since there's nothing to
+ * listen for, and a fixed server snapshot since `navigator` doesn't exist
+ * during SSR.
+ */
+function subscribeToNothing() {
+  return () => {};
+}
+
+function getModifierLabelSnapshot(): string {
+  const platform = navigator.platform || navigator.userAgent || "";
+  return /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌘" : "Ctrl";
+}
+
+function getModifierLabelServerSnapshot(): string {
+  return "Ctrl";
+}
+
 function optionId(result: SearchResult): string {
   return `command-palette-option-${result.type}-${result.id}`;
 }
 
 export function CommandPalette() {
   const router = useRouter();
+  const modifierLabel = useSyncExternalStore(subscribeToNothing, getModifierLabelSnapshot, getModifierLabelServerSnapshot);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -124,6 +169,11 @@ export function CommandPalette() {
     close();
   }
 
+  function goTo(href: string) {
+    router.push(href);
+    close();
+  }
+
   function handleKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") {
       close();
@@ -157,8 +207,8 @@ export function CommandPalette() {
       >
         <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         <span className="min-w-0 flex-1 truncate text-foreground-subtle">Search teams, players, competitions…</span>
-        <kbd className="hidden rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-foreground-subtle sm:inline-block">
-          ⌘K
+        <kbd className="hidden rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-foreground-subtle sm:inline-block">
+          {modifierLabel}K
         </kbd>
       </button>
 
@@ -203,9 +253,27 @@ export function CommandPalette() {
 
               <div id={LISTBOX_ID} role="listbox" aria-label="Search results" className="max-h-80 overflow-y-auto p-2">
                 {query.trim().length < 2 ? (
-                  <p className="px-3 py-6 text-center text-xs text-foreground-subtle">
-                    Type at least 2 characters to search.
-                  </p>
+                  <div className="flex flex-col gap-3 px-1 py-3">
+                    <p className="px-2 text-center text-xs text-foreground-subtle">
+                      Type at least 2 characters to search, or jump straight to a section.
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5 px-1">
+                      {QUICK_LINKS.map((link) => {
+                        const Icon = link.icon;
+                        return (
+                          <button
+                            key={link.href}
+                            type="button"
+                            onClick={() => goTo(link.href)}
+                            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+                          >
+                            <Icon className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                            {link.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ) : pending ? (
                   <p className="px-3 py-6 text-center text-xs text-foreground-subtle">Searching…</p>
                 ) : results.length === 0 ? (

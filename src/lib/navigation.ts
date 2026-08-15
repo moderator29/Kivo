@@ -16,6 +16,7 @@ import {
   Award,
   CircleUserRound,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 
 export type NavStatus = "live" | "coming-soon";
@@ -139,6 +140,21 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "settings", label: "Settings", href: "/settings", icon: Settings, status: "live" },
   { id: "profile", label: "Profile", href: "/profile", icon: CircleUserRound, status: "live" },
 ];
+
+/**
+ * Not part of NAV_ITEMS: every entry there is guest-viewable and enumerated
+ * generically by the sidebar/mobile nav, but this one destination is gated on
+ * `hasAdminAccess(profile.role)`, not on `status`/coming-soon. desktop-sidebar.tsx
+ * and mobile-bottom-nav.tsx render it themselves behind an `isAdmin` prop
+ * computed server-side in (app)/layout.tsx. RECOMMENDATIONS.md item 134.
+ */
+export const ADMIN_NAV_ITEM: NavItem = {
+  id: "admin",
+  label: "Admin",
+  href: "/admin",
+  icon: ShieldCheck,
+  status: "live",
+};
 
 /**
  * Looks up a nav item by id, throwing a clear, named error immediately if
