@@ -75,6 +75,29 @@ export default async function HomePage() {
     : { data: null };
   const followedTeamIds = (followedTeamRows ?? []).map((f) => f.followed_id);
 
+  // RECOMMENDATIONS item 174: "Your matchday" — today's real fixtures
+  // (same date window as "Today" above) filtered down to the teams this
+  // profile actually follows plus their favourite_team_id, deduped. Distinct
+  // from "Today" (every fixture, no filter) and from "Your teams" below
+  // (upcoming fixtures for followed teams, not day-scoped) — this is the
+  // combination neither of those already covers: what's actually on today,
+  // for you specifically.
+  const matchdayTeamIds = [...new Set([...followedTeamIds, ...(profile?.favourite_team_id ? [profile.favourite_team_id] : [])])];
+
+  const { data: matchdayFixtures } = matchdayTeamIds.length
+    ? await supabase
+        .from("fixtures")
+        .select(
+          `id, kickoff_at, status, home_score, away_score,
+           home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
+           away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
+        )
+        .gte("kickoff_at", startOfDay.toISOString())
+        .lt("kickoff_at", endOfDay.toISOString())
+        .or(matchdayTeamIds.map((id) => `home_team_id.eq.${id},away_team_id.eq.${id}`).join(","))
+        .order("kickoff_at", { ascending: true })
+    : { data: null };
+
   const { data: yourTeamsFixtures } = followedTeamIds.length
     ? await supabase
         .from("fixtures")
@@ -138,6 +161,47 @@ export default async function HomePage() {
           </p>
         )}
       </FadeIn>
+
+      {/* RECOMMENDATIONS item 174: only rendered when there's actually
+          something to show it against — a profile with no followed/favourite
+          team just sees "Your teams" below invite them to follow one, so
+          this doesn't duplicate that empty state. */}
+      {matchdayTeamIds.length > 0 && (
+        <FadeIn delay={0.1} className="kivo-glass-brand rounded-2xl p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+              <Flame className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+              Your matchday
+            </h2>
+          </div>
+
+          {matchdayFixtures && matchdayFixtures.length > 0 ? (
+            <div className="mt-3 flex flex-col gap-2">
+              {matchdayFixtures.map((fixture, index) => {
+                const hasScore = fixture.home_score !== null && fixture.away_score !== null;
+                const live = fixture.status === "live" || fixture.status === "halftime";
+                return (
+                  <FixtureRow
+                    key={fixture.id}
+                    href={`/matches/${fixture.id}`}
+                    homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
+                    homeName={fixture.home_team?.name ?? "Home"}
+                    awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
+                    awayName={fixture.away_team?.name ?? "Away"}
+                    scoreLabel={hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
+                    live={live}
+                    index={index}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-foreground-muted">
+              None of your followed teams play today.
+            </p>
+          )}
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.12} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
