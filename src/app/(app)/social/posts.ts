@@ -42,47 +42,73 @@ export type PostListItem = {
 export async function fetchPostsPage(
   offset: number,
   viewerProfileId: string | null,
-  options?: { fixtureId?: string; limit?: number; followingOnly?: boolean },
+  options?: { fixtureId?: string; limit?: number; followingOnly?: boolean; postIds?: string[] },
 ): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
   const limit = options?.limit ?? SOCIAL_PAGE_SIZE;
   const supabase = createServerSupabaseClient();
 
-  // RECOMMENDATIONS item 175: `followed_type = 'user'` (the follow_target_type
-  // enum already supports it — see 0001) filtered to posts by the profiles the
-  // viewer actually follows. A signed-out viewer can't follow anyone, so this
-  // resolves to "nobody" rather than silently falling back to the full feed.
-  let followedAuthorIds: string[] | null = null;
-  if (options?.followingOnly) {
-    if (!viewerProfileId) return { error: null, posts: [], hasMore: false };
-    const { data: followRows } = await supabase
-      .from("follows")
-      .select("followed_id")
-      .eq("follower_profile_id", viewerProfileId)
-      .eq("followed_type", "user");
-    followedAuthorIds = (followRows ?? []).map((f) => f.followed_id);
-    // .in("author_profile_id", []) would send a malformed `in.()` filter to
-    // PostgREST — short-circuit instead of ever sending that.
-    if (followedAuthorIds.length === 0) return { error: null, posts: [], hasMore: false };
+  type PostRow = { id: string; body: string; created_at: string; author_profile_id: string };
+  let pageRows: PostRow[];
+  let hasMore = false;
+
+  if (options?.postIds) {
+    // RECOMMENDATIONS item 173: /saved passes an explicit, already-ordered,
+    // bounded set of post ids (most-recently-saved first) instead of a feed
+    // page — no offset/range pagination, no followingOnly/fixtureId
+    // filtering, just hydrate exactly these posts with the same joins every
+    // other caller gets.
+    if (options.postIds.length === 0) return { error: null, posts: [], hasMore: false };
+    const { data, error } = await supabase
+      .from("posts")
+      .select("id, body, created_at, author_profile_id")
+      .in("id", options.postIds);
+    if (error) {
+      console.error("Failed to load posts", error);
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+    }
+    const rowById = new Map((data ?? []).map((p) => [p.id, p]));
+    // .in() doesn't guarantee the result order matches the input array, so
+    // the caller's real ordering (by save recency) is restored here.
+    pageRows = options.postIds.map((id) => rowById.get(id)).filter((p): p is PostRow => !!p);
+  } else {
+    // RECOMMENDATIONS item 175: `followed_type = 'user'` (the
+    // follow_target_type enum already supports it — see 0001) filtered to
+    // posts by the profiles the viewer actually follows. A signed-out viewer
+    // can't follow anyone, so this resolves to "nobody" rather than silently
+    // falling back to the full feed.
+    let followedAuthorIds: string[] | null = null;
+    if (options?.followingOnly) {
+      if (!viewerProfileId) return { error: null, posts: [], hasMore: false };
+      const { data: followRows } = await supabase
+        .from("follows")
+        .select("followed_id")
+        .eq("follower_profile_id", viewerProfileId)
+        .eq("followed_type", "user");
+      followedAuthorIds = (followRows ?? []).map((f) => f.followed_id);
+      // .in("author_profile_id", []) would send a malformed `in.()` filter to
+      // PostgREST — short-circuit instead of ever sending that.
+      if (followedAuthorIds.length === 0) return { error: null, posts: [], hasMore: false };
+    }
+
+    let query = supabase
+      .from("posts")
+      .select("id, body, created_at, author_profile_id")
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit);
+
+    if (options?.fixtureId) query = query.eq("fixture_id", options.fixtureId);
+    if (followedAuthorIds) query = query.in("author_profile_id", followedAuthorIds);
+
+    const { data: rows, error } = await query;
+    if (error) {
+      console.error("Failed to load posts", error);
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+    }
+
+    const allRows = rows ?? [];
+    pageRows = allRows.slice(0, limit);
+    hasMore = allRows.length > limit;
   }
-
-  let query = supabase
-    .from("posts")
-    .select("id, body, created_at, author_profile_id")
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit);
-
-  if (options?.fixtureId) query = query.eq("fixture_id", options.fixtureId);
-  if (followedAuthorIds) query = query.in("author_profile_id", followedAuthorIds);
-
-  const { data: rows, error } = await query;
-  if (error) {
-    console.error("Failed to load posts", error);
-    return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
-  }
-
-  const allRows = rows ?? [];
-  const pageRows = allRows.slice(0, limit);
-  const hasMore = allRows.length > limit;
 
   const postIds = pageRows.map((p) => p.id);
   // profiles_select_own_or_admin restricts a plain select to the caller's own
