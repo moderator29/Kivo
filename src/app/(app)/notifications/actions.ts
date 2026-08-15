@@ -9,11 +9,12 @@ export async function markNotificationRead(notificationId: string) {
   if (!profile) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", notificationId)
-    .eq("profile_id", profile.id);
+  // Goes through the mark_notifications_read RPC rather than a raw
+  // `.update()` (RECOMMENDATIONS item 38) — notifications has no client-facing
+  // UPDATE policy any more, so a raw update would silently touch zero rows.
+  // The RPC only ever sets read_at, scoped server-side to the caller's own
+  // profile.
+  await supabase.rpc("mark_notifications_read", { p_notification_ids: [notificationId] });
   revalidatePath("/", "layout");
 }
 
@@ -22,11 +23,16 @@ export async function markAllNotificationsRead() {
   if (!profile) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase
+  const { data: unread } = await supabase
     .from("notifications")
-    .update({ read_at: new Date().toISOString() })
+    .select("id")
     .eq("profile_id", profile.id)
     .is("read_at", null);
+
+  const ids = (unread ?? []).map((n) => n.id);
+  if (ids.length > 0) {
+    await supabase.rpc("mark_notifications_read", { p_notification_ids: ids });
+  }
   revalidatePath("/", "layout");
 }
 

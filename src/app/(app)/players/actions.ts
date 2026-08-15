@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { positionGroup, type PositionGroup } from "@/app/(app)/fantasy/fantasy-rules";
+import { escapeLikePattern } from "@/lib/text";
 
 export type PlayerSearchResult = {
   id: string;
@@ -51,7 +52,7 @@ export async function searchPlayers(
     .order("full_name", { ascending: true });
 
   const trimmed = query.trim();
-  if (trimmed) request = request.ilike("full_name", `%${trimmed}%`);
+  if (trimmed) request = request.ilike("full_name", `%${escapeLikePattern(trimmed)}%`);
   if (teamId !== "All") request = request.eq("current_team_id", teamId);
   if (position !== "All") request = request.or(POSITION_ILIKE_FILTERS[position]);
 

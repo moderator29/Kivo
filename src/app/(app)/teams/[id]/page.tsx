@@ -12,6 +12,7 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { parseUuidParam } from "@/lib/params";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
@@ -120,7 +121,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function TeamProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parseUuidParam(rawId);
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 

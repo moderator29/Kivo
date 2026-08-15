@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { getOrCreateFantasyTeam, ensureFantasyPlayerPrices } from "@/lib/fantasy";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
+import { escapeLikePattern } from "@/lib/text";
 import {
   generateInviteCode,
   positionGroup,
@@ -17,6 +18,18 @@ import {
 
 const LEAGUE_NAME_MAX = 60;
 const INVITE_CODE_ATTEMPTS = 5;
+
+// The exact, fixed set of user-safe messages redeem_invite_code() raises or
+// returns by design (see supabase/migrations/0024_redeem_invite_code_durable_throttle.sql).
+// Anything else — a constraint violation, a column/type error, any other
+// unexpected failure — is an internal detail that must never reach the
+// client as-is (RECOMMENDATIONS item 41).
+const KNOWN_REDEEM_INVITE_CODE_ERRORS = new Set([
+  "You must be signed in to join a league.",
+  "You are doing that a bit too fast. Please wait a moment and try again.",
+  "Invalid invite code. Check the code and try again.",
+  "This league is full.",
+]);
 
 export async function createFantasyLeague(input: {
   name: string;
@@ -85,12 +98,20 @@ export async function joinFantasyLeague(inviteCode: string) {
   if (!code) return { error: "Enter an invite code." };
 
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase.rpc("redeem_invite_code", { p_invite_code: code });
+  const { data, error } = await supabase.rpc("redeem_invite_code", { p_invite_code: code });
 
-  if (error) {
-    // redeem_invite_code raises plain, user-safe messages by design — pass
-    // them straight through instead of a generic fallback.
-    return { error: error.message || "Couldn't join that league. Try again." };
+  // redeem_invite_code raises for "not signed in" / "too many attempts"
+  // (nothing written yet at that point, so aborting the transaction is
+  // safe) and returns a row with `error_message` set for "invalid code" /
+  // "league full" instead of raising (raising there would roll back the
+  // throttle attempt this same call just recorded — see the migration's
+  // comment). Either channel can carry one of a fixed, known set of
+  // user-safe messages; anything outside that set — a constraint violation,
+  // a column/type error, any other unexpected failure — is an internal
+  // detail that must never reach the client as-is.
+  const message = error ? error.message : (data?.[0]?.error_message ?? null);
+  if (message) {
+    return { error: KNOWN_REDEEM_INVITE_CODE_ERRORS.has(message) ? message : "Something went wrong. Try again." };
   }
 
   await awardBadge(profile.id, "fantasy_league_joined");
@@ -316,7 +337,7 @@ export async function searchFantasyPlayers(
     .order("full_name", { ascending: true });
 
   const trimmed = query.trim();
-  if (trimmed) request = request.ilike("full_name", `%${trimmed}%`);
+  if (trimmed) request = request.ilike("full_name", `%${escapeLikePattern(trimmed)}%`);
 
   // Mirrors positionGroup()'s free-text classification in fantasy-rules.ts
   // exactly, so the DB-level filter and the client-facing group never drift.

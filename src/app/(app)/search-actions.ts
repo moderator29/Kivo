@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { escapeLikePattern } from "@/lib/text";
 
 export type SearchResult = {
   type: "team" | "player" | "competition";
@@ -14,17 +15,6 @@ export type SearchResult = {
 
 const RESULTS_PER_CATEGORY = 5;
 const MAX_QUERY_LENGTH = 80;
-
-/**
- * Escapes ilike's special characters (%, _) and its escape character itself
- * (\) so a search term containing them is matched literally instead of
- * silently altering the pattern — e.g. a user searching for "50%" or
- * "under_18" shouldn't accidentally turn part of their own query into a
- * wildcard.
- */
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
-}
 
 /**
  * Powers the global command palette (⌘K). Searches the three entity tables
