@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { UserRound, Shield, Flag, Cake, Activity, ArrowLeftRight } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -9,8 +9,12 @@ import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
+import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { calculateAge, formatDate } from "@/lib/format";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
@@ -29,19 +33,6 @@ const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
 // A lineup row against a fixture in any of these statuses means the player has
 // actually taken the pitch — "scheduled" fixtures don't count as an appearance yet.
 const PLAYED_STATUSES = new Set(["live", "halftime", "finished"]);
-
-function calculateAge(dateOfBirth: string): number {
-  const dob = new Date(dateOfBirth);
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const monthDiff = now.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age--;
-  return age;
-}
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-}
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -64,11 +55,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing] = await Promise.all([
+  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, transfersLastSyncedAt] = await Promise.all([
     supabase
       .from("players")
       .select(
-        `id, full_name, known_as, date_of_birth, nationality, position, current_team_id,
+        `id, full_name, known_as, date_of_birth, nationality, position, photo_url, current_team_id,
          current_team:teams(id, name, short_name, crest_url)`,
       )
       .eq("id", id)
@@ -99,6 +90,9 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           .eq("followed_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 60: transfer sync writes entity_type 'transfer'
+    // (see syncPlayerTransfers in src/lib/football/sync-transfers.ts).
+    getLastSyncedAt(["transfer"]),
   ]);
 
   if (!player) notFound();
@@ -119,13 +113,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <TrackView type="player" id={player.id} name={displayName} imageUrl={null} />
+      <TrackView type="player" id={player.id} name={displayName} imageUrl={player.photo_url} />
       <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
           <FadeIn delay={0} className="shrink-0">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/5">
-              <UserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-            </div>
+            <PlayerAvatar photoUrl={player.photo_url} name={displayName} size={64} />
           </FadeIn>
           <FadeIn delay={0.05} className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-semibold text-foreground">{displayName}</h1>
@@ -208,10 +200,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       </FadeIn>
 
       <FadeIn delay={0.3} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-          Transfer history
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Transfer history
+          </h2>
+          <LastSyncedNote timestamp={transfersLastSyncedAt} />
+        </div>
         {transfers && transfers.length > 0 ? (
           <div className="flex flex-col gap-2">
             {transfers.map((transfer) => (
@@ -266,7 +261,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No transfer history synced for this player yet.
             {canManageFootballData(profile?.role) && (
-              <InlineSyncButton label="Sync transfers" action={triggerPlayerTransfersSync.bind(null, player.id)} />
+              <InlineSyncButton
+                label="Sync transfers"
+                action={triggerPlayerTransfersSync.bind(null, player.id)}
+                hint="Needs this player's team squad synced first, so this player has a provider mapping."
+              />
             )}
           </div>
         )}

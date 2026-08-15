@@ -1,12 +1,14 @@
-import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Activity, ShieldCheck } from "lucide-react";
+import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Activity, ShieldCheck, ListChecks, Clock3, ArrowLeftRight } from "lucide-react";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
+import { staggerDelay } from "@/lib/stagger";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
 import { ScorePredictionsButton } from "@/components/admin/score-predictions-button";
 import { ScoreFantasyGameweekButton } from "@/components/admin/score-fantasy-gameweek-button";
 import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
+import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers-button";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
@@ -28,6 +30,56 @@ function formatTimestamp(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * RECOMMENDATIONS.md item 61: the sync dependency chain (fixtures unlock
+ * everything else) is otherwise only discoverable by reading error strings
+ * like "Sync its competition's fixtures first" (sync-squads.ts) or "Sync its
+ * fixtures first" (sync-match-details.ts's syncStandings) after a sync
+ * already failed. Documented here as an ordered checklist instead, matching
+ * exactly what each sync function actually requires — see the "Requires"
+ * column's cross-reference to the real guard in each src/lib/football/*.ts
+ * file.
+ */
+const SYNC_ORDER_STEPS: { title: string; where: string; requires: string }[] = [
+  {
+    title: "1. Sync today's fixtures",
+    where: '"Sync now" above',
+    requires: "Nothing — this is the entry point. Creates KIVO's competitions, teams, venues and fixtures, each mapped to their provider id.",
+  },
+  {
+    title: "2. Sync a team's squad",
+    where: "that team's profile page",
+    requires: "Step 1 first, for a fixture involving that team — a team with no provider mapping yet can't be squad-synced (sync-squads.ts).",
+  },
+  {
+    title: "3. Sync a season's standings",
+    where: "that competition's league page",
+    requires: "Step 1 first, for a fixture in that competition — standings need the competition's provider mapping (sync-match-details.ts).",
+  },
+  {
+    title: "4. Sync a player's transfer history",
+    where: "that player's profile page",
+    requires: "Step 2 first, for that player's team — a player only gets a provider mapping via a squad sync (sync-transfers.ts).",
+  },
+  {
+    title: "5. Sync a fixture's lineups, events, and stats",
+    where: "that fixture's Match Centre",
+    requires: "Step 1 first, for that fixture. A side with no squad synced yet has its lineup entries skipped, not auto-synced, unless squad auto-sync is opted into on the fixture's own sync control (RECOMMENDATIONS.md item 59) — that's an extra provider call per unseen team, so it's off by default.",
+  },
+];
+
+/** RECOMMENDATIONS.md item 62: getFootballDataProvider() only ever runs inside
+ * these admin-triggered sync actions (never a public page's render path — see
+ * src/lib/football/index.ts and its only callers), so a 429 from API-Football
+ * surfaces here, not on a public page. classifyHttpError() in
+ * api-football-request.ts already writes an explicit "daily quota exhausted"
+ * message into error_message; this just recognizes that text to show a calmer,
+ * plain-language summary above the raw technical line instead of only red
+ * "failed" styling. */
+function isQuotaExhaustedMessage(message: string): boolean {
+  return message.includes("quota exhausted");
 }
 
 export default async function DataHealthPage() {
@@ -96,6 +148,23 @@ export default async function DataHealthPage() {
       .is("points_awarded", null);
     unscoredPredictions = count ?? 0;
   }
+
+  // RECOMMENDATIONS.md item 64: transfers is public-read, so a plain client is
+  // enough here (unlike unscoredPredictions above, which needs owner-only RLS
+  // bypassed). Two separate head-count queries rather than one OR'd query so the
+  // number shown is honestly "rows this button can help", not conflated with rows
+  // that are unresolved for some other reason.
+  const { count: unresolvedFromCount } = await supabase
+    .from("transfers")
+    .select("id", { count: "exact", head: true })
+    .is("from_team_id", null)
+    .not("from_team_provider_id", "is", null);
+  const { count: unresolvedToCount } = await supabase
+    .from("transfers")
+    .select("id", { count: "exact", head: true })
+    .is("to_team_id", null)
+    .not("to_team_provider_id", "is", null);
+  const unresolvedTransferSides = (unresolvedFromCount ?? 0) + (unresolvedToCount ?? 0);
 
   // fantasy_gameweeks is public-read, but fantasy_points is owner-only RLS
   // (fantasy_points_select_own) — a plain client can't see whether other
@@ -170,6 +239,28 @@ export default async function DataHealthPage() {
         </div>
       </FadeIn>
 
+      <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <ListChecks className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Sync order
+        </h2>
+        <p className="text-xs text-foreground-subtle">
+          Every other sync depends on fixtures having run first. Doing them out of order fails with a &ldquo;no
+          provider mapping yet&rdquo; error instead of syncing anything.
+        </p>
+        <ol className="flex flex-col gap-2.5">
+          {SYNC_ORDER_STEPS.map((step) => (
+            <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-white/5 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-foreground">{step.title}</span>
+                <span className="shrink-0 text-[10px] text-foreground-subtle">{step.where}</span>
+              </div>
+              <p className="text-[11px] text-foreground-subtle">{step.requires}</p>
+            </li>
+          ))}
+        </ol>
+      </FadeIn>
+
       <FadeIn delay={0.1} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
         <div className="flex items-center gap-3">
           <div
@@ -196,6 +287,38 @@ export default async function DataHealthPage() {
         <ScorePredictionsButton />
       </FadeIn>
 
+      {/* RECOMMENDATIONS.md item 64: resolveTeamId in sync-transfers.ts leaves
+          from_team_id/to_team_id null for a club KIVO hadn't synced yet at the time —
+          this surfaces how many transfer sides are still sitting like that, and the
+          zero-quota reconciliation pass that can revisit them now that more teams may
+          have been synced since. */}
+      <FadeIn delay={0.105} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              unresolvedTransferSides > 0 ? "bg-warning/15" : "bg-white/5"
+            }`}
+          >
+            <ArrowLeftRight
+              className={`h-5 w-5 ${unresolvedTransferSides > 0 ? "text-warning" : "text-foreground-subtle"}`}
+              strokeWidth={1.75}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {unresolvedTransferSides > 0
+                ? `${unresolvedTransferSides} transfer side${unresolvedTransferSides === 1 ? "" : "s"} showing "Club not synced"`
+                : "All synced transfers have resolved clubs"}
+            </p>
+            <p className="text-xs text-foreground-subtle">
+              Re-checks provider_mappings for clubs that weren&apos;t synced yet when their transfer was recorded. No
+              provider quota spent.
+            </p>
+          </div>
+        </div>
+        <ReconcileTransfersButton />
+      </FadeIn>
+
       <div className="flex flex-col gap-3">
         <FadeIn delay={0.11} className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Fantasy scoring</h2>
@@ -219,7 +342,7 @@ export default async function DataHealthPage() {
               return (
                 <FadeIn
                   key={gw.id}
-                  delay={Math.min(0.12 + index * 0.03, 0.3)}
+                  delay={0.12 + staggerDelay(index, 0.03)}
                   className="kivo-glass flex items-center justify-between gap-3 rounded-xl p-4"
                 >
                   <div>
@@ -302,7 +425,7 @@ export default async function DataHealthPage() {
               return (
                 <FadeIn
                   key={run.id}
-                  delay={Math.min(0.2 + index * 0.05, 0.5)}
+                  delay={0.2 + staggerDelay(index, 0.05)}
                   className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-white/[0.03]"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -324,7 +447,18 @@ export default async function DataHealthPage() {
                       {style.label}
                     </span>
                   </div>
-                  {run.error_message && (
+                  {run.error_message && isQuotaExhaustedMessage(run.error_message) && (
+                    // RECOMMENDATIONS.md item 62: no public page calls the provider
+                    // live (see the doc comment on isQuotaExhaustedMessage above), so
+                    // this admin-facing summary is where "today's data is capped
+                    // until tomorrow" actually needs to land.
+                    <p className="flex items-center gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+                      <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                      Today&apos;s data is capped until tomorrow. API-Football&apos;s free daily quota is used up; sync
+                      will work again after it resets.
+                    </p>
+                  )}
+                  {run.error_message && !isQuotaExhaustedMessage(run.error_message) && (
                     <p className="rounded-lg bg-critical/5 px-3 py-2 text-xs text-critical">{run.error_message}</p>
                   )}
                 </FadeIn>

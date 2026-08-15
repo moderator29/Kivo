@@ -7,9 +7,11 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
+import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -55,7 +57,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
 
   if (!fixture) notFound();
 
-  const [{ data: events }, { data: lineups }, { data: stats }, { data: standings }, { posts: roomPosts }] = await Promise.all([
+  const [{ data: events }, { data: lineups }, { data: stats }, { data: standings }, { posts: roomPosts }, fixturesLastSyncedAt, detailsLastSyncedAt] = await Promise.all([
     supabase
       .from("fixture_events")
       .select(
@@ -85,6 +87,12 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     // Same shared query as /social and its own "Load more" — just scoped to
     // this fixture's posts. See app/(app)/social/posts.ts.
     fetchPostsPage(0, profile?.id ?? null, { fixtureId: id, limit: 50 }),
+    // RECOMMENDATIONS.md item 60: "last synced" freshness for this fixture's core
+    // score/status (entity_type 'fixture', written by syncTodayFixtures) and,
+    // separately, its lineups/events/stats (entity_type 'lineup', written by
+    // syncFixtureDetails) — see getLastSyncedAt() and MatchCentreTabs.
+    getLastSyncedAt(["fixture"]),
+    getLastSyncedAt(["lineup"]),
   ]);
 
   const statsForTab = (stats ?? []).map((s) => ({
@@ -157,6 +165,8 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           )}
         </div>
 
+        <LastSyncedNote timestamp={fixturesLastSyncedAt} label="Score and status synced" />
+
         <div className="flex items-center justify-between gap-3">
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={40} />
@@ -205,6 +215,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           signedIn={Boolean(profile)}
           canSyncDetails={canManageFootballData(profile?.role)}
           syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
+          detailsLastSyncedAt={detailsLastSyncedAt}
           events={(events ?? []).map((e) => ({
             id: e.id,
             eventType: e.event_type,

@@ -1,12 +1,14 @@
 "use client";
 
-import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, useRef, type KeyboardEvent } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Shield } from "lucide-react";
 import Image from "next/image";
 import { EVENT_LABEL } from "@/lib/football/event-labels";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { staggerDelay } from "@/lib/stagger";
+import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-sync-control";
+import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 
 type MatchEvent = {
@@ -64,7 +66,9 @@ type StandingsRow = {
   position: number | null;
 };
 
-type SyncDetailsAction = () => Promise<{ error: string | null; recordsProcessed?: number }>;
+/** `autoSyncMissingSquads` (RECOMMENDATIONS.md item 59) is read at click time from
+ * FixtureDetailsSyncControl's own checkbox state, not stored here. */
+type SyncDetailsAction = (autoSyncMissingSquads: boolean) => Promise<{ error: string | null; recordsProcessed?: number }>;
 
 type MatchCentreTabsProps = {
   fixtureId: string;
@@ -78,6 +82,10 @@ type MatchCentreTabsProps = {
   signedIn: boolean;
   canSyncDetails: boolean;
   syncDetailsAction: SyncDetailsAction;
+  /** Most recent successful/partial sync_runs timestamp for this fixture's
+   * lineups/events/stats (entity_type 'lineup') — see getLastSyncedAt() in
+   * src/lib/football/last-synced.ts. RECOMMENDATIONS.md item 60. */
+  detailsLastSyncedAt: string | null;
 };
 
 const TABS = ["Details", "Stats", "Lineups", "Standings", "Room"] as const;
@@ -91,31 +99,17 @@ function tabFromSlug(slug: string | null): Tab {
   return TABS.find((tab) => tabSlug(tab) === slug) ?? TABS[0];
 }
 
-function EmptyState({ message, action }: { message: string; action?: ReactNode }) {
+function EmptyState({ message }: { message: string }) {
   return (
     <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
       {message}
-      {action}
     </div>
   );
 }
 
-function DetailsTab({
-  events,
-  canSyncDetails,
-  syncDetailsAction,
-}: {
-  events: MatchEvent[];
-  canSyncDetails: boolean;
-  syncDetailsAction: SyncDetailsAction;
-}) {
+function DetailsTab({ events }: { events: MatchEvent[] }) {
   if (events.length === 0) {
-    return (
-      <EmptyState
-        message="No match events synced yet. The timeline appears once this fixture's details have been synced."
-        action={canSyncDetails && <InlineSyncButton label="Sync match details" action={syncDetailsAction} />}
-      />
-    );
+    return <EmptyState message="No match events synced yet. The timeline appears once this fixture's details have been synced." />;
   }
   return (
     <div className="flex flex-col gap-2">
@@ -124,7 +118,7 @@ function DetailsTab({
           key={event.id}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
           className="kivo-glass flex items-center gap-3 rounded-xl p-3"
         >
           <span className="w-10 shrink-0 text-right text-xs font-semibold text-foreground-subtle">
@@ -149,22 +143,13 @@ function LineupsTab({
   homeTeamId,
   awayTeamId,
   lineups,
-  canSyncDetails,
-  syncDetailsAction,
 }: {
   homeTeamId: string;
   awayTeamId: string;
   lineups: LineupEntry[];
-  canSyncDetails: boolean;
-  syncDetailsAction: SyncDetailsAction;
 }) {
   if (lineups.length === 0) {
-    return (
-      <EmptyState
-        message="Lineups haven't been synced yet for this fixture."
-        action={canSyncDetails && <InlineSyncButton label="Sync match details" action={syncDetailsAction} />}
-      />
-    );
+    return <EmptyState message="Lineups haven't been synced yet for this fixture." />;
   }
 
   const renderTeam = (teamId: string) => {
@@ -181,7 +166,7 @@ function LineupsTab({
                 key={p.playerId || p.playerName}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-center gap-2 text-sm text-foreground"
               >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
@@ -199,7 +184,7 @@ function LineupsTab({
                 key={p.playerId || p.playerName}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(0.1 + index * 0.03, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.2, delay: 0.1 + staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-center gap-2 text-sm text-foreground-muted"
               >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
@@ -238,25 +223,16 @@ function StatsTab({
   stats,
   homeTeamId,
   awayTeamId,
-  canSyncDetails,
-  syncDetailsAction,
 }: {
   stats: TeamStats[];
   homeTeamId: string;
   awayTeamId: string;
-  canSyncDetails: boolean;
-  syncDetailsAction: SyncDetailsAction;
 }) {
   const home = stats.find((s) => s.teamId === homeTeamId);
   const away = stats.find((s) => s.teamId === awayTeamId);
 
   if (!home && !away) {
-    return (
-      <EmptyState
-        message="Stats haven't been synced yet for this fixture."
-        action={canSyncDetails && <InlineSyncButton label="Sync match details" action={syncDetailsAction} />}
-      />
-    );
+    return <EmptyState message="Stats haven't been synced yet for this fixture." />;
   }
 
   const rows = STAT_ROWS.filter((row) => home?.[row.key] != null || away?.[row.key] != null);
@@ -315,7 +291,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
             key={row.teamId}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
             className={`grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs ${
               highlighted ? "bg-kivo-cyan/5" : ""
             }`}
@@ -377,6 +353,7 @@ function MatchCentreTabsInner({
   signedIn,
   canSyncDetails,
   syncDetailsAction,
+  detailsLastSyncedAt,
 }: MatchCentreTabsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -447,6 +424,20 @@ function MatchCentreTabsInner({
         ))}
       </div>
 
+      {/* Persistent freshness + sync control for the three tabs backed by
+          syncFixtureDetails (RECOMMENDATIONS.md item 60) — lives above the tab
+          panel itself (not buried in each tab's empty state) so an admin can
+          re-sync a fixture that already has partial data (e.g. mid-match, to
+          pull fresher stats), not just an entirely-unsynced one. Standings and
+          Room aren't backed by this action, so the bar only shows for the
+          other three. */}
+      {(active === "Details" || active === "Stats" || active === "Lineups") && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <LastSyncedNote timestamp={detailsLastSyncedAt} label="Match details synced" />
+          {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         <motion.div
           key={active}
@@ -459,27 +450,9 @@ function MatchCentreTabsInner({
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
-          {active === "Details" && (
-            <DetailsTab events={events} canSyncDetails={canSyncDetails} syncDetailsAction={syncDetailsAction} />
-          )}
-          {active === "Stats" && (
-            <StatsTab
-              stats={stats}
-              homeTeamId={homeTeamId}
-              awayTeamId={awayTeamId}
-              canSyncDetails={canSyncDetails}
-              syncDetailsAction={syncDetailsAction}
-            />
-          )}
-          {active === "Lineups" && (
-            <LineupsTab
-              homeTeamId={homeTeamId}
-              awayTeamId={awayTeamId}
-              lineups={lineups}
-              canSyncDetails={canSyncDetails}
-              syncDetailsAction={syncDetailsAction}
-            />
-          )}
+          {active === "Details" && <DetailsTab events={events} />}
+          {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+          {active === "Lineups" && <LineupsTab homeTeamId={homeTeamId} awayTeamId={awayTeamId} lineups={lineups} />}
           {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Room" && <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} />}
         </motion.div>
