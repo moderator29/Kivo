@@ -1802,6 +1802,29 @@ export type Database = {
         Args: { p_exclude_profile_id?: string; p_username: string }
         Returns: boolean
       }
+      join_public_fantasy_league: {
+        Args: { p_league_id: string }
+        Returns: {
+          id: string
+          max_teams: number
+          name: string
+          season_id: string
+        }[]
+      }
+      list_public_fantasy_leagues: {
+        Args: { p_limit?: number; p_offset?: number; p_search_pattern?: string }
+        Returns: {
+          competition_name: string
+          competition_short_name: string
+          created_at: string
+          id: string
+          max_teams: number
+          name: string
+          season_id: string
+          season_name: string
+          team_count: number
+        }[]
+      }
       mark_notifications_read: {
         Args: { p_notification_ids: string[] }
         Returns: undefined
@@ -1817,8 +1840,6 @@ export type Database = {
           season_id: string
         }[]
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       upsert_competition_with_mapping: {
         Args: {
           p_name: string

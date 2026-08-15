@@ -7,6 +7,7 @@ import { getOrCreateFantasyTeam, ensureFantasyPlayerPrices } from "@/lib/fantasy
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
 import { escapeLikePattern } from "@/lib/text";
+import { PUBLIC_FANTASY_LEAGUES_PAGE_SIZE } from "./browse/constants";
 import {
   generateInviteCode,
   positionGroup,
@@ -385,4 +386,90 @@ export async function searchFantasyPlayers(
     .sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
 
   return { error: null, players: results };
+}
+
+export type PublicFantasyLeagueListItem = {
+  id: string;
+  name: string;
+  seasonId: string;
+  seasonLabel: string;
+  maxTeams: number;
+  teamCount: number;
+  isFull: boolean;
+};
+
+/**
+ * Browse surface for public leagues (RECOMMENDATIONS item 43). Goes through
+ * list_public_fantasy_leagues rather than a plain `.from("fantasy_leagues")`
+ * select — fantasy_leagues is owner-only RLS (fantasy_leagues_all_own), so a
+ * base-table query can never see another creator's league, public or not.
+ * Requests PAGE_SIZE + 1 rows so `hasMore` can be read directly off the
+ * response, same trick loadMoreLeagues (src/app/(app)/leagues/actions.ts)
+ * uses.
+ */
+export async function listPublicFantasyLeagues(
+  search: string,
+  offset: number,
+): Promise<{ error: string | null; leagues: PublicFantasyLeagueListItem[]; hasMore: boolean }> {
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in.", leagues: [], hasMore: false };
+
+  const trimmed = search.trim();
+  const searchPattern = trimmed ? `%${escapeLikePattern(trimmed)}%` : undefined;
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("list_public_fantasy_leagues", {
+    p_search_pattern: searchPattern,
+    p_limit: PUBLIC_FANTASY_LEAGUES_PAGE_SIZE + 1,
+    p_offset: offset,
+  });
+
+  if (error) {
+    console.error("Failed to list public fantasy leagues", error);
+    return { error: "Couldn't load public leagues. Try again.", leagues: [], hasMore: false };
+  }
+
+  const rows = data ?? [];
+  const leagues = rows.slice(0, PUBLIC_FANTASY_LEAGUES_PAGE_SIZE).map((row) => ({
+    id: row.id,
+    name: row.name,
+    seasonId: row.season_id,
+    seasonLabel: [row.competition_short_name ?? row.competition_name, row.season_name].filter(Boolean).join(" · ") || row.season_name,
+    maxTeams: row.max_teams,
+    teamCount: Number(row.team_count),
+    isFull: Number(row.team_count) >= row.max_teams,
+  }));
+
+  return { error: null, leagues, hasMore: rows.length > PUBLIC_FANTASY_LEAGUES_PAGE_SIZE };
+}
+
+/**
+ * Joins a public league with no invite code, the discovery counterpart to
+ * joinFantasyLeague above (RECOMMENDATIONS item 43). join_public_fantasy_league
+ * re-checks is_private = false itself server-side, so this can't be used to
+ * slip into a private league even if its id were somehow known — the code
+ * requirement for private leagues is enforced in the RPC, not just by what
+ * this page happens to show.
+ */
+export async function joinPublicFantasyLeague(leagueId: string) {
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in to join a league." };
+
+  // Same bucket as joinFantasyLeague — both create a fantasy_teams row via
+  // the same kind of RPC call, so they share one abuse budget.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "join_fantasy_league", 5, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase.rpc("join_public_fantasy_league", { p_league_id: leagueId });
+
+  if (error) {
+    return { error: error.message || "Couldn't join that league. Try again." };
+  }
+
+  await awardBadge(profile.id, "fantasy_league_joined");
+
+  revalidatePath("/fantasy");
+  revalidatePath("/fantasy/browse");
+  return { error: null };
 }

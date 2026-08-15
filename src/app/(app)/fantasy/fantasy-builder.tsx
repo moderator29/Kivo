@@ -18,6 +18,7 @@ import {
   ArrowDownToLine,
   Trash2,
   History,
+  Compass,
 } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -300,6 +301,14 @@ export function FantasyBuilder({
             ))}
           </div>
         )}
+
+        <Link
+          href="/fantasy/browse"
+          className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-kivo-cyan"
+        >
+          <Compass className="h-3.5 w-3.5" strokeWidth={1.75} />
+          Browse public leagues
+        </Link>
       </FadeIn>
 
       <FadeIn
