@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X, ArrowLeftRight } from "lucide-react";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { searchPlayers } from "@/app/(app)/players/actions";
 
 export type ComparePlayerOption = {
@@ -99,7 +100,17 @@ function PlayerSlot({
           {open && query.trim().length >= 2 && (
             <div className="kivo-glass absolute top-full z-20 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl p-1.5">
               {searching && visibleResults.length === 0 ? (
-                <p className="px-3 py-4 text-center text-xs text-foreground-subtle">Searching…</p>
+                <div className="flex flex-col gap-1" aria-label="Searching" role="status">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-lg p-2">
+                      <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-2.5 w-20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : visibleResults.length === 0 ? (
                 <p className="px-3 py-4 text-center text-xs text-foreground-subtle">No players found.</p>
               ) : (

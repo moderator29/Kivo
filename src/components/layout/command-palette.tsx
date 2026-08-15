@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft } from "lucide-react";
 import { searchPlatform, type SearchResult } from "@/app/(app)/search-actions";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const TYPE_ICON = { team: Shield, player: UserRound, competition: Trophy } as const;
 const TYPE_LABEL = { team: "Teams", player: "Players", competition: "Competitions" } as const;
@@ -275,7 +276,17 @@ export function CommandPalette() {
                     </div>
                   </div>
                 ) : pending ? (
-                  <p className="px-3 py-6 text-center text-xs text-foreground-subtle">Searching…</p>
+                  <div className="flex flex-col gap-1 p-1" aria-label="Searching" role="status">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                        <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                          <Skeleton className="h-3 w-36" />
+                          <Skeleton className="h-2.5 w-20" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : results.length === 0 ? (
                   <p className="px-3 py-6 text-center text-xs text-foreground-subtle">
                     No matches for &quot;{query}&quot;.
