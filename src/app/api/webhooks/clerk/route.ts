@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { Webhook } from "svix";
 import type { WebhookEvent } from "@clerk/nextjs/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/log";
 
 export async function POST(req: Request) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
       // Duplicate-key is expected on webhook retries (Clerk does not guarantee
       // at-most-once delivery) — the profile already exists, nothing to do.
       if (error && error.code !== "23505") {
-        console.error("Failed to create profile from Clerk webhook", error);
+        logError("clerk-webhook.user.created", error, { clerkUserId: user.id });
         return new Response("Failed to create profile", { status: 500 });
       }
       break;
@@ -59,6 +60,15 @@ export async function POST(req: Request) {
     case "user.updated": {
       const user = event.data;
 
+      // Unconditional overwrite is safe today (RECOMMENDATIONS item 203,
+      // re-checked 2026-08-15): profiles.display_name/avatar_url have no
+      // KIVO-side editor anywhere in the app -- settings' ProfileDetailsEditor
+      // only writes bio/country (src/app/(app)/settings/actions.ts), so there
+      // is no user-side edit for a Clerk sync to revert yet. If display_name
+      // or avatar_url ever gets its own editor, this needs to stop
+      // unconditionally overwriting an already-set value (e.g. only fill on
+      // first creation, or gate on a has_custom_display_name-style flag) --
+      // re-audit this handler before shipping that editor, not after.
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -68,7 +78,7 @@ export async function POST(req: Request) {
         .eq("clerk_user_id", user.id);
 
       if (error) {
-        console.error("Failed to update profile from Clerk webhook", error);
+        logError("clerk-webhook.user.updated", error, { clerkUserId: user.id });
         return new Response("Failed to update profile", { status: 500 });
       }
       break;
@@ -77,7 +87,7 @@ export async function POST(req: Request) {
       if (event.data.id) {
         const { error } = await supabase.from("profiles").delete().eq("clerk_user_id", event.data.id);
         if (error) {
-          console.error("Failed to delete profile from Clerk webhook", error);
+          logError("clerk-webhook.user.deleted", error, { clerkUserId: event.data.id });
           return new Response("Failed to delete profile", { status: 500 });
         }
       }
