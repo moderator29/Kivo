@@ -21,9 +21,9 @@
   --kivo-info: #38bdf8;
   --kivo-achievement: #f5c451;
 
-  --kivo-glass: rgba(255, 255, 255, 0.04);
-  --kivo-glass-border: rgba(255, 255, 255, 0.08);
-  --kivo-glass-hover: rgba(255, 255, 255, 0.07);
+  --kivo-glass: rgba(255, 255, 255, 0.05);
+  --kivo-glass-border: rgba(255, 255, 255, 0.06);
+  --kivo-glass-hover: rgba(255, 255, 255, 0.08);
 
   --background: var(--kivo-obsidian);
   --background-secondary: var(--kivo-navy-deep);

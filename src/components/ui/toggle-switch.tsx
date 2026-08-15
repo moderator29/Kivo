@@ -19,12 +19,12 @@ export function ToggleSwitch({
       aria-label={label}
       disabled={disabled}
       onClick={onChange}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40 ${
-        checked ? "kivo-gradient-prime" : "kivo-glass-sharp"
+      className={`relative h-[30px] w-[50px] shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40 ${
+        checked ? "kivo-gradient-prime" : "bg-white/10"
       }`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-kivo-white shadow-sm transition-transform duration-200 ease-out ${
+        className={`absolute top-[3px] left-[3px] h-6 w-6 rounded-full bg-kivo-white transition-transform duration-200 ease-out ${
           checked ? "translate-x-5" : "translate-x-0"
         }`}
       />

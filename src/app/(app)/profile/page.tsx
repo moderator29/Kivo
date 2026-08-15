@@ -76,7 +76,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass flex items-center gap-4 rounded-2xl p-5">
+      <FadeIn className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
         <div className="kivo-gradient-prime flex h-16 w-16 shrink-0 items-center justify-center rounded-full">
           <CircleUserRound className="h-8 w-8 text-kivo-white" strokeWidth={1.5} />
         </div>
@@ -113,7 +113,7 @@ export default async function ProfilePage() {
         />
       </div>
 
-      <FadeIn delay={0.2} className="kivo-glass rounded-2xl p-5">
+      <FadeIn delay={0.2} className="kivo-glass rounded-3xl p-6">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             <Star className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
@@ -140,7 +140,7 @@ export default async function ProfilePage() {
         )}
       </FadeIn>
 
-      <FadeIn delay={0.25} className="kivo-glass rounded-2xl p-5">
+      <FadeIn delay={0.25} className="kivo-glass rounded-3xl p-6">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             <Bookmark className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />

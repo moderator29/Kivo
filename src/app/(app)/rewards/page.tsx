@@ -68,13 +68,13 @@ export default async function RewardsPage() {
         <p className="text-sm text-foreground-muted">XP and badges earned across KIVO.</p>
       </FadeIn>
 
-      <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
+      <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-3xl p-6">
         <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
           <Flame className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
         </div>
         <div>
           {totalXp > 0 ? (
-            <span className="text-2xl font-semibold text-foreground">
+            <span className="text-3xl font-bold tracking-tight text-foreground">
               {/* Real value, always in the DOM and correct even if the
                   counter animation below doesn't render for some reason
                   (no CSS support, reduced motion, etc). */}
@@ -93,9 +93,9 @@ export default async function RewardsPage() {
               <span className="sr-only">{totalXp}</span> XP
             </span>
           ) : (
-            <span className="text-2xl font-semibold text-foreground">0 XP</span>
+            <span className="text-3xl font-bold tracking-tight text-foreground">0 XP</span>
           )}
-          <p className="text-xs text-foreground-subtle">Earned from onboarding, posts and community activity</p>
+          <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, posts and community activity</p>
         </div>
       </FadeIn>
 
@@ -157,7 +157,7 @@ export default async function RewardsPage() {
             No XP earned yet. Complete onboarding or post in the community to get started.
           </div>
         ) : (
-          <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+          <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-3xl">
             {xpHistory.map((entry, index) => (
               <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div>

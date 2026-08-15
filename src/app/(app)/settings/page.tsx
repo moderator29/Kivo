@@ -40,49 +40,49 @@ export default async function SettingsPage() {
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
       </FadeIn>
 
-      <FadeIn delay={0.08} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Account</h2>
-
-        <div className="flex flex-col gap-1">
+      <FadeIn delay={0.08} className="kivo-glass flex flex-col rounded-3xl p-5">
+        <div className="flex flex-col gap-1.5 py-4">
           <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
             <Mail className="h-3 w-3" strokeWidth={2} />
             Email
           </span>
-          <span className="text-sm text-foreground">{email ?? "No email on file"}</span>
+          <span className="text-sm font-semibold text-foreground">{email ?? "No email on file"}</span>
         </div>
 
-        <div className="flex flex-col gap-1 border-t border-white/5 pt-3">
+        <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
           <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
             <AtSign className="h-3 w-3" strokeWidth={2} />
             Username
           </span>
           <UsernameEditor username={profile.username} />
         </div>
+
+        <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
+          <span className="text-xs text-foreground-subtle">Profile details</span>
+          <ProfileDetailsEditor bio={profile.bio} country={profile.country} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+          <span className="text-xs text-foreground-subtle">Notifications</span>
+          <NotificationPreferencesPanel initial={notificationPreferences} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/5 pt-5">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold text-foreground">Session</span>
+            <span className="text-xs text-foreground-subtle">Sign out of KIVO on this device.</span>
+          </div>
+          <SignOutButton redirectUrl="/">
+            <button className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95">
+              <LogOut className="h-4 w-4" strokeWidth={2} />
+              Sign out
+            </button>
+          </SignOutButton>
+        </div>
       </FadeIn>
 
-      <FadeIn delay={0.16} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Profile</h2>
-        <ProfileDetailsEditor bio={profile.bio} country={profile.country} />
-      </FadeIn>
-
-      <FadeIn delay={0.24} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Notifications</h2>
-        <NotificationPreferencesPanel initial={notificationPreferences} />
-      </FadeIn>
-
-      <FadeIn delay={0.32} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Session</h2>
-        <p className="text-sm text-foreground-muted">Sign out of KIVO on this device.</p>
-        <SignOutButton redirectUrl="/">
-          <button className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95">
-            <LogOut className="h-4 w-4" strokeWidth={2} />
-            Sign out
-          </button>
-        </SignOutButton>
-      </FadeIn>
-
-      <FadeIn delay={0.4} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Danger zone</h2>
+      <FadeIn delay={0.32} className="kivo-glass flex flex-col gap-4 rounded-3xl border border-critical/20 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-critical">Danger zone</h2>
         <DeleteAccountSection />
       </FadeIn>
     </div>

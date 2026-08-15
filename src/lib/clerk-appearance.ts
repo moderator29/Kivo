@@ -24,7 +24,7 @@ export const kivoClerkAppearance: ComponentProps<typeof SignIn>["appearance"] = 
     colorDanger: "#ff3b4a",
     colorSuccess: "#22c55e",
     colorBorder: "rgba(255, 255, 255, 0.12)",
-    borderRadius: "0.75rem",
+    borderRadius: "1.25rem",
     fontFamily: "inherit",
   },
   elements: {
