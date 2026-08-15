@@ -1,44 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  UserRound,
-  Crown,
-  Star,
-  Search,
-  X,
-  Copy,
-  Check,
-  Clock,
-  Plus,
-  ArrowUpFromLine,
-  ArrowDownToLine,
-  Trash2,
-  History,
-  Compass,
-} from "lucide-react";
+import { Copy, Check, Clock, Plus, History, Compass } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
-import { TeamCrest } from "@/components/ui/team-crest";
-import { useFocusTrap } from "@/hooks/use-focus-trap";
-import { setGameweekRoster, setFantasyCaptain, searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
+import { setGameweekRoster, setFantasyCaptain, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
 import { HowScoringWorks } from "./how-scoring-works";
+import { StatTile, PitchLines, PlayerToken } from "./pitch";
+import { PlayerActionSheet } from "./player-action-sheet";
+import { PlayerPicker } from "./player-picker";
+import { DeadlineCountdown } from "./deadline-countdown";
 import {
   POSITION_GROUPS,
   SQUAD_RULES,
   SQUAD_SIZE,
   FANTASY_BUDGET_CAP,
   formatFantasyPrice,
-  formatDeadlineCountdown,
   validateRoster,
   type PositionGroup,
   type PositionGroupOrOther,
 } from "./fantasy-rules";
 
-type RosterEntry = {
+export type RosterEntry = {
   playerId: string;
   name: string;
   position: string | null;
@@ -101,13 +86,39 @@ function rosterSignature(list: RosterEntry[]) {
     .join(",");
 }
 
-function useNow(intervalMs: number) {
-  const [now, setNow] = useState(() => new Date());
+/**
+ * Whether `deadlineAt` has already passed, updated exactly once — right when
+ * the deadline itself arrives — via a single `setTimeout` rather than a
+ * recurring interval (RECOMMENDATIONS item 83). `locked` gates real
+ * interactive state (Save, captaincy, the picker) so it still needs to be
+ * known here at the FantasyBuilder level, unlike the countdown *text*, which
+ * is cosmetic-only and now lives in the DeadlineCountdown leaf below.
+ */
+function computeDeadlinePassed(deadlineAt: string | null): boolean {
+  return !deadlineAt || new Date(deadlineAt) <= new Date();
+}
+
+function useDeadlinePassed(deadlineAt: string | null): boolean {
+  const [passed, setPassed] = useState(() => computeDeadlinePassed(deadlineAt));
+
+  // React's documented "adjusting state when a prop changes" pattern (same
+  // one NotificationBell already uses) — recompute synchronously during
+  // render, not in an effect, whenever `deadlineAt` itself changes (a
+  // different gameweek/team selected).
+  const [prevDeadlineAt, setPrevDeadlineAt] = useState(deadlineAt);
+  if (deadlineAt !== prevDeadlineAt) {
+    setPrevDeadlineAt(deadlineAt);
+    setPassed(computeDeadlinePassed(deadlineAt));
+  }
+
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
+    if (!deadlineAt || passed) return;
+    const msRemaining = Math.max(0, new Date(deadlineAt).getTime() - Date.now());
+    const id = setTimeout(() => setPassed(true), msRemaining);
+    return () => clearTimeout(id);
+  }, [deadlineAt, passed]);
+
+  return passed;
 }
 
 export function FantasyBuilder({
@@ -133,8 +144,8 @@ export function FantasyBuilder({
   const [saving, startSaving] = useTransition();
   const [actionPending, startAction] = useTransition();
 
-  const now = useNow(30_000);
-  const locked = gameweek ? new Date(gameweek.deadlineAt) <= now : true;
+  const deadlinePassed = useDeadlinePassed(gameweek?.deadlineAt ?? null);
+  const locked = gameweek ? deadlinePassed : true;
 
   const dirty = rosterSignature(pending) !== rosterSignature(savedRoster);
   const validation = useMemo(
@@ -380,7 +391,11 @@ export function FantasyBuilder({
             </FadeIn>
           )}
           <FadeIn delay={0.05} className="grid grid-cols-3 gap-3">
-            <StatTile label={`Gameweek ${gameweek.number}`} value={formatDeadlineCountdown(gameweek.deadlineAt, now)} valueClass={locked ? "text-critical" : "text-foreground"} />
+            <StatTile
+              label={`Gameweek ${gameweek.number}`}
+              value={<DeadlineCountdown deadlineAt={gameweek.deadlineAt} />}
+              valueClass={locked ? "text-critical" : "text-foreground"}
+            />
             <StatTile
               label="Budget left"
               value={formatFantasyPrice(remaining)}
@@ -540,372 +555,5 @@ export function FantasyBuilder({
         locked={locked}
       />
     </div>
-  );
-}
-
-function StatTile({ label, value, valueClass, caption }: { label: string; value: string; valueClass: string; caption?: string }) {
-  return (
-    <div className="kivo-glass flex flex-col gap-1 rounded-2xl p-3">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">{label}</span>
-      <span className={`text-lg font-semibold tabular-nums ${valueClass}`}>{value}</span>
-      {caption && <span className="text-[10px] leading-snug text-foreground-subtle">{caption}</span>}
-    </div>
-  );
-}
-
-function PitchLines() {
-  return (
-    <svg
-      className="pointer-events-none absolute inset-4 opacity-[0.07]"
-      viewBox="0 0 100 140"
-      preserveAspectRatio="none"
-      aria-hidden
-    >
-      <rect x="1" y="1" width="98" height="138" fill="none" stroke="currentColor" strokeWidth="1" />
-      <line x1="1" y1="70" x2="99" y2="70" stroke="currentColor" strokeWidth="1" />
-      <circle cx="50" cy="70" r="16" fill="none" stroke="currentColor" strokeWidth="1" />
-      <rect x="20" y="1" width="60" height="20" fill="none" stroke="currentColor" strokeWidth="1" />
-      <rect x="20" y="119" width="60" height="20" fill="none" stroke="currentColor" strokeWidth="1" />
-    </svg>
-  );
-}
-
-function PlayerToken({ player, onClick, compact = false }: { player: RosterEntry; onClick: () => void; compact?: boolean }) {
-  const size = compact ? 40 : 48;
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.94 }}
-      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className="group flex flex-col items-center gap-1"
-      style={{ width: compact ? 64 : 76 }}
-    >
-      <div className="relative">
-        <div
-          className="flex items-center justify-center rounded-full border border-white/10 bg-white/[0.06] transition group-hover:bg-white/10"
-          style={{ width: size, height: size }}
-        >
-          <UserRound className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
-        </div>
-        {player.teamCrestUrl && (
-          <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-kivo-obsidian ring-1 ring-white/10">
-            <Image src={player.teamCrestUrl} alt="" width={12} height={12} className="object-contain" />
-          </div>
-        )}
-        <AnimatePresence>
-          {player.isCaptain && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 500, damping: 22 }}
-              className="kivo-gradient-victory absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-kivo-white ring-2 ring-kivo-obsidian"
-            >
-              C
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {player.isViceCaptain && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 500, damping: 22 }}
-              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-achievement/40 bg-achievement/15 text-[10px] font-bold text-achievement ring-2 ring-kivo-obsidian"
-            >
-              V
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      <span className="w-full truncate text-center text-[11px] font-medium text-foreground">{player.name}</span>
-      <span className="text-[10px] font-semibold tabular-nums text-foreground-subtle">{formatFantasyPrice(player.price)}</span>
-    </motion.button>
-  );
-}
-
-function PlayerActionSheet({
-  player,
-  isSaved,
-  locked,
-  pending,
-  onClose,
-  onToggleStarting,
-  onRemove,
-  onMakeCaptain,
-  onMakeViceCaptain,
-}: {
-  player: RosterEntry | null;
-  isSaved: boolean;
-  locked: boolean;
-  pending: boolean;
-  onClose: () => void;
-  onToggleStarting: () => void;
-  onRemove: () => void;
-  onMakeCaptain: () => void;
-  onMakeViceCaptain: () => void;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(player !== null, panelRef, onClose);
-
-  return (
-    <AnimatePresence>
-      {player && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-40 flex flex-col justify-end"
-        >
-          <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-          <motion.div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${player.name} actions`}
-            initial={{ y: 24, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 24, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3 rounded-2xl p-4"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <TeamCrest crestUrl={player.teamCrestUrl} name={player.teamName ?? ""} size={28} />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
-                  <p className="truncate text-xs text-foreground-subtle">
-                    {[player.position, player.teamName].filter(Boolean).join(" · ") || "-"} · {formatFantasyPrice(player.price)}
-                  </p>
-                </div>
-              </div>
-              <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5">
-                <X className="h-4 w-4" strokeWidth={1.75} />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <ActionRow
-                icon={player.isStarting ? ArrowDownToLine : ArrowUpFromLine}
-                label={player.isStarting ? "Move to bench" : "Move to starting XI"}
-                onClick={() => {
-                  onToggleStarting();
-                  onClose();
-                }}
-              />
-              <ActionRow
-                icon={Crown}
-                label={player.isCaptain ? "Already captain" : "Make captain"}
-                disabled={!isSaved || locked || pending || player.isCaptain}
-                hint={!isSaved ? "Save your squad first" : undefined}
-                onClick={onMakeCaptain}
-              />
-              <ActionRow
-                icon={Star}
-                label={player.isViceCaptain ? "Already vice-captain" : "Make vice-captain"}
-                disabled={!isSaved || locked || pending || player.isViceCaptain || player.isCaptain}
-                hint={!isSaved ? "Save your squad first" : undefined}
-                onClick={onMakeViceCaptain}
-              />
-              <ActionRow icon={Trash2} label="Remove from squad" tone="critical" onClick={onRemove} />
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-function ActionRow({
-  icon: Icon,
-  label,
-  hint,
-  disabled,
-  tone = "default",
-  onClick,
-}: {
-  icon: typeof Crown;
-  label: string;
-  hint?: string;
-  disabled?: boolean;
-  tone?: "default" | "critical";
-  onClick: () => void;
-}) {
-  return (
-    <motion.button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      whileTap={disabled ? undefined : { scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-40 ${
-        tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-white/5"
-      }`}
-    >
-      <span className="flex items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-        {label}
-      </span>
-      {hint && <span className="text-[10px] text-foreground-subtle">{hint}</span>}
-    </motion.button>
-  );
-}
-
-function PlayerPicker({
-  open,
-  seasonId,
-  filter,
-  onFilterChange,
-  onClose,
-  onAdd,
-  squadPlayerIds,
-  squadCounts,
-  remaining,
-  locked,
-}: {
-  open: boolean;
-  seasonId: string;
-  filter: PositionGroup | "All";
-  onFilterChange: (f: PositionGroup | "All") => void;
-  onClose: () => void;
-  onAdd: (p: FantasyPlayerSearchResult) => void;
-  squadPlayerIds: string[];
-  squadCounts: Record<PositionGroup, number>;
-  remaining: number;
-  locked: boolean;
-}) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<FantasyPlayerSearchResult[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [searching, startSearching] = useTransition();
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(open, panelRef, onClose);
-
-  useEffect(() => {
-    if (!open) return;
-    const timeout = setTimeout(() => {
-      startSearching(async () => {
-        const result = await searchFantasyPlayers(seasonId, query, filter);
-        setError(result.error);
-        setResults(result.players);
-      });
-    }, 250);
-    return () => clearTimeout(timeout);
-  }, [open, query, filter, seasonId]);
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-40 flex flex-col justify-end"
-        >
-          <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-          <motion.div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="player-picker-title"
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 36 }}
-            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex max-h-[75vh] flex-col gap-3 rounded-2xl p-4"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="player-picker-title" className="text-sm font-semibold text-foreground">Add a player</h2>
-              <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5">
-                <X className="h-4 w-4" strokeWidth={1.75} />
-              </button>
-            </div>
-
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search players…"
-                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {(["All", ...POSITION_GROUPS] as const).map((group) => (
-                <button
-                  key={group}
-                  type="button"
-                  onClick={() => onFilterChange(group)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                    filter === group ? "kivo-gradient-victory text-kivo-white" : "border border-white/10 text-foreground-muted hover:bg-white/5"
-                  }`}
-                >
-                  {group}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {locked ? (
-                <p className="py-8 text-center text-xs text-foreground-subtle">This gameweek is locked. Changes are closed.</p>
-              ) : error ? (
-                <p className="py-8 text-center text-xs text-critical">{error}</p>
-              ) : searching && results.length === 0 ? (
-                <p className="py-8 text-center text-xs text-foreground-subtle">Searching…</p>
-              ) : results.length === 0 ? (
-                <p className="py-8 text-center text-xs text-foreground-subtle">
-                  No players synced yet. The picker fills in once KIVO&apos;s football data sync has run.
-                </p>
-              ) : (
-                <div className="flex flex-col divide-y divide-white/5">
-                  {results.map((p) => {
-                    const already = squadPlayerIds.includes(p.id);
-                    const group = p.positionGroup;
-                    const groupFull = group !== "Other" && squadCounts[group] >= SQUAD_RULES[group];
-                    const overBudget = p.price > remaining + 1e-9;
-                    const disabled = already || locked || groupFull || overBudget || group === "Other";
-                    return (
-                      <div key={p.id} className="flex items-center gap-3 py-2.5">
-                        <TeamCrest crestUrl={p.teamCrestUrl} name={p.teamName ?? ""} size={26} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm text-foreground">{p.name}</p>
-                          <p className="truncate text-[11px] text-foreground-subtle">
-                            {[p.position, p.teamName].filter(Boolean).join(" · ") || "-"}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">{formatFantasyPrice(p.price)}</span>
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => onAdd(p)}
-                          title={already ? "Already in your squad" : groupFull ? `${group} slots are full` : overBudget ? "Over budget" : undefined}
-                          className="flex shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-40"
-                        >
-                          {already ? (
-                            <>
-                              <Check className="h-3 w-3" strokeWidth={2} /> Added
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-3 w-3" strokeWidth={2} /> Add
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
   );
 }

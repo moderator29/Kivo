@@ -8,6 +8,15 @@ import { awardBadge } from "@/lib/rewards";
 
 type FollowTargetType = "team" | "player" | "competition";
 
+// Maps a follow target to the one detail page that shows its own follow
+// state (RECOMMENDATIONS item 81) — "competition" rows live under /leagues,
+// not /competitions, matching leagues/[id]/page.tsx's route.
+const TARGET_DETAIL_PATH: Record<FollowTargetType, string> = {
+  team: "/teams",
+  player: "/players",
+  competition: "/leagues",
+};
+
 export async function toggleFollow(targetType: FollowTargetType, targetId: string, currentlyFollowing: boolean) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in to follow.", following: currentlyFollowing };
@@ -48,6 +57,12 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
     }
   }
 
-  revalidatePath("/", "layout");
+  // Only the pages that actually read follow state: the target's own detail
+  // page, and the two profile surfaces that show follow counts/lists. Was
+  // revalidatePath("/", "layout"), which dropped the entire app's cache for
+  // one like or one follow (RECOMMENDATIONS item 81).
+  revalidatePath(`${TARGET_DETAIL_PATH[targetType]}/${targetId}`);
+  revalidatePath("/profile");
+  revalidatePath("/profile/following");
   return { error: null, following: !currentlyFollowing };
 }

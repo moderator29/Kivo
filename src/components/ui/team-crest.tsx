@@ -31,6 +31,13 @@ export function TeamCrest({
         alt={name ?? ""}
         width={size}
         height={size}
+        // Crests render at 20-56px everywhere this component is used — never
+        // large enough to benefit from Next's responsive multi-size
+        // optimization, so the optimizer's per-URL fetch/resize/cache round
+        // trip on first render of every new club is pure overhead
+        // (RECOMMENDATIONS item 86). Serve the provider's already-small
+        // original directly instead.
+        unoptimized
         className="shrink-0 object-contain"
         style={{ width: size, height: size }}
       />

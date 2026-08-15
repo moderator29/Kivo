@@ -15,7 +15,14 @@ export async function markNotificationRead(notificationId: string) {
   // The RPC only ever sets read_at, scoped server-side to the caller's own
   // profile.
   await supabase.rpc("mark_notifications_read", { p_notification_ids: [notificationId] });
-  revalidatePath("/", "layout");
+  // Only /notifications actually re-renders server-side from this write —
+  // NotificationBell (rendered in every page's shared layout) already
+  // reflects reads instantly via its own optimistic state and re-syncs the
+  // badge count on tab focus via getUnreadNotificationCount(), not through a
+  // server re-render. Was revalidatePath("/", "layout"), which dropped the
+  // entire app's cache for marking one notification read (RECOMMENDATIONS
+  // item 81).
+  revalidatePath("/notifications");
 }
 
 export async function markAllNotificationsRead() {
@@ -33,7 +40,8 @@ export async function markAllNotificationsRead() {
   if (ids.length > 0) {
     await supabase.rpc("mark_notifications_read", { p_notification_ids: ids });
   }
-  revalidatePath("/", "layout");
+  // See the comment in markNotificationRead above — same scoping fix.
+  revalidatePath("/notifications");
 }
 
 /**
