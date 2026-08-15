@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/log";
 import type { Database } from "@/lib/supabase/types";
 
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -59,27 +60,40 @@ export async function getLastSyncedAt(entityTypes: EntityType[]): Promise<string
  * the row (no error text, no provider name, no run id).
  */
 export async function getTransparencyFreshness(): Promise<{ lastSyncedAt: string | null; quotaRemaining: number | null }> {
-  const service = createServiceRoleSupabaseClient();
-  const [{ data: lastRun }, { data: quotaRun }] = await Promise.all([
-    service
-      .from("sync_runs")
-      .select("last_synced_at")
-      .in("status", ["success", "partial"])
-      .not("last_synced_at", "is", null)
-      .order("last_synced_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    service
-      .from("sync_runs")
-      .select("provider_quota_remaining")
-      .not("provider_quota_remaining", "is", null)
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  // /transparency is guest-viewable — unlike Admin's Data Health, nothing
+  // here can gate on a role check before reaching this call. A
+  // `SUPABASE_SERVICE_ROLE_KEY` construction failure (missing env var) or
+  // any other unexpected error from this privileged-but-narrow read must
+  // never surface as a hard crash for an ordinary visitor; degrading to "not
+  // yet reported" is the same honest-empty-state the page already renders
+  // for a fresh install with no sync history at all, so this reuses that
+  // existing UI path rather than needing a new one.
+  try {
+    const service = createServiceRoleSupabaseClient();
+    const [{ data: lastRun }, { data: quotaRun }] = await Promise.all([
+      service
+        .from("sync_runs")
+        .select("last_synced_at")
+        .in("status", ["success", "partial"])
+        .not("last_synced_at", "is", null)
+        .order("last_synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      service
+        .from("sync_runs")
+        .select("provider_quota_remaining")
+        .not("provider_quota_remaining", "is", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-  return {
-    lastSyncedAt: lastRun?.last_synced_at ?? null,
-    quotaRemaining: quotaRun?.provider_quota_remaining ?? null,
-  };
+    return {
+      lastSyncedAt: lastRun?.last_synced_at ?? null,
+      quotaRemaining: quotaRun?.provider_quota_remaining ?? null,
+    };
+  } catch (error) {
+    logError("transparency.getTransparencyFreshness", error);
+    return { lastSyncedAt: null, quotaRemaining: null };
+  }
 }
