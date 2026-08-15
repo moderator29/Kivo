@@ -1680,6 +1680,7 @@ export type Database = {
           last_synced_at: string | null
           provider: string
           provider_quota_remaining: number | null
+          raw_response_sample: Json | null
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
@@ -1693,6 +1694,7 @@ export type Database = {
           last_synced_at?: string | null
           provider: string
           provider_quota_remaining?: number | null
+          raw_response_sample?: Json | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1706,6 +1708,7 @@ export type Database = {
           last_synced_at?: string | null
           provider?: string
           provider_quota_remaining?: number | null
+          raw_response_sample?: Json | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]

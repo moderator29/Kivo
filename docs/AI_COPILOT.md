@@ -77,3 +77,46 @@ up to the `follows` query's own limit of 20).
 
 These are logged in `RECOMMENDATIONS.md` rather than built here, per this
 pass's scope.
+
+## What this pass added: entity-scoped grounding, provenance, disclosure
+
+**Items 184/185 — fixture/team/player-scoped entry points.** `buildGroundingContext`
+now takes an optional second argument, `focus: GroundingFocus | null`
+(`{ type: "fixture" | "team" | "player", id }`). Real entry points —
+`src/components/ai/ask-ai-link.tsx` — appear on Match Centre, team pages and
+player pages, deep-linking to `/ai?ctx=<type>&id=<id>`.
+`src/app/(app)/ai/page.tsx` resolves that query string into a `GroundingFocus`
+server-side (an unrecognized `ctx` or malformed `id` just falls back to no
+focus, never a hard error) and threads it through the very first
+`buildGroundingContext` call, so the deep-linked entity is real, verified
+context from the first turn — not a hint the model has to go looking for.
+The client (`chat.tsx`) then resends the same focus on every subsequent turn
+of that session (a dismissible chip lets the user drop it), since focus is
+kept as client state rather than persisted against the `ai_conversations`
+row — a deliberate, small trade-off logged in RECOMMENDATIONS.md item 185
+rather than growing the schema for a UI-only concern.
+
+Fetching for a focused entity reuses the exact same engines the rest of this
+file already calls (`buildMatchInsights`, `computeTeamForm`,
+`computePlayerForm`) — nothing new is computed, only which entity it's
+computed for changes. See `buildFocusFacts` in `grounding.ts`.
+
+**Item 188 — provenance chips.** The summary this file builds is now two
+explicitly labelled sections instead of one flat list: "VERIFIED KIVO DATA"
+(raw facts synced from the provider) and "KIVO-CALCULATED" (Form
+Engine/Match Intelligence derived stats — real, not fabricated, but computed
+rather than a raw provider fact). The chat route's system prompt instructs
+the model to prefix a sentence citing either section with a literal inline
+tag (`[[KIVO-VERIFIED]]` / `[[KIVO-CALCULATED]]`); `chat.tsx` turns a tag
+into a small visible chip and degrades honestly to plain text on any turn
+the model doesn't use one — nothing is fabricated either way, a missing chip
+just means the model didn't tag that sentence.
+
+**Item 189 — "what KIVO knows right now" disclosure panel.** A
+collapsed-by-default panel in `chat.tsx`, toggled from the header, shows
+`grounding.summary` **verbatim** — the literal string handed to the model,
+not a separately hand-built summary that could quietly drift from what's
+actually grounding the conversation — plus a freshness line reusing
+`getTransparencyFreshness()` (`src/lib/football/last-synced.ts`, the same
+helper `/transparency` already uses) for "last provider sync" and "quota
+remaining today", rather than re-deriving that logic.

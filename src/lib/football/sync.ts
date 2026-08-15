@@ -1,10 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/types";
+import type { Database, Json } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import type { FixtureStatus, NormalizedFixture, NormalizedTeam } from "./types";
 import { notifyFixtureStatusChange } from "./match-notifications";
+import { getSyncedCompetitionProviderIds } from "./competitions-config";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -391,9 +392,34 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
         // a rate-limited or otherwise non-OK response still updates this via
         // ApiFootballError.quotaRemaining (see api-football-request.ts).
         provider_quota_remaining: provider.getQuotaRemaining(),
+        // RECOMMENDATIONS.md item 65: the raw response sample is most
+        // valuable on exactly this path — a hard getFixturesByDate failure
+        // is the case an admin most needs to see what the provider actually
+        // sent back.
+        raw_response_sample: provider.getLastRawResponseSample() as Json | null,
       })
       .eq("id", syncRun.id);
     return { status: "failed", recordsProcessed: 0, error: message };
+  }
+
+  // RECOMMENDATIONS.md item 28: scope the whole run to configured
+  // competitions, if any are configured — see competitions-config.ts for why
+  // this filters the already-fetched response rather than issuing one
+  // provider request per league, and why "unset" means "no filter" rather
+  // than a KIVO-invented default league list. Filtering here, before any of
+  // the mapping/upsert work below, is what keeps competitions/teams/venues
+  // outside the configured set from ever being written at all — not just
+  // hidden from the UI afterwards.
+  const syncedCompetitionIds = getSyncedCompetitionProviderIds();
+  const fixturesBeforeScoping = fixtures.length;
+  if (syncedCompetitionIds) {
+    fixtures = fixtures.filter((f) => syncedCompetitionIds.has(f.competitionProviderId));
+  }
+  const scopedOutCount = fixturesBeforeScoping - fixtures.length;
+  if (scopedOutCount > 0) {
+    console.info(
+      `Football sync: scoped out ${scopedOutCount}/${fixturesBeforeScoping} fixtures outside FOOTBALL_SYNC_COMPETITION_IDS`,
+    );
   }
 
   // RECOMMENDATIONS.md item 27: resolve every distinct competition/team/venue
@@ -494,6 +520,10 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
       // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
       // not an estimate — see ApiFootballProvider.getQuotaRemaining().
       provider_quota_remaining: provider.getQuotaRemaining(),
+      // RECOMMENDATIONS.md item 65: written on every finish, not only a hard
+      // failure, so an admin can inspect "what did the provider actually
+      // send back" on request for a run that otherwise succeeded.
+      raw_response_sample: provider.getLastRawResponseSample() as Json | null,
     })
     .eq("id", syncRun.id);
 

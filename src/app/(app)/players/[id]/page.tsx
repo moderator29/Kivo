@@ -11,6 +11,7 @@ import { FollowButton } from "@/components/ui/follow-button";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
@@ -175,6 +176,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             Compare with another player
           </Link>
+        </FadeIn>
+        {/* RECOMMENDATIONS.md items 184/185: real, player-scoped AI grounding
+            entry point — see ask-ai-link.tsx. */}
+        <FadeIn delay={0.2}>
+          <AskAiLink ctx="player" id={player.id} label={`Ask AI about ${displayName}`} />
         </FadeIn>
       </div>
 

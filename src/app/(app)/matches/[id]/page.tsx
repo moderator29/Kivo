@@ -8,6 +8,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
@@ -268,6 +269,11 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             )}
           </FadeIn>
         </div>
+
+        {/* RECOMMENDATIONS.md items 184/185: real, fixture-scoped AI
+            grounding entry point — deep-links into /ai with this exact
+            fixture pre-loaded as context, see ask-ai-link.tsx. */}
+        <AskAiLink ctx="fixture" id={fixture.id} label="Ask AI about this match" />
       </FadeIn>
 
       {/* RECOMMENDATIONS.md item 170: only shown once the match is actually

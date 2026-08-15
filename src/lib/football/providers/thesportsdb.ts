@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import { TheSportsDbError, requestWithRetry } from "./thesportsdb-request";
 import { mapEvent, toIntOrZero, toTheSportsDbSeasonString, type TheSportsDbEvent } from "./thesportsdb-normalizers";
+import { buildRawResponseSample, type RawResponseSample } from "../raw-response-sample";
 
 /**
  * TheSportsDB v1 adapter — a second, config-selectable `FootballDataProvider`
@@ -135,13 +136,32 @@ export class TheSportsDbProvider implements FootballDataProvider {
     return null;
   }
 
+  /** RECOMMENDATIONS.md item 65 — see raw-response-sample.ts and this
+   * provider's `status: null` caveat on the success path (thesportsdb-
+   * request.ts's requestWithRetry returns only the parsed body, not the
+   * Response, on success). */
+  private lastRawResponseSample: RawResponseSample | null = null;
+
+  getLastRawResponseSample(): RawResponseSample | null {
+    return this.lastRawResponseSample;
+  }
+
   private async request<T>(endpointPath: string, revalidateSeconds: number): Promise<T> {
     const url = `${BASE_URL}/${this.apiKey}${endpointPath}`;
-    return requestWithRetry<T>({
-      path: endpointPath,
-      url,
-      fetchImpl: (input, init) => fetch(input, { ...init, next: { revalidate: revalidateSeconds } }),
-    });
+    try {
+      const json = await requestWithRetry<T>({
+        path: endpointPath,
+        url,
+        fetchImpl: (input, init) => fetch(input, { ...init, next: { revalidate: revalidateSeconds } }),
+      });
+      this.lastRawResponseSample = buildRawResponseSample(endpointPath, null, json);
+      return json;
+    } catch (err) {
+      if (err instanceof TheSportsDbError) {
+        this.lastRawResponseSample = buildRawResponseSample(endpointPath, err.status, { error: err.message, kind: err.kind });
+      }
+      throw err;
+    }
   }
 
   async getFixturesByDate(date: string): Promise<NormalizedFixture[]> {

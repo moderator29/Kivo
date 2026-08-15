@@ -266,6 +266,12 @@ export class MockFootballProvider implements FootballDataProvider {
     return null;
   }
 
+  /** RECOMMENDATIONS.md item 65: no real upstream response ever exists to
+   * sample — null, honestly, same rationale as getQuotaRemaining above. */
+  getLastRawResponseSample(): unknown | null {
+    return null;
+  }
+
   async getFixturesByDate(): Promise<NormalizedFixture[]> {
     return MOCK_FIXTURES;
   }

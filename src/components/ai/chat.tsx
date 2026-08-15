@@ -3,13 +3,59 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
-import { motion } from "motion/react";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info } from "lucide-react";
 import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
 import { cn } from "@/lib/utils";
-import { formatClockTime } from "@/lib/format";
+import { formatClockTime, timeAgo } from "@/lib/format";
 import { ConversationHistoryPanel } from "@/components/ai/conversation-history";
 import { loadConversationMessages, renameConversation, deleteConversation, type ConversationSummary } from "@/app/(app)/ai/actions";
+
+/** RECOMMENDATIONS.md items 184/185: mirrors `GroundingFocus` in
+ * `src/lib/ai/grounding.ts` — kept as a plain local type (not imported) since
+ * that module is `server-only` and this is a client component. */
+type ChatFocus = { type: "fixture" | "team" | "player"; id: string } | null;
+
+/** RECOMMENDATIONS.md item 188: the exact literal tags the system prompt
+ * (`/api/ai/chat/route.ts`) instructs the model to prefix its own claims
+ * with — kept in sync with that prompt text by convention, not by a shared
+ * constant, since one lives in a server-only route and the other in a
+ * client component. */
+const PROVENANCE_VERIFIED = "[[KIVO-VERIFIED]]";
+const PROVENANCE_CALCULATED = "[[KIVO-CALCULATED]]";
+const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\])/g;
+
+/** Turns an assistant reply's inline provenance tags into small visible
+ * chips instead of raw bracket text — degrades honestly if the model never
+ * emits a tag on a given turn (plain text renders exactly as before, no
+ * chips, nothing broken). */
+function renderMessageContent(content: string) {
+  return content.split(PROVENANCE_SPLIT_RE).map((part, i) => {
+    if (part === PROVENANCE_VERIFIED) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-kivo-cyan"
+        >
+          <ShieldCheck className="h-2.5 w-2.5" strokeWidth={2} />
+          Verified
+        </span>
+      );
+    }
+    if (part === PROVENANCE_CALCULATED) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-violet-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-violet-300"
+        >
+          <Calculator className="h-2.5 w-2.5" strokeWidth={2} />
+          KIVO-calculated
+        </span>
+      );
+    }
+    return part;
+  });
+}
 
 interface ChatMessage {
   id: string;
@@ -47,22 +93,56 @@ export function AiChat({
   initialConversations = [],
   hasFollowedEntities = false,
   hasSyncedFixtures = false,
+  initialFocus = null,
+  focusLabel = null,
+  groundingSummary = "",
+  lastSyncedAt = null,
+  quotaRemaining = null,
 }: {
   signedIn: boolean;
   initialConversations?: ConversationSummary[];
   hasFollowedEntities?: boolean;
   hasSyncedFixtures?: boolean;
+  /** RECOMMENDATIONS.md items 184/185: resolved server-side from `?ctx=&id=`
+   * (see `src/app/(app)/ai/page.tsx`) — resent on every turn of this session
+   * (see `streamAssistantReply`) so the deep-linked entity keeps grounding
+   * the conversation, not just its first turn. */
+  initialFocus?: ChatFocus;
+  /** Real, human-readable name for `initialFocus` — e.g. "Arsenal vs
+   * Chelsea" — same value `grounding.disclosureLabel` resolved server-side,
+   * never invented client-side. */
+  focusLabel?: string | null;
+  /** RECOMMENDATIONS.md item 189: `grounding.summary` verbatim — the exact
+   * text sent to the model on page load, shown in the disclosure panel
+   * below unmodified. */
+  groundingSummary?: string;
+  lastSyncedAt?: string | null;
+  quotaRemaining?: number | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  // RECOMMENDATIONS.md items 184/185: a lazy initializer (runs once, on
+  // mount, before the first paint) rather than an effect that calls
+  // setInput — this is real initial state, not a synchronization concern,
+  // so it never needs to re-run or fight a later effect. Never auto-sent
+  // (see `send`) — opening the Copilot from a match/team/player page should
+  // never spend a model call the user didn't ask for.
+  const [input, setInput] = useState(() => (initialFocus && focusLabel ? `Tell me about ${focusLabel}.` : ""));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  // RECOMMENDATIONS.md items 184/185: the active deep-linked focus, if any —
+  // dismissible (the user can clear it without losing the conversation) and
+  // otherwise resent on every turn, see streamAssistantReply below.
+  const [focus, setFocus] = useState<ChatFocus>(initialFocus);
+  // RECOMMENDATIONS.md item 189: collapsed by default so it never competes
+  // with the conversation itself — this is a disclosure the user opts into,
+  // not something pushed at them.
+  const [showDisclosure, setShowDisclosure] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -101,7 +181,10 @@ export function AiChat({
   // the conversations-list bookkeeping is identical between "send a new
   // message" and "redo the last reply"; only how the request body is built
   // and what gets prepended to `messages` beforehand differs.
-  async function streamAssistantReply(requestBody: { conversationId?: string; message?: string; regenerate?: boolean }, titleFallback: string) {
+  async function streamAssistantReply(
+    requestBody: { conversationId?: string; message?: string; regenerate?: boolean; focus?: ChatFocus },
+    titleFallback: string,
+  ) {
     const isNewConversation = !activeConversationId;
     const assistantMessageId = crypto.randomUUID();
     let assistantText = "";
@@ -218,7 +301,7 @@ export function AiChat({
     setMessages((prev) => [...prev, userMessage]);
     setPending(true);
 
-    await streamAssistantReply({ conversationId: activeConversationId, message: trimmed }, trimmed);
+    await streamAssistantReply({ conversationId: activeConversationId, message: trimmed, focus }, trimmed);
   }
 
   // RECOMMENDATIONS.md item 194: regenerate the last assistant reply without
@@ -238,7 +321,7 @@ export function AiChat({
 
     const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
     await streamAssistantReply(
-      { conversationId: activeConversationId, regenerate: true },
+      { conversationId: activeConversationId, regenerate: true, focus },
       lastUserMessage?.content ?? "Conversation",
     );
   }
@@ -342,6 +425,22 @@ export function AiChat({
         </motion.div>
         <h1 className="flex-1 text-lg font-semibold text-foreground">AI Copilot</h1>
 
+        {/* RECOMMENDATIONS.md item 189: "what KIVO knows right now" — a real
+            disclosure the user opts into, not a badge pushed at them. */}
+        <motion.button
+          type="button"
+          onClick={() => setShowDisclosure((v) => !v)}
+          aria-label="What KIVO knows right now"
+          aria-expanded={showDisclosure}
+          whileTap={{ scale: 0.92 }}
+          className={cn(
+            "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+            showDisclosure ? "text-kivo-cyan" : "text-foreground-muted hover:text-foreground",
+          )}
+        >
+          <Info className="h-4 w-4" strokeWidth={1.75} />
+        </motion.button>
+
         {signedIn && (
           <div className="flex items-center gap-1.5">
             <motion.button
@@ -364,6 +463,56 @@ export function AiChat({
           </div>
         )}
       </motion.div>
+
+      {/* RECOMMENDATIONS.md item 189: `groundingSummary` is `grounding.summary`
+          verbatim — the exact text sent to the model — plus the same
+          freshness numbers `/transparency` shows, reused via
+          getTransparencyFreshness() rather than recomputed here. */}
+      <AnimatePresence initial={false}>
+        {showDisclosure && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">What KIVO knows right now</p>
+              <p className="text-xs text-foreground-muted">
+                Last provider sync: <span className="text-foreground">{lastSyncedAt ? timeAgo(lastSyncedAt) : "nothing synced yet"}</span>
+                {" · "}
+                Provider quota remaining today:{" "}
+                <span className="text-foreground">{quotaRemaining !== null ? quotaRemaining : "not yet reported"}</span>
+              </p>
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-black/20 p-3 text-[11px] leading-relaxed text-foreground-muted">
+                {groundingSummary || "No grounding context available."}
+              </pre>
+              <p className="text-[11px] text-foreground-subtle">
+                This is the exact context KIVO hands the model before every reply — nothing outside it is treated as verified.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* RECOMMENDATIONS.md items 184/185: the active deep-linked focus, if
+          any — dismissible so the user can fall back to an unscoped session
+          without losing the conversation already in progress. */}
+      {focus && focusLabel && (
+        <div className="flex items-center gap-1.5 self-start rounded-full border border-kivo-cyan/30 bg-kivo-cyan/10 py-1 pl-3 pr-1 text-xs text-kivo-cyan">
+          <Sparkles className="h-3 w-3" strokeWidth={2} />
+          Focused on {focusLabel}
+          <button
+            type="button"
+            onClick={() => setFocus(null)}
+            aria-label="Clear focus"
+            className="flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-kivo-cyan/20"
+          >
+            <X className="h-3 w-3" strokeWidth={2} />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-3" role="log" aria-live="polite" aria-relevant="additions">
         {loadingConversation && (
@@ -448,7 +597,7 @@ export function AiChat({
                 m.role === "user" ? "kivo-gradient-prime text-kivo-white" : "kivo-glass text-foreground",
               )}
             >
-              {m.content}
+              {m.role === "assistant" ? renderMessageContent(m.content) : m.content}
             </div>
 
             {m.role === "assistant" && m.content && (

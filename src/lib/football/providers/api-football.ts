@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
 import { ApiFootballError, requestWithRetry } from "./api-football-request";
+import { buildRawResponseSample, type RawResponseSample } from "../raw-response-sample";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 
@@ -167,6 +168,14 @@ export class ApiFootballProvider implements FootballDataProvider {
    * request completes. */
   private quotaRemaining: number | null = null;
 
+  /** RECOMMENDATIONS.md item 65: the last raw response (success or failure)
+   * this provider instance actually received, truncated/bounded — see
+   * raw-response-sample.ts. Updated on every request, same "most recent
+   * wins" lifetime as quotaRemaining above; sync.ts reads it once per run
+   * (after getFixturesByDate settles) and writes it to
+   * sync_runs.raw_response_sample for admin diagnostics. */
+  private lastRawResponseSample: RawResponseSample | null = null;
+
   constructor(private readonly apiKey: string) {}
 
   /**
@@ -186,10 +195,15 @@ export class ApiFootballProvider implements FootballDataProvider {
         revalidateSeconds,
       });
       if (quotaRemaining !== null) this.quotaRemaining = quotaRemaining;
-      return (await response.json()) as T;
+      const json = (await response.json()) as T;
+      this.lastRawResponseSample = buildRawResponseSample(path, response.status, json);
+      return json;
     } catch (err) {
       if (err instanceof ApiFootballError && err.quotaRemaining !== null) {
         this.quotaRemaining = err.quotaRemaining;
+      }
+      if (err instanceof ApiFootballError) {
+        this.lastRawResponseSample = buildRawResponseSample(path, err.status ?? 0, { error: err.message, kind: err.kind });
       }
       throw err;
     }
@@ -200,6 +214,11 @@ export class ApiFootballProvider implements FootballDataProvider {
    * least one request has completed. */
   getQuotaRemaining(): number | null {
     return this.quotaRemaining;
+  }
+
+  /** RECOMMENDATIONS.md item 65 — see the field's own doc comment above. */
+  getLastRawResponseSample(): RawResponseSample | null {
+    return this.lastRawResponseSample;
   }
 
   async getFixturesByDate(date: string): Promise<NormalizedFixture[]> {
