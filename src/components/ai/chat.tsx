@@ -333,7 +333,7 @@ export function AiChat({
         )}
       </motion.div>
 
-      <div className="flex flex-1 flex-col gap-3">
+      <div className="flex flex-1 flex-col gap-3" role="log" aria-live="polite" aria-relevant="additions">
         {loadingConversation && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -436,7 +436,11 @@ export function AiChat({
           </motion.div>
         )}
 
-        {error && <p className="text-sm text-critical">{error}</p>}
+        {error && (
+          <p className="text-sm text-critical" role="status" aria-live="polite">
+            {error}
+          </p>
+        )}
 
         <div ref={messagesEndRef} />
       </div>
@@ -466,9 +470,10 @@ export function AiChat({
         <motion.button
           type="submit"
           disabled={pending || !input.trim()}
+          aria-busy={pending}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.92 }}
-          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-kivo-white transition-opacity disabled:opacity-40"
+          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-kivo-white transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
           aria-label="Send"
         >
           <ArrowUp className="h-4 w-4" strokeWidth={2} />

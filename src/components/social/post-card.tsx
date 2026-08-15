@@ -255,7 +255,7 @@ export function PostCard({
                 transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                 className="kivo-glass-sharp absolute right-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl p-1"
               >
-                <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Report this post
                 </p>
                 {REPORT_REASONS.map((reason) => (

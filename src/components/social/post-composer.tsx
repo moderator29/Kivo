@@ -77,13 +77,20 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
         className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none"
       />
       <div className="flex items-center justify-between">
-        {error ? <span className="text-xs text-critical">{error}</span> : <span />}
+        {error ? (
+          <span className="text-xs text-critical" role="status" aria-live="polite">
+            {error}
+          </span>
+        ) : (
+          <span />
+        )}
         <motion.button
           type="submit"
           disabled={pending}
+          aria-busy={pending}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.96 }}
-          className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
         >
           {pending ? "Posting…" : "Post"}
         </motion.button>

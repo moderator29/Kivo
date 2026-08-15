@@ -151,7 +151,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                   {badge.description && (
                     <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
                   )}
-                  <span className="text-[10px] text-foreground-subtle">{timeAgo(badge.awarded_at)}</span>
+                  <span className="text-[11px] text-foreground-subtle">{timeAgo(badge.awarded_at)}</span>
                 </div>
               </FadeIn>
             ))}

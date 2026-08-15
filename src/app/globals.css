@@ -64,8 +64,12 @@
 
 html {
   /* Bumped from the 16px default so the whole rem-based type scale reads a
-     little larger and more confident, per founder direction. */
-  font-size: 17px;
+     little larger and more confident, per founder direction — as a
+     percentage rather than a fixed px value so it still scales off the
+     user's own browser base font size instead of silently overriding it
+     (WCAG 1.4.4). 106.25% of the 16px default renders the same 17px this
+     replaced. RECOMMENDATIONS.md item 153. */
+  font-size: 106.25%;
 }
 
 body {
@@ -86,7 +90,17 @@ body {
   -webkit-backdrop-filter: blur(20px);
 }
 
-.kivo-glass:hover {
+/* Opt-in hover feedback (RECOMMENDATIONS.md item 159): `.kivo-glass` alone
+   used to brighten on hover unconditionally, which made static containers
+   (fixture list items, stat panels — a plain `<div>` with no click handler)
+   signal clickability they don't have. Every genuinely interactive surface
+   built on `.kivo-glass` already layers its own explicit `hover:bg-white/…`
+   utility class on top for its real feedback (see PostComposer's guest CTA,
+   the player page's current-club link, the "Browse public leagues" link),
+   so this class was purely redundant there and actively misleading
+   everywhere else — add it explicitly where a `.kivo-glass` element really
+   is the whole click target and needs its own ambient hover instead. */
+.kivo-glass-interactive:hover {
   background: var(--kivo-glass-hover);
 }
 
@@ -198,13 +212,33 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* RECOMMENDATIONS.md item 155: this used to clamp `transition-duration`
+     on every element too, which also snapped non-motion feedback —
+     colour, background and opacity changes on hover/focus — to instant,
+     with no accessibility benefit (WCAG 2.3.3 targets movement, not colour
+     changes). `animation-duration` stays global: it's what drives every
+     purely decorative CSS `@keyframes` loop in this file (the aurora
+     drift/breathe blobs, the mark-glyph rotate-and-scale drift, and
+     `kivo-fade-in` above — this is also what keeps FadeIn's own
+     reduced-motion handling working, since `kivo-fade-in` is an animation,
+     not a transition). Framer Motion's own animations (`whileHover`,
+     `whileTap`, layout transitions, all the `motion.*` usage elsewhere in
+     the app) already respect this preference independently via
+     `<MotionConfig reducedMotion="user">` in the root layout, so they don't
+     need anything here. What's left for `transition-duration` specifically
+     is Tailwind's `transition-transform` utility — genuinely
+     movement/scale/rotate-only, nothing else riding along in the same
+     transition — clamped on its own below. */
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .transition-transform {
+    transition-duration: 0.01ms !important;
   }
 }
 

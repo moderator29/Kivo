@@ -253,7 +253,7 @@ export default async function DataHealthPage() {
             <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-white/5 px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-foreground">{step.title}</span>
-                <span className="shrink-0 text-[10px] text-foreground-subtle">{step.where}</span>
+                <span className="shrink-0 text-[11px] text-foreground-subtle">{step.where}</span>
               </div>
               <p className="text-[11px] text-foreground-subtle">{step.requires}</p>
             </li>
@@ -350,7 +350,7 @@ export default async function DataHealthPage() {
                       <span className="font-medium">GW{gw.number}</span>
                       {seasonLabel ? ` · ${seasonLabel}` : ""}
                       {gw.is_current && (
-                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[10px] font-semibold text-kivo-cyan">
+                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[11px] font-semibold text-kivo-cyan">
                           Current
                         </span>
                       )}
@@ -441,7 +441,7 @@ export default async function DataHealthPage() {
                       </p>
                     </div>
                     <span
-                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.className}`}
+                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${style.className}`}
                     >
                       <StatusIcon className={`h-3 w-3 ${run.status === "running" ? "animate-spin" : ""}`} strokeWidth={2} />
                       {style.label}

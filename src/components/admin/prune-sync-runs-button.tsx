@@ -22,8 +22,9 @@ export function PruneSyncRunsButton() {
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={handleClick}
-        className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-sm font-semibold text-foreground-muted transition hover:bg-white/10 disabled:opacity-50"
+        className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-sm font-semibold text-foreground-muted transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
       >
         <Trash2 className={`h-4 w-4 ${pending ? "animate-pulse" : ""}`} strokeWidth={2} />
         {pending ? "Pruning…" : "Prune old sync runs"}

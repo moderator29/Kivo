@@ -22,8 +22,9 @@ export function FootballSyncButton() {
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={handleClick}
-        className="flex items-center gap-2 rounded-lg bg-kivo-cyan/15 px-4 py-2 text-sm font-semibold text-kivo-cyan transition hover:bg-kivo-cyan/25 disabled:opacity-50"
+        className="flex items-center gap-2 rounded-lg bg-kivo-cyan/15 px-4 py-2 text-sm font-semibold text-kivo-cyan transition hover:bg-kivo-cyan/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
       >
         <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} strokeWidth={2} />
         {pending ? "Syncing…" : "Sync now"}

@@ -497,7 +497,11 @@ export function FantasyBuilder({
             </FadeIn>
           )}
 
-          {actionError && <p className="text-xs text-critical">{actionError}</p>}
+          {actionError && (
+            <p className="text-xs text-critical" role="status" aria-live="polite">
+              {actionError}
+            </p>
+          )}
 
           <AnimatePresence>
             {dirty && (
@@ -509,7 +513,9 @@ export function FantasyBuilder({
                 className="kivo-glass fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+16px)] z-20 mx-auto flex max-w-2xl flex-col gap-2 rounded-2xl p-4 lg:inset-x-auto lg:left-1/2 lg:w-full lg:max-w-2xl lg:-translate-x-1/2"
               >
                 {(saveError ?? validationError) && (
-                  <p className="text-xs text-critical">{saveError ?? validationError}</p>
+                  <p className="text-xs text-critical" role="status" aria-live="polite">
+                    {saveError ?? validationError}
+                  </p>
                 )}
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-foreground-subtle">
@@ -519,7 +525,8 @@ export function FantasyBuilder({
                     type="button"
                     onClick={handleSave}
                     disabled={saving || locked || !validation.ok}
-                    className="kivo-gradient-victory shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-kivo-white transition disabled:opacity-50"
+                    aria-busy={saving}
+                    className="kivo-gradient-victory shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-kivo-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
                   >
                     {saving ? "Saving…" : "Save squad"}
                   </button>

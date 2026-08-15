@@ -134,7 +134,7 @@ export default async function RewardsPage() {
                     <span className="text-xs font-semibold text-foreground">{badge.name}</span>
                     <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
                     {!earned && (
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                         Locked
                       </span>
                     )}

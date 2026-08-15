@@ -24,9 +24,9 @@ export function StatTile({
 }) {
   return (
     <div className="kivo-glass flex flex-col gap-1 rounded-2xl p-3">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">{label}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">{label}</span>
       <span className={`text-lg font-semibold tabular-nums ${valueClass}`}>{value}</span>
-      {caption && <span className="text-[10px] leading-snug text-foreground-subtle">{caption}</span>}
+      {caption && <span className="text-[11px] leading-snug text-foreground-subtle">{caption}</span>}
     </div>
   );
 }
@@ -57,7 +57,7 @@ export function PlayerToken({ player, onClick, compact = false }: { player: Rost
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.94 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className="group flex flex-col items-center gap-1"
+      className="group flex flex-col items-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
       style={{ width: compact ? 64 : 76 }}
     >
       <div className="relative">
@@ -102,7 +102,7 @@ export function PlayerToken({ player, onClick, compact = false }: { player: Rost
         </AnimatePresence>
       </div>
       <span className="w-full truncate text-center text-[11px] font-medium text-foreground">{player.name}</span>
-      <span className="text-[10px] font-semibold tabular-nums text-foreground-subtle">{formatFantasyPrice(player.price)}</span>
+      <span className="text-[11px] font-semibold tabular-nums text-foreground-subtle">{formatFantasyPrice(player.price)}</span>
     </motion.button>
   );
 }

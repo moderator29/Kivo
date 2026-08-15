@@ -190,7 +190,7 @@ export default async function TransfersPage({
                   </div>
 
                   <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>

@@ -53,7 +53,7 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
               </div>
             )}
             <span className="truncate text-xs font-semibold text-foreground">{team.shortName ?? team.name}</span>
-            {team.country && <span className="truncate text-[10px] text-foreground-subtle">{team.country}</span>}
+            {team.country && <span className="truncate text-[11px] text-foreground-subtle">{team.country}</span>}
           </Link>
         )}
       />

@@ -55,7 +55,7 @@ export function FantasyLeaderboard({
                   <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
                     <span className="truncate">{entry.teamName}</span>
                     {isViewer && (
-                      <span className="shrink-0 rounded-full bg-kivo-cyan/20 px-1.5 py-0.5 text-[10px] font-semibold text-kivo-cyan">
+                      <span className="shrink-0 rounded-full bg-kivo-cyan/20 px-1.5 py-0.5 text-[11px] font-semibold text-kivo-cyan">
                         You
                       </span>
                     )}

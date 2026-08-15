@@ -160,7 +160,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
               ].map(([label, value]) => (
                 <div key={label as string} className="rounded-lg bg-white/5 px-1.5 py-1.5">
                   <div className="text-xs font-semibold text-foreground">{value}</div>
-                  <div className="text-[9px] uppercase tracking-wide text-foreground-subtle">{label}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
                 </div>
               ))}
             </div>

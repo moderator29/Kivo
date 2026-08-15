@@ -123,7 +123,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             <h1 className="truncate text-xl font-semibold text-foreground">{displayName}</h1>
             {showFullNameSubtitle && <p className="truncate text-xs text-foreground-subtle">{player.full_name}</p>}
             {player.position && (
-              <span className="mt-1 inline-block rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+              <span className="mt-1 inline-block rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                 {player.position}
               </span>
             )}
@@ -188,7 +188,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             ].map(([label, value]) => (
               <div key={label as string} className="kivo-glass rounded-xl px-2 py-3">
                 <div className="text-lg font-semibold text-foreground">{value}</div>
-                <div className="text-[10px] uppercase tracking-wide text-foreground-subtle">{label}</div>
+                <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
               </div>
             ))}
           </div>
@@ -247,7 +247,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                     </span>
                     <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transfer_date)}</span>

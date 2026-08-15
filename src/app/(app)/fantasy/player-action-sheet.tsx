@@ -42,7 +42,13 @@ export function PlayerActionSheet({
           transition={{ duration: 0.15 }}
           className="fixed inset-0 z-40 flex flex-col justify-end"
         >
-          <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          {/* Non-focusable backdrop (RECOMMENDATIONS.md item 149): a real
+              `<button>` here sat in tab/reading order before the dialog's
+              own content, so a screen reader user landed on an unlabelled
+              "Close" control before hearing anything about the player it's
+              actually about. The panel's own X button (below) is the real,
+              announced close control. */}
+          <div aria-hidden="true" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             ref={panelRef}
             role="dialog"
@@ -123,7 +129,7 @@ function ActionRow({
       onClick={onClick}
       whileTap={disabled ? undefined : { scale: 0.98 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-40 ${
+      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 disabled:opacity-40 ${
         tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-white/5"
       }`}
     >
@@ -131,7 +137,7 @@ function ActionRow({
         <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         {label}
       </span>
-      {hint && <span className="text-[10px] text-foreground-subtle">{hint}</span>}
+      {hint && <span className="text-[11px] text-foreground-subtle">{hint}</span>}
     </motion.button>
   );
 }

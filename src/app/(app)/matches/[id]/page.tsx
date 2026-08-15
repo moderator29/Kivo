@@ -178,7 +178,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
               {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
             </span>
             <span
-              className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
                 live
                   ? "animate-[kivo-live-breathe_2.2s_ease-in-out_infinite] border-live/30 bg-live/10 text-live"
                   : "border-white/10 text-foreground-subtle"

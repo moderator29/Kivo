@@ -149,6 +149,7 @@ export function PredictionCard({
               key={outcome}
               type="button"
               disabled={pending}
+              aria-busy={pending}
               onClick={() => handlePick(outcome)}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
@@ -181,6 +182,8 @@ export function PredictionCard({
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
             className="text-xs text-critical"
+            role="status"
+            aria-live="polite"
           >
             {error}
           </motion.p>
@@ -192,6 +195,8 @@ export function PredictionCard({
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
             className="flex items-center gap-1 text-xs font-medium text-live"
+            role="status"
+            aria-live="polite"
           >
             <Check className="h-3 w-3" strokeWidth={2.5} />
             Prediction saved

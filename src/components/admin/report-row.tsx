@@ -55,7 +55,7 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
   }
 
   const staleBadge = !preview.live && (
-    <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
+    <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
       Deleted, from report snapshot
     </span>
   );
@@ -157,7 +157,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
               <p className="text-xs text-foreground-muted">{reason}</p>
             </div>
             <span
-              className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}
+              className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badge.className}`}
             >
               <Clock className="h-3 w-3" strokeWidth={2} />
               {badge.label}
@@ -177,14 +177,19 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
             />
           )}
 
-          {error && <p className="text-xs text-critical">{error}</p>}
+          {error && (
+            <p className="text-xs text-critical" role="status" aria-live="polite">
+              {error}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button
               type="button"
               disabled={pending}
+              aria-busy={pending}
               onClick={() => (showNote === "actioned" ? handleDecision("actioned") : setShowNote("actioned"))}
-              className="flex items-center gap-1 rounded-lg bg-live/15 px-3 py-1.5 text-xs font-semibold text-live transition hover:bg-live/25 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-live/15 px-3 py-1.5 text-xs font-semibold text-live transition hover:bg-live/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={2} />
               {showNote === "actioned" ? "Confirm actioned" : "Mark actioned"}
@@ -192,8 +197,9 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
             <button
               type="button"
               disabled={pending}
+              aria-busy={pending}
               onClick={() => (showNote === "dismissed" ? handleDecision("dismissed") : setShowNote("dismissed"))}
-              className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2} />
               {showNote === "dismissed" ? "Confirm dismiss" : "Dismiss"}

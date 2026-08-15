@@ -67,7 +67,11 @@ export function PlayerPicker({
           transition={{ duration: 0.15 }}
           className="fixed inset-0 z-40 flex flex-col justify-end"
         >
-          <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          {/* Non-focusable backdrop (RECOMMENDATIONS.md item 149): a real
+              `<button>` here sat in tab/reading order before the dialog's
+              own content. The panel's own X button (below) is the real,
+              announced close control. */}
+          <div aria-hidden="true" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             ref={panelRef}
             role="dialog"

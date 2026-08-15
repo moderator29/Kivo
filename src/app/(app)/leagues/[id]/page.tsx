@@ -126,36 +126,55 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
         ) : (
-          <div className="kivo-glass overflow-hidden rounded-2xl">
-            <div className="grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <span>#</span>
-              <span>Team</span>
-              <span className="text-right">P</span>
-              <span className="text-right">GD</span>
-              <span className="text-right">Pts</span>
-              <span></span>
-            </div>
-            {standings.map((row) => (
-              <Link
-                key={row.team_id}
-                href={row.team?.id ? `/teams/${row.team.id}` : "#"}
-                className="grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs transition-all hover:translate-x-1 hover:bg-white/5"
-              >
-                <span className="text-foreground-subtle">{row.position ?? "-"}</span>
-                <span className="flex items-center gap-2 truncate text-foreground">
-                  {row.team?.crest_url ? (
-                    <Image src={row.team.crest_url} alt={row.team.name} width={16} height={16} className="shrink-0 object-contain" />
-                  ) : (
-                    <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-                  )}
-                  <span className="truncate">{row.team?.name ?? "Unknown team"}</span>
-                </span>
-                <span className="text-right text-foreground-muted">{row.played}</span>
-                <span className="text-right text-foreground-muted">{row.goals_for - row.goals_against}</span>
-                <span className="text-right font-semibold text-foreground">{row.points}</span>
-                <span />
-              </Link>
-            ))}
+          // Real `<table>` with `scope="col"` headers (RECOMMENDATIONS.md item
+          // 150): this used to be a grid of `<span>`s, which carries no
+          // row/column relationships for assistive tech. The team name is now
+          // the one link per row (its own tab stop with a clean accessible
+          // name) rather than the whole row, since a screen reader announcing
+          // every stat column as part of one giant link's name is worse, not
+          // better.
+          <div className="kivo-glass overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[26rem] border-collapse text-xs">
+              <thead>
+                <tr className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                  <th scope="col" className="px-3 py-2 text-left font-semibold">#</th>
+                  <th scope="col" className="py-2 text-left font-semibold">Team</th>
+                  <th scope="col" className="py-2 text-right font-semibold">P</th>
+                  <th scope="col" className="py-2 text-right font-semibold">GD</th>
+                  <th scope="col" className="px-3 py-2 text-right font-semibold">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {standings.map((row) => (
+                  <tr key={row.team_id} className="transition-colors hover:bg-white/5">
+                    <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
+                    <td className="max-w-0 py-2 text-foreground">
+                      {row.team?.id ? (
+                        <Link
+                          href={`/teams/${row.team.id}`}
+                          className="flex items-center gap-2 truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                        >
+                          {row.team.crest_url ? (
+                            <Image src={row.team.crest_url} alt="" width={16} height={16} className="shrink-0 object-contain" />
+                          ) : (
+                            <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                          )}
+                          <span className="truncate">{row.team.name}</span>
+                        </Link>
+                      ) : (
+                        <span className="flex items-center gap-2 truncate">
+                          <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                          <span className="truncate">Unknown team</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right text-foreground-muted">{row.played}</td>
+                    <td className="py-2 text-right text-foreground-muted">{row.goals_for - row.goals_against}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-foreground">{row.points}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </FadeIn>
