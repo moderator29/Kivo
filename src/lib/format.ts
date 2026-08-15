@@ -16,3 +16,28 @@ export function timeAgo(isoDate: string): string {
   const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" });
 }
+
+/** Whole-years-old age from a date of birth, as of right now. Was defined
+ * identically on `teams/[id]` and `players/[id]` before this was
+ * consolidated. */
+export function calculateAge(dateOfBirth: string): number {
+  const dob = new Date(dateOfBirth);
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+/** Long-form date ("14 August 2026") by default — pass `{ month: "short" }`
+ * for the abbreviated form transfers uses ("14 Aug 2026"). Both were
+ * near-identical standalone `formatDate` functions (`players/[id]` and
+ * `transfers/page.tsx`) before this was consolidated; each call site keeps
+ * its previous exact output. */
+export function formatDate(value: string, options: { month?: "numeric" | "2-digit" | "long" | "short" | "narrow" } = {}): string {
+  return new Date(value).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: options.month ?? "long",
+    day: "numeric",
+  });
+}
