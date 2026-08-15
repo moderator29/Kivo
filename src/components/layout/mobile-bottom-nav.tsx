@@ -57,9 +57,9 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 24, opacity: 0 }}
               transition={{ type: "spring", stiffness: 420, damping: 36 }}
-              className="kivo-glass relative z-10 mb-[calc(env(safe-area-inset-bottom)+76px)] mx-3 rounded-2xl p-3"
+              className="kivo-glass-brand relative z-10 mb-[calc(env(safe-area-inset-bottom)+76px)] mx-3 max-h-[70vh] overflow-y-auto rounded-2xl p-3"
             >
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {moreItems.map((item) => {
                   const active = isActiveRoute(pathname, item.href);
                   const Icon = item.icon;
@@ -70,28 +70,39 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       onClick={() => setMoreOpen(false)}
-                      className="group flex flex-col items-center gap-2 rounded-xl px-2 py-3 text-center transition-transform hover:bg-white/[0.06] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                      className="group relative flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition-colors hover:bg-white/[0.06] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
                     >
-                      <Icon
-                        className={cn(
-                          "h-5 w-5 transition-colors",
-                          active ? "text-kivo-cyan" : "text-foreground-subtle group-hover:text-foreground-muted",
-                        )}
-                        strokeWidth={1.75}
-                      />
                       <span
                         className={cn(
-                          "text-[11px] font-medium transition-colors",
-                          active ? "text-kivo-cyan" : "text-foreground-muted",
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
+                          active
+                            ? "kivo-gradient-prime shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                            : "bg-white/[0.05] group-hover:bg-white/[0.08]",
                         )}
                       >
-                        {item.label}
+                        <Icon
+                          className={cn(
+                            "h-5 w-5 transition-colors",
+                            active ? "text-kivo-white" : "text-foreground-subtle group-hover:text-foreground-muted",
+                          )}
+                          strokeWidth={1.75}
+                        />
                       </span>
-                      {isComingSoon && (
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
-                          Soon
+                      <span className="flex min-w-0 flex-col items-start gap-0.5">
+                        <span
+                          className={cn(
+                            "truncate text-[13px] font-semibold transition-colors",
+                            active ? "text-kivo-cyan" : "text-foreground",
+                          )}
+                        >
+                          {item.label}
                         </span>
-                      )}
+                        {isComingSoon && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                            Soon
+                          </span>
+                        )}
+                      </span>
                     </Link>
                   );
                 })}
