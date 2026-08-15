@@ -19,6 +19,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -152,6 +153,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     { data: upcoming },
     { data: recent },
     isFollowing,
+    isSaved,
     squadLastSyncedAt,
     { data: goalEvents },
     { data: cardEvents },
@@ -215,6 +217,17 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           .eq("follower_profile_id", profile.id)
           .eq("followed_type", "team")
           .eq("followed_id", id)
+          .then(({ count }) => (count ?? 0) > 0)
+      : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 173: team watchlist — real save state,
+    // saves_select_own already scopes this to the caller's own row.
+    profile
+      ? supabase
+          .from("saves")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", profile.id)
+          .eq("target_type", "team")
+          .eq("target_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
     // RECOMMENDATIONS.md item 60: squad sync writes entity_type 'player'
@@ -345,7 +358,8 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             <h1 className="truncate text-xl font-semibold text-foreground">{team.name}</h1>
             {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>}
           </FadeIn>
-          <FadeIn delay={0.1}>
+          <FadeIn delay={0.1} className="flex items-center gap-2">
+            <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={!!profile} />
             <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} signedIn={!!profile} />
           </FadeIn>
         </div>
