@@ -9,6 +9,7 @@ import { TransfersFilters } from "@/components/transfers/transfers-filters";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { formatDate } from "@/lib/format";
+import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import type { Database } from "@/lib/supabase/types";
 
 const item = getNavItem("transfers");
@@ -16,18 +17,6 @@ const item = getNavItem("transfers");
 export const metadata: Metadata = { title: item.label };
 
 type TransferType = Database["public"]["Enums"]["transfer_type"];
-
-// Plain, honest labels only — API-Football's /transfers endpoint reports real,
-// already-completed moves and nothing else. There is no rumour/reported tier to
-// draw from, so no "Confirmed / Rumour / Advanced Talks" taxonomy belongs here
-// (that would need a news/journalist source KIVO doesn't have — see AGENTS.md).
-const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
-  transfer: "Transfer",
-  loan: "Loan",
-  free: "Free transfer",
-  end_of_loan: "End of loan",
-  unknown: "Fee undisclosed",
-};
 
 // Matches the exact `transfer_type` enum in supabase/migrations/0006_transfers.sql —
 // the filter dropdown's option list has to stay a subset of real values, never a

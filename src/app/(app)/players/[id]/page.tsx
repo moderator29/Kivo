@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -14,25 +14,9 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
+import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { calculateAge, formatDate } from "@/lib/format";
-import type { Database } from "@/lib/supabase/types";
-
-type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
-type TransferType = Database["public"]["Enums"]["transfer_type"];
-
-// Same honesty rule as /transfers — API-Football's transfer data is real,
-// already-completed moves only, so labels stay plain, no rumour/confidence tiers.
-const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
-  transfer: "Transfer",
-  loan: "Loan",
-  free: "Free transfer",
-  end_of_loan: "End of loan",
-  unknown: "Fee undisclosed",
-};
-
-// A lineup row against a fixture in any of these statuses means the player has
-// actually taken the pitch — "scheduled" fixtures don't count as an appearance yet.
-const PLAYED_STATUSES = new Set(["live", "halftime", "finished"]);
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -97,16 +81,8 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   if (!player) notFound();
 
-  const appearances = (lineupRows ?? []).filter((l) => l.fixture && PLAYED_STATUSES.has(l.fixture.status));
-  const hasMatchData = appearances.length > 0;
-  const starts = appearances.filter((l) => l.is_starting).length;
-
-  const countEvents = (types: FixtureEventType[]) =>
-    (eventRows ?? []).filter((e) => types.includes(e.event_type)).length;
-
-  const goals = countEvents(["goal", "penalty_goal"]);
-  const yellowCards = countEvents(["yellow_card"]);
-  const redCards = countEvents(["red_card", "second_yellow_card"]);
+  const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
+  const hasMatchData = stats.appearances > 0;
 
   const displayName = player.known_as ?? player.full_name;
   const showFullNameSubtitle = Boolean(player.known_as) && player.known_as !== player.full_name;
@@ -145,6 +121,15 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               : "Date of birth not yet synced"}
           </div>
         </FadeIn>
+        <FadeIn delay={0.18}>
+          <Link
+            href={`/players/compare?a=${player.id}`}
+            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          >
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            Compare with another player
+          </Link>
+        </FadeIn>
       </div>
 
       <FadeIn delay={0.2} className="flex flex-col gap-3">
@@ -180,11 +165,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         {hasMatchData ? (
           <div className="grid grid-cols-3 gap-2 text-center sm:grid-cols-5">
             {[
-              ["Apps", appearances.length],
-              ["Starts", starts],
-              ["Goals", goals],
-              ["Yellow", yellowCards],
-              ["Red", redCards],
+              ["Apps", stats.appearances],
+              ["Starts", stats.starts],
+              ["Goals", stats.goals],
+              ["Yellow", stats.yellowCards],
+              ["Red", stats.redCards],
             ].map(([label, value]) => (
               <div key={label as string} className="kivo-glass rounded-xl px-2 py-3">
                 <div className="text-lg font-semibold text-foreground">{value}</div>

@@ -10,8 +10,10 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { getHeadToHead } from "@/lib/football/head-to-head";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -47,17 +49,17 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     .from("fixtures")
     .select(
       `id, kickoff_at, status, home_score, away_score, season_id,
-       home_team:teams!fixtures_home_team_id_fkey(id, name, crest_url),
-       away_team:teams!fixtures_away_team_id_fkey(id, name, crest_url),
+       home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+       away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
        competition:competitions(name, short_name),
-       venue:venues(name, city)`,
+       venue:venues(id, name, city)`,
     )
     .eq("id", id)
     .maybeSingle();
 
   if (!fixture) notFound();
 
-  const [{ data: events }, { data: lineups }, { data: stats }, { data: standings }, { posts: roomPosts }, fixturesLastSyncedAt, detailsLastSyncedAt] = await Promise.all([
+  const [{ data: events }, { data: lineups }, { data: stats }, { data: standings }, { posts: roomPosts }, fixturesLastSyncedAt, detailsLastSyncedAt, headToHead] = await Promise.all([
     supabase
       .from("fixture_events")
       .select(
@@ -93,6 +95,11 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     // syncFixtureDetails) — see getLastSyncedAt() and MatchCentreTabs.
     getLastSyncedAt(["fixture"]),
     getLastSyncedAt(["lineup"]),
+    // RECOMMENDATIONS.md item 161: prior meetings only, excluding this very
+    // fixture (it's the one already on screen, not "history").
+    fixture.home_team?.id && fixture.away_team?.id
+      ? getHeadToHead(supabase, fixture.home_team.id, fixture.away_team.id, { excludeFixtureId: fixture.id })
+      : Promise.resolve(null),
   ]);
 
   const statsForTab = (stats ?? []).map((s) => ({
@@ -157,11 +164,11 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
           <span>{fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}</span>
           {fixture.venue?.name && (
-            <span className="flex items-center gap-1">
+            <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-kivo-cyan">
               <MapPin className="h-3 w-3" strokeWidth={2} />
               {fixture.venue.name}
               {fixture.venue.city ? `, ${fixture.venue.city}` : ""}
-            </span>
+            </Link>
           )}
         </div>
 
@@ -204,6 +211,19 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           </FadeIn>
         </div>
       </FadeIn>
+
+      {/* RECOMMENDATIONS.md item 161: only shown when these two teams have
+          at least one prior finished meeting on record — a debut fixture
+          between them shouldn't render a zero-state card here. */}
+      {headToHead && headToHead.meetings.length > 0 && fixture.home_team && fixture.away_team && (
+        <FadeIn delay={0.11}>
+          <HeadToHeadCard
+            teamA={{ name: fixture.home_team.name, shortName: fixture.home_team.short_name }}
+            teamB={{ name: fixture.away_team.name, shortName: fixture.away_team.short_name }}
+            record={headToHead}
+          />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.14}>
         <MatchCentreTabs

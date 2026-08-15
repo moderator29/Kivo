@@ -5,12 +5,14 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TeamComparePicker, type CompareTeamOption } from "@/components/teams/team-compare-picker";
+import { FormBadges } from "@/components/teams/form-badges";
+import { HeadToHeadCard } from "@/components/football/head-to-head-card";
+import { getHeadToHead } from "@/lib/football/head-to-head";
+import { resultFor, type FormResult } from "@/lib/football/results";
 
 export const metadata: Metadata = { title: "Compare teams" };
 
 type Supabase = ReturnType<typeof createServerSupabaseClient>;
-
-type FormResult = "W" | "D" | "L";
 
 type TeamCompareData = {
   id: string;
@@ -67,9 +69,7 @@ async function getTeamCompareData(supabase: Supabase, id: string): Promise<TeamC
       const isHome = fixture.home_team_id === id;
       const ownScore = isHome ? fixture.home_score : fixture.away_score;
       const oppScore = isHome ? fixture.away_score : fixture.home_score;
-      if (ownScore > oppScore) return "W";
-      if (ownScore < oppScore) return "L";
-      return "D";
+      return resultFor(ownScore, oppScore);
     })
     .filter((result): result is FormResult => result !== null);
 
@@ -95,29 +95,6 @@ async function getTeamCompareData(supabase: Supabase, id: string): Promise<TeamC
     form,
     squadCount: squadCount ?? 0,
   };
-}
-
-function FormBadges({ form }: { form: FormResult[] }) {
-  if (form.length === 0) {
-    return <p className="text-sm text-foreground-muted">No results synced yet.</p>;
-  }
-  const style: Record<FormResult, string> = {
-    W: "border-live/30 bg-live/10 text-live",
-    D: "border-white/10 text-foreground-muted",
-    L: "border-critical/30 bg-critical/10 text-critical",
-  };
-  return (
-    <div className="flex items-center gap-1.5">
-      {form.map((result, index) => (
-        <span
-          key={index}
-          className={`flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${style[result]}`}
-        >
-          {result}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function CompareColumn({ team }: { team: TeamCompareData }) {
@@ -238,6 +215,14 @@ export default async function TeamComparePage({
 
   const notFoundSelection = validSelection && (!teamA || !teamB);
 
+  // RECOMMENDATIONS.md item 161: this page is the "team pages" surface for
+  // head-to-head — a per-rival widget on every /teams/[id] isn't required
+  // by the item, and /teams/[id] already links here ("Compare with another
+  // team"), so a dedicated record between exactly the two teams someone
+  // picked belongs on the page built for picking two teams, not duplicated
+  // on the single-team page too.
+  const headToHead = teamA && teamB ? await getHeadToHead(supabase, teamA.id, teamB.id) : null;
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
@@ -274,6 +259,12 @@ export default async function TeamComparePage({
               <CompareColumn team={teamB} />
             </div>
           </FadeIn>
+
+          {headToHead && (
+            <FadeIn delay={0.17}>
+              <HeadToHeadCard teamA={teamA} teamB={teamB} record={headToHead} />
+            </FadeIn>
+          )}
 
           <FadeIn delay={0.2} className="flex flex-col gap-2 text-center text-[11px] text-foreground-subtle">
             <div className="flex items-center justify-center gap-1.5">
