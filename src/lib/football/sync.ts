@@ -55,16 +55,51 @@ async function createMapping(
   if (error && error.code !== "23505") throw error;
 }
 
+/**
+ * RECOMMENDATIONS.md item 27: one `provider_mappings` round trip for every distinct
+ * provider id of a given entity type, instead of one round trip per fixture. Called
+ * once up front per entity type (competition/team/venue) with every distinct id the
+ * whole day's fixture batch references; the returned map is then threaded through
+ * upsertCompetition/upsertTeam/upsertVenue below as their existence check, and each
+ * of those mutates it in place when it inserts a brand-new row so a later fixture in
+ * the same run that references the same provider id reuses it instead of inserting
+ * again. Empty input skips the request entirely — a day with e.g. no venue ids at
+ * all shouldn't fire an empty `.in()` query.
+ */
+async function batchFindMappedIds(
+  supabase: ServiceClient,
+  provider: string,
+  entityType: EntityType,
+  providerEntityIds: string[],
+): Promise<Map<string, string>> {
+  const known = new Map<string, string>();
+  if (providerEntityIds.length === 0) return known;
+
+  const { data, error } = await supabase
+    .from("provider_mappings")
+    .select("provider_entity_id, kivo_entity_id")
+    .eq("provider", provider)
+    .eq("entity_type", entityType)
+    .in("provider_entity_id", providerEntityIds);
+
+  if (error) throw error;
+  for (const row of data ?? []) known.set(row.provider_entity_id, row.kivo_entity_id);
+  return known;
+}
+
 /** Updates the row on every sync (a renamed competition or a new short name
  * should actually land), same "sync is the source of truth for what the
- * provider reports" rule as upsertFixture below. */
+ * provider reports" rule as upsertFixture below. `knownMappings` is the batched
+ * lookup from batchFindMappedIds — see its doc comment for why this takes a map
+ * instead of querying provider_mappings itself. */
 async function upsertCompetition(
   supabase: ServiceClient,
   provider: string,
   competitionProviderId: string,
   name: string,
+  knownMappings: Map<string, string>,
 ): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "competition", competitionProviderId);
+  const existing = knownMappings.get(competitionProviderId) ?? null;
   if (existing) {
     const { error } = await supabase.from("competitions").update({ name }).eq("id", existing);
     if (error) throw error;
@@ -75,6 +110,7 @@ async function upsertCompetition(
   if (error || !data) throw error ?? new Error("Failed to insert competition");
 
   await createMapping(supabase, provider, "competition", competitionProviderId, data.id);
+  knownMappings.set(competitionProviderId, data.id);
   return data.id;
 }
 
@@ -156,14 +192,16 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
 /** `name` is nullable (migration 0017) rather than backfilled with a fabricated
  * "Unknown venue" string — a provider id with no reported name stays honestly
  * unnamed. Never overwrites a real name with a later null, same rule as
- * upsertPlayer in sync-squads.ts. */
+ * upsertPlayer in sync-squads.ts. `knownMappings` is the batched lookup from
+ * batchFindMappedIds — see its doc comment. */
 async function upsertVenue(
   supabase: ServiceClient,
   provider: string,
   venueProviderId: string,
   name: string | null,
+  knownMappings: Map<string, string>,
 ): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "venue", venueProviderId);
+  const existing = knownMappings.get(venueProviderId) ?? null;
   if (existing) {
     if (name !== null) {
       const { error } = await supabase.from("venues").update({ name }).eq("id", existing);
@@ -176,15 +214,22 @@ async function upsertVenue(
   if (error || !data) throw error ?? new Error("Failed to insert venue");
 
   await createMapping(supabase, provider, "venue", venueProviderId, data.id);
+  knownMappings.set(venueProviderId, data.id);
   return data.id;
 }
 
 /** Updates name on every sync (always provided). short_name/crest_url only
  * overwrite when the provider actually reported one this time — same
  * never-clobber-with-null rule as upsertPlayer in sync-squads.ts, so a crest
- * an admin filled in by hand never gets nulled out by a leaner provider response. */
-async function upsertTeam(supabase: ServiceClient, provider: string, team: NormalizedTeam): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "team", team.providerId);
+ * an admin filled in by hand never gets nulled out by a leaner provider response.
+ * `knownMappings` is the batched lookup from batchFindMappedIds — see its doc comment. */
+async function upsertTeam(
+  supabase: ServiceClient,
+  provider: string,
+  team: NormalizedTeam,
+  knownMappings: Map<string, string>,
+): Promise<string> {
+  const existing = knownMappings.get(team.providerId) ?? null;
   if (existing) {
     const update: Database["public"]["Tables"]["teams"]["Update"] = { name: team.name };
     if (team.shortName !== null) update.short_name = team.shortName;
@@ -203,6 +248,7 @@ async function upsertTeam(supabase: ServiceClient, provider: string, team: Norma
   if (error || !data) throw error ?? new Error("Failed to insert team");
 
   await createMapping(supabase, provider, "team", team.providerId, data.id);
+  knownMappings.set(team.providerId, data.id);
   return data.id;
 }
 
@@ -257,6 +303,13 @@ function todayIsoDate(): string {
  * per the schema's RLS design (see supabase/migrations/0001, "a future sync job should use
  * the service_role key"). A bad fixture never aborts the whole batch; every fixture-level
  * failure is caught, logged and rolled into the run's error_message instead.
+ *
+ * Competition/team/venue provider_mappings lookups are batched once up front across the
+ * whole fixtures array (RECOMMENDATIONS.md item 27) rather than re-queried per fixture —
+ * an unfiltered day can be hundreds of fixtures, and this turns the ~6 sequential round
+ * trips per fixture that used to invite a server-action timeout into 3 batch lookups plus
+ * per-fixture work that's now limited to season/fixture resolution and inserts for
+ * whatever competitions/teams/venues actually turned out to be new.
  */
 export async function syncTodayFixtures(): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
@@ -295,6 +348,23 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
     return { status: "failed", recordsProcessed: 0, error: message };
   }
 
+  // RECOMMENDATIONS.md item 27: resolve every distinct competition/team/venue
+  // provider id this whole batch needs in three round trips total, up front,
+  // instead of a findMappedId query per entity per fixture. The per-fixture loop
+  // below then only issues an insert for provider ids that came back missing,
+  // and only ever hits provider_mappings again to write those new rows.
+  const competitionProviderIds = Array.from(new Set(fixtures.map((f) => f.competitionProviderId)));
+  const teamProviderIds = Array.from(new Set(fixtures.flatMap((f) => [f.homeTeam.providerId, f.awayTeam.providerId])));
+  const venueProviderIds = Array.from(
+    new Set(fixtures.map((f) => f.venueProviderId).filter((id): id is string => id !== null)),
+  );
+
+  const [competitionMappings, teamMappings, venueMappings] = await Promise.all([
+    batchFindMappedIds(supabase, provider.name, "competition", competitionProviderIds),
+    batchFindMappedIds(supabase, provider.name, "team", teamProviderIds),
+    batchFindMappedIds(supabase, provider.name, "venue", venueProviderIds),
+  ]);
+
   let processed = 0;
   const errors: string[] = [];
 
@@ -305,12 +375,13 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
         provider.name,
         fixture.competitionProviderId,
         fixture.competitionName,
+        competitionMappings,
       );
       const seasonId = await upsertSeason(supabase, competitionId, fixture.season);
-      const homeTeamId = await upsertTeam(supabase, provider.name, fixture.homeTeam);
-      const awayTeamId = await upsertTeam(supabase, provider.name, fixture.awayTeam);
+      const homeTeamId = await upsertTeam(supabase, provider.name, fixture.homeTeam, teamMappings);
+      const awayTeamId = await upsertTeam(supabase, provider.name, fixture.awayTeam, teamMappings);
       const venueId = fixture.venueProviderId
-        ? await upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName)
+        ? await upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName, venueMappings)
         : null;
 
       await upsertFixture(supabase, provider.name, fixture, {
