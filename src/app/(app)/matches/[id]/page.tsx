@@ -13,7 +13,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
-import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
+import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
@@ -50,7 +50,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   const { data: fixture } = await supabase
     .from("fixtures")
     .select(
-      `id, kickoff_at, status, home_score, away_score, season_id,
+      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
        competition:competitions(name, short_name),
@@ -173,7 +173,6 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-  const live = isLiveStatus(fixture.status);
   const fanRatingSummaryRow = fanRatingSummary.data?.[0] ?? null;
   const fanRatingCount = fanRatingSummaryRow ? Number(fanRatingSummaryRow.rating_count) : 0;
   const fanRatingAvg =
@@ -247,30 +246,14 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             )}
           </FadeIn>
 
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <span className="animate-[kivo-score-reveal_0.5s_ease-out_0.1s_both] text-2xl font-semibold text-foreground">
-              {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-            </span>
-            <span
-              className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                live
-                  ? "animate-[kivo-live-breathe_2.2s_ease-in-out_infinite] border-live/30 bg-live/10 text-live"
-                  : "border-white/10 text-foreground-subtle"
-              }`}
-            >
-              {live && (
-                <span className="h-1.5 w-1.5 shrink-0 animate-[kivo-live-ring_2s_ease-out_infinite] rounded-full bg-live" />
-              )}
-              {fixture.status === "scheduled"
-                ? new Date(fixture.kickoff_at).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : STATUS_LABEL[fixture.status]}
-            </span>
-          </div>
+          <MatchScoreDisplay
+            fixtureId={fixture.id}
+            status={fixture.status}
+            homeScore={fixture.home_score}
+            awayScore={fixture.away_score}
+            minuteElapsed={fixture.minute_elapsed}
+            kickoffAt={fixture.kickoff_at}
+          />
 
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={40} />

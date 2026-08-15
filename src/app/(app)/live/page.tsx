@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -8,101 +7,12 @@ import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
-import { TeamCrest } from "@/components/ui/team-crest";
-import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
-import { isLiveStatus } from "@/lib/football/fixture-status";
-import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
+import { LiveFixtureList } from "@/components/matches/live-fixture-list";
 import { getNavItem } from "@/lib/navigation";
-import type { Database } from "@/lib/supabase/types";
-
-type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
 const item = getNavItem("live");
 
 export const metadata: Metadata = { title: item.label };
-
-type FixtureRow = {
-  id: string;
-  kickoff_at: string;
-  status: FixtureStatus;
-  home_score: number | null;
-  away_score: number | null;
-  minute_elapsed: number | null;
-  home_team: { name: string; crest_url: string | null } | null;
-  away_team: { name: string; crest_url: string | null } | null;
-  competition: { id: string | null; name: string; short_name: string | null } | null;
-};
-
-/** Groups an already-fetched fixture list by competition with a real match
- * count per group — shared by the "Live now" and "Today's fixtures" blocks
- * below (RECOMMENDATIONS-style item: group /live and /matches by competition). */
-function GroupedFixtureRows({ fixtures }: { fixtures: FixtureRow[] }) {
-  const groups = groupFixturesByCompetition(fixtures);
-  return (
-    <div className="flex flex-col gap-4">
-      {groups.map((group) => (
-        <div key={group.competitionId ?? group.competitionName} className="flex flex-col gap-1">
-          <div className="flex items-center justify-between px-2">
-            {group.competitionId ? (
-              <Link
-                href={`/leagues/${group.competitionId}`}
-                className="text-xs font-semibold text-foreground-muted transition hover:text-kivo-cyan"
-              >
-                {group.competitionName}
-              </Link>
-            ) : (
-              <span className="text-xs font-semibold text-foreground-muted">{group.competitionName}</span>
-            )}
-            <span className="text-[11px] text-foreground-subtle">
-              {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
-            </span>
-          </div>
-          <div className="flex flex-col divide-y divide-white/5">
-            {group.fixtures.map((fixture) => (
-              <FixtureRowCard key={fixture.id} fixture={fixture} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FixtureRowCard({ fixture }: { fixture: FixtureRow }) {
-  const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-  const live = isLiveStatus(fixture.status);
-
-  return (
-    <Link
-      href={`/matches/${fixture.id}`}
-      className="flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-white/5"
-    >
-      {/* No per-row competition label — GroupedFixtureRows' section header
-          above already names it. */}
-      <div className="flex items-center justify-end">
-        <FixtureStatusBadge
-          status={fixture.status}
-          kickoffAt={fixture.kickoff_at}
-          showLiveDot={false}
-          minuteElapsed={fixture.minute_elapsed}
-        />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-1 items-center gap-2">
-          <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-          <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
-        </div>
-        <span className={`shrink-0 text-sm font-semibold ${live ? "text-live" : "text-foreground"}`}>
-          {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-        </span>
-        <div className="flex flex-1 items-center justify-end gap-2">
-          <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
-          <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
-        </div>
-      </div>
-    </Link>
-  );
-}
 
 export default async function LivePage() {
   const supabase = createServerSupabaseClient();
@@ -169,14 +79,14 @@ export default async function LivePage() {
             <Radio className="h-4 w-4 text-live" strokeWidth={2} />
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Live now</h2>
           </div>
-          <GroupedFixtureRows fixtures={liveFixtures} />
+          <LiveFixtureList fixtures={liveFixtures} />
         </FadeIn>
       )}
 
       {!hasLiveFixtures && hasTodayFixtures && todayFixtures && (
         <FadeIn delay={0.05} className="kivo-glass rounded-2xl p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today&apos;s fixtures</h2>
-          <GroupedFixtureRows fixtures={todayFixtures} />
+          <LiveFixtureList fixtures={todayFixtures} />
         </FadeIn>
       )}
     </div>
