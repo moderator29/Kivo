@@ -11,6 +11,7 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
+import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
@@ -59,7 +60,24 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
 
   if (!fixture) notFound();
 
-  const [{ data: events }, { data: lineups }, { data: stats }, { data: standings }, { posts: roomPosts }, fixturesLastSyncedAt, detailsLastSyncedAt, headToHead] = await Promise.all([
+  // RECOMMENDATIONS.md item 170: only meaningful once the match is actually
+  // over — fan_ratings_insert_own's own WITH CHECK (0032) enforces this same
+  // rule server-side, this just avoids fetching rating data for a fixture
+  // nobody could have rated yet.
+  const isFinished = fixture.status === "finished";
+
+  const [
+    { data: events },
+    { data: lineups },
+    { data: stats },
+    { data: standings },
+    { posts: roomPosts },
+    fixturesLastSyncedAt,
+    detailsLastSyncedAt,
+    headToHead,
+    ownFanRating,
+    fanRatingSummary,
+  ] = await Promise.all([
     supabase
       .from("fixture_events")
       .select(
@@ -100,6 +118,15 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     fixture.home_team?.id && fixture.away_team?.id
       ? getHeadToHead(supabase, fixture.home_team.id, fixture.away_team.id, { excludeFixtureId: fixture.id })
       : Promise.resolve(null),
+    // fan_ratings_select_own already scopes this to the caller's own row.
+    isFinished && profile
+      ? supabase.from("fan_ratings").select("rating").eq("fixture_id", id).eq("profile_id", profile.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Real aggregate via the narrow SECURITY DEFINER RPC — fan_ratings has no
+    // cross-user SELECT policy, same reasoning as get_prediction_consensus.
+    isFinished
+      ? supabase.rpc("get_fan_rating_summary", { p_fixture_id: id })
+      : Promise.resolve({ data: null }),
   ]);
 
   const statsForTab = (stats ?? []).map((s) => ({
@@ -135,6 +162,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
   const live = isLiveStatus(fixture.status);
+  const fanRatingSummaryRow = fanRatingSummary.data?.[0] ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -211,6 +239,22 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           </FadeIn>
         </div>
       </FadeIn>
+
+      {/* RECOMMENDATIONS.md item 170: only shown once the match is actually
+          over — "rate a performance after the whistle" is the item's own
+          framing, and fan_ratings_insert_own's WITH CHECK would reject an
+          earlier submission anyway. */}
+      {isFinished && (
+        <FadeIn delay={0.1}>
+          <FanRatingCard
+            fixtureId={fixture.id}
+            signedIn={Boolean(profile)}
+            initialRating={ownFanRating.data?.rating ?? null}
+            ratingCount={fanRatingSummaryRow ? Number(fanRatingSummaryRow.rating_count) : 0}
+            avgRating={fanRatingSummaryRow?.avg_rating !== null && fanRatingSummaryRow?.avg_rating !== undefined ? Number(fanRatingSummaryRow.avg_rating) : null}
+          />
+        </FadeIn>
+      )}
 
       {/* RECOMMENDATIONS.md item 161: only shown when these two teams have
           at least one prior finished meeting on record — a debut fixture
