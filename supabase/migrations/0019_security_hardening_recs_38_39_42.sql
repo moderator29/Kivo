@@ -121,3 +121,10 @@ comment on function public.redeem_invite_code(text) is
 revoke execute on function public.redeem_invite_code(text) from public;
 revoke execute on function public.redeem_invite_code(text) from anon;
 grant execute on function public.redeem_invite_code(text) to authenticated;
+
+-- To reverse: drop function public.mark_notifications_read(uuid[]), then
+-- recreate notifications_update_own from 0001's original definition (only if
+-- reverting the read_at-only tightening is actually intended — not
+-- recommended, it restores the type/payload rewrite hole). redeem_invite_code
+-- can be restored to 0008's throttle-free version by re-running that
+-- migration's create-or-replace body, though that reopens item 42's gap.

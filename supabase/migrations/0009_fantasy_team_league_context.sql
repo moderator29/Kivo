@@ -47,3 +47,5 @@ $$;
 revoke execute on function public.get_fantasy_team_league(uuid) from public;
 revoke execute on function public.get_fantasy_team_league(uuid) from anon;
 grant execute on function public.get_fantasy_team_league(uuid) to authenticated;
+
+-- To reverse: drop function public.get_fantasy_team_league(uuid).

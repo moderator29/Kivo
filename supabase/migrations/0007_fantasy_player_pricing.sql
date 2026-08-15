@@ -113,3 +113,6 @@ end;
 $$;
 
 grant execute on function public.redeem_invite_code(text) to authenticated;
+
+-- To reverse: drop function public.redeem_invite_code(text), then drop table
+-- fantasy_player_prices (cascades its policies/index/trigger).

@@ -58,3 +58,8 @@ create policy transfers_update_admin on transfers
 create policy transfers_delete_admin on transfers
   for delete to authenticated
   using (private.has_role(array['football_data_admin', 'admin', 'super_admin']));
+
+-- To reverse: drop table transfers (cascades its policies/index/trigger),
+-- then drop type transfer_type; the 'transfer' provider_entity_type enum
+-- value cannot be dropped without recreating the whole enum, so a full
+-- rollback would need that extra step if the value must go too.

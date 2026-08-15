@@ -20,3 +20,6 @@ alter table seasons add column provider_year integer not null;
 
 comment on column seasons.provider_year is
   'Bare season-start year as reported by the football data provider (e.g. 2025 for the "2025/2026" season). The identity column syncStandings and any other provider-year lookup should read -- seasons.name stays purely the "YYYY/YYYY+1" display string its own comment describes.';
+
+-- To reverse: alter table seasons drop column provider_year (safe only if no
+-- code still reads it -- syncStandings does as of this migration).

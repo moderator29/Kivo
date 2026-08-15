@@ -1175,3 +1175,9 @@ create policy audit_log_insert_admin on audit_log
 
 -- No update/delete policy: audit_log is append-only, including for admins
 -- acting through the API — corrections are new rows, not edits, by design.
+
+-- To reverse: this is the foundational schema every later migration builds
+-- on, so there is no partial rollback — reversing it means dropping the
+-- entire public schema (`drop schema public cascade; create schema public;`)
+-- and reapplying every migration from scratch is the realistic recovery
+-- path for a mistake caught this early, not an undo of 0001 in isolation.

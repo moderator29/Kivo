@@ -147,3 +147,9 @@ grant execute on function public.join_public_fantasy_league(uuid) to authenticat
 -- -----------------------------------------------------------------------------
 create index idx_fantasy_leagues_public_created_at on fantasy_leagues (created_at desc) where is_private = false;
 create index idx_fantasy_leagues_name_trgm on fantasy_leagues using gin (name gin_trgm_ops);
+
+-- To reverse: drop index idx_fantasy_leagues_public_created_at;
+-- drop index idx_fantasy_leagues_name_trgm;
+-- drop function public.join_public_fantasy_league(uuid);
+-- drop function public.list_public_fantasy_leagues(text, integer, integer)
+-- -- the /fantasy/browse route loses its data source and join path.

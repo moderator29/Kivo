@@ -14,3 +14,8 @@
 -- there's no reason to leave it grantable.
 revoke execute on function public.get_xp_total(uuid) from anon;
 revoke execute on function public.prune_sync_runs(integer) from anon;
+
+-- To reverse: grant execute on function public.get_xp_total(uuid) to anon;
+-- grant execute on function public.prune_sync_runs(integer) to anon — not
+-- recommended, this reopens the unauthenticated prune_sync_runs hole this
+-- migration exists to close.

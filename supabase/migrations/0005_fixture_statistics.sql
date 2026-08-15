@@ -56,3 +56,5 @@ create policy fixture_statistics_update_admin on fixture_statistics
 create policy fixture_statistics_delete_admin on fixture_statistics
   for delete to authenticated
   using (private.has_role(array['football_data_admin', 'admin', 'super_admin']));
+
+-- To reverse: drop table fixture_statistics (cascades its policies/index/trigger).

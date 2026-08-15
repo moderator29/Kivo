@@ -34,3 +34,6 @@ $$;
 
 revoke execute on function public.is_username_available(text, uuid) from public;
 grant execute on function public.is_username_available(text, uuid) to anon, authenticated;
+
+-- To reverse: drop function public.is_username_available(text, uuid) — the
+-- onboarding and settings username fields lose their live availability check.

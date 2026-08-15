@@ -29,3 +29,7 @@ $$;
 
 revoke execute on function public.get_public_profiles(uuid[]) from public;
 grant execute on function public.get_public_profiles(uuid[]) to anon, authenticated;
+
+-- To reverse: drop function public.get_public_profiles(uuid[]) — every guest-
+-- and cross-user author-name join in the app depends on this, so a rollback
+-- here regresses item 20's "KIVO fan" fallback-name bug immediately.

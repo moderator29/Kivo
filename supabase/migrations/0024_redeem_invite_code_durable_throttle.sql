@@ -88,3 +88,9 @@ comment on function public.redeem_invite_code(text) is
 revoke execute on function public.redeem_invite_code(text) from public;
 revoke execute on function public.redeem_invite_code(text) from anon;
 grant execute on function public.redeem_invite_code(text) to authenticated;
+
+-- To reverse: this changes the function's own return signature (adds
+-- error_message), so `drop function` first, then re-run 0019's create-or-
+-- replace body to restore the raise-based version — that reopens the
+-- rolled-back-throttle bug this migration exists to fix, so only do this if
+-- you have a different fix in mind.

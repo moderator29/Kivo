@@ -16,3 +16,8 @@ insert into badges (code, name, description, icon_url) values
   ('first_comment', 'Joined the Conversation', 'Left your first comment in the community.', '/assets/icons/social/messages.webp'),
   ('ten_posts', 'Regular', 'Posted 10 times in the KIVO community.', '/assets/icons/social/communities.webp')
 on conflict (code) do nothing;
+
+-- To reverse: delete from badges where code in ('first_prediction_correct',
+-- 'five_predictions_correct', 'fantasy_gameweek_scored', 'fantasy_league_joined',
+-- 'first_follow', 'five_follows', 'first_comment', 'ten_posts') — safe only if
+-- no user_badges rows reference them yet (check first).

@@ -30,3 +30,6 @@ comment on column reports.content_snapshot is
   'audit trail keeps evidence and the moderation queue can render a preview '
   'even for already-deleted content. Populated once, in reportContent() '
   '(src/app/(app)/social/report-actions.ts); never overwritten afterwards.';
+
+-- To reverse: alter table reports drop column content_snapshot — the
+-- moderation queue reverts to showing no preview for deleted content.

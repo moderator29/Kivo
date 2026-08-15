@@ -76,3 +76,9 @@ create policy fantasy_gameweeks_update_admin on fantasy_gameweeks
 create policy fantasy_gameweeks_delete_admin on fantasy_gameweeks
   for delete to authenticated
   using (private.has_role(array['football_data_admin', 'admin', 'super_admin']));
+
+-- To reverse: drop the twenty indexes above (safe any time, they're pure
+-- performance aids), then drop each replacement policy and recreate its two
+-- predecessors (profiles_select_own/profiles_select_admin,
+-- profiles_update_own/profiles_update_admin, badges_write_admin `for all`,
+-- fantasy_gameweeks_write_admin `for all`) from migration 0001's originals.

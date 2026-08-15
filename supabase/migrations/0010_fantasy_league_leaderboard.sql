@@ -51,3 +51,5 @@ $$;
 revoke execute on function public.get_fantasy_league_leaderboard(uuid) from public;
 revoke execute on function public.get_fantasy_league_leaderboard(uuid) from anon;
 grant execute on function public.get_fantasy_league_leaderboard(uuid) to authenticated;
+
+-- To reverse: drop function public.get_fantasy_league_leaderboard(uuid).

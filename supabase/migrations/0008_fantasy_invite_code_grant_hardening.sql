@@ -8,3 +8,7 @@
 revoke execute on function public.redeem_invite_code(text) from public;
 revoke execute on function public.redeem_invite_code(text) from anon;
 grant execute on function public.redeem_invite_code(text) to authenticated;
+
+-- To reverse: grant execute on function public.redeem_invite_code(text) to
+-- public, anon (restores the pre-hardening, wider-than-intended grant — not
+-- recommended, included only for completeness).

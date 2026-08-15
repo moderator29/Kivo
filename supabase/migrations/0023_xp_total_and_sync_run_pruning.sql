@@ -47,3 +47,7 @@ $$;
 revoke execute on function public.prune_sync_runs(integer) from public;
 revoke execute on function public.prune_sync_runs(integer) from authenticated;
 grant execute on function public.prune_sync_runs(integer) to service_role;
+
+-- To reverse: drop function public.get_xp_total(uuid); drop function
+-- public.prune_sync_runs(integer). See 0025 for a grants follow-up that
+-- must also be considered if reverting this.
