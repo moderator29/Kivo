@@ -19,10 +19,14 @@ import type { NotificationRow } from "@/lib/notifications";
  * column in supabase/migrations/0001_kivo_core_schema.sql: "notification
  * types will grow continuously as features ship"), not a Postgres enum — so
  * this union is KIVO's own registry of every type a producer emits or is
- * reasonably expected to emit next, not a mirror of a DB constraint. Only
- * "post_like" (src/app/(app)/social/actions.ts) is wired to a real producer
- * today; the rest are forward-covered so describe()/icon()/href() never fall
- * back to a raw snake_case string once they ship. Add new types here first.
+ * reasonably expected to emit next, not a mirror of a DB constraint.
+ * "post_like" (src/app/(app)/social/actions.ts), "match_kickoff"/
+ * "match_goal"/"match_red_card"/"match_result"/"player_event"
+ * (src/lib/football/match-notifications.ts, wired into the real sync code
+ * paths in sync.ts/sync-match-details.ts) are wired to real producers;
+ * prediction/fantasy/badge/moderation types below are forward-covered so
+ * describe()/icon()/href() never fall back to a raw snake_case string once
+ * those ship a producer too. Add new types here first.
  */
 export type NotificationType =
   | "post_like"
@@ -31,7 +35,9 @@ export type NotificationType =
   | "new_follower"
   | "match_kickoff"
   | "match_goal"
+  | "match_red_card"
   | "match_result"
+  | "player_event"
   | "prediction_result"
   | "prediction_reminder"
   | "fantasy_deadline"
@@ -109,9 +115,19 @@ export const NOTIFICATION_REGISTRY: Record<NotificationType, RegistryEntry> = {
     icon: Goal,
     href: fixtureHref,
   },
+  match_red_card: {
+    title: (p) => str(p, "summary") ?? "Red card in a match you're following",
+    icon: ShieldAlert,
+    href: fixtureHref,
+  },
   match_result: {
     title: (p) => str(p, "summary") ?? "Full time in a match you're following",
     icon: Trophy,
+    href: fixtureHref,
+  },
+  player_event: {
+    title: (p) => str(p, "summary") ?? "A player you follow was involved in a match event",
+    icon: Target,
     href: fixtureHref,
   },
   prediction_result: {

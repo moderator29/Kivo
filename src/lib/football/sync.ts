@@ -4,6 +4,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import type { FixtureStatus, NormalizedFixture, NormalizedTeam } from "./types";
+import { notifyFixtureStatusChange } from "./match-notifications";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -280,6 +281,7 @@ async function upsertFixture(
   provider: string,
   fixture: NormalizedFixture,
   refs: ResolvedFixtureRefs,
+  previousStatus: DbFixtureStatus | null,
 ): Promise<void> {
   // p_venue_id/p_home_score/p_away_score/p_home_score_ht/p_away_score_ht/
   // p_minute_elapsed are optional RPC args for the same reason as
@@ -310,8 +312,28 @@ async function upsertFixture(
   if (fixture.awayScoreHt !== null) args.p_away_score_ht = fixture.awayScoreHt;
   if (fixture.minute !== null) args.p_minute_elapsed = fixture.minute;
 
-  const { error } = await supabase.rpc("upsert_fixture_with_mapping", args);
+  const { data: kivoFixtureId, error } = await supabase.rpc("upsert_fixture_with_mapping", args);
   if (error) throw error;
+
+  // RECOMMENDATIONS.md notification items: kickoff/full-time. Fires off the
+  // exact status write this function just made, using the real KIVO fixture
+  // id the RPC itself returns (not the provider id) — see
+  // notifyFixtureStatusChange's own doc comment for why `previousStatus`
+  // (looked up once per whole run, see syncTodayFixtures) has to be known
+  // and different from the new status before this does anything.
+  if (kivoFixtureId) {
+    await notifyFixtureStatusChange(supabase, {
+      fixtureId: kivoFixtureId,
+      homeTeamId: refs.homeTeamId,
+      awayTeamId: refs.awayTeamId,
+      homeTeamName: fixture.homeTeam.name,
+      awayTeamName: fixture.awayTeam.name,
+      previousStatus,
+      newStatus: toDbFixtureStatus(fixture.status),
+      homeScore: fixture.homeScore,
+      awayScore: fixture.awayScore,
+    });
+  }
 }
 
 function todayIsoDate(): string {
@@ -391,6 +413,26 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
     batchFindMappedIds(supabase, provider.name, "venue", venueProviderIds),
   ]);
 
+  // Notification items (kickoff/full-time): batch-resolve each fixture's
+  // real prior status the same up-front way as the mappings above, one
+  // extra round trip for the whole run rather than one per fixture. A
+  // provider id with no existing mapping is a fixture KIVO has never synced
+  // before — its entry is simply absent from this map, and
+  // notifyFixtureStatusChange treats "no known prior status" as "don't
+  // guess, don't notify" (see its doc comment).
+  const fixtureProviderIds = Array.from(new Set(fixtures.map((f) => f.providerId)));
+  const fixtureMappings = await batchFindMappedIds(supabase, provider.name, "fixture", fixtureProviderIds);
+  const priorStatusByKivoId = new Map<string, DbFixtureStatus>();
+  const knownKivoFixtureIds = Array.from(fixtureMappings.values());
+  if (knownKivoFixtureIds.length > 0) {
+    const { data: priorRows, error: priorError } = await supabase
+      .from("fixtures")
+      .select("id, status")
+      .in("id", knownKivoFixtureIds);
+    if (priorError) throw priorError;
+    for (const row of priorRows ?? []) priorStatusByKivoId.set(row.id, row.status);
+  }
+
   let processed = 0;
   const errors: string[] = [];
 
@@ -410,13 +452,22 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
         ? await upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName, venueMappings)
         : null;
 
-      await upsertFixture(supabase, provider.name, fixture, {
-        competitionId,
-        seasonId,
-        homeTeamId,
-        awayTeamId,
-        venueId,
-      });
+      const knownKivoId = fixtureMappings.get(fixture.providerId) ?? null;
+      const previousStatus = knownKivoId ? (priorStatusByKivoId.get(knownKivoId) ?? null) : null;
+
+      await upsertFixture(
+        supabase,
+        provider.name,
+        fixture,
+        {
+          competitionId,
+          seasonId,
+          homeTeamId,
+          awayTeamId,
+          venueId,
+        },
+        previousStatus,
+      );
       processed += 1;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

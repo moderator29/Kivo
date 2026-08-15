@@ -1959,6 +1959,13 @@ export type Database = {
           team_count: number
         }[]
       }
+      get_most_followed_teams: {
+        Args: { p_limit?: number }
+        Returns: {
+          follower_count: number
+          team_id: string
+        }[]
+      }
       get_poll_results: {
         Args: { p_post_id: string }
         Returns: {

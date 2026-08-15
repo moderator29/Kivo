@@ -16,6 +16,51 @@ export type SearchResult = {
 const RESULTS_PER_CATEGORY = 5;
 const MAX_QUERY_LENGTH = 80;
 
+export type PopularTeam = {
+  id: string;
+  name: string;
+  crestUrl: string | null;
+  followerCount: number;
+};
+
+const POPULAR_TEAMS_LIMIT = 6;
+
+/**
+ * RECOMMENDATIONS.md item 128's "trending" half of the command palette's
+ * zero state — real usage data, not a fabricated list. This codebase has no
+ * view-tracking of any kind (no page-view table, no analytics event log), so
+ * a genuine "most viewed" ranking isn't buildable honestly; `follows` is,
+ * and is deliberately surfaced as "Popular" rather than "Trending" in the UI
+ * (see command-palette.tsx) — a real follower count is a legitimate
+ * popularity signal, but it isn't the time-windowed live-activity thing
+ * "trending" usually implies, and this codebase doesn't have that data.
+ *
+ * follows_select_own (migration 0001) blocks a plain cross-user count from
+ * the client, so this goes through get_most_followed_teams — a narrow
+ * SECURITY DEFINER aggregate (migration 0040) that returns only counts,
+ * never who follows whom, same pattern as get_prediction_consensus.
+ * Returns an empty array (never fabricated placeholder teams) once nobody
+ * has followed a team yet.
+ */
+export async function getPopularTeams(): Promise<PopularTeam[]> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: popular, error } = await supabase.rpc("get_most_followed_teams", { p_limit: POPULAR_TEAMS_LIMIT });
+  if (error || !popular || popular.length === 0) return [];
+
+  const teamIds = popular.map((row) => row.team_id);
+  const { data: teams } = await supabase.from("teams").select("id, name, crest_url").in("id", teamIds);
+  const teamById = new Map((teams ?? []).map((t) => [t.id, t]));
+
+  return popular
+    .map((row): PopularTeam | null => {
+      const team = teamById.get(row.team_id);
+      if (!team) return null;
+      return { id: team.id, name: team.name, crestUrl: team.crest_url, followerCount: Number(row.follower_count) };
+    })
+    .filter((t): t is PopularTeam => t !== null);
+}
+
 /**
  * Powers the global command palette (⌘K). Searches the three entity tables
  * that already have real synced data and their own detail pages — fixtures

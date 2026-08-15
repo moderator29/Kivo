@@ -11,8 +11,9 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft } from "lucide-react";
-import { searchPlatform, type SearchResult } from "@/app/(app)/search-actions";
+import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft, Clock, Flame, X } from "lucide-react";
+import { searchPlatform, getPopularTeams, type SearchResult, type PopularTeam } from "@/app/(app)/search-actions";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const TYPE_ICON = { team: Shield, player: UserRound, competition: Trophy } as const;
@@ -33,6 +34,55 @@ const QUICK_LINKS = [
   { label: "Competitions", href: "/leagues", icon: Trophy },
   { label: "Matches", href: "/matches", icon: CalendarDays },
 ] as const;
+
+// Item 128: recent searches. Real queries this browser actually searched
+// for, not user data — localStorage is the right home (no new schema, and
+// nothing here needs to sync across devices or survive a cleared browser,
+// same standing this codebase already applies to e.g. onboarding dismissal
+// flags). Capped small and deduped case-insensitively so retyping the same
+// team name doesn't pad the list with near-duplicates.
+const RECENT_SEARCHES_KEY = "kivo:recent-searches";
+const MAX_RECENT_SEARCHES = 5;
+
+function loadRecentSearches(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(RECENT_SEARCHES_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((q): q is string => typeof q === "string" && q.length > 0).slice(0, MAX_RECENT_SEARCHES);
+  } catch {
+    return [];
+  }
+}
+
+/** Records a real, completed search — called when the user actually
+ * navigates to a result, not on every debounced keystroke, so the list holds
+ * genuine finished searches rather than every half-typed prefix. */
+function saveRecentSearch(query: string): string[] {
+  const trimmed = query.trim();
+  if (typeof window === "undefined" || trimmed.length < 2) return loadRecentSearches();
+  try {
+    const deduped = loadRecentSearches().filter((q) => q.toLowerCase() !== trimmed.toLowerCase());
+    const next = [trimmed, ...deduped].slice(0, MAX_RECENT_SEARCHES);
+    window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    // Private browsing / storage quota — recent searches is a UX nicety,
+    // never worth failing the actual navigation over.
+    return loadRecentSearches();
+  }
+}
+
+function clearRecentSearches(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(RECENT_SEARCHES_KEY);
+  } catch {
+    // Same non-critical storage failure as above.
+  }
+}
 
 /**
  * Item 127: the palette's own Ctrl/Cmd keydown handler already accepts either
@@ -69,6 +119,14 @@ export function CommandPalette() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pending, startTransition] = useTransition();
+  // Item 128: recent (localStorage, this browser only) + popular (real
+  // follower counts, see getPopularTeams) for the zero state. recentSearches'
+  // lazy initializer runs once on mount (server snapshot is always `[]`,
+  // matching loadRecentSearches' own `typeof window === "undefined"` guard,
+  // so this is hydration-safe) and is otherwise only ever updated directly
+  // by saveRecentSearch/clearRecentSearches below — never inside an effect.
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+  const [popularTeams, setPopularTeams] = useState<PopularTeam[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -110,6 +168,16 @@ export function CommandPalette() {
       return () => cancelAnimationFrame(id);
     }
   }, [open]);
+
+  // Popular teams is a real server round trip, fetched once when the palette
+  // is first opened and cached for the session (a follower-count ranking
+  // doesn't meaningfully change within one session) — not on every open.
+  useEffect(() => {
+    if (!open || popularTeams !== null) return;
+    getPopularTeams()
+      .then(setPopularTeams)
+      .catch(() => setPopularTeams([]));
+  }, [open, popularTeams]);
 
   // Keyboard highlight is only a visual affordance without this — arrowing
   // past the fifth result in the max-h-80 scroll container would move
@@ -166,6 +234,9 @@ export function CommandPalette() {
   }, [query]);
 
   function navigateTo(result: SearchResult) {
+    // Item 128: record the query that led here as a real, completed search
+    // — only on an actual result selection, not every debounced keystroke.
+    setRecentSearches(saveRecentSearch(query));
     router.push(`${TYPE_HREF[result.type]}/${result.id}`);
     close();
   }
@@ -173,6 +244,16 @@ export function CommandPalette() {
   function goTo(href: string) {
     router.push(href);
     close();
+  }
+
+  function runRecentSearch(term: string) {
+    setQuery(term);
+    inputRef.current?.focus();
+  }
+
+  function handleClearRecentSearches() {
+    clearRecentSearches();
+    setRecentSearches([]);
   }
 
   function handleKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
@@ -254,7 +335,65 @@ export function CommandPalette() {
 
               <div id={LISTBOX_ID} role="listbox" aria-label="Search results" className="max-h-80 overflow-y-auto p-2">
                 {query.trim().length < 2 ? (
-                  <div className="flex flex-col gap-3 px-1 py-3">
+                  <div className="flex flex-col gap-4 px-1 py-3">
+                    {recentSearches.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between px-2">
+                          <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">
+                            <Clock className="h-3 w-3" strokeWidth={2} />
+                            Recent
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleClearRecentSearches}
+                            className="flex items-center gap-1 rounded px-1 text-[11px] text-foreground-subtle transition hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                          >
+                            <X className="h-3 w-3" strokeWidth={2} />
+                            Clear
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 px-1">
+                          {recentSearches.map((term) => (
+                            <button
+                              key={term}
+                              type="button"
+                              onClick={() => runRecentSearch(term)}
+                              className="rounded-full border border-white/10 px-3 py-1 text-xs text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                            >
+                              {term}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {popularTeams && popularTeams.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="flex items-center gap-1.5 px-2 text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">
+                          <Flame className="h-3 w-3" strokeWidth={2} />
+                          Popular teams
+                        </span>
+                        <div className="flex flex-col gap-0.5 px-1">
+                          {popularTeams.map((team) => (
+                            <button
+                              key={team.id}
+                              type="button"
+                              onClick={() => goTo(`/teams/${team.id}`)}
+                              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-sm text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+                            >
+                              <TeamCrest crestUrl={team.crestUrl} name={team.name} size={20} />
+                              <span className="min-w-0 flex-1 truncate">{team.name}</span>
+                              <span className="text-[11px] text-foreground-subtle">
+                                {team.followerCount} follower{team.followerCount === 1 ? "" : "s"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        {/* "Popular", not "Trending": a real follower count, not
+                            time-windowed live activity KIVO doesn't track. */}
+                      </div>
+                    )}
+
                     <p className="px-2 text-center text-xs text-foreground-subtle">
                       Type at least 2 characters to search, or jump straight to a section.
                     </p>
