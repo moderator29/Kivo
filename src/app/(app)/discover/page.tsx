@@ -61,7 +61,7 @@ export default async function DiscoverPage() {
       label: "Transfers",
       count: transfers,
       countLabel: transfers === 1 ? "transfer synced" : "transfers synced",
-      description: "Confirmed transfers, tracked as they're synced from the data pipeline.",
+      description: "Confirmed transfers for players synced so far, not the full transfer market.",
     },
   ];
 
