@@ -145,7 +145,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
           <>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-semibold text-foreground">
-                {team.standing.position !== null ? `#${team.standing.position}` : "–"}
+                {team.standing.position !== null ? `#${team.standing.position}` : "-"}
               </span>
               {team.standing.competitionLabel && (
                 <span className="text-[11px] text-foreground-subtle">{team.standing.competitionLabel}</span>

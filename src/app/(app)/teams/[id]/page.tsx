@@ -253,7 +253,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-semibold text-foreground">
-                {currentStanding.position !== null ? `#${currentStanding.position}` : "–"}
+                {currentStanding.position !== null ? `#${currentStanding.position}` : "-"}
               </span>
               <span className="text-xs text-foreground-subtle">
                 {currentStanding.season?.competition?.short_name ?? currentStanding.season?.competition?.name} ·{" "}
@@ -297,7 +297,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               <p className="text-[11px] text-foreground-subtle">
                 {[manager.nationality, manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : null]
                   .filter(Boolean)
-                  .join(" · ") || "No further details on record"}
+                  .join(" · ") || "-"}
               </p>
             </div>
           </div>
@@ -336,7 +336,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                         <div className="min-w-0">
                           <p className="truncate text-sm text-foreground">{player.known_as ?? player.full_name}</p>
                           <p className="truncate text-[11px] text-foreground-subtle">
-                            {[player.position, player.nationality].filter(Boolean).join(" · ") || "—"}
+                            {[player.position, player.nationality].filter(Boolean).join(" · ") || "-"}
                           </p>
                         </div>
                       </Link>

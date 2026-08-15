@@ -58,7 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/matches",
     icon: CalendarDays,
     status: "live",
-    comingSoonDescription: "No fixtures synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No fixtures synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/matches.webp",
   },
   {
@@ -104,7 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/teams",
     icon: Shield,
     status: "live",
-    comingSoonDescription: "No teams synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No teams synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/teams.webp",
   },
   {
@@ -113,7 +113,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/players",
     icon: UserRound,
     status: "live",
-    comingSoonDescription: "No players synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No players synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/players.webp",
   },
   {
@@ -122,7 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/leagues",
     icon: ListOrdered,
     status: "live",
-    comingSoonDescription: "No competitions synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No competitions synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/leagues.webp",
   },
   {

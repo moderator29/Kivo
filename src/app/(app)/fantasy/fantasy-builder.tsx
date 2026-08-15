@@ -378,7 +378,7 @@ export function FantasyBuilder({
             />
             <StatTile
               label="Points"
-              value={pointsAvailable ? String(points) : "–"}
+              value={pointsAvailable ? String(points) : "-"}
               valueClass="text-foreground"
               caption={pointsAvailable ? undefined : "Available after this gameweek's matches finish"}
             />
@@ -665,7 +665,7 @@ function PlayerActionSheet({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
                   <p className="truncate text-xs text-foreground-subtle">
-                    {[player.position, player.teamName].filter(Boolean).join(" · ") || "—"} · {formatFantasyPrice(player.price)}
+                    {[player.position, player.teamName].filter(Boolean).join(" · ") || "-"} · {formatFantasyPrice(player.price)}
                   </p>
                 </div>
               </div>
@@ -862,7 +862,7 @@ function PlayerPicker({
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm text-foreground">{p.name}</p>
                           <p className="truncate text-[11px] text-foreground-subtle">
-                            {[p.position, p.teamName].filter(Boolean).join(" · ") || "—"}
+                            {[p.position, p.teamName].filter(Boolean).join(" · ") || "-"}
                           </p>
                         </div>
                         <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">{formatFantasyPrice(p.price)}</span>

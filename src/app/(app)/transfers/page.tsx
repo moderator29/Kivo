@@ -195,7 +195,7 @@ export default async function TransfersPage({
                     <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                     </span>
-                    <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "—"}</span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>
                   </div>
                 </div>
               </FadeIn>

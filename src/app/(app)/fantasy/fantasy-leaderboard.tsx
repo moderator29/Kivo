@@ -63,7 +63,7 @@ export function FantasyLeaderboard({
                 </Link>
               </div>
               <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                {entry.hasScores ? entry.totalPoints : "–"}
+                {entry.hasScores ? entry.totalPoints : "-"}
               </span>
             </div>
           );

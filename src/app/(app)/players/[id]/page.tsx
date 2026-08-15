@@ -257,7 +257,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                     </span>
                     <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transfer_date)}</span>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "—"}</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>
                 </div>
               </div>
             ))}

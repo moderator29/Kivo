@@ -138,7 +138,7 @@ export default async function FollowingPage() {
                       <div className="min-w-0">
                         <p className="truncate text-sm text-foreground">{player.known_as ?? player.full_name}</p>
                         <p className="truncate text-[11px] text-foreground-subtle">
-                          {[player.position, player.current_team?.name].filter(Boolean).join(" · ") || "—"}
+                          {[player.position, player.current_team?.name].filter(Boolean).join(" · ") || "-"}
                         </p>
                       </div>
                     </Link>
