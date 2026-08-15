@@ -1,0 +1,339 @@
+@import "tailwindcss";
+
+:root {
+  --kivo-obsidian: #05060a;
+  --kivo-navy-deep: #0a1020;
+  --kivo-navy: #0d1630;
+  --kivo-blue: #2563ff;
+  --kivo-cyan: #00d9ff;
+  --kivo-violet: #7c3fff;
+  --kivo-magenta: #d946ef;
+  --kivo-white: #f8faff;
+  --kivo-white-soft: #cbd5e1;
+  --kivo-slate: #64748b;
+  /* Lighter than --kivo-slate specifically for text-on-obsidian: #64748b only
+     hits ~4.25:1 on #05060a, short of WCAG AA's 4.5:1 for normal-size text. */
+  --kivo-slate-text: #8592a8;
+
+  --kivo-live: #22c55e;
+  --kivo-critical: #ff3b4a;
+  --kivo-warning: #facc15;
+  --kivo-info: #38bdf8;
+  --kivo-achievement: #f5c451;
+
+  --kivo-glass: rgba(255, 255, 255, 0.04);
+  --kivo-glass-border: rgba(255, 255, 255, 0.08);
+  --kivo-glass-hover: rgba(255, 255, 255, 0.07);
+
+  --background: var(--kivo-obsidian);
+  --background-secondary: var(--kivo-navy-deep);
+  --surface: var(--kivo-navy);
+  --foreground: var(--kivo-white);
+  --foreground-muted: var(--kivo-white-soft);
+  --foreground-subtle: var(--kivo-slate-text);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+
+  --color-kivo-obsidian: var(--kivo-obsidian);
+  --color-kivo-navy-deep: var(--kivo-navy-deep);
+  --color-kivo-navy: var(--kivo-navy);
+  --color-kivo-blue: var(--kivo-blue);
+  --color-kivo-cyan: var(--kivo-cyan);
+  --color-kivo-violet: var(--kivo-violet);
+  --color-kivo-magenta: var(--kivo-magenta);
+  --color-kivo-white: var(--kivo-white);
+  --color-kivo-white-soft: var(--kivo-white-soft);
+  --color-kivo-slate: var(--kivo-slate);
+
+  --color-live: var(--kivo-live);
+  --color-critical: var(--kivo-critical);
+  --color-warning: var(--kivo-warning);
+  --color-info: var(--kivo-info);
+  --color-achievement: var(--kivo-achievement);
+
+  --font-sans: var(--font-jakarta);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  /* Bumped from the 16px default so the whole rem-based type scale reads a
+     little larger and more confident, per founder direction. */
+  font-size: 17px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--kivo-blue);
+  color: var(--kivo-white);
+}
+
+.kivo-glass {
+  background: var(--kivo-glass);
+  border: 1px solid var(--kivo-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.kivo-glass:hover {
+  background: var(--kivo-glass-hover);
+}
+
+/* Glass panel with a visible brand-gradient stroke around it, for moments
+   that should read as "premium" rather than ambient (hero cards, feature
+   highlights). The gradient lives on a masked ::before ring so the actual
+   glass background stays untouched and independently opaque/blurred —
+   stacking the gradient directly into .kivo-glass's own (mostly
+   transparent) background would just let the bright gradient dominate the
+   whole card instead of reading as a thin stroke. */
+.kivo-glass-brand {
+  position: relative;
+  background: var(--kivo-glass);
+  border: 1px solid transparent;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.kivo-glass-brand:hover {
+  background: var(--kivo-glass-hover);
+}
+
+.kivo-glass-brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-violet), var(--kivo-magenta));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Sharp-edged glass for buttons/controls: a crisp bright border instead of
+   the ambient low-opacity one on .kivo-glass, so it reads as interactive. */
+.kivo-glass-sharp {
+  background: var(--kivo-glass);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.kivo-glass-sharp:hover {
+  background: var(--kivo-glass-hover);
+  border-color: rgba(0, 217, 255, 0.6);
+}
+
+.kivo-gradient-prime {
+  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
+}
+
+.kivo-gradient-intelligence {
+  background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-blue), var(--kivo-cyan));
+}
+
+.kivo-gradient-pulse {
+  background-image: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-blue));
+}
+
+.kivo-gradient-premium {
+  background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-magenta));
+}
+
+.kivo-gradient-victory {
+  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-violet), var(--kivo-achievement));
+}
+
+.kivo-text-gradient-prime {
+  /* Fallback in case background-clip: text doesn't paint — never fully transparent. */
+  color: var(--kivo-cyan);
+  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .kivo-text-gradient-prime {
+    color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Landing hero background aurora: slow-drifting, low-opacity brand-gradient
+   glow blobs positioned behind the hero copy. Purely decorative (aria-hidden,
+   pointer-events: none) and pure CSS so it costs nothing beyond a composited
+   transform. Each blob's animation-duration is clamped to near-zero by the
+   prefers-reduced-motion block above, same as every other animation on the
+   page — nothing extra to wire up here. */
+.kivo-aurora {
+  position: absolute;
+  inset: -15% -10%;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.kivo-aurora-blob {
+  position: absolute;
+  width: 50%;
+  height: 60%;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.35;
+  will-change: transform;
+}
+
+.kivo-aurora-blob--cyan {
+  top: -5%;
+  left: 2%;
+  background: radial-gradient(circle, var(--kivo-cyan), transparent 70%);
+  animation: kivo-aurora-drift-a 20s ease-in-out infinite;
+}
+
+.kivo-aurora-blob--violet {
+  right: -4%;
+  bottom: -12%;
+  background: radial-gradient(circle, var(--kivo-violet), transparent 70%);
+  animation: kivo-aurora-drift-b 26s ease-in-out infinite;
+}
+
+.kivo-aurora-blob--magenta {
+  top: 30%;
+  left: 30%;
+  width: 38%;
+  height: 45%;
+  opacity: 0.22;
+  background: radial-gradient(circle, var(--kivo-magenta), transparent 70%);
+  animation: kivo-aurora-drift-c 24s ease-in-out infinite;
+}
+
+@keyframes kivo-aurora-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6%, 8%) scale(1.1);
+  }
+}
+
+@keyframes kivo-aurora-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-8%, -6%) scale(1.08);
+  }
+}
+
+@keyframes kivo-aurora-drift-c {
+  0%,
+  100% {
+    transform: translate(-4%, 0) scale(0.95);
+  }
+  50% {
+    transform: translate(4%, -6%) scale(1.05);
+  }
+}
+
+/* Page-wide variant of the aurora above: fixed to the viewport instead of
+   absolute inside one section, so the glow keeps breathing behind the whole
+   scroll rather than stopping at the hero's box. Used on the landing page's
+   root wrapper. Same reduced-motion handling applies automatically since it
+   reuses the same keyframes/blob classes. */
+.kivo-aurora-page {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* A much quieter version for logged-in app pages: content has to stay the
+   priority, so this drops opacity and adds a slow overall breathing pulse
+   (scale) rather than the hero's bigger drift, and sits fixed behind the
+   app shell at the lowest z-index. */
+.kivo-aurora-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.5;
+  animation: kivo-aurora-breathe 14s ease-in-out infinite;
+}
+
+@keyframes kivo-aurora-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* Shared crop for the K-mark-only glyph (top portion of the square lockup,
+   mark-then-wordmark stacked) used by KivoMarkGlyph. Opacity is applied
+   inline per usage (see that component) rather than here, since it varies a
+   lot between the one large hero watermark and the small scattered accents.
+   Slow rotate+drift keeps every instance from feeling like a static sticker. */
+.kivo-mark-glyph {
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+  animation: kivo-mark-glyph-drift 40s ease-in-out infinite;
+}
+
+.kivo-mark-glyph img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+}
+
+.kivo-mark-glyph--reverse {
+  animation-direction: reverse;
+}
+
+@keyframes kivo-mark-glyph-drift {
+  0%,
+  100% {
+    transform: rotate(-3deg) scale(1);
+  }
+  50% {
+    transform: rotate(2deg) scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kivo-mark-glyph,
+  .kivo-aurora-ambient {
+    animation: none !important;
+  }
+}
