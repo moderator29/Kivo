@@ -11,6 +11,7 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { isLiveStatus } from "@/lib/football/fixture-status";
+import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
 import { getNavItem } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
@@ -29,8 +30,43 @@ type FixtureRow = {
   minute_elapsed: number | null;
   home_team: { name: string; crest_url: string | null } | null;
   away_team: { name: string; crest_url: string | null } | null;
-  competition: { name: string; short_name: string | null } | null;
+  competition: { id: string | null; name: string; short_name: string | null } | null;
 };
+
+/** Groups an already-fetched fixture list by competition with a real match
+ * count per group — shared by the "Live now" and "Today's fixtures" blocks
+ * below (RECOMMENDATIONS-style item: group /live and /matches by competition). */
+function GroupedFixtureRows({ fixtures }: { fixtures: FixtureRow[] }) {
+  const groups = groupFixturesByCompetition(fixtures);
+  return (
+    <div className="flex flex-col gap-4">
+      {groups.map((group) => (
+        <div key={group.competitionId ?? group.competitionName} className="flex flex-col gap-1">
+          <div className="flex items-center justify-between px-2">
+            {group.competitionId ? (
+              <Link
+                href={`/leagues/${group.competitionId}`}
+                className="text-xs font-semibold text-foreground-muted transition hover:text-kivo-cyan"
+              >
+                {group.competitionName}
+              </Link>
+            ) : (
+              <span className="text-xs font-semibold text-foreground-muted">{group.competitionName}</span>
+            )}
+            <span className="text-[11px] text-foreground-subtle">
+              {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
+            </span>
+          </div>
+          <div className="flex flex-col divide-y divide-white/5">
+            {group.fixtures.map((fixture) => (
+              <FixtureRowCard key={fixture.id} fixture={fixture} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function FixtureRowCard({ fixture }: { fixture: FixtureRow }) {
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
@@ -41,10 +77,9 @@ function FixtureRowCard({ fixture }: { fixture: FixtureRow }) {
       href={`/matches/${fixture.id}`}
       className="flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-white/5"
     >
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-foreground-subtle">
-          {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
-        </span>
+      {/* No per-row competition label — GroupedFixtureRows' section header
+          above already names it. */}
+      <div className="flex items-center justify-end">
         <FixtureStatusBadge
           status={fixture.status}
           kickoffAt={fixture.kickoff_at}
@@ -82,7 +117,7 @@ export default async function LivePage() {
   const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
-       competition:competitions(name, short_name)`;
+       competition:competitions(id, name, short_name)`;
 
   const { data: liveFixtures } = await supabase
     .from("fixtures")
@@ -134,22 +169,14 @@ export default async function LivePage() {
             <Radio className="h-4 w-4 text-live" strokeWidth={2} />
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Live now</h2>
           </div>
-          <div className="flex flex-col divide-y divide-white/5">
-            {liveFixtures.map((fixture) => (
-              <FixtureRowCard key={fixture.id} fixture={fixture} />
-            ))}
-          </div>
+          <GroupedFixtureRows fixtures={liveFixtures} />
         </FadeIn>
       )}
 
       {!hasLiveFixtures && hasTodayFixtures && todayFixtures && (
         <FadeIn delay={0.05} className="kivo-glass rounded-2xl p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today&apos;s fixtures</h2>
-          <div className="flex flex-col divide-y divide-white/5">
-            {todayFixtures.map((fixture) => (
-              <FixtureRowCard key={fixture.id} fixture={fixture} />
-            ))}
-          </div>
+          <GroupedFixtureRows fixtures={todayFixtures} />
         </FadeIn>
       )}
     </div>

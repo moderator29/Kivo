@@ -842,6 +842,7 @@ export type Database = {
         Row: {
           created_at: string
           fixture_id: string
+          formation: string | null
           id: string
           is_starting: boolean
           player_id: string
@@ -852,6 +853,7 @@ export type Database = {
         Insert: {
           created_at?: string
           fixture_id: string
+          formation?: string | null
           id?: string
           is_starting?: boolean
           player_id: string
@@ -862,6 +864,7 @@ export type Database = {
         Update: {
           created_at?: string
           fixture_id?: string
+          formation?: string | null
           id?: string
           is_starting?: boolean
           player_id?: string

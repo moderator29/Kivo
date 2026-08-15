@@ -370,6 +370,7 @@ export class ApiFootballProvider implements FootballDataProvider {
           shortName: null,
           crestUrl: side.team.logo,
         },
+        formation: side.formation,
         entries: [
           ...side.startXI.map(({ player }) => ({
             playerProviderId: String(player.id),

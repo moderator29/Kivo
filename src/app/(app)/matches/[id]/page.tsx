@@ -78,19 +78,20 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     headToHead,
     ownFanRating,
     fanRatingSummary,
+    { data: managers },
   ] = await Promise.all([
     supabase
       .from("fixture_events")
       .select(
         `id, event_type, minute, added_time, detail, team_id,
-         player:players!fixture_events_player_id_fkey(full_name, known_as),
-         related_player:players!fixture_events_related_player_id_fkey(full_name, known_as)`,
+         player:players!fixture_events_player_id_fkey(id, full_name, known_as),
+         related_player:players!fixture_events_related_player_id_fkey(id, full_name, known_as)`,
       )
       .eq("fixture_id", id)
       .order("minute", { ascending: true }),
     supabase
       .from("lineups")
-      .select("team_id, is_starting, shirt_number, position, player:players(id, full_name, known_as)")
+      .select("team_id, is_starting, shirt_number, position, formation, player:players(id, full_name, known_as)")
       .eq("fixture_id", id),
     supabase
       .from("fixture_statistics")
@@ -127,6 +128,16 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     // cross-user SELECT policy, same reasoning as get_prediction_consensus.
     isFinished
       ? supabase.rpc("get_fan_rating_summary", { p_fixture_id: id })
+      : Promise.resolve({ data: null }),
+    // Each team's current manager, already synced by syncTeamSquad/getManager
+    // (the `managers` table) — zero new provider calls, just a join against
+    // data already in the database, per this task's item 1.
+    fixture.home_team?.id && fixture.away_team?.id
+      ? supabase
+          .from("managers")
+          .select("id, full_name, current_team_id, updated_at")
+          .in("current_team_id", [fixture.home_team.id, fixture.away_team.id])
+          .order("updated_at", { ascending: false })
       : Promise.resolve({ data: null }),
   ]);
 
@@ -175,6 +186,15 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   // real.
   const roomReactionCount = roomPosts.reduce((sum, post) => sum + post.reactionCount, 0);
 
+  // Each team's current manager. A team can in principle have more than one
+  // `managers` row pointing at it (a managerial change leaves the old coach's
+  // current_team_id stale rather than clearing it — see upsertManager in
+  // sync-squads.ts), so this takes the most-recently-synced row per team
+  // (query above is already ordered updated_at desc) rather than assuming
+  // exactly one.
+  const homeManager = (managers ?? []).find((m) => m.current_team_id === fixture.home_team?.id) ?? null;
+  const awayManager = (managers ?? []).find((m) => m.current_team_id === fixture.away_team?.id) ?? null;
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass-brand sticky top-2 z-10 flex flex-col gap-4 rounded-2xl p-5">
@@ -217,6 +237,14 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={40} />
             <span className="text-center text-sm font-medium text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+            {homeManager && (
+              <Link
+                href={`/managers/${homeManager.id}`}
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+              >
+                {homeManager.full_name}
+              </Link>
+            )}
           </FadeIn>
 
           <div className="flex shrink-0 flex-col items-center gap-1">
@@ -247,6 +275,14 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={40} />
             <span className="text-center text-sm font-medium text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+            {awayManager && (
+              <Link
+                href={`/managers/${awayManager.id}`}
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+              >
+                {awayManager.full_name}
+              </Link>
+            )}
           </FadeIn>
         </div>
       </FadeIn>
@@ -315,7 +351,9 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             addedTime: e.added_time,
             detail: e.detail,
             teamId: e.team_id,
+            playerId: e.player?.id ?? null,
             playerName: e.player?.known_as ?? e.player?.full_name ?? null,
+            relatedPlayerId: e.related_player?.id ?? null,
             relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
           }))}
           lineups={(lineups ?? []).map((l) => ({
@@ -323,6 +361,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             isStarting: l.is_starting,
             shirtNumber: l.shirt_number,
             position: l.position,
+            formation: l.formation,
             playerId: l.player?.id ?? "",
             playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
           }))}

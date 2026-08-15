@@ -152,6 +152,7 @@ async function processLineupSide(
         is_starting: entry.isStarting,
         shirt_number: entry.shirtNumber,
         position: entry.position,
+        formation: side.formation,
       },
       { onConflict: "fixture_id,team_id,player_id" },
     );

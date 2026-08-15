@@ -7,6 +7,7 @@ import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { MatchesDateStrip, dateKey, todayUtc } from "@/components/matches/date-strip";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 
@@ -47,7 +48,7 @@ export default async function MatchesPage({
         `id, kickoff_at, status, home_score, away_score,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
-       competition:competitions(name, short_name)`,
+       competition:competitions(id, name, short_name)`,
       )
       .gte("kickoff_at", startOfDay.toISOString())
       .lt("kickoff_at", endOfDay.toISOString())
@@ -64,6 +65,11 @@ export default async function MatchesPage({
     day: "numeric",
     timeZone: "UTC",
   });
+
+  // Real match counts per competition, grouping fixtures already fetched
+  // above — no new provider/DB call. See groupFixturesByCompetition.
+  const competitionGroups = groupFixturesByCompetition(fixtures ?? []);
+  let cardIndex = 0;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -89,66 +95,87 @@ export default async function MatchesPage({
           </p>
         </FadeIn>
       ) : (
-        <div className="flex flex-col gap-2">
-          {fixtures.map((fixture, index) => {
-            const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-            return (
-              <FadeIn
-                key={fixture.id}
-                delay={0.08 + staggerDelay(index, 0.03)}
-                className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-white/[0.06]"
-              >
-                {/* Stretched-link overlay: makes the whole card navigate to
-                    Match Centre (item 110), matching Home's FixtureRow and
-                    /live's cards, while the team-name links below stay
-                    clickable to their team pages by sitting above this
-                    overlay in stacking order (`relative z-10`) instead of
-                    nesting a second interactive <a> inside this one. */}
-                <Link
-                  href={`/matches/${fixture.id}`}
-                  className="absolute inset-0 z-0 rounded-2xl"
-                  aria-label={`${fixture.home_team?.name ?? "Home team"} vs ${fixture.away_team?.name ?? "Away team"}, match centre`}
-                />
-                <div className="relative z-0 mb-2 flex items-center justify-between">
-                  <span className="text-xs text-foreground-subtle">
-                    {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
-                  </span>
-                  <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} />
-                </div>
-                <div className="relative z-0 flex items-center justify-between gap-3">
-                  <div className="flex flex-1 items-center gap-2">
-                    <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-                    {fixture.home_team?.id ? (
-                      <Link
-                        href={`/teams/${fixture.home_team.id}`}
-                        className="relative z-10 truncate text-sm text-foreground hover:text-kivo-cyan"
-                      >
-                        {fixture.home_team.name}
-                      </Link>
-                    ) : (
-                      <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
-                    )}
-                  </div>
-                  <span className="shrink-0 text-sm font-semibold text-foreground">
-                    {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-                  </span>
-                  <div className="flex flex-1 items-center justify-end gap-2">
-                    {fixture.away_team?.id ? (
-                      <Link
-                        href={`/teams/${fixture.away_team.id}`}
-                        className="relative z-10 truncate text-right text-sm text-foreground hover:text-kivo-cyan"
-                      >
-                        {fixture.away_team.name}
-                      </Link>
-                    ) : (
-                      <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
-                    )}
-                    <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
-                  </div>
-                </div>
+        <div className="flex flex-col gap-6">
+          {competitionGroups.map((group) => (
+            <div key={group.competitionId ?? group.competitionName} className="flex flex-col gap-2">
+              <FadeIn delay={0.06} className="flex items-center justify-between px-1">
+                {group.competitionId ? (
+                  <Link
+                    href={`/leagues/${group.competitionId}`}
+                    className="text-sm font-semibold text-foreground transition hover:text-kivo-cyan"
+                  >
+                    {group.competitionName}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-semibold text-foreground">{group.competitionName}</span>
+                )}
+                <span className="text-xs text-foreground-subtle">
+                  {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
+                </span>
               </FadeIn>
-            );
-          })}
+              <div className="flex flex-col gap-2">
+                {group.fixtures.map((fixture) => {
+                  const index = cardIndex++;
+                  const hasScore = fixture.home_score !== null && fixture.away_score !== null;
+                  return (
+                    <FadeIn
+                      key={fixture.id}
+                      delay={0.08 + staggerDelay(index, 0.03)}
+                      className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                    >
+                      {/* Stretched-link overlay: makes the whole card navigate to
+                          Match Centre (item 110), matching Home's FixtureRow and
+                          /live's cards, while the team-name links below stay
+                          clickable to their team pages by sitting above this
+                          overlay in stacking order (`relative z-10`) instead of
+                          nesting a second interactive <a> inside this one. */}
+                      <Link
+                        href={`/matches/${fixture.id}`}
+                        className="absolute inset-0 z-0 rounded-2xl"
+                        aria-label={`${fixture.home_team?.name ?? "Home team"} vs ${fixture.away_team?.name ?? "Away team"}, match centre`}
+                      />
+                      {/* No per-card competition label here — the group header
+                          above already names it. */}
+                      <div className="relative z-0 mb-2 flex items-center justify-end">
+                        <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} />
+                      </div>
+                      <div className="relative z-0 flex items-center justify-between gap-3">
+                        <div className="flex flex-1 items-center gap-2">
+                          <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
+                          {fixture.home_team?.id ? (
+                            <Link
+                              href={`/teams/${fixture.home_team.id}`}
+                              className="relative z-10 truncate text-sm text-foreground hover:text-kivo-cyan"
+                            >
+                              {fixture.home_team.name}
+                            </Link>
+                          ) : (
+                            <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-sm font-semibold text-foreground">
+                          {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
+                        </span>
+                        <div className="flex flex-1 items-center justify-end gap-2">
+                          {fixture.away_team?.id ? (
+                            <Link
+                              href={`/teams/${fixture.away_team.id}`}
+                              className="relative z-10 truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+                            >
+                              {fixture.away_team.name}
+                            </Link>
+                          ) : (
+                            <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+                          )}
+                          <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
+                        </div>
+                      </div>
+                    </FadeIn>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
