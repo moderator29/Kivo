@@ -1338,6 +1338,7 @@ export type Database = {
       }
       reports: {
         Row: {
+          content_snapshot: Json | null
           created_at: string
           id: string
           reason: string
@@ -1350,6 +1351,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          content_snapshot?: Json | null
           created_at?: string
           id?: string
           reason: string
@@ -1362,6 +1364,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          content_snapshot?: Json | null
           created_at?: string
           id?: string
           reason?: string
@@ -1794,18 +1797,69 @@ export type Database = {
           username: string
         }[]
       }
+      get_xp_total: { Args: { p_profile_id: string }; Returns: number }
       is_username_available: {
         Args: { p_exclude_profile_id?: string; p_username: string }
         Returns: boolean
       }
+      mark_notifications_read: {
+        Args: { p_notification_ids: string[] }
+        Returns: undefined
+      }
+      prune_sync_runs: { Args: { p_older_than_days?: number }; Returns: number }
       redeem_invite_code: {
         Args: { p_invite_code: string }
         Returns: {
+          error_message: string
           id: string
           max_teams: number
           name: string
           season_id: string
         }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      upsert_competition_with_mapping: {
+        Args: {
+          p_name: string
+          p_provider: string
+          p_provider_entity_id: string
+        }
+        Returns: string
+      }
+      upsert_fixture_with_mapping: {
+        Args: {
+          p_away_score?: number
+          p_away_team_id: string
+          p_competition_id: string
+          p_home_score?: number
+          p_home_team_id: string
+          p_kickoff_at: string
+          p_provider: string
+          p_provider_entity_id: string
+          p_season_id: string
+          p_status: Database["public"]["Enums"]["fixture_status"]
+          p_venue_id?: string
+        }
+        Returns: string
+      }
+      upsert_team_with_mapping: {
+        Args: {
+          p_crest_url?: string
+          p_name: string
+          p_provider: string
+          p_provider_entity_id: string
+          p_short_name?: string
+        }
+        Returns: string
+      }
+      upsert_venue_with_mapping: {
+        Args: {
+          p_name?: string
+          p_provider: string
+          p_provider_entity_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
