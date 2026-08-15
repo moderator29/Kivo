@@ -34,7 +34,14 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
   const previewMode = await isPreviewModeActive(profile);
 
   return (
-    <AppShell signedIn={Boolean(profile)} isAdmin={hasAdminAccess(profile?.role)} previewMode={previewMode}>
+    <AppShell
+      signedIn={Boolean(profile)}
+      isAdmin={hasAdminAccess(profile?.role)}
+      previewMode={previewMode}
+      viewerProfile={
+        profile ? { username: profile.username, displayName: profile.display_name, avatarUrl: profile.avatar_url } : null
+      }
+    >
       {children}
     </AppShell>
   );

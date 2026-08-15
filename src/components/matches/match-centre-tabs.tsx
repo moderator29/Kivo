@@ -382,9 +382,9 @@ export function MatchCentreTabs(props: MatchCentreTabsProps) {
 function MatchCentreTabsFallback() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="kivo-glass-sharp flex rounded-xl p-1">
+      <div className="flex gap-1 border-b border-white/10">
         {TABS.map((tab) => (
-          <div key={tab} className="relative flex-1 rounded-lg py-2 text-center text-xs font-semibold text-foreground-muted">
+          <div key={tab} className="relative flex-1 px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted">
             {tab}
           </div>
         ))}
@@ -447,7 +447,7 @@ function MatchCentreTabsInner({
         role="tablist"
         aria-label="Match centre sections"
         onKeyDown={handleTabKeyDown}
-        className="kivo-glass-sharp flex rounded-xl p-1"
+        className="flex gap-1 border-b border-white/10"
       >
         {TABS.map((tab) => (
           <button
@@ -462,16 +462,16 @@ function MatchCentreTabsInner({
             aria-controls={`match-centre-panel-${tabSlug(tab)}`}
             tabIndex={active === tab ? 0 : -1}
             onClick={() => setActive(tab)}
-            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
+            <span className={`relative ${active === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
             {active === tab && (
               <motion.span
                 layoutId="match-centre-active-tab"
-                className="kivo-gradient-victory absolute inset-0 rounded-lg"
+                className="kivo-gradient-prime absolute inset-x-1 -bottom-px h-0.5 rounded-full"
                 transition={{ type: "spring", stiffness: 400, damping: 32 }}
               />
             )}
-            <span className={`relative ${active === tab ? "text-kivo-white" : "text-foreground-muted"}`}>{tab}</span>
           </button>
         ))}
       </div>

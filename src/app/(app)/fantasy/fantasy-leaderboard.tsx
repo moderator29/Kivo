@@ -48,7 +48,13 @@ export function FantasyLeaderboard({
                   isViewer ? "rounded-xl bg-kivo-cyan/10 ring-1 ring-kivo-cyan/30" : ""
                 }`}
               >
-                <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-foreground-subtle">
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-1 ${
+                    index === 0
+                      ? "bg-achievement/15 text-achievement ring-achievement/30"
+                      : "bg-white/[0.06] text-foreground-subtle ring-white/10"
+                  }`}
+                >
                   {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -67,7 +73,7 @@ export function FantasyLeaderboard({
                     @{entry.ownerUsername}
                   </Link>
                 </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                <span className="shrink-0 text-base font-bold tabular-nums text-foreground">
                   {entry.hasScores ? entry.totalPoints : "-"}
                 </span>
               </div>

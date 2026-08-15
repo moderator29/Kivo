@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Menu } from "lucide-react";
-import { ADMIN_NAV_ITEM, NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
+import { X, Menu, ChevronRight, UserRound } from "lucide-react";
+import { ADMIN_NAV_ITEM, NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
+import { SIDEBAR_GROUPS } from "./desktop-sidebar";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import type { ViewerProfileSummary } from "./app-shell";
 
 // RECOMMENDATIONS item 131: matches, predictions and fantasy are all real,
 // working features now (not the "Fantasy is unreachable" state the item was
@@ -19,7 +22,15 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 // moves into "More", same as matches/predictions were before this change.
 const BOTTOM_BAR_IDS = ["live", "matches", "social", "predictions"];
 
-export function MobileBottomNav({ aiConfigured, isAdmin }: { aiConfigured: boolean; isAdmin: boolean }) {
+export function MobileBottomNav({
+  aiConfigured,
+  isAdmin,
+  viewerProfile,
+}: {
+  aiConfigured: boolean;
+  isAdmin: boolean;
+  viewerProfile: ViewerProfileSummary | null;
+}) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
@@ -31,6 +42,19 @@ export function MobileBottomNav({ aiConfigured, isAdmin }: { aiConfigured: boole
   // gated on role, rather than folded into NAV_ITEMS (which every guest
   // enumerates unconditionally).
   if (isAdmin) moreItems.push(ADMIN_NAV_ITEM);
+
+  // Same section grouping as the desktop sidebar (SIDEBAR_GROUPS), filtered
+  // down to whichever of those items actually landed in "More" here (the
+  // four items already pinned to the bottom bar drop out of their groups
+  // rather than appearing twice).
+  const moreGroups = SIDEBAR_GROUPS.map((group) => ({
+    label: group.label,
+    items: group.ids
+      .map((id) => moreItems.find((item) => item.id === id))
+      .filter((item): item is NavItem => Boolean(item)),
+  })).filter((group) => group.items.length > 0);
+  const homeItem = moreItems.find((item) => item.id === "home");
+  if (isAdmin) moreGroups.push({ label: "Admin", items: [ADMIN_NAV_ITEM] });
 
   useFocusTrap(moreOpen, panelRef, () => setMoreOpen(false), { restoreFocusRef: toggleButtonRef });
 
@@ -73,55 +97,55 @@ export function MobileBottomNav({ aiConfigured, isAdmin }: { aiConfigured: boole
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 24, opacity: 0 }}
               transition={{ type: "spring", stiffness: 420, damping: 36 }}
-              className="kivo-glass-brand relative z-10 mb-[calc(env(safe-area-inset-bottom)+76px)] mx-3 max-h-[70vh] overflow-y-auto rounded-2xl p-3"
+              className="kivo-glass-brand relative z-10 mb-[calc(env(safe-area-inset-bottom)+76px)] mx-3 flex max-h-[75vh] flex-col overflow-hidden rounded-3xl pt-2.5"
             >
-              <div className="grid grid-cols-2 gap-2">
-                {moreItems.map((item) => {
-                  const active = isActiveRoute(pathname, item.href);
-                  const Icon = item.icon;
-                  const isComingSoon = item.status === "coming-soon" && !(item.id === "ai" && aiConfigured);
-                  return (
+              <div aria-hidden="true" className="mx-auto h-1 w-9 shrink-0 rounded-full bg-white/15" />
+
+              <div className="flex flex-col overflow-y-auto px-3 pb-3">
+                {viewerProfile && (
+                  <div className="mt-2 flex items-center gap-3 px-1 pb-3">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06]">
+                      {viewerProfile.avatarUrl ? (
+                        <Image src={viewerProfile.avatarUrl} alt="" width={48} height={48} className="h-full w-full object-cover" unoptimized />
+                      ) : (
+                        <UserRound className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">{viewerProfile.displayName || `@${viewerProfile.username}`}</p>
+                      <p className="truncate text-xs text-foreground-subtle">@{viewerProfile.username}</p>
+                    </div>
                     <Link
-                      key={item.id}
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
+                      href="/settings"
                       onClick={() => setMoreOpen(false)}
-                      className="group relative flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition-colors hover:bg-white/[0.06] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                      className="kivo-glass-sharp shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold text-foreground transition active:scale-95"
                     >
-                      <span
-                        className={cn(
-                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
-                          active
-                            ? "kivo-gradient-prime shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
-                            : "bg-white/[0.05] group-hover:bg-white/[0.08]",
-                        )}
-                      >
-                        <Icon
-                          className={cn(
-                            "h-5 w-5 transition-colors",
-                            active ? "text-kivo-white" : "text-foreground-subtle group-hover:text-foreground-muted",
-                          )}
-                          strokeWidth={1.75}
-                        />
-                      </span>
-                      <span className="flex min-w-0 flex-col items-start gap-0.5">
-                        <span
-                          className={cn(
-                            "truncate text-[13px] font-semibold transition-colors",
-                            active ? "text-kivo-cyan" : "text-foreground",
-                          )}
-                        >
-                          {item.label}
-                        </span>
-                        {isComingSoon && (
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-                            Soon
-                          </span>
-                        )}
-                      </span>
+                      Manage
                     </Link>
-                  );
-                })}
+                  </div>
+                )}
+
+                {homeItem && (
+                  <div className="flex flex-col pb-1.5">
+                    <MoreRow item={homeItem} pathname={pathname} aiConfigured={aiConfigured} onNavigate={() => setMoreOpen(false)} />
+                  </div>
+                )}
+
+                {/* Grouped list, one hairline divider per section, generous
+                    ~56-60px rows — same pattern as the desktop sidebar and
+                    /settings' grouped card, no per-row box. */}
+                <div className="kivo-glass flex flex-col rounded-2xl">
+                  {moreGroups.map((group, index) => (
+                    <div key={group.label} className={cn("flex flex-col py-1.5", index > 0 && "border-t border-white/5")}>
+                      <span className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
+                        {group.label}
+                      </span>
+                      {group.items.map((item) => (
+                        <MoreRow key={item.id} item={item} pathname={pathname} aiConfigured={aiConfigured} onNavigate={() => setMoreOpen(false)} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </motion.div>
           </motion.div>
@@ -187,5 +211,47 @@ export function MobileBottomNav({ aiConfigured, isAdmin }: { aiConfigured: boole
         </div>
       </nav>
     </>
+  );
+}
+
+/** One row of the "More" sheet's grouped list — icon left, bold label,
+ * generous ~56px height, trailing chevron as a drill-down affordance (every
+ * row here is a real navigation, so the chevron just signals "goes
+ * somewhere" the same way the settings rows' chevrons do). */
+function MoreRow({
+  item,
+  pathname,
+  aiConfigured,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string | null;
+  aiConfigured: boolean;
+  onNavigate: () => void;
+}) {
+  const active = isActiveRoute(pathname, item.href);
+  const Icon = item.icon;
+  const isComingSoon = item.status === "coming-soon" && !(item.id === "ai" && aiConfigured);
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
+      className="group flex min-h-14 items-center gap-3 px-3.5 py-3 transition-colors active:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+    >
+      <Icon
+        className={cn("h-5 w-5 shrink-0 transition-colors", active ? "text-kivo-cyan" : "text-foreground-subtle")}
+        strokeWidth={1.75}
+      />
+      <span className={cn("flex-1 truncate text-sm", active ? "font-semibold text-foreground" : "font-medium text-foreground")}>
+        {item.label}
+      </span>
+      {isComingSoon && (
+        <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+          Soon
+        </span>
+      )}
+      <ChevronRight className="h-4 w-4 shrink-0 text-foreground-subtle/60" strokeWidth={1.75} />
+    </Link>
   );
 }

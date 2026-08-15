@@ -25,7 +25,7 @@ export function StatTile({
   return (
     <div className="kivo-glass flex flex-col gap-1 rounded-2xl p-3">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">{label}</span>
-      <span className={`text-lg font-semibold tabular-nums ${valueClass}`}>{value}</span>
+      <span className={`text-xl font-bold tabular-nums ${valueClass}`}>{value}</span>
       {caption && <span className="text-[11px] leading-snug text-foreground-subtle">{caption}</span>}
     </div>
   );

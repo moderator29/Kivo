@@ -208,8 +208,8 @@ export function ConversationHistoryPanel({
         aria-haspopup="dialog"
         whileTap={{ scale: 0.92 }}
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-          open && "bg-white/[0.06] text-foreground",
+          "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+          open && "text-foreground",
         )}
       >
         <History className="h-4 w-4" strokeWidth={1.75} />

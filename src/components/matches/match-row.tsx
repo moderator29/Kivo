@@ -41,7 +41,9 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
       </div>
       <div className="relative z-0 flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">
-          <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
+          <span className="shrink-0 rounded-full p-0.5 ring-1 ring-white/10">
+            <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
+          </span>
           {fixture.home_team?.id ? (
             <Link
               href={`/teams/${fixture.home_team.id}`}
@@ -53,7 +55,7 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
             <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
           )}
         </div>
-        <span className="shrink-0 text-sm font-semibold text-foreground">
+        <span className={hasScore ? "shrink-0 text-base font-bold tabular-nums text-foreground" : "shrink-0 text-sm font-semibold text-foreground-subtle"}>
           {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
         </span>
         <div className="flex flex-1 items-center justify-end gap-2">
@@ -67,7 +69,9 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
           ) : (
             <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
           )}
-          <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
+          <span className="shrink-0 rounded-full p-0.5 ring-1 ring-white/10">
+            <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
+          </span>
         </div>
       </div>
     </div>

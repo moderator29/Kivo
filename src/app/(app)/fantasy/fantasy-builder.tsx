@@ -327,7 +327,7 @@ export function FantasyBuilder({
         role="tablist"
         aria-label="Fantasy view"
         onKeyDown={handleViewTabKeyDown}
-        className="kivo-glass-sharp flex rounded-xl p-1"
+        className="flex gap-1 border-b border-white/10"
       >
         {VIEW_TABS.map((tab) => (
           <button
@@ -342,16 +342,16 @@ export function FantasyBuilder({
             aria-controls={viewPanelId(tab)}
             tabIndex={view === tab ? 0 : -1}
             onClick={() => setView(tab)}
-            className="relative flex-1 rounded-lg py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
+            <span className={`relative ${view === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
             {view === tab && (
               <motion.span
                 layoutId="fantasy-view-active-tab"
-                className="kivo-gradient-victory absolute inset-0 rounded-lg"
+                className="kivo-gradient-prime absolute inset-x-1 -bottom-px h-0.5 rounded-full"
                 transition={{ type: "spring", stiffness: 400, damping: 32 }}
               />
             )}
-            <span className={`relative ${view === tab ? "text-kivo-white" : "text-foreground-muted"}`}>{tab}</span>
           </button>
         ))}
       </FadeIn>

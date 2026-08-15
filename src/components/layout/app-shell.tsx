@@ -12,11 +12,14 @@ import { isAiConfigured } from "@/lib/ai/client";
 // setting reaches every `motion` component under it via context regardless
 // of DOM nesting depth. A second one here was redundant. RECOMMENDATIONS.md
 // item 74.
+export type ViewerProfileSummary = { username: string; displayName: string | null; avatarUrl: string | null };
+
 export function AppShell({
   children,
   signedIn,
   isAdmin,
   previewMode,
+  viewerProfile,
 }: {
   children: ReactNode;
   signedIn: boolean;
@@ -29,6 +32,10 @@ export function AppShell({
    * isAdmin is true and the admin explicitly opted in. Drives the fixed
    * PreviewModeBanner plus the top padding that keeps it clear of content. */
   previewMode: boolean;
+  /** Real profile summary for the mobile "More" sheet's header (avatar +
+   * username) — null for a guest, in which case that header simply doesn't
+   * render (see MobileBottomNav). Never fabricated placeholder identity. */
+  viewerProfile: ViewerProfileSummary | null;
 }) {
   const aiConfigured = isAiConfigured();
 
@@ -52,7 +59,7 @@ export function AppShell({
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
-      <MobileBottomNav aiConfigured={aiConfigured} isAdmin={isAdmin} />
+      <MobileBottomNav aiConfigured={aiConfigured} isAdmin={isAdmin} viewerProfile={viewerProfile} />
     </div>
   );
 }

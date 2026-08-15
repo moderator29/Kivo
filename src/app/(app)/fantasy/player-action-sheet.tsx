@@ -58,8 +58,10 @@ export function PlayerActionSheet({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 24, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3 rounded-2xl p-4"
+            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3 rounded-3xl p-4 pt-2.5"
           >
+            <div aria-hidden="true" className="mx-auto h-1 w-9 shrink-0 rounded-full bg-white/15" />
+
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2.5">
                 <TeamCrest crestUrl={player.teamCrestUrl} name={player.teamName ?? ""} size={28} />
@@ -70,7 +72,12 @@ export function PlayerActionSheet({
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-foreground-subtle transition hover:text-foreground"
+              >
                 <X className="h-4 w-4" strokeWidth={1.75} />
               </button>
             </div>
@@ -134,7 +141,13 @@ function ActionRow({
       }`}
     >
       <span className="flex items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+            tone === "critical" ? "bg-critical/10" : "bg-white/[0.06]"
+          }`}
+        >
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
+        </span>
         {label}
       </span>
       {hint && <span className="text-[11px] text-foreground-subtle">{hint}</span>}

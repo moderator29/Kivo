@@ -38,17 +38,17 @@ export function HeadToHeadCard({ teamA, teamB, record }: { teamA: TeamRef; teamB
         <>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-white/5 px-2 py-2">
-              <div className="text-lg font-semibold text-foreground">{record.teamAWins}</div>
+              <div className="text-2xl font-bold text-foreground">{record.teamAWins}</div>
               <div className="truncate text-[11px] uppercase tracking-wide text-foreground-subtle">
                 {teamA.shortName ?? teamA.name} wins
               </div>
             </div>
             <div className="rounded-xl bg-white/5 px-2 py-2">
-              <div className="text-lg font-semibold text-foreground">{record.draws}</div>
+              <div className="text-2xl font-bold text-foreground">{record.draws}</div>
               <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">Draws</div>
             </div>
             <div className="rounded-xl bg-white/5 px-2 py-2">
-              <div className="text-lg font-semibold text-foreground">{record.teamBWins}</div>
+              <div className="text-2xl font-bold text-foreground">{record.teamBWins}</div>
               <div className="truncate text-[11px] uppercase tracking-wide text-foreground-subtle">
                 {teamB.shortName ?? teamB.name} wins
               </div>

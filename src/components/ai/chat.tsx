@@ -320,7 +320,7 @@ export function AiChat({
               disabled={messages.length === 0 && !activeConversationId}
               aria-label="New conversation"
               whileTap={{ scale: 0.92 }}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-foreground-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+              className="kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
             >
               <SquarePen className="h-4 w-4" strokeWidth={1.75} />
             </motion.button>
@@ -496,7 +496,7 @@ export function AiChat({
           aria-busy={pending}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.92 }}
-          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-kivo-white transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-kivo-white transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
           aria-label="Send"
         >
           <ArrowUp className="h-4 w-4" strokeWidth={2} />
