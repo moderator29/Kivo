@@ -12,6 +12,7 @@ import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
+import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
@@ -163,6 +164,16 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
   const live = isLiveStatus(fixture.status);
   const fanRatingSummaryRow = fanRatingSummary.data?.[0] ?? null;
+  const fanRatingCount = fanRatingSummaryRow ? Number(fanRatingSummaryRow.rating_count) : 0;
+  const fanRatingAvg =
+    fanRatingSummaryRow?.avg_rating !== null && fanRatingSummaryRow?.avg_rating !== undefined
+      ? Number(fanRatingSummaryRow.avg_rating)
+      : null;
+  // RECOMMENDATIONS.md item 171: aggregates item 170's real fan rating data
+  // with real match-room reaction counts already fetched above for the Room
+  // tab (roomPosts) — no new query, just a sum of numbers that were already
+  // real.
+  const roomReactionCount = roomPosts.reduce((sum, post) => sum + post.reactionCount, 0);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -250,8 +261,25 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             fixtureId={fixture.id}
             signedIn={Boolean(profile)}
             initialRating={ownFanRating.data?.rating ?? null}
-            ratingCount={fanRatingSummaryRow ? Number(fanRatingSummaryRow.rating_count) : 0}
-            avgRating={fanRatingSummaryRow?.avg_rating !== null && fanRatingSummaryRow?.avg_rating !== undefined ? Number(fanRatingSummaryRow.avg_rating) : null}
+            ratingCount={fanRatingCount}
+            avgRating={fanRatingAvg}
+          />
+        </FadeIn>
+      )}
+
+      {/* RECOMMENDATIONS.md item 171: renders nothing itself once there's
+          neither a real rating average nor any real Room activity — see the
+          component's own early return. */}
+      {isFinished && fixture.home_team && fixture.away_team && (
+        <FadeIn delay={0.12}>
+          <MatchVerdictCard
+            homeTeamName={fixture.home_team.name}
+            awayTeamName={fixture.away_team.name}
+            scoreLabel={hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
+            fanRatingCount={fanRatingCount}
+            fanRatingAvg={fanRatingAvg}
+            roomReactionCount={roomReactionCount}
+            roomPostCount={roomPosts.length}
           />
         </FadeIn>
       )}
