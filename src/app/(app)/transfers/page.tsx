@@ -3,13 +3,15 @@ import Link from "next/link";
 import { ArrowLeftRight, UserRound } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
-import { ComingSoon } from "@/components/ui/coming-soon";
+import { NoDataYet } from "@/components/ui/no-data-yet";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TransfersFilters } from "@/components/transfers/transfers-filters";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
+import { staggerDelay } from "@/lib/stagger";
+import { formatDate } from "@/lib/format";
 import type { Database } from "@/lib/supabase/types";
 
-const item = NAV_ITEMS.find((i) => i.id === "transfers")!;
+const item = getNavItem("transfers");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -36,10 +38,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type TeamRef = { id: string; name: string; short_name: string | null; crest_url: string | null };
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
 
 function TeamLink({ team }: { team: TeamRef | null }) {
   if (!team) {
@@ -106,12 +104,12 @@ export default async function TransfersPage({
   const transferTypeOptions = TRANSFER_TYPES.map((value) => ({ value, label: TRANSFER_TYPE_LABEL[value] }));
 
   // Nothing synced at all yet (no filters applied, still zero rows) keeps the
-  // original full-page "coming soon" state. A filtered query that happens to
+  // original full-page honest-empty state. A filtered query that happens to
   // match nothing gets an inline empty message instead, further down, so the
   // filters themselves stay on screen to adjust.
   if (!hasActiveFilters && (!transfers || transfers.length === 0)) {
     return (
-      <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
   }
 
@@ -160,7 +158,7 @@ export default async function TransfersPage({
             const playerName = transfer.player ? (transfer.player.known_as ?? transfer.player.full_name) : null;
 
             return (
-              <FadeIn key={transfer.id} delay={Math.min(index * 0.03, 0.3)}>
+              <FadeIn key={transfer.id} delay={staggerDelay(index, 0.03)}>
                 <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
                   <div className="flex items-center justify-between gap-3">
                     {transfer.player && playerName ? (
@@ -178,7 +176,7 @@ export default async function TransfersPage({
                       </span>
                     )}
                     <span className="shrink-0 text-xs tabular-nums text-foreground-subtle">
-                      {formatDate(transfer.transfer_date)}
+                      {formatDate(transfer.transfer_date, { month: "short" })}
                     </span>
                   </div>
 

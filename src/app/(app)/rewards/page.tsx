@@ -5,10 +5,11 @@ import { Flame, Award, History } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
+import { staggerDelay } from "@/lib/stagger";
 import { timeAgo } from "@/lib/format";
 
-const item = NAV_ITEMS.find((i) => i.id === "rewards")!;
+const item = getNavItem("rewards");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -113,7 +114,7 @@ export default async function RewardsPage() {
             {allBadges.map((badge, index) => {
               const earned = earnedBadgeIds.has(badge.id);
               return (
-                <FadeIn key={badge.id} delay={0.12 + Math.min(index * 0.03, 0.3)}>
+                <FadeIn key={badge.id} delay={0.12 + staggerDelay(index, 0.03)}>
                   <div
                     className={`kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ${
                       earned

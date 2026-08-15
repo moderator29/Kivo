@@ -23,9 +23,16 @@ export type PositionGroup = (typeof POSITION_GROUPS)[number];
 export type PositionGroupOrOther = PositionGroup | "Other";
 
 /**
- * Same free-text bucketing heuristic as teams/[id]/page.tsx's positionGroup()
- * helper — `players.position` is intentionally free text (providers vary),
- * so this mirrors that page's logic rather than inventing a second taxonomy.
+ * `players.position` is intentionally free text (providers vary), so this is
+ * the single classifier every consumer shares: fantasy's own squad-rules
+ * code, `players/actions.ts`'s search filter, and `teams/[id]/page.tsx`'s
+ * squad-by-group view (which also imports the `PositionGroupOrOther` type
+ * above, aliased locally as `PositionGroup`, to type its own display-only
+ * `POSITION_GROUPS` list). That page treats "Other" as a real, visible squad
+ * section; fantasy below treats it as an invalid pick (`validateRoster`
+ * rejects it) since an unrecognised position can't be slotted into a
+ * formation. Same taxonomy, deliberately different handling of the
+ * unclassified bucket — not an accidental drift.
  */
 export function positionGroup(position: string | null): PositionGroupOrOther {
   if (!position) return "Other";

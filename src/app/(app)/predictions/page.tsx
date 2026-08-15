@@ -4,12 +4,13 @@ import { ArrowRight } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
-import { ComingSoon } from "@/components/ui/coming-soon";
+import { NoDataYet } from "@/components/ui/no-data-yet";
 import { PredictionCard } from "@/components/predictions/prediction-card";
 import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/predictions/predictions-leaderboard";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
+import { staggerDelay } from "@/lib/stagger";
 
-const item = NAV_ITEMS.find((i) => i.id === "predictions")!;
+const item = getNavItem("predictions");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -32,7 +33,7 @@ export default async function PredictionsPage() {
 
   if (!fixtures || fixtures.length === 0) {
     return (
-      <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
   }
 
@@ -84,7 +85,7 @@ export default async function PredictionsPage() {
 
       <div className="flex flex-col gap-3">
         {fixtures.map((fixture, index) => (
-          <FadeIn key={fixture.id} delay={Math.min(index * 0.03, 0.3)}>
+          <FadeIn key={fixture.id} delay={staggerDelay(index, 0.03)}>
             <PredictionCard
               fixtureId={fixture.id}
               kickoffAt={fixture.kickoff_at}

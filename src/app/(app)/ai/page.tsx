@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { ComingSoon } from "@/components/ui/coming-soon";
 import { AiChat } from "@/components/ai/chat";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ConversationSummary } from "./actions";
 
-const item = NAV_ITEMS.find((i) => i.id === "ai")!;
+const item = getNavItem("ai");
 
 export const metadata: Metadata = { title: item.label };
 

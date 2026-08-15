@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { FadeIn } from "@/components/ui/fade-in";
-import { ComingSoon } from "@/components/ui/coming-soon";
+import { NoDataYet } from "@/components/ui/no-data-yet";
+import { EntityListPage } from "@/components/ui/entity-list-page";
 import { TeamsGrid } from "@/components/teams/teams-grid";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
 import { TEAMS_PAGE_SIZE } from "./constants";
 
-const item = NAV_ITEMS.find((i) => i.id === "teams")!;
+const item = getNavItem("teams");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -34,18 +34,13 @@ export default async function TeamsPage() {
 
   if (teams.length === 0) {
     return (
-      <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Teams</h1>
-        <p className="text-sm text-foreground-muted">Clubs synced from today&apos;s fixtures.</p>
-      </FadeIn>
-
+    <EntityListPage title="Teams" description="Clubs synced from today's fixtures.">
       <TeamsGrid initialTeams={teams} initialHasMore={hasMore} />
-    </div>
+    </EntityListPage>
   );
 }
