@@ -35,7 +35,7 @@ export default async function HomePage() {
   const endOfDay = new Date(startOfDay);
   endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
 
-  const [{ data: todayFixtures }, { data: xpEntries }, { count: predictionCount }, { count: fantasyTeamCount }] =
+  const [{ data: todayFixtures }, { data: xpTotal }, { count: predictionCount }, { count: fantasyTeamCount }] =
     await Promise.all([
       supabase
         .from("fixtures")
@@ -48,7 +48,10 @@ export default async function HomePage() {
         .lt("kickoff_at", endOfDay.toISOString())
         .order("kickoff_at", { ascending: true })
         .limit(3),
-      profile ? supabase.from("xp_ledger").select("amount").eq("profile_id", profile.id) : Promise.resolve({ data: null }),
+      // Single aggregate round trip instead of fetching every xp_ledger row
+      // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
+      // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
+      profile ? supabase.rpc("get_xp_total", { p_profile_id: profile.id }) : Promise.resolve({ data: null }),
       profile
         ? supabase
             .from("predictions")
@@ -61,7 +64,7 @@ export default async function HomePage() {
         : Promise.resolve({ count: null }),
     ]);
 
-  const totalXp = (xpEntries ?? []).reduce((sum, entry) => sum + entry.amount, 0);
+  const totalXp = xpTotal ?? 0;
 
   // "Your teams" — the one place `follows` actually changes what's on screen
   // (RECOMMENDATIONS item 13). Two-step because `followed_id` has no DB-level

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 import { syncTodayFixtures } from "@/lib/football/sync";
 import { syncTeamSquad } from "@/lib/football/sync-squads";
 import { syncFixtureDetails, syncStandings } from "@/lib/football/sync-match-details";
@@ -114,4 +116,41 @@ export async function triggerPlayerTransfersSync(playerId: string): Promise<{ er
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };
+}
+
+/**
+ * On-demand retention sweep for RECOMMENDATIONS item 48: sync_runs grows
+ * without bound and each row's error_message can hold up to twenty
+ * concatenated failures (see syncTodayFixtures/syncTeamSquad/etc in
+ * src/lib/football/sync*.ts), so an admin triggers this to prune history
+ * older than 90 days rather than a cron (this codebase has zero scheduled
+ * jobs by design). Deletion happens inside prune_sync_runs(), a SECURITY
+ * DEFINER SQL function granted only to service_role (see
+ * supabase/migrations/0023_xp_total_and_sync_run_pruning.sql /
+ * 0025_lock_down_xp_total_and_prune_sync_runs_grants.sql) — run through the
+ * service-role client here, same as the other admin actions on this page
+ * that need to see or touch rows a plain client's RLS would otherwise hide.
+ */
+export async function pruneSyncRuns(): Promise<{ error: string | null; recordsProcessed?: number }> {
+  const profile = await getOrCreateProfile();
+  if (!profile || !canManageFootballData(profile.role)) {
+    return { error: "You don't have football data admin access." };
+  }
+
+  const service = createServiceRoleSupabaseClient();
+  const { data: deletedCount, error } = await service.rpc("prune_sync_runs", { p_older_than_days: 90 });
+
+  if (error) {
+    console.error("Failed to prune sync_runs", error);
+    return { error: "Couldn't prune old sync runs. Try again." };
+  }
+
+  await logAudit(profile.id, "prune_sync_runs", "sync_runs", {
+    olderThanDays: 90,
+    recordsProcessed: deletedCount ?? 0,
+  });
+
+  revalidatePath("/admin/data-health");
+
+  return { error: null, recordsProcessed: deletedCount ?? 0 };
 }

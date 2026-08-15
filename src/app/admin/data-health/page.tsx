@@ -6,6 +6,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
 import { ScorePredictionsButton } from "@/components/admin/score-predictions-button";
 import { ScoreFantasyGameweekButton } from "@/components/admin/score-fantasy-gameweek-button";
+import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
@@ -249,8 +250,12 @@ export default async function DataHealthPage() {
       )}
 
       <div className="flex flex-col gap-3">
-        <FadeIn delay={0.16}>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Recent sync runs</h2>
+        <FadeIn delay={0.16} className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Recent sync runs</h2>
+            <p className="text-xs text-foreground-subtle">Prunes history older than 90 days. No cron, admin-triggered only.</p>
+          </div>
+          <PruneSyncRunsButton />
         </FadeIn>
 
         {!syncRuns || syncRuns.length === 0 ? (
