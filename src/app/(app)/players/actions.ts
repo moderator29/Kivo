@@ -10,6 +10,7 @@ export type PlayerSearchResult = {
   position: string | null;
   nationality: string | null;
   teamName: string | null;
+  photoUrl: string | null;
 };
 
 const RESULTS_LIMIT = 100;
@@ -48,7 +49,7 @@ export async function searchPlayers(
 
   let request = supabase
     .from("players")
-    .select("id, full_name, known_as, position, nationality, current_team_id, team:teams(name, short_name)")
+    .select("id, full_name, known_as, position, nationality, photo_url, current_team_id, team:teams(name, short_name)")
     .order("full_name", { ascending: true });
 
   const trimmed = query.trim();
@@ -75,6 +76,7 @@ export async function searchPlayers(
       position: p.position,
       nationality: p.nationality,
       teamName: p.team?.short_name ?? p.team?.name ?? null,
+      photoUrl: p.photo_url,
     })),
   };
 }

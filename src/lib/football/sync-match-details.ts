@@ -74,17 +74,43 @@ async function upsertFixtureEvent(
   await createMapping(supabase, providerName, "fixture_event", event.providerId, data.id);
 }
 
-/** If a team has zero players synced yet, pull its squad first so lineup entries
- * can actually resolve to a player_id — otherwise every entry would be skipped on
- * a team's very first fixture-details sync. Failures here are logged, not thrown:
- * lineup entries that still can't resolve afterward are skipped gracefully below. */
-async function ensureTeamHasSquad(supabase: ServiceClient, teamId: string, unresolved: string[]): Promise<void> {
+async function teamHasSquad(supabase: ServiceClient, teamId: string): Promise<boolean> {
   const { count, error } = await supabase
     .from("players")
     .select("id", { count: "exact", head: true })
     .eq("current_team_id", teamId);
   if (error) throw error;
-  if (count) return;
+  return Boolean(count);
+}
+
+/**
+ * If a team has zero players synced yet, its lineup entries can never resolve to a
+ * player_id. RECOMMENDATIONS.md item 59: this used to unconditionally pull that
+ * team's full squad (2+ more provider calls) the moment it was found empty — an
+ * admin syncing details for several fixtures across unseen teams could blow a
+ * meaningful chunk of the 100/day quota on one click without ever being told.
+ * `autoSyncMissingSquads` (default false, see syncFixtureDetails) makes that spend
+ * opt-in: off, a team with no squad yet just has its lineup entries skipped and
+ * logged so the admin can see why and sync that team's squad deliberately; on,
+ * behavior is unchanged from before this item — pull the squad inline. Failures
+ * here are logged, not thrown either way: lineup entries that still can't resolve
+ * afterward are skipped gracefully by the caller.
+ */
+async function ensureTeamHasSquad(
+  supabase: ServiceClient,
+  teamId: string,
+  teamName: string,
+  unresolved: string[],
+  autoSyncMissingSquads: boolean,
+): Promise<void> {
+  if (await teamHasSquad(supabase, teamId)) return;
+
+  if (!autoSyncMissingSquads) {
+    unresolved.push(
+      `team ${teamName} has no squad synced yet, so its lineup entries were skipped (not auto-synced, to protect the daily quota). Sync its squad, or re-run with squad auto-sync enabled, to resolve them.`,
+    );
+    return;
+  }
 
   const result = await syncTeamSquad(teamId);
   if (result.status === "failed") {
@@ -98,6 +124,7 @@ async function processLineupSide(
   fixtureId: string,
   side: NormalizedTeamLineup,
   unresolved: string[],
+  autoSyncMissingSquads: boolean,
 ): Promise<number> {
   const teamId = await findMappedId(supabase, providerName, "team", side.team.providerId);
   if (!teamId) {
@@ -105,7 +132,7 @@ async function processLineupSide(
     return 0;
   }
 
-  await ensureTeamHasSquad(supabase, teamId, unresolved);
+  await ensureTeamHasSquad(supabase, teamId, side.team.name, unresolved, autoSyncMissingSquads);
 
   let processed = 0;
   for (const entry of side.entries) {
@@ -247,13 +274,20 @@ async function processStatistics(
 /**
  * On-demand sync of one fixture's lineups + match events + team statistics. Given a
  * KIVO fixture id, resolves its provider id, fetches all three, and upserts. Players
- * referenced by a lineup/event that aren't in KIVO yet trigger an on-demand squad
- * sync for that team (see ensureTeamHasSquad); any player still unresolved after
- * that is skipped and logged rather than crashing the whole sync. Safe to call
- * repeatedly for a live match — see upsertFixtureEvent's dedupe note (statistics
- * are upserted on the fixture_statistics table's own unique constraint, same idea).
+ * referenced by a lineup that belongs to a team with no squad synced yet are skipped
+ * and logged unless `autoSyncMissingSquads` is set (see ensureTeamHasSquad,
+ * RECOMMENDATIONS.md item 59) — default false, so a "sync match details" click never
+ * silently spends the 2+ extra provider calls a squad sync costs per unseen team.
+ * Any player still unresolved after that is skipped and logged rather than crashing
+ * the whole sync. Safe to call repeatedly for a live match — see upsertFixtureEvent's
+ * dedupe note (statistics are upserted on the fixture_statistics table's own unique
+ * constraint, same idea).
  */
-export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult> {
+export async function syncFixtureDetails(
+  fixtureId: string,
+  options: { autoSyncMissingSquads?: boolean } = {},
+): Promise<SyncResult> {
+  const autoSyncMissingSquads = options.autoSyncMissingSquads ?? false;
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
 
@@ -325,7 +359,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
 
   if (lineups) {
     for (const side of lineups.teams) {
-      processed += await processLineupSide(supabase, provider.name, fixtureId, side, unresolved);
+      processed += await processLineupSide(supabase, provider.name, fixtureId, side, unresolved, autoSyncMissingSquads);
     }
   }
 

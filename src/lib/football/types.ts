@@ -75,6 +75,11 @@ export interface NormalizedPlayer {
   /** Free text on purpose, mirrors players.position in the schema — providers
    * report coarse buckets (e.g. "Goalkeeper") rather than a fixed taxonomy. */
   position: string | null;
+  /** Provider-hosted headshot URL, mirrors players.photo_url (migration 0030,
+   * RECOMMENDATIONS.md item 56) — real provider data already fetched by
+   * getSquad(), not a KIVO-hosted asset. Null when the provider has none on
+   * file, never a placeholder image URL. */
+  photoUrl: string | null;
 }
 
 export interface NormalizedManager {

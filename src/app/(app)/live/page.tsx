@@ -2,17 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getOrCreateProfile } from "@/lib/profile";
+import { canManageFootballData } from "@/lib/admin";
+import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
-import { ComingSoon } from "@/components/ui/coming-soon";
+import { NoDataYet } from "@/components/ui/no-data-yet";
+import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { isLiveStatus } from "@/lib/football/fixture-status";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
-const item = NAV_ITEMS.find((i) => i.id === "live")!;
+const item = getNavItem("live");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -67,6 +71,8 @@ function FixtureRowCard({ fixture }: { fixture: FixtureRow }) {
 
 export default async function LivePage() {
   const supabase = createServerSupabaseClient();
+  const profile = await getOrCreateProfile();
+  const canRefreshLive = canManageFootballData(profile?.role);
 
   const startOfDay = new Date();
   startOfDay.setUTCHours(0, 0, 0, 0);
@@ -99,19 +105,27 @@ export default async function LivePage() {
 
   if (!hasLiveFixtures && !hasTodayFixtures) {
     return (
-      <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
   }
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
-        <p className="text-sm text-foreground-muted">
-          {hasLiveFixtures
-            ? "Matches in progress right now, synced from API-Football."
-            : "Nothing in play right now. Here's what's on today."}
-        </p>
+      <FadeIn className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
+          <p className="text-sm text-foreground-muted">
+            {hasLiveFixtures
+              ? "Matches in progress right now, synced from API-Football."
+              : "Nothing in play right now. Here's what's on today."}
+          </p>
+        </div>
+        {/* RECOMMENDATIONS.md item 51: the real guard FOOTBALL_LIVE_POLLING_ENABLED
+            sits in front of now — triggerLiveScoresRefresh (src/app/admin/data-health/
+            actions.ts) checks the flag itself and returns a clear "disabled until a
+            paid tier exists" message rather than spending quota, so this button is
+            always visible to admins but only does real work once that flag is on. */}
+        {canRefreshLive && <InlineSyncButton label="Refresh live scores" action={triggerLiveScoresRefresh} />}
       </FadeIn>
 
       {hasLiveFixtures && liveFixtures && (

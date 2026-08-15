@@ -6,6 +6,14 @@ import { ApiFootballProvider } from "./providers/api-football";
  * Feature flag — live polling/websocket connections must stay off until a paid
  * provider tier with real quota exists. Flip via FOOTBALL_LIVE_POLLING_ENABLED.
  * See DECISIONS.md — never let this default to true.
+ *
+ * RECOMMENDATIONS.md item 51: this now actually guards something —
+ * triggerLiveScoresRefresh (src/app/admin/data-health/actions.ts), the manual
+ * "Refresh live scores" action on /live, checks it before spending any provider
+ * quota. It's still never a timer/poll of any kind on this free tier: the guard
+ * exists so the *manual* action stays a deliberate, admin-triggered no-op until
+ * a paid tier makes the flag worth flipping, not so it can be automated later
+ * without re-reading this comment.
  */
 export const FOOTBALL_LIVE_POLLING_ENABLED = process.env.FOOTBALL_LIVE_POLLING_ENABLED === "true";
 

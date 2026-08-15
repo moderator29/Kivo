@@ -14,7 +14,11 @@ type ServiceClient = SupabaseClient<Database>;
  * actually supplied a non-null value for are touched — the free-tier squads
  * endpoint never returns dateOfBirth/nationality (see getSquad() in
  * providers/api-football.ts), and re-syncing must never clobber richer data a
- * future/paid source (or an admin) may have filled in with nulls.
+ * future/paid source (or an admin) may have filled in with nulls. photoUrl
+ * follows the same never-clobber-with-null rule (RECOMMENDATIONS.md item 56)
+ * even though the free tier *does* return it on every call — a provider
+ * response that briefly omits it for one player should never blank out a
+ * photo already on file.
  */
 async function upsertPlayer(
   supabase: ServiceClient,
@@ -33,6 +37,7 @@ async function upsertPlayer(
     if (player.dateOfBirth !== null) update.date_of_birth = player.dateOfBirth;
     if (player.nationality !== null) update.nationality = player.nationality;
     if (player.position !== null) update.position = player.position;
+    if (player.photoUrl !== null) update.photo_url = player.photoUrl;
 
     const { error } = await supabase.from("players").update(update).eq("id", existing);
     if (error) throw error;
@@ -47,6 +52,7 @@ async function upsertPlayer(
       date_of_birth: player.dateOfBirth,
       nationality: player.nationality,
       position: player.position,
+      photo_url: player.photoUrl,
       current_team_id: teamId,
     })
     .select("id")

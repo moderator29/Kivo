@@ -38,19 +38,20 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
 ];
 
 /** Deliberately mirrors the real provider's limitation: no dateOfBirth/nationality
- * from a squads-style listing — see the doc comment on getSquad() in api-football.ts. */
+ * from a squads-style listing — see the doc comment on getSquad() in api-football.ts.
+ * photoUrl stays null too, same zero-fake-data rule — there is no real photo to mock. */
 const MOCK_SQUADS: Record<string, NormalizedPlayer[]> = {
   "mock-team-1": [
-    { providerId: "mock-player-1", fullName: "Chidi Okafor", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper" },
-    { providerId: "mock-player-2", fullName: "Tunde Bakare", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender" },
-    { providerId: "mock-player-3", fullName: "Femi Adisa", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder" },
-    { providerId: "mock-player-4", fullName: "Kelechi Uzo", knownAs: "K. Uzo", dateOfBirth: null, nationality: null, position: "Attacker" },
+    { providerId: "mock-player-1", fullName: "Chidi Okafor", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper", photoUrl: null },
+    { providerId: "mock-player-2", fullName: "Tunde Bakare", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender", photoUrl: null },
+    { providerId: "mock-player-3", fullName: "Femi Adisa", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder", photoUrl: null },
+    { providerId: "mock-player-4", fullName: "Kelechi Uzo", knownAs: "K. Uzo", dateOfBirth: null, nationality: null, position: "Attacker", photoUrl: null },
   ],
   "mock-team-2": [
-    { providerId: "mock-player-5", fullName: "Emeka Nwosu", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper" },
-    { providerId: "mock-player-6", fullName: "Yusuf Danladi", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender" },
-    { providerId: "mock-player-7", fullName: "Obinna Chukwu", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder" },
-    { providerId: "mock-player-8", fullName: "Ahmed Musa Jr", knownAs: null, dateOfBirth: null, nationality: null, position: "Attacker" },
+    { providerId: "mock-player-5", fullName: "Emeka Nwosu", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper", photoUrl: null },
+    { providerId: "mock-player-6", fullName: "Yusuf Danladi", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender", photoUrl: null },
+    { providerId: "mock-player-7", fullName: "Obinna Chukwu", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder", photoUrl: null },
+    { providerId: "mock-player-8", fullName: "Ahmed Musa Jr", knownAs: null, dateOfBirth: null, nationality: null, position: "Attacker", photoUrl: null },
   ],
 };
 

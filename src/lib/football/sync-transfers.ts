@@ -38,10 +38,17 @@ async function upsertTransfer(
     resolveTeamId(supabase, providerName, transfer.toTeamProviderId),
   ]);
 
+  // from_team_provider_id/to_team_provider_id (migration 0030, RECOMMENDATIONS.md
+  // item 64) are always written, resolved or not — persisting the provider's raw id
+  // even when resolveTeamId came back null is exactly what lets
+  // reconcileUnresolvedTransferTeams() below re-resolve this row later, once that
+  // club has been synced, without spending fresh provider quota to re-fetch it.
   const payload: Database["public"]["Tables"]["transfers"]["Insert"] = {
     player_id: playerId,
     from_team_id: fromTeamId,
+    from_team_provider_id: transfer.fromTeamProviderId,
     to_team_id: toTeamId,
+    to_team_provider_id: transfer.toTeamProviderId,
     transfer_date: transfer.transferDate,
     fee_text: transfer.feeText,
     transfer_type: transfer.transferType,
@@ -157,4 +164,81 @@ export async function syncPlayerTransfers(playerId: string): Promise<SyncResult>
     recordsProcessed: processed,
     error: errorMessage ?? undefined,
   };
+}
+
+/**
+ * RECOMMENDATIONS.md item 64: resolveTeamId above correctly leaves a transfer's
+ * from_team_id/to_team_id null when it references a club KIVO hasn't synced yet —
+ * but nothing ever revisited those rows once the club *did* get synced later
+ * (via a subsequent fixture or squad sync), so "Club not synced" on /transfers
+ * and every player's transfer history was effectively permanent.
+ *
+ * This is a pure DB reconciliation pass: it scans for transfers rows the earlier
+ * sync left with a provider id recorded but no KIVO id (from_team_provider_id/
+ * to_team_provider_id, migration 0030), re-runs findMappedId against
+ * provider_mappings — now possibly populated by a later sync — and fills in
+ * whichever side just resolved. Zero provider calls, so it costs nothing against
+ * the daily quota and is safe to run as often as an admin likes.
+ *
+ * Capped at 500 rows per run (bounded work per click, same spirit as the 20-error
+ * cap on sync_runs.error_message elsewhere in this file) — an admin can just run it
+ * again if more remain, same on-demand pattern as every other sync action.
+ */
+const RECONCILE_BATCH_LIMIT = 500;
+
+export async function reconcileUnresolvedTransferTeams(): Promise<{ error: string | null; recordsProcessed: number }> {
+  const supabase = createServiceRoleSupabaseClient();
+
+  // getFootballDataProvider() never makes a network call on its own (constructing
+  // ApiFootballProvider just sets `name` and stores the key) — only used here for
+  // `provider.name`, the string provider_mappings rows are keyed on. Still guarded:
+  // it throws when no provider is configured at all, which this action (deliberately
+  // not gated on API_FOOTBALL_KEY, see triggerLiveScoresRefresh's sibling comment in
+  // actions.ts) should report as a clear message rather than an unhandled crash.
+  let providerName: string;
+  try {
+    providerName = (await getFootballDataProvider()).name;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: message, recordsProcessed: 0 };
+  }
+
+  const { data: rows, error: selectError } = await supabase
+    .from("transfers")
+    .select("id, from_team_id, from_team_provider_id, to_team_id, to_team_provider_id")
+    .or("and(from_team_id.is.null,from_team_provider_id.not.is.null),and(to_team_id.is.null,to_team_provider_id.not.is.null)")
+    .limit(RECONCILE_BATCH_LIMIT);
+
+  if (selectError) {
+    console.error("Transfer team reconciliation: failed to load unresolved rows", selectError);
+    return { error: "Couldn't load unresolved transfers. Try again.", recordsProcessed: 0 };
+  }
+  if (!rows || rows.length === 0) {
+    return { error: null, recordsProcessed: 0 };
+  }
+
+  let resolvedCount = 0;
+  for (const row of rows) {
+    const update: Database["public"]["Tables"]["transfers"]["Update"] = {};
+
+    if (row.from_team_id === null && row.from_team_provider_id !== null) {
+      const resolved = await resolveTeamId(supabase, providerName, row.from_team_provider_id);
+      if (resolved) update.from_team_id = resolved;
+    }
+    if (row.to_team_id === null && row.to_team_provider_id !== null) {
+      const resolved = await resolveTeamId(supabase, providerName, row.to_team_provider_id);
+      if (resolved) update.to_team_id = resolved;
+    }
+
+    if (Object.keys(update).length === 0) continue;
+
+    const { error: updateError } = await supabase.from("transfers").update(update).eq("id", row.id);
+    if (updateError) {
+      console.error(`Transfer team reconciliation: failed to update transfer ${row.id}`, updateError);
+      continue;
+    }
+    resolvedCount += 1;
+  }
+
+  return { error: null, recordsProcessed: resolvedCount };
 }

@@ -1069,6 +1069,7 @@ export type Database = {
           id: string
           known_as: string | null
           nationality: string | null
+          photo_url: string | null
           position: string | null
           updated_at: string
         }
@@ -1080,6 +1081,7 @@ export type Database = {
           id?: string
           known_as?: string | null
           nationality?: string | null
+          photo_url?: string | null
           position?: string | null
           updated_at?: string
         }
@@ -1091,6 +1093,7 @@ export type Database = {
           id?: string
           known_as?: string | null
           nationality?: string | null
+          photo_url?: string | null
           position?: string | null
           updated_at?: string
         }
@@ -1594,9 +1597,11 @@ export type Database = {
           created_at: string
           fee_text: string | null
           from_team_id: string | null
+          from_team_provider_id: string | null
           id: string
           player_id: string
           to_team_id: string | null
+          to_team_provider_id: string | null
           transfer_date: string
           transfer_type: Database["public"]["Enums"]["transfer_type"]
           updated_at: string
@@ -1605,9 +1610,11 @@ export type Database = {
           created_at?: string
           fee_text?: string | null
           from_team_id?: string | null
+          from_team_provider_id?: string | null
           id?: string
           player_id: string
           to_team_id?: string | null
+          to_team_provider_id?: string | null
           transfer_date: string
           transfer_type?: Database["public"]["Enums"]["transfer_type"]
           updated_at?: string
@@ -1616,9 +1623,11 @@ export type Database = {
           created_at?: string
           fee_text?: string | null
           from_team_id?: string | null
+          from_team_provider_id?: string | null
           id?: string
           player_id?: string
           to_team_id?: string | null
+          to_team_provider_id?: string | null
           transfer_date?: string
           transfer_type?: Database["public"]["Enums"]["transfer_type"]
           updated_at?: string

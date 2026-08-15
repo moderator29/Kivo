@@ -311,6 +311,11 @@ export class ApiFootballProvider implements FootballDataProvider {
    * whole squad would burn the 100-requests/day free quota in a couple of
    * teams, so it's intentionally not called here. dateOfBirth/nationality are
    * left null rather than estimated from `age`.
+   *
+   * `photo` IS mapped through (RECOMMENDATIONS.md item 56) — it's real
+   * provider data already fetched and paid for in quota on every call this
+   * method makes, unlike dateOfBirth/nationality which would cost an
+   * additional per-player request the free tier can't afford.
    */
   async getSquad(teamProviderId: string): Promise<NormalizedPlayer[]> {
     const data = await this.request<ApiFootballSquadResponse>(`/players/squads?team=${teamProviderId}`, SQUAD_CACHE_SECONDS);
@@ -324,6 +329,7 @@ export class ApiFootballProvider implements FootballDataProvider {
       dateOfBirth: null,
       nationality: null,
       position: p.position,
+      photoUrl: p.photo,
     }));
   }
 
