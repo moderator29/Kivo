@@ -27,43 +27,50 @@ The app boots and is fully usable (auth, social, admin) with just Clerk + Supaba
 ```
 src/
   app/
-    (app)/                — authenticated product surfaces, shared shell/nav
-      home/                 — personalized feed / dashboard
-      social/               — posts, comments, reactions, reports
-      matches/[id]/         — Match Centre (score, lineups, stats) + Match Room (fixture-scoped posts)
-      teams/[id]/, teams/compare/, players/[id]/, leagues/[id]/  — football entity pages
-      fantasy/              — league create/join, squad builder, leaderboard
-      predictions/          — picks + leaderboard
-      transfers/, live/, discover/, news/, rewards/  — supporting surfaces
-      ai/                   — AI Copilot chat UI
-      notifications/        — notifications inbox
+    (app)/                — authenticated-shell product surfaces (guest-viewable, sign-up-gated actions)
+      home/                  — personalized feed / dashboard
+      social/                — posts, one-level comment threads, six reaction types, in-feed polls, reports
+      matches/, matches/[id]/  — fixture list + Match Centre (lineups, stats, fan ratings) and its Room tab
+        (fixture-scoped posts, live scores when synced)
+      teams/, teams/[id]/, teams/compare/  — club pages: squad, head-to-head, discipline, goal timing, transfer ledger
+      players/, players/[id]/, players/compare/  — player pages: stats, photos, transfer history
+      leagues/, leagues/[id]/  — competitions + standings
+      managers/, managers/[id]/, venues/, venues/[id]/  — manager and stadium pages, synced alongside teams/fixtures
+      fantasy/, fantasy/browse/  — squad builder, private + public league create/join/discovery, leaderboard
+      predictions/, predictions/mine/  — picks, scoring, leaderboard, personal history
+      transfers/, live/, discover/, news/, rewards/, saved/  — supporting surfaces
+      ai/                    — AI Copilot chat UI (streaming, persisted/resumable conversation history)
+      notifications/         — full notifications inbox (bell lives in the shared shell)
       profile/, profile/following/, u/[username]/  — own profile + public profiles
-      settings/             — account/notification preference settings
+      settings/              — account/notification preference settings
     admin/                 — /admin, RBAC-gated, separate shell from the public app
       data-health/, moderation/, users/
     onboarding/            — post-signup handle/profile setup, outside the (app) shell
     sign-in/, sign-up/     — Clerk-hosted auth flows
+    about/, privacy/, terms/  — static marketing/legal pages
     api/
-      ai/chat/               — AI Copilot chat endpoint (Anthropic)
+      ai/chat/               — AI Copilot chat endpoint (Anthropic), streamed as NDJSON
       webhooks/clerk/        — Clerk → Supabase profile sync
+      health/                — uptime check endpoint
   components/
     layout/, ui/           — app shell, nav, top bar, shared primitives
-    social/, matches/, notifications/, onboarding/, settings/, profile/,
+    social/, matches/, football/, notifications/, onboarding/, settings/, profile/,
     predictions/, teams/, players/, leagues/, transfers/, discover/,
     home/, admin/, ai/, marketing/
       (fantasy's builder/leaderboard/onboarding components live alongside
       their route files in app/(app)/fantasy/ rather than in components/)
   lib/
     supabase/              — server + browser clients, generated DB types
-    football/               — FootballDataProvider abstraction + adapters
+    football/               — FootballDataProvider abstraction + adapters, sync pipeline, head-to-head/results helpers
     ai/                      — Anthropic client + grounding helpers
     og/                      — OpenGraph image generation helpers
     navigation.ts            — single source of truth for primary nav
     notification-registry.ts, notifications.ts, notification-preferences.ts
-    fantasy.ts, predictions.ts, rewards.ts, rate-limit.ts, audit.ts
-    profile.ts, admin.ts, clerk.ts, countries.ts, format.ts, utils.ts,
+    fantasy.ts, fantasy-scoring.ts, predictions.ts, rewards.ts, rate-limit.ts, audit.ts
+    profile.ts, admin.ts, clerk.ts, countries.ts, format.ts, reactions.ts, text.ts, utils.ts,
     recently-viewed.ts
-supabase/migrations/      — version-controlled SQL, applied via Supabase MCP (15 migrations)
+  hooks/                   — shared client-side hooks (e.g. focus trap)
+supabase/migrations/      — version-controlled SQL, applied via Supabase MCP (34 migrations, 42 tables)
 design/                    — icon manifest + processed brand assets
 ```
 

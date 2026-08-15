@@ -125,10 +125,10 @@ export default function PrivacyPage() {
               needed for their part:
             </p>
             <ul className="flex flex-col gap-2 pl-1 text-sm leading-relaxed text-foreground-muted sm:text-base">
-              <li>• <span className="text-foreground">Clerk</span> — authentication and identity (your email, sign-in method, account credentials).</li>
-              <li>• <span className="text-foreground">Supabase</span> — hosts KIVO&apos;s application database (your profile, posts, predictions, fantasy data and everything else described above), access-controlled per account.</li>
-              <li>• <span className="text-foreground">API-Football</span> — supplies football data (fixtures, teams, players, scores); does not receive data about you.</li>
-              <li>• <span className="text-foreground">Anthropic</span> — receives your message and grounding context only when you use the AI Copilot, to generate a reply.</li>
+              <li>• <span className="text-foreground">Clerk</span>: authentication and identity (your email, sign-in method, account credentials).</li>
+              <li>• <span className="text-foreground">Supabase</span>: hosts KIVO&apos;s application database (your profile, posts, predictions, fantasy data and everything else described above), access-controlled per account.</li>
+              <li>• <span className="text-foreground">API-Football</span>: supplies football data (fixtures, teams, players, scores); does not receive data about you.</li>
+              <li>• <span className="text-foreground">Anthropic</span>: receives your message and grounding context only when you use the AI Copilot, to generate a reply.</li>
             </ul>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               We do not sell your personal information to third parties.

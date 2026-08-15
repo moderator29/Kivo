@@ -58,13 +58,13 @@ const HOW_IT_WORKS = [
     icon: ShieldCheck,
     title: "Browse free, no account needed",
     description:
-      "Scores, standings, teams, players, Match Centre, the AI Copilot's public answers — all viewable the moment you land, exactly like Sofascore or Flashscore. No wall before the product.",
+      "Scores, standings, teams, players, Match Centre, the AI Copilot's public answers: all viewable the moment you land, exactly like Sofascore or Flashscore. No wall before the product.",
   },
   {
     icon: UserPlus,
     title: "Sign up only when you act",
     description:
-      "Like a post, submit a prediction, build a fantasy squad, join the conversation — that's the moment KIVO asks you to sign up, and it takes you straight back to what you were doing.",
+      "Like a post, submit a prediction, build a fantasy squad, join the conversation: that's the moment KIVO asks you to sign up, and it takes you straight back to what you were doing.",
   },
   {
     icon: Sparkles,
@@ -209,7 +209,7 @@ export default function LandingPage() {
 
             <FadeIn delay={0.4}>
               <p className="text-xs text-foreground-subtle">
-                No account needed to look around — sign up only when you want to play.
+                No account needed to look around. Sign up only when you want to play.
               </p>
             </FadeIn>
           </div>

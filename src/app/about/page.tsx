@@ -8,7 +8,7 @@ import { FeatureCard } from "@/components/marketing/feature-card";
 export const metadata: Metadata = {
   title: "About | KIVO",
   description:
-    "KIVO is a football home built for how fans actually watch, argue and play — live scores, Match Rooms, an AI Copilot grounded in real data, and fantasy, starting in Nigeria.",
+    "KIVO is a football home built for how fans actually watch, argue and play: live scores, Match Rooms, an AI Copilot grounded in real data, and fantasy, starting in Nigeria.",
 };
 
 const WHAT_YOU_FIND = [
