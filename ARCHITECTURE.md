@@ -77,6 +77,23 @@ Every user-owned table (`profiles`, `fantasy_teams`, `predictions`, ...) is RLS-
 
 `/admin` is a separate route tree with its own layout, gated server-side by `hasAdminAccess(profile.role)` (never a client-only check) — RLS on every admin-touched table backs this up independently, so a bypassed UI guard still can't read/write data the role doesn't own.
 
+## Preview mode (admin-only sample data, never shown to real users)
+
+Some UI (currently just the player profile "Market" section — market value, contract expiry, see `supabase/migrations/0036_premium_stats_readiness.sql`) is wired to real columns that are null for every row until a paid data vendor is connected, and by design renders nothing while they're null rather than fake numbers. Preview mode lets an **admin** see what that UI looks like once real data exists, without ever risking a real visitor seeing a fabricated value.
+
+**How it works** (`src/lib/preview-mode.ts`):
+- An admin turns it on via the "Preview" toggle in the app top bar (only rendered for `hasAdminAccess(profile.role)`), or directly at `GET /admin/preview-mode?on=1`. That route re-checks admin access itself server-side before doing anything — the toggle button carries no authority of its own.
+- On success it sets a short-lived (4h), `httpOnly`, `sameSite=lax` cookie (`kivo_preview_mode`). Nothing else in the app ever writes this cookie.
+- `isPreviewModeActive(profile)` is the only read path: it returns `true` **only if both** `hasAdminAccess(profile.role)` is true **and** the cookie is present — checked fresh, server-side, on every request. A guest, a non-admin, or an environment variable can never turn this on; there is no default-on path.
+- When active, gated sections fill a still-null field with a hardcoded sample value instead of rendering nothing, alongside the real branch (a non-null field always renders its real value, untouched, un-marked).
+
+**Safety guarantees a screenshot or a non-admin session can rely on:**
+1. A fixed, page-wide amber banner ("Preview mode — sample data, not real. Visible to admins only.") renders on every `(app)` page for as long as the cookie + admin conditions hold (`src/components/layout/preview-mode-banner.tsx`, wired in `src/components/layout/app-shell.tsx`).
+2. Every individual faked field additionally gets its own marker — a dashed amber border plus an asterisk with a tooltip (`src/components/ui/preview-marker.tsx`) — so a cropped screenshot of just that field, without the banner in frame, still can't be mistaken for real data.
+3. Preview mode is opt-in per admin session (cookie), not a build/env flag — it can't silently affect any other visitor, in any environment, ever.
+
+Applying the same pattern elsewhere: check `hasAdminAccess` + `isPreviewModeActive(profile)`, only substitute a sample value for a field that is genuinely null, and always pair it with `PREVIEW_FIELD_CLASSNAME`/`PreviewAsterisk` — never substitute over a real value.
+
 ## What's real vs. architected-but-not-live
 
 **Live now**: auth (Clerk + Supabase), profiles, Social (posts, one-level comment threads, all six reaction types, in-feed polls, reports feeding the moderation queue), Match Rooms (fixture-scoped posts inside Match Centre's Room tab), fan match ratings and the shareable Match Verdict summary, saved posts/teams/players/competitions (watchlist) and follows, Fantasy (public + private league creation, public league discovery/browse, squad builder, admin-triggered gameweek scoring, roster carry-forward between gameweeks, leaderboard), Predictions (picks, admin-triggered scoring, leaderboard, cross-user consensus), AI Copilot (Anthropic Claude, streaming responses, grounded chat, persisted and resumable conversation history — live when `ANTHROPIC_API_KEY` is set), Notifications (in-app bell + full notifications page, typed notification registry), onboarding, Settings, public profiles (`/u/[username]`), team and player detail pages (head-to-head record, discipline table, goal-timing distribution, real transfer history, player photos), team/player comparison, manager pages, venue pages, admin (RBAC, overview, moderation queue, user list, data-health sync triggers with a quota/trend summary strip — all reading/writing real data).

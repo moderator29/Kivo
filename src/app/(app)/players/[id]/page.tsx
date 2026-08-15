@@ -18,6 +18,8 @@ import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { calculateAge, formatDate, formatMarketValueEur } from "@/lib/format";
+import { isPreviewModeActive } from "@/lib/preview-mode";
+import { PREVIEW_FIELD_CLASSNAME, PreviewAsterisk } from "@/components/ui/preview-marker";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -39,6 +41,9 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const { id } = await params;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
+  // Admin-only, opt-in-only — see src/lib/preview-mode.ts. False for every
+  // guest and every non-admin regardless of anything in the request.
+  const previewMode = await isPreviewModeActive(profile);
 
   const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, isSaved, transfersLastSyncedAt] = await Promise.all([
     supabase
@@ -99,6 +104,20 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   const displayName = player.known_as ?? player.full_name;
   const showFullNameSubtitle = Boolean(player.known_as) && player.known_as !== player.full_name;
+
+  // Preview mode only ever fills in a field that is genuinely null today —
+  // it never overrides a real value, and it's computed fresh per-request
+  // from previewMode above (admin + opt-in only). See supabase/migrations/
+  // 0036_premium_stats_readiness.sql for why these two columns are null for
+  // every player right now, and src/lib/preview-mode.ts for the safety
+  // contract. Every faked value here MUST stay wrapped in PreviewAsterisk /
+  // PREVIEW_FIELD_CLASSNAME so it can never be mistaken for a real one.
+  const marketValueIsFake = previewMode && player.market_value_eur == null;
+  const marketValueEur = player.market_value_eur ?? (previewMode ? 42_500_000 : null);
+  const marketValueUpdatedAt = player.market_value_eur != null ? player.market_value_updated_at : marketValueIsFake ? new Date().toISOString() : null;
+
+  const contractIsFake = previewMode && player.contract_expires_at == null;
+  const contractExpiresAt = player.contract_expires_at ?? (previewMode ? "2028-06-30" : null);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -171,34 +190,51 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         )}
       </FadeIn>
 
-      {(player.market_value_eur != null || player.contract_expires_at != null) && (
-        // Real vendor data only (supabase/migrations/0036_premium_stats_readiness.sql)
-        // — this whole section is invisible until a premium provider is connected
-        // and has actually written a value for this player, since both columns are
-        // null for every player today. No placeholder card renders in the meantime.
+      {(marketValueEur != null || contractExpiresAt != null) && (
+        // Real vendor data (supabase/migrations/0036_premium_stats_readiness.sql)
+        // — this section stays invisible until a premium provider is connected
+        // and has actually written a value for this player, UNLESS an admin has
+        // turned preview mode on (src/lib/preview-mode.ts), in which case a null
+        // field renders with an obviously-marked sample value instead. A real
+        // value, when one exists, always renders unmarked exactly as before.
         <FadeIn delay={0.22} className="flex flex-col gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             <Wallet className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
             Market
+            {(marketValueIsFake || contractIsFake) && (
+              <span className="rounded-full border border-dashed border-amber-400/70 bg-amber-400/[0.06] px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-400">
+                Preview data
+              </span>
+            )}
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {player.market_value_eur != null && (
-              <div className="kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted">
+            {marketValueEur != null && (
+              <div
+                className={`kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted ${marketValueIsFake ? PREVIEW_FIELD_CLASSNAME : ""}`}
+              >
                 <Wallet className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
                 <div>
-                  <div className="text-foreground">{formatMarketValueEur(player.market_value_eur)}</div>
-                  {player.market_value_updated_at && (
+                  <div className="text-foreground">
+                    {formatMarketValueEur(marketValueEur)}
+                    {marketValueIsFake && <PreviewAsterisk />}
+                  </div>
+                  {marketValueUpdatedAt && (
                     <div className="text-[11px] text-foreground-subtle">
-                      Updated {formatDate(player.market_value_updated_at)}
+                      {marketValueIsFake ? "Sample as of" : "Updated"} {formatDate(marketValueUpdatedAt)}
                     </div>
                   )}
                 </div>
               </div>
             )}
-            {player.contract_expires_at != null && (
-              <div className="kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted">
+            {contractExpiresAt != null && (
+              <div
+                className={`kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted ${contractIsFake ? PREVIEW_FIELD_CLASSNAME : ""}`}
+              >
                 <FileClock className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
-                <div className="text-foreground">Contract until {formatDate(player.contract_expires_at)}</div>
+                <div className="text-foreground">
+                  Contract until {formatDate(contractExpiresAt)}
+                  {contractIsFake && <PreviewAsterisk />}
+                </div>
               </div>
             )}
           </div>

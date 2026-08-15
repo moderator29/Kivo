@@ -6,6 +6,7 @@ import { UserButton } from "@clerk/nextjs";
 import { getRecentNotifications } from "@/lib/notifications";
 import { NotificationBell } from "./notification-bell";
 import { CommandPalette } from "./command-palette";
+import { PreviewModeToggle } from "@/components/admin/preview-mode-toggle";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 /**
@@ -36,7 +37,17 @@ async function NotificationBellData() {
   return <NotificationBell initialNotifications={notifications} initialUnreadCount={unreadCount} />;
 }
 
-export function TopBar({ signedIn }: { signedIn: boolean }) {
+export function TopBar({
+  signedIn,
+  isAdmin = false,
+  previewMode = false,
+}: {
+  signedIn: boolean;
+  /** Gates the preview-mode toggle — see src/lib/preview-mode.ts. A guest or
+   * non-admin never sees this control at all, not even in its "off" state. */
+  isAdmin?: boolean;
+  previewMode?: boolean;
+}) {
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-kivo-obsidian/90 px-4 py-3 backdrop-blur-lg lg:px-8">
       <Link
@@ -50,6 +61,8 @@ export function TopBar({ signedIn }: { signedIn: boolean }) {
       <div className="ml-auto flex min-w-0 flex-1 items-center gap-3 lg:ml-0">
         <CommandPalette />
       </div>
+
+      {isAdmin && <PreviewModeToggle active={previewMode} />}
 
       {signedIn ? (
         <>
