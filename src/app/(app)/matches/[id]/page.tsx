@@ -321,6 +321,8 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           fixtureId={fixture.id}
           homeTeamId={fixture.home_team?.id ?? ""}
           awayTeamId={fixture.away_team?.id ?? ""}
+          homeTeamName={fixture.home_team?.name ?? "Home team"}
+          awayTeamName={fixture.away_team?.name ?? "Away team"}
           roomPosts={roomPostsForTab}
           stats={statsForTab}
           signedIn={Boolean(profile)}

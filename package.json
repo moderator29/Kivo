@@ -12,7 +12,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "calibrate:ratings": "tsx scripts/calibrate-rating-engine.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
@@ -37,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

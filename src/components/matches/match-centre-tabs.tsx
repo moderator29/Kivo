@@ -12,6 +12,7 @@ import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
+import { HeatmapView } from "@/components/matches/heatmap-view";
 
 type MatchEvent = {
   id: string;
@@ -83,6 +84,12 @@ type MatchCentreTabsProps = {
   fixtureId: string;
   homeTeamId: string;
   awayTeamId: string;
+  /** Real team names (`fixtures.home_team`/`away_team` join in the page),
+   * used only for the Heatmap tab's per-side labels ("<name>'s on-pitch
+   * movement") — every other tab already resolves team identity from
+   * `standings`/`lineups` rows themselves. */
+  homeTeamName: string;
+  awayTeamName: string;
   events: MatchEvent[];
   lineups: LineupEntry[];
   stats: TeamStats[];
@@ -97,7 +104,7 @@ type MatchCentreTabsProps = {
   detailsLastSyncedAt: string | null;
 };
 
-const TABS = ["Details", "Stats", "Lineups", "Standings", "Room"] as const;
+const TABS = ["Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"] as const;
 type Tab = (typeof TABS)[number];
 
 function tabSlug(tab: Tab): string {
@@ -250,6 +257,33 @@ function LineupsTab({
   );
 }
 
+/**
+ * RECOMMENDATIONS.md item 228: `HeatmapView`/`HeatmapEngine` were already
+ * built and tested; this tab is the "add it as a tab" half of that item now
+ * that the product decision has been made. No `PositionalDataProvider` is
+ * connected anywhere in KIVO (`positional-types.ts`) — both calls below
+ * always pass an empty `observations` array, so `HeatmapView` always renders
+ * its own honest "Positional data unavailable for this match" empty state.
+ * That is the correct, expected behaviour for every real fixture today, not
+ * a bug to paper over with sample/fake data.
+ */
+function HeatmapTab({
+  fixtureId,
+  homeTeamName,
+  awayTeamName,
+}: {
+  fixtureId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <HeatmapView observations={[]} matchId={fixtureId} subjectLabel={homeTeamName} />
+      <HeatmapView observations={[]} matchId={fixtureId} subjectLabel={awayTeamName} />
+    </div>
+  );
+}
+
 const STAT_ROWS: { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string }[] = [
   { key: "possessionPct", label: "Possession", suffix: "%" },
   { key: "shotsTotal", label: "Shots" },
@@ -397,6 +431,8 @@ function MatchCentreTabsInner({
   fixtureId,
   homeTeamId,
   awayTeamId,
+  homeTeamName,
+  awayTeamName,
   events,
   lineups,
   stats,
@@ -505,6 +541,7 @@ function MatchCentreTabsInner({
           {active === "Details" && <DetailsTab events={events} />}
           {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Lineups" && <LineupsTab homeTeamId={homeTeamId} awayTeamId={awayTeamId} lineups={lineups} />}
+          {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
           {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Room" && <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} />}
         </motion.div>
