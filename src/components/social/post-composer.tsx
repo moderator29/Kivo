@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { PenSquare } from "lucide-react";
 import { motion } from "motion/react";
 import { createPost } from "@/app/(app)/social/actions";
 
@@ -17,8 +19,34 @@ export function PostComposer({
   fixtureId?: string;
   placeholder?: string;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
+
+  // A guest gets a non-interactive card, not a live textarea: it used to
+  // call e.currentTarget.blur() on focus, which yanked the cursor away with
+  // no explanation and trapped keyboard users who tabbed into it (item 101).
+  // The whole card is one link instead, so the affordance and the action
+  // are the same thing.
+  if (!signedIn) {
+    return (
+      <Link
+        href={`/sign-up?redirect_url=${encodeURIComponent(pathname)}`}
+        className="kivo-glass flex items-center justify-between gap-3 rounded-2xl p-4 text-left transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+      >
+        <span className="flex items-center gap-2.5 text-sm text-foreground-subtle">
+          <PenSquare className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+          Sign up to share your take.
+        </span>
+        <span className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white">
+          Sign up to post
+        </span>
+      </Link>
+    );
+  }
+
+  return <SignedInComposer fixtureId={fixtureId} placeholder={placeholder} />;
+}
+
+function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; placeholder: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -27,10 +55,6 @@ export function PostComposer({
     <form
       ref={formRef}
       action={(formData) => {
-        if (!signedIn) {
-          router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
-          return;
-        }
         setError(null);
         startTransition(async () => {
           const result = await createPost(formData);
@@ -46,13 +70,10 @@ export function PostComposer({
       {fixtureId && <input type="hidden" name="fixture_id" value={fixtureId} />}
       <textarea
         name="body"
-        required={signedIn}
+        required
         maxLength={MAX_LENGTH}
         rows={3}
-        placeholder={signedIn ? placeholder : "Sign up to share your take."}
-        onFocus={(e) => {
-          if (!signedIn) e.currentTarget.blur();
-        }}
+        placeholder={placeholder}
         className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none"
       />
       <div className="flex items-center justify-between">
@@ -64,7 +85,7 @@ export function PostComposer({
           whileTap={{ scale: 0.96 }}
           className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {pending ? "Posting…" : signedIn ? "Post" : "Sign up to post"}
+          {pending ? "Posting…" : "Post"}
         </motion.button>
       </div>
     </form>

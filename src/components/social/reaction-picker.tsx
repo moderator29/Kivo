@@ -39,6 +39,7 @@ export function ReactionPicker({
   const [optimisticReaction, setOptimisticReaction] = useState(viewerReaction);
   const [optimisticCount, setOptimisticCount] = useState(count);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -51,11 +52,21 @@ export function ReactionPicker({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [pickerOpen]);
 
+  // Auto-dismiss the error after a few seconds rather than leaving it stuck
+  // next to the button forever (RECOMMENDATIONS item 117: it used to revert
+  // the optimistic state on failure with no explanation at all).
+  useEffect(() => {
+    if (!error) return;
+    const timeout = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(timeout);
+  }, [error]);
+
   function applyReaction(next: ReactionType | null) {
     if (pending) return;
     const previousReaction = optimisticReaction;
     const previousCount = optimisticCount;
     const delta = (next !== null ? 1 : 0) - (previousReaction !== null ? 1 : 0);
+    setError(null);
     setOptimisticReaction(next);
     setOptimisticCount((c) => c + delta);
     setPickerOpen(false);
@@ -67,6 +78,7 @@ export function ReactionPicker({
         // after an earlier successful change in the same session.
         setOptimisticReaction(previousReaction);
         setOptimisticCount(previousCount);
+        setError(result.error);
       }
     });
   }
@@ -143,6 +155,21 @@ export function ReactionPicker({
               </button>
             ))}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            role="alert"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 z-20 mt-1 w-max max-w-[14rem] text-[11px] text-critical"
+          >
+            {error}
+          </motion.p>
         )}
       </AnimatePresence>
     </div>
