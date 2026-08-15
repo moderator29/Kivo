@@ -49,7 +49,7 @@ const supabaseOrigin = resolveSupabaseOrigin();
 //   clients (src/lib/supabase/server.ts, src/lib/supabase/client.ts) talk to
 //   NEXT_PUBLIC_SUPABASE_URL directly over REST.
 // - Anthropic (@anthropic-ai/sdk) and the football data providers
-//   (API-Football/Sportmonks) are called only from server code
+//   (API-Football/TheSportsDB) are called only from server code
 //   (src/lib/ai/client.ts, src/lib/football/) — never fetched from the
 //   browser, so they need no browser-facing CSP entry.
 // - Fonts (next/font/google) are self-hosted at build time — no runtime

@@ -103,8 +103,19 @@ export default async function DataHealthPage() {
 
   // Honest per this platform's zero-fake-data rule: the mock provider never counts as
   // "connected" here, even in dev — it exists only so UI can be built without spending
-  // API-Football quota. See src/lib/football/index.ts.
-  const providerConfigured = Boolean(process.env.API_FOOTBALL_KEY);
+  // real provider quota. Mirrors getFootballDataProvider()'s own selection order
+  // (src/lib/football/index.ts) so this banner never claims a provider is connected
+  // that the app wouldn't actually construct — e.g. FOOTBALL_DATA_PROVIDER=thesportsdb
+  // with only API_FOOTBALL_KEY set correctly still reads as API-Football here, since
+  // that's genuinely what getFootballDataProvider() would fall back to.
+  const activeProviderName: "api-football" | "thesportsdb" | null =
+    process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" && process.env.THE_SPORTS_DB_API_KEY
+      ? "thesportsdb"
+      : process.env.API_FOOTBALL_KEY
+        ? "api-football"
+        : null;
+  const providerConfigured = activeProviderName !== null;
+  const activeProviderLabel = activeProviderName === "thesportsdb" ? "TheSportsDB" : "API-Football";
 
   const supabase = createServerSupabaseClient();
   const { data: syncRuns } = await supabase
@@ -232,12 +243,14 @@ export default async function DataHealthPage() {
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {providerConfigured ? "API-Football connected" : "No provider connected"}
+              {providerConfigured ? `${activeProviderLabel} connected` : "No provider connected"}
             </p>
             <p className="text-xs text-foreground-subtle">
               {providerConfigured
-                ? "API_FOOTBALL_KEY is set. Sync writes real fixtures via the service-role client."
-                : "Set API_FOOTBALL_KEY to enable syncing. The dev-only mock provider is never used here."}
+                ? activeProviderName === "thesportsdb"
+                  ? "FOOTBALL_DATA_PROVIDER=thesportsdb and THE_SPORTS_DB_API_KEY are set. Some sync actions (lineups, events, stats, manager, transfers) aren't supported by this provider — see docs/PROVIDER_ABSTRACTION.md."
+                  : "API_FOOTBALL_KEY is set. Sync writes real fixtures via the service-role client."
+                : "Set API_FOOTBALL_KEY (or THE_SPORTS_DB_API_KEY + FOOTBALL_DATA_PROVIDER=thesportsdb) to enable syncing. The dev-only mock provider is never used here."}
             </p>
           </div>
         </div>

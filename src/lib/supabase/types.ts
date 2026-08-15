@@ -1116,45 +1116,36 @@ export type Database = {
       }
       players: {
         Row: {
-          contract_expires_at: string | null
           created_at: string
           current_team_id: string | null
           date_of_birth: string | null
           full_name: string
           id: string
           known_as: string | null
-          market_value_eur: number | null
-          market_value_updated_at: string | null
           nationality: string | null
           photo_url: string | null
           position: string | null
           updated_at: string
         }
         Insert: {
-          contract_expires_at?: string | null
           created_at?: string
           current_team_id?: string | null
           date_of_birth?: string | null
           full_name: string
           id?: string
           known_as?: string | null
-          market_value_eur?: number | null
-          market_value_updated_at?: string | null
           nationality?: string | null
           photo_url?: string | null
           position?: string | null
           updated_at?: string
         }
         Update: {
-          contract_expires_at?: string | null
           created_at?: string
           current_team_id?: string | null
           date_of_birth?: string | null
           full_name?: string
           id?: string
           known_as?: string | null
-          market_value_eur?: number | null
-          market_value_updated_at?: string | null
           nationality?: string | null
           photo_url?: string | null
           position?: string | null

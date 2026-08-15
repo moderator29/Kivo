@@ -44,7 +44,7 @@ FootballDataProvider (interface)
 ApiFootballProvider   MockFootballProvider (dev-only, throws in production)
 ```
 
-Nothing in routes, components, or the database imports a concrete provider — everything goes through `getFootballDataProvider()` in `src/lib/football/index.ts`. Swapping in Sportmonks later, or adding a second provider for fallback, touches one file. Live polling is feature-flagged off (`FOOTBALL_LIVE_POLLING_ENABLED`) until real API quota exists — see `DECISIONS.md`.
+Nothing in routes, components, or the database imports a concrete provider — everything goes through `getFootballDataProvider()` in `src/lib/football/index.ts`. A second provider, TheSportsDB, now exists alongside API-Football (`FOOTBALL_DATA_PROVIDER` env var selects it) — see `docs/PROVIDER_ABSTRACTION.md`. Live polling is feature-flagged off (`FOOTBALL_LIVE_POLLING_ENABLED`) until real API quota exists — see `DECISIONS.md`.
 
 ## Database
 
@@ -79,7 +79,7 @@ Every user-owned table (`profiles`, `fantasy_teams`, `predictions`, ...) is RLS-
 
 ## Preview mode (admin-only sample data, never shown to real users)
 
-Some UI (currently just the player profile "Market" section — market value, contract expiry, see `supabase/migrations/0036_premium_stats_readiness.sql`) is wired to real columns that are null for every row until a paid data vendor is connected, and by design renders nothing while they're null rather than fake numbers. Preview mode lets an **admin** see what that UI looks like once real data exists, without ever risking a real visitor seeing a fabricated value.
+General-purpose infrastructure for any not-yet-synced field that should render nothing (not a fake number) for real visitors until real data exists, while still letting an **admin** preview what the UI will look like once it does. Its original consumer — a player-profile "Market" section (market value, contract expiry) gated on a Sportmonks-shaped schema — was removed on 2026-08-15 when Sportmonks was dropped from the project entirely (see `DECISIONS.md`); the mechanism has no active consumer today but stays in place for the next real not-yet-synced field that needs it.
 
 **How it works** (`src/lib/preview-mode.ts`):
 - An admin turns it on via the "Preview" toggle in the app top bar (only rendered for `hasAdminAccess(profile.role)`), or directly at `GET /admin/preview-mode?on=1`. That route re-checks admin access itself server-side before doing anything — the toggle button carries no authority of its own.
@@ -98,6 +98,6 @@ Applying the same pattern elsewhere: check `hasAdminAccess` + `isPreviewModeActi
 
 **Live now**: auth (Clerk + Supabase), profiles, Social (posts, one-level comment threads, all six reaction types, in-feed polls, reports feeding the moderation queue), Match Rooms (fixture-scoped posts inside Match Centre's Room tab), fan match ratings and the shareable Match Verdict summary, saved posts/teams/players/competitions (watchlist) and follows, Fantasy (public + private league creation, public league discovery/browse, squad builder, admin-triggered gameweek scoring, roster carry-forward between gameweeks, leaderboard), Predictions (picks, admin-triggered scoring, leaderboard, cross-user consensus), AI Copilot (Anthropic Claude, streaming responses, grounded chat, persisted and resumable conversation history — live when `ANTHROPIC_API_KEY` is set), Notifications (in-app bell + full notifications page, typed notification registry), onboarding, Settings, public profiles (`/u/[username]`), team and player detail pages (head-to-head record, discipline table, goal-timing distribution, real transfer history, player photos), team/player comparison, manager pages, venue pages, admin (RBAC, overview, moderation queue, user list, data-health sync triggers with a quota/trend summary strip — all reading/writing real data).
 
-**Architected, not yet connected**: live football data at scale (provider abstraction built and API-Football-backed, but sync is admin-triggered on demand rather than continuously polled — `FOOTBALL_LIVE_POLLING_ENABLED` stays off until real API quota exists), a second/Sportmonks football provider (interface is ready for it, no implementation exists), transactional email (Resend vars reserved, nothing sends yet), `notification_deliveries` (table and RLS exist, but no delivery pipeline writes to it — the in-app bell/page read `notifications` directly).
+**Architected, not yet connected**: live football data at scale (provider abstraction built and API-Football-backed, a second TheSportsDB provider now also implemented, but sync is admin-triggered on demand rather than continuously polled — `FOOTBALL_LIVE_POLLING_ENABLED` stays off until real API quota exists, and no live worker/Realtime distribution has been built — see `docs/DATA_ARCHITECTURE.md`), transactional email (Resend vars reserved, nothing sends yet), `notification_deliveries` (table and RLS exist, but no delivery pipeline writes to it — the in-app bell/page read `notifications` directly).
 
 Every "architected, not yet connected" surface shows an honest Coming Soon state in the product — never a fabricated one.

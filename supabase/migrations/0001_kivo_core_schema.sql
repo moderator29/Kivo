@@ -537,7 +537,7 @@ create table provider_mappings (
   id                uuid primary key default gen_random_uuid(),
   entity_type       provider_entity_type not null,
   kivo_entity_id    uuid not null, -- polymorphic: id in whichever table entity_type names
-  provider          text not null, -- e.g. 'opta', 'sportmonks', 'api-football'
+  provider          text not null, -- e.g. 'api-football', 'thesportsdb', 'opta'
   provider_entity_id text not null,
   extra             jsonb not null default '{}'::jsonb, -- genuinely provider-specific fields only
   created_at        timestamptz not null default now(),

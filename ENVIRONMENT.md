@@ -10,7 +10,7 @@ This is the plain-language version, audited 2026-08-15 by tracing every code pat
 |---|---|
 | `API_FOOTBALL_KEY` | **Instantly works.** `getFootballDataProvider()` switches from the dev-only mock straight to the real API-Football adapter — no other flag or step needed. Every sync path (today's fixtures, a team's squad, a fixture's lineups/events/stats, a season's standings, a player's transfer history) already calls the provider through that same one entry point, so all of them start hitting the real API immediately. On Admin → Data Health, the "Sync now" button and every per-item sync action already refuse to run without this key set (so nothing can silently "succeed" against mock data in production) — once it's set, those buttons trigger real syncs right away. Nothing hardcodes mock-only behavior anywhere in the sync layer. |
 | `ANTHROPIC_API_KEY` | **Instantly works.** `isAiConfigured()` is the single gate checked by the `/ai` page (swaps from its Coming Soon state to the real chat UI) and by `/api/ai/chat` (returns a real streamed, grounded Claude response instead of a 503). There is no leftover stale/mock AI response anywhere — every code path that talks to Anthropic goes through `getAnthropicClient()`, which itself refuses to run without the key. |
-| `SPORTMONKS_API_TOKEN` | **Needs one more short build pass first — this is NOT plug-and-play yet.** `isPremiumStatsConfigured()` will correctly flip to "true," but nothing actually calls Sportmonks: `getPremiumStatsProvider()` deliberately throws "configured but not implemented yet," because no HTTP client for Sportmonks has been written — there was never a vendor account to build one against. This is intentional, not a bug: rather than fabricate fake market-value/contract/heatmap numbers, the interface, database columns, and a scoped implementation plan (candidate real Sportmonks v3 endpoints to call) are ready and waiting in `src/lib/football/premium-stats.ts` and `DECISIONS.md`, so wiring it up once the founder has a confirmed Sportmonks account is a short, scoped follow-up rather than a fresh investigation — not something that happens automatically by adding the key. |
+| `THE_SPORTS_DB_API_KEY` | **Instantly works, but only if `FOOTBALL_DATA_PROVIDER=thesportsdb` is also set.** `getFootballDataProvider()` defaults to API-Football; TheSportsDB is a config-selectable alternative provider (`src/lib/football/providers/thesportsdb.ts`), not a fallback that activates automatically. See `docs/PROVIDER_ABSTRACTION.md` for what it does and doesn't support on the free tier. |
 
 ## ⚠️ One manual step only the founder can complete
 
@@ -59,6 +59,8 @@ Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a s
 | Variable | Purpose | Required | Notes |
 |---|---|---|---|
 | `API_FOOTBALL_KEY` | API-Football key (free tier for MVP — $0 budget, see DECISIONS.md). Read in `src/lib/football/index.ts` and `src/app/admin/data-health/*` | Optional | [dashboard.api-football.com](https://dashboard.api-football.com) — without this, a development-only mock provider is used automatically (never in production) |
+| `THE_SPORTS_DB_API_KEY` | TheSportsDB v1 API key, embedded in the request path (not a header) by `src/lib/football/providers/thesportsdb.ts`. Read only when `FOOTBALL_DATA_PROVIDER=thesportsdb` | Optional | [thesportsdb.com/free_sports_api](https://www.thesportsdb.com/free_sports_api) (Patreon key at [patreon.com/thesportsdb](https://www.patreon.com/thesportsdb) for the v2/premium tier — not used here) — see `docs/API_FOOTBALL.md` and `docs/PROVIDER_ABSTRACTION.md` for real free-tier coverage/limits |
+| `FOOTBALL_DATA_PROVIDER` | Selects which provider `getFootballDataProvider()` returns: `api-football` (default) or `thesportsdb`. Read in `src/lib/football/index.ts` | Optional, default `api-football` | Any other/unrecognized value falls back to `api-football` rather than failing the build |
 | `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts` — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
 
 ## AI Copilot
@@ -72,12 +74,11 @@ Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a s
 
 ## Reserved / not currently read by the app
 
-These are declared in `.env.example` for a feature that's designed but not built yet. Setting them has no functional effect today (`SPORTMONKS_API_TOKEN` is the one exception — see below). Confirmed by grepping every `process.env.` reference in `src/`.
+These are declared in `.env.example` for a feature that's designed but not built yet. Setting them has no functional effect today. Confirmed by grepping every `process.env.` reference in `src/`.
 
 | Variable | Purpose once built | Status |
 |---|---|---|
 | `NEXT_PUBLIC_APP_NAME` | Would override the "KIVO" display name in metadata/UI | Not implemented — "KIVO" is hardcoded instead; setting this has no effect |
-| `SPORTMONKS_API_TOKEN` | Reserved for a future premium provider covering player market value, contract expiry, and per-player match heat maps — the three fields API-Football's free tier doesn't report | Partially read but NOT functional: `src/lib/football/premium-stats.ts`'s `isPremiumStatsConfigured()` does read this and will correctly report `true` once it's set, but `getPremiumStatsProvider()` still unconditionally throws — no HTTP client calling Sportmonks exists yet. See that file's scoped implementation plan (candidate real v3 endpoints, not yet verified against a live account) and `DECISIONS.md`'s 2026-08-15 audit update. Setting this key alone does not bring any premium stats online. |
 | `RESEND_API_KEY` | Transactional email (not auth — Clerk handles verification/reset emails itself) | Not wired — [resend.com](https://resend.com) |
 | `RESEND_FROM_EMAIL` | Sending address for transactional email | Not wired — requires a verified sending domain before production |
 | `CRON_SECRET` | Would authorize scheduled job endpoints if/when background sync jobs exist | Not used — all football syncs today are admin-triggered on demand, not cron |

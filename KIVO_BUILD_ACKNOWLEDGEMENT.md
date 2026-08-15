@@ -82,3 +82,7 @@ No TypeScript/lint errors, no broken build, no exposed secrets, no fake data pre
 ## Quality/effort standard
 
 Sonnet as default; medium reasoning effort for routine implementation, high effort reserved for architecture, security, data-integrity, and the major screens (Home, Match Centre, AI Copilot, Social, Fantasy, Team/Player pages, Admin dashboard) — each of those gets a critical self-review pass (hierarchy, spacing, responsiveness, accessibility, motion, brand consistency) before being called done, not accepted on the first pass.
+
+## Post-acknowledgement update (2026-08-15)
+
+This document is kept as-written — a record of what was understood at the start of the build — rather than edited to match later decisions. Two mentions above are now superseded: the "API strategy understood" section's framing of Sportmonks as "the researched primary candidate," and item 6's "Sportmonks/API-Football current commercial redistribution terms" flag. The founder has since explicitly decided against Sportmonks; it was removed from the codebase entirely (every reference, the schema readiness columns it was built for, and the gated stub provider seam) and replaced with a real, implemented TheSportsDB provider as the second option alongside API-Football. See `DECISIONS.md`'s 2026-08-15 "Sportmonks removed entirely" entry for the full record.

@@ -5,10 +5,14 @@ import type { Profile } from "./profile";
 
 /**
  * Admin-only "preview mode": lets an admin see what a page looks like once a
- * not-yet-synced field (market value, contract expiry, etc — see
- * supabase/migrations/0036_premium_stats_readiness.sql) has real data, WITHOUT
- * ever showing a fabricated number to a real visitor. See ARCHITECTURE.md
- * "Preview mode" for the full write-up.
+ * not-yet-synced field has real data, WITHOUT ever showing a fabricated number
+ * to a real visitor. General-purpose infrastructure — not tied to any one
+ * field or vendor; its original consumer (a market-value/contract-expiry
+ * "Market" section gated on a Sportmonks-shaped schema) was removed on
+ * 2026-08-15 when Sportmonks was dropped from the project (see DECISIONS.md),
+ * but the mechanism itself stays, ready for the next not-yet-synced field that
+ * needs it (a heatmap viewer, for instance). See ARCHITECTURE.md "Preview
+ * mode" for the full write-up.
  *
  * Safety contract (do not weaken any of these):
  *  1. Requires a signed-in admin (hasAdminAccess(profile.role)) — checked
