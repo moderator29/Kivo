@@ -31,7 +31,7 @@ function ConsensusBar({ consensus }: { consensus: PredictionConsensus }) {
   if (total < MIN_MEANINGFUL_SAMPLE) {
     return (
       <p className="text-center text-[11px] text-foreground-subtle">
-        {total} KIVO pick{total === 1 ? "" : "s"} so far — too few for a real consensus yet.
+        {total} KIVO pick{total === 1 ? "" : "s"} so far. Too few for a real consensus yet.
       </p>
     );
   }
@@ -46,7 +46,7 @@ function ConsensusBar({ consensus }: { consensus: PredictionConsensus }) {
         <div className="h-full bg-kivo-violet" style={{ width: `${pct(consensus.away_win)}%` }} />
       </div>
       <p className="text-center text-[11px] text-foreground-subtle">
-        {pct(consensus.home_win)}% home · {pct(consensus.draw)}% draw · {pct(consensus.away_win)}% away — {total} real
+        {pct(consensus.home_win)}% home · {pct(consensus.draw)}% draw · {pct(consensus.away_win)}% away · {total} real
         KIVO pick{total === 1 ? "" : "s"}
       </p>
     </div>

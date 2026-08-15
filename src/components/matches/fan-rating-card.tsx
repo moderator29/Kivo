@@ -114,7 +114,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
 
       <p className="text-xs text-foreground-subtle">
         {count < MIN_MEANINGFUL_SAMPLE
-          ? `${count} fan rating${count === 1 ? "" : "s"} so far — too few for an average yet.`
+          ? `${count} fan rating${count === 1 ? "" : "s"} so far. Too few for an average yet.`
           : `${avg!.toFixed(1)} average from ${count} fan ratings.`}
       </p>
     </div>

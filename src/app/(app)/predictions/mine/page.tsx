@@ -136,7 +136,7 @@ export default async function MyPredictionsPage() {
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-2xl font-semibold text-foreground">
-                {accuracyPct !== null ? `${accuracyPct}%` : "—"}
+                {accuracyPct !== null ? `${accuracyPct}%` : "-"}
               </span>
               <span className="text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">Accuracy</span>
             </div>

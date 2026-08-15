@@ -46,7 +46,7 @@ export function MatchVerdictCard({
 
   function handleCopy() {
     const lines = [
-      `${homeTeamName} ${scoreLabel} ${awayTeamName} — the KIVO verdict`,
+      `${homeTeamName} ${scoreLabel} ${awayTeamName}: the KIVO verdict`,
       hasRealRatingAvg ? `${fanRatingAvg!.toFixed(1)}/5 from ${fanRatingCount} fan ratings` : null,
       hasRoomActivity
         ? `${roomReactionCount} reaction${roomReactionCount === 1 ? "" : "s"} across ${roomPostCount} post${roomPostCount === 1 ? "" : "s"} in the Room`
