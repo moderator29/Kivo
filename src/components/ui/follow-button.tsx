@@ -6,7 +6,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { Star, Check } from "lucide-react";
 import { toggleFollow } from "@/app/(app)/follow-actions";
 
-type FollowTargetType = "team" | "player" | "competition";
+// RECOMMENDATIONS item 175: "user" added so this same button can follow
+// another profile, not just team/player/competition — same star affordance,
+// already used site-wide for "follow", reused rather than inventing a
+// second follow control just for people.
+type FollowTargetType = "team" | "player" | "competition" | "user";
 
 type FollowButtonProps = {
   targetType: FollowTargetType;

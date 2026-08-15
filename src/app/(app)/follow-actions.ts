@@ -6,12 +6,21 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
 
-type FollowTargetType = "team" | "player" | "competition";
+// RECOMMENDATIONS item 175: "user" was already in the follow_target_type
+// enum (0001) and follows_no_self_follow already guards it — nothing
+// client-facing used it until now. Following a user has no dedicated
+// "detail page follow state" the way team/player/competition do (see
+// TARGET_DETAIL_PATH below, which deliberately doesn't cover "user"), so a
+// user follow instead feeds the /social Following tab.
+type FollowTargetType = "team" | "player" | "competition" | "user";
 
 // Maps a follow target to the one detail page that shows its own follow
 // state (RECOMMENDATIONS item 81) — "competition" rows live under /leagues,
-// not /competitions, matching leagues/[id]/page.tsx's route.
-const TARGET_DETAIL_PATH: Record<FollowTargetType, string> = {
+// not /competitions, matching leagues/[id]/page.tsx's route. "user" has no
+// entry: /u/[username] is keyed by username, not the profile id this
+// function receives, and its own follow state is re-fetched by the page
+// itself rather than needing a targeted revalidate here.
+const TARGET_DETAIL_PATH: Partial<Record<FollowTargetType, string>> = {
   team: "/teams",
   player: "/players",
   competition: "/leagues",
@@ -61,7 +70,11 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
   // page, and the two profile surfaces that show follow counts/lists. Was
   // revalidatePath("/", "layout"), which dropped the entire app's cache for
   // one like or one follow (RECOMMENDATIONS item 81).
-  revalidatePath(`${TARGET_DETAIL_PATH[targetType]}/${targetId}`);
+  const detailPath = TARGET_DETAIL_PATH[targetType];
+  if (detailPath) revalidatePath(`${detailPath}/${targetId}`);
+  // "user" follows feed the /social Following tab (item 175) instead of a
+  // target detail page.
+  if (targetType === "user") revalidatePath("/social");
   revalidatePath("/profile");
   revalidatePath("/profile/following");
   return { error: null, following: !currentlyFollowing };
