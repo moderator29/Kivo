@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, Wallet, FileClock } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, LineChart } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -14,12 +14,12 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
+import { FormBadges } from "@/components/teams/form-badges";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
-import { calculateAge, formatDate, formatMarketValueEur } from "@/lib/format";
-import { isPreviewModeActive } from "@/lib/preview-mode";
-import { PREVIEW_FIELD_CLASSNAME, PreviewAsterisk } from "@/components/ui/preview-marker";
+import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
+import { calculateAge, formatDate } from "@/lib/format";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -41,23 +41,22 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const { id } = await params;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
-  // Admin-only, opt-in-only — see src/lib/preview-mode.ts. False for every
-  // guest and every non-admin regardless of anything in the request.
-  const previewMode = await isPreviewModeActive(profile);
 
   const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, isSaved, transfersLastSyncedAt] = await Promise.all([
     supabase
       .from("players")
       .select(
         `id, full_name, known_as, date_of_birth, nationality, position, photo_url, current_team_id,
-         market_value_eur, market_value_updated_at, contract_expires_at,
          current_team:teams(id, name, short_name, crest_url)`,
       )
       .eq("id", id)
       .maybeSingle(),
     supabase
       .from("lineups")
-      .select("id, is_starting, fixture:fixtures(status)")
+      .select(
+        `id, is_starting, team_id,
+         fixture:fixtures(id, status, kickoff_at, home_team_id, away_team_id, home_score, away_score)`,
+      )
       .eq("player_id", id),
     supabase
       .from("fixture_events")
@@ -102,22 +101,36 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
   const hasMatchData = stats.appearances > 0;
 
+  // KIVO Form Engine (src/lib/football/form-engine.ts): each lineups row
+  // already carries the team_id this player was named for in that fixture,
+  // so it resolves to the same "own vs opponent score" shape team form uses
+  // (teams/[id]/page.tsx) rather than a per-player individual result, which
+  // doesn't exist in football — a player shares their team's real result.
+  // Sorted newest-first client-side (bounded row count: one per fixture this
+  // player has ever been named in a lineup for) rather than a second
+  // DB round trip just to order by a joined column.
+  const playerResultsNewestFirst: ResolvedResult[] = (lineupRows ?? [])
+    .flatMap((row) => {
+      if (!row.fixture) return [];
+      const resolved = resolveFixtureResult(
+        {
+          id: row.fixture.id,
+          kickoff_at: row.fixture.kickoff_at,
+          status: row.fixture.status,
+          home_score: row.fixture.home_score,
+          away_score: row.fixture.away_score,
+          home_team_id: row.fixture.home_team_id,
+          away_team_id: row.fixture.away_team_id,
+        },
+        row.team_id,
+      );
+      return resolved ? [resolved] : [];
+    })
+    .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
+  const recentForm = computePlayerForm(playerResultsNewestFirst, "last5");
+
   const displayName = player.known_as ?? player.full_name;
   const showFullNameSubtitle = Boolean(player.known_as) && player.known_as !== player.full_name;
-
-  // Preview mode only ever fills in a field that is genuinely null today —
-  // it never overrides a real value, and it's computed fresh per-request
-  // from previewMode above (admin + opt-in only). See supabase/migrations/
-  // 0036_premium_stats_readiness.sql for why these two columns are null for
-  // every player right now, and src/lib/preview-mode.ts for the safety
-  // contract. Every faked value here MUST stay wrapped in PreviewAsterisk /
-  // PREVIEW_FIELD_CLASSNAME so it can never be mistaken for a real one.
-  const marketValueIsFake = previewMode && player.market_value_eur == null;
-  const marketValueEur = player.market_value_eur ?? (previewMode ? 42_500_000 : null);
-  const marketValueUpdatedAt = player.market_value_eur != null ? player.market_value_updated_at : marketValueIsFake ? new Date().toISOString() : null;
-
-  const contractIsFake = previewMode && player.contract_expires_at == null;
-  const contractExpiresAt = player.contract_expires_at ?? (previewMode ? "2028-06-30" : null);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -190,57 +203,6 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         )}
       </FadeIn>
 
-      {(marketValueEur != null || contractExpiresAt != null) && (
-        // Real vendor data (supabase/migrations/0036_premium_stats_readiness.sql)
-        // — this section stays invisible until a premium provider is connected
-        // and has actually written a value for this player, UNLESS an admin has
-        // turned preview mode on (src/lib/preview-mode.ts), in which case a null
-        // field renders with an obviously-marked sample value instead. A real
-        // value, when one exists, always renders unmarked exactly as before.
-        <FadeIn delay={0.22} className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Wallet className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-            Market
-            {(marketValueIsFake || contractIsFake) && (
-              <span className="rounded-full border border-dashed border-amber-400/70 bg-amber-400/[0.06] px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-400">
-                Preview data
-              </span>
-            )}
-          </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {marketValueEur != null && (
-              <div
-                className={`kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted ${marketValueIsFake ? PREVIEW_FIELD_CLASSNAME : ""}`}
-              >
-                <Wallet className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
-                <div>
-                  <div className="text-foreground">
-                    {formatMarketValueEur(marketValueEur)}
-                    {marketValueIsFake && <PreviewAsterisk />}
-                  </div>
-                  {marketValueUpdatedAt && (
-                    <div className="text-[11px] text-foreground-subtle">
-                      {marketValueIsFake ? "Sample as of" : "Updated"} {formatDate(marketValueUpdatedAt)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {contractExpiresAt != null && (
-              <div
-                className={`kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted ${contractIsFake ? PREVIEW_FIELD_CLASSNAME : ""}`}
-              >
-                <FileClock className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
-                <div className="text-foreground">
-                  Contract until {formatDate(contractExpiresAt)}
-                  {contractIsFake && <PreviewAsterisk />}
-                </div>
-              </div>
-            )}
-          </div>
-        </FadeIn>
-      )}
-
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
@@ -264,6 +226,30 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No match data yet.
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.28} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <LineChart className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Recent form
+        </h2>
+        {recentForm.isSufficientSample ? (
+          <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+            <FormBadges form={recentForm.sequence} />
+            <p className="text-xs text-foreground-subtle">
+              {displayName}&apos;s team in the {recentForm.sampleSize} most recent finished match
+              {recentForm.sampleSize === 1 ? "" : "es"} they were named in the squad for:{" "}
+              {recentForm.wins}W {recentForm.draws}D {recentForm.losses}L · {recentForm.goalsScored} scored,{" "}
+              {recentForm.goalsConceded} conceded.
+            </p>
+          </div>
+        ) : (
+          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
+            {playerResultsNewestFirst.length > 0
+              ? `Only ${playerResultsNewestFirst.length} finished match${playerResultsNewestFirst.length === 1 ? "" : "es"} synced for ${displayName} so far — not enough real matches yet for a reliable form trend.`
+              : `No finished matches synced yet for ${displayName}.`}
           </div>
         )}
       </FadeIn>

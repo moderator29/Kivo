@@ -500,7 +500,7 @@ Each of these is backed by data KIVO already has or can obtain within the existi
 
 219. **`README.md` still points at `RECOMMENDATIONS.md` as "the continuously-updated product/UX backlog".** Update the description to match this document, and note where the prior research log lives in git history. **Small.**
 
-220. **`ENVIRONMENT.md` documents five variables that nothing reads** (`SPORTMONKS_API_TOKEN`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `CRON_SECRET`, `WEBHOOK_SECRET`) and omits one that is read (`AI_MODEL`, item 196). Mark the reserved ones clearly in a separate section. **Small.**
+220. **`ENVIRONMENT.md` documented variables that nothing reads** (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `CRON_SECRET`, `WEBHOOK_SECRET`) and omitted one that is read (`AI_MODEL`, item 196). Fixed — reserved ones now live in their own section. **Status: DONE (2026-08-15).** `SPORTMONKS_API_TOKEN`, also flagged here originally, is no longer relevant: Sportmonks was dropped from the project entirely per founder directive (see `DECISIONS.md`), and `THE_SPORTS_DB_API_KEY`/`FOOTBALL_DATA_PROVIDER` took its place as a real, implemented second provider rather than a reserved-but-unread stub. **Small.**
 
 221. **Placeholder glyphs are inconsistent across the product.** The codebase uses `-`, `–`, `—`, `"–"`, `"Not yet synced"` and `"No further details on record"` for the same "no value here" concept, sometimes two of them on the same screen. Standardise on one glyph plus one prose form. Note also that the em dash placeholders in `transfers/page.tsx` and `players/[id]/page.tsx` sit against the house rule that no user-facing text uses em dashes. **Small.**
 
@@ -509,6 +509,22 @@ Each of these is backed by data KIVO already has or can obtain within the existi
 223. **Empty-state copy has three distinct voices:** the honest-technical ("An admin can trigger a sync from Data Health", which leaks internal roles to ordinary users), the friendly ("Nobody's posted yet. Be the first"), and the neutral ("No results synced yet"). Write one voice guide and apply it. In particular, ordinary users should not be told about admin actions they cannot take. **Small.**
 
 224. **The prior recommendations log's item 27 should be formally retired**, not left as "Proposed" (see item 178). Leaving a fabrication-dependent idea marked as an accepted-adjacent proposal in the backlog is how it eventually gets built. **Small.**
+
+---
+
+## 13. KIVO intelligence layer (Form/Rating/Heatmap engines, this pass)
+
+225. **Calibrate the Rating Engine against real synced matches before wiring it to any UI.** `src/lib/football/rating-engine.ts` and `RATING_WEIGHTS` are reasoned defaults extending `fantasy-scoring.ts`'s existing position-weighting convention, unit-tested against hand-built inputs only — never spot-checked against a real hat-trick, a real disciplinary nightmare, or a real quiet game once enough fixtures have `lineups` + `fixture_events` + final scores synced. Do that spot-check first, then wire into `players/[id]/page.tsx` (a "Match ratings" section) or the Match Centre lineup view, gated behind the same "insufficient sample" honesty pattern `form-engine.ts` already established. See `docs/RATING_ENGINE.md`. **Medium.**
+
+226. **Unify H2H, Form, and goal-timing into one `MatchInsights` object** the AI Copilot and a future match-preview surface can both consume, per the original brief's Part 1 framing. Today `head-to-head.ts`, `form-engine.ts`, and the ad hoc goal-timing block in `teams/[id]/page.tsx` are three separate reads instead of one composed retrieval — the AI Copilot in particular would benefit from one grounding call instead of hand-adding each engine's output one at a time (see item 227). **Medium.**
+
+227. **Extend the Form Engine's grounding enrichment (`src/lib/ai/grounding.ts`) from "favourite team only" to every followed team**, and to followed players' recent involvement (reusing the same lineups→`resolveFixtureResult`→`computePlayerForm` pattern `players/[id]/page.tsx`'s "Recent form" section now uses for one player). This pass scoped the enrichment to the single favourite team specifically to keep the extra query bounded and low-risk; the pattern is proven and the extension is mechanical. See `docs/AI_COPILOT.md`. **Small.**
+
+228. **Add a "Heatmap" tab to `match-centre-tabs.tsx` once a decision is made** on whether to show the honest "unavailable" `HeatmapView` state on a live surface today, or wait until a real `PositionalDataProvider` implementation exists. The component (`src/components/matches/heatmap-view.tsx`) and engine (`src/lib/football/heatmap-engine.ts`) are both already built and tested — this is purely a product call, not an engineering blocker. See `docs/HEATMAP_ENGINE.md`. **Small.**
+
+229. **Season-average KIVO ratings surfaced on `teams/[id]/page.tsx`'s squad list** (e.g. a small rating chip per player) is the natural next UI target once item 225's calibration pass is done — `aggregateSeasonRating()` already exists and already refuses to present a misleadingly small sample as reliable (`isSufficientSample`, `MIN_RATING_SAMPLE = 3`). **Medium**, blocked on 225.
+
+230. **`lineups.pitch_heatmap` (added by migration 0036, still present after 0039 deliberately left it alone) is an unused, always-null JSON column** that predates `HeatmapEngine`'s own coordinate/observation model (`PositionalObservation[]`, canonical `PITCH_DIMENSIONS`). Once a real `PositionalDataProvider` is connected, decide whether raw per-fixture observations belong in a new dedicated table (matching `PositionalObservation`'s shape) rather than this column, or whether this column should be repurposed/dropped. Not decided this pass — flagging so it isn't mistaken for a live, populated field. **Small.**
 
 ---
 

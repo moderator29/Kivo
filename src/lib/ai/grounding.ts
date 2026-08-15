@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/profile";
+import { computeTeamForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 
 export interface GroundingContext {
   /** Rendered as plain text and injected into the system prompt — kept small and structured on purpose. */
@@ -31,7 +32,7 @@ export async function buildGroundingContext(profile: Profile | null): Promise<Gr
       .in("followed_type", ["team", "player", "competition"])
       .limit(20),
     profile.favourite_team_id
-      ? supabase.from("teams").select("name").eq("id", profile.favourite_team_id).maybeSingle()
+      ? supabase.from("teams").select("id, name").eq("id", profile.favourite_team_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase
       .from("fixtures")
@@ -63,8 +64,42 @@ export async function buildGroundingContext(profile: Profile | null): Promise<Gr
       : Promise.resolve({ data: [] as { name: string }[] }),
   ]);
 
+  // KIVO Form Engine (src/lib/football/form-engine.ts): the user's favourite
+  // team's real recent form, when there is one and enough synced matches
+  // exist to compute it honestly. Scoped to just the favourite team (not
+  // every followed team) to keep this one extra query bounded regardless of
+  // how many entities the user follows.
+  const favouriteTeamForm = favouriteTeam
+    ? await (async () => {
+        const { data: recentFixtures } = await supabase
+          .from("fixtures")
+          .select("id, kickoff_at, status, home_score, away_score, home_team_id, away_team_id")
+          .or(`home_team_id.eq.${favouriteTeam.id},away_team_id.eq.${favouriteTeam.id}`)
+          .eq("status", "finished")
+          .order("kickoff_at", { ascending: false })
+          .limit(10);
+        const resolved: ResolvedResult[] = (recentFixtures ?? [])
+          .map((f) => resolveFixtureResult(f, favouriteTeam.id))
+          .filter((r): r is ResolvedResult => r !== null);
+        return computeTeamForm(resolved, "last5");
+      })()
+    : null;
+
   const lines: string[] = [];
   lines.push(`User: @${profile.username}${favouriteTeam ? `, favourite team: ${favouriteTeam.name}` : ""}.`);
+  if (favouriteTeam && favouriteTeamForm) {
+    if (favouriteTeamForm.isSufficientSample) {
+      lines.push(
+        `${favouriteTeam.name}'s real recent form (last ${favouriteTeamForm.sampleSize} synced matches, newest first): ` +
+          `${favouriteTeamForm.sequence.join(" ")} (${favouriteTeamForm.wins}W ${favouriteTeamForm.draws}D ${favouriteTeamForm.losses}L, ` +
+          `${favouriteTeamForm.goalsScored} scored / ${favouriteTeamForm.goalsConceded} conceded). Use this if the user asks about their team's form.`,
+      );
+    } else {
+      lines.push(
+        `${favouriteTeam.name} has too few finished matches synced (${favouriteTeamForm.sampleSize}) for a reliable form trend — say so rather than guessing if asked about their form.`,
+      );
+    }
+  }
 
   // A followed row whose target was since deleted resolves to nothing here
   // (same caveat as the following page) and is simply dropped rather than
