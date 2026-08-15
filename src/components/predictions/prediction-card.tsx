@@ -13,6 +13,46 @@ import { cn } from "@/lib/utils";
 
 const NEAR_LOCK_MS = 60 * 60_000;
 
+// RECOMMENDATIONS.md item 168: "must be suppressed below a minimum sample
+// size so a single vote never renders as 100% of users" — same real-sample
+// threshold HeadToHeadCard already established (item 161) for the same
+// reason, reused here rather than inventing a second honesty convention.
+const MIN_MEANINGFUL_SAMPLE = 3;
+
+export type PredictionConsensus = { home_win: number; draw: number; away_win: number };
+
+/** Real per-outcome pick counts from get_prediction_consensus (SECURITY
+ * DEFINER — predictions_select_own means a plain client query can never see
+ * anyone else's pick). Renders nothing below MIN_MEANINGFUL_SAMPLE rather
+ * than a misleading "100%" off one or two real picks. */
+function ConsensusBar({ consensus }: { consensus: PredictionConsensus }) {
+  const total = consensus.home_win + consensus.draw + consensus.away_win;
+  if (total === 0) return null;
+  if (total < MIN_MEANINGFUL_SAMPLE) {
+    return (
+      <p className="text-center text-[11px] text-foreground-subtle">
+        {total} KIVO pick{total === 1 ? "" : "s"} so far — too few for a real consensus yet.
+      </p>
+    );
+  }
+
+  const pct = (count: number) => Math.round((count / total) * 100);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-white/5">
+        <div className="h-full bg-kivo-cyan" style={{ width: `${pct(consensus.home_win)}%` }} />
+        <div className="h-full bg-white/25" style={{ width: `${pct(consensus.draw)}%` }} />
+        <div className="h-full bg-kivo-violet" style={{ width: `${pct(consensus.away_win)}%` }} />
+      </div>
+      <p className="text-center text-[11px] text-foreground-subtle">
+        {pct(consensus.home_win)}% home · {pct(consensus.draw)}% draw · {pct(consensus.away_win)}% away — {total} real
+        KIVO pick{total === 1 ? "" : "s"}
+      </p>
+    </div>
+  );
+}
+
 /**
  * Ticking "locks in Xh Ym" readout, ownership pattern matches fantasy's
  * DeadlineCountdown (RECOMMENDATIONS item 83): a leaf with its own 30s
@@ -49,6 +89,10 @@ type PredictionCardProps = {
   awayTeam: Team;
   initialPrediction: Outcome | null;
   signedIn: boolean;
+  /** Real pick counts from get_prediction_consensus, or null when the RPC
+   * returned nothing for this fixture (zero picks yet). RECOMMENDATIONS item
+   * 168. */
+  consensus?: PredictionConsensus | null;
 };
 
 export function PredictionCard({
@@ -59,6 +103,7 @@ export function PredictionCard({
   awayTeam,
   initialPrediction,
   signedIn,
+  consensus = null,
 }: PredictionCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -203,6 +248,8 @@ export function PredictionCard({
           </motion.p>
         ) : null}
       </AnimatePresence>
+
+      {consensus && <ConsensusBar consensus={consensus} />}
     </div>
   );
 }
