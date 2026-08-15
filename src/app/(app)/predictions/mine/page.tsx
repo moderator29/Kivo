@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { staggerDelay } from "@/lib/stagger";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import { PREDICTION_OUTCOME_LABEL } from "@/lib/predictions";
 
@@ -146,7 +147,7 @@ export default async function MyPredictionsPage() {
               const ResultIcon = result.icon;
 
               return (
-                <FadeIn key={row.id} delay={Math.min(0.1 + index * 0.03, 0.4)}>
+                <FadeIn key={row.id} delay={0.1 + staggerDelay(index, 0.03)}>
                   <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-foreground-subtle">{competitionName}</span>

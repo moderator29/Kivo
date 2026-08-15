@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { timeAgo } from "@/lib/format";
+import { staggerDelay } from "@/lib/stagger";
 
 type PublicProfile = {
   id: string;
@@ -135,7 +136,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {badges.map((badge, index) => (
-              <FadeIn key={badge.code} delay={0.12 + Math.min(index * 0.03, 0.3)}>
+              <FadeIn key={badge.code} delay={0.12 + staggerDelay(index, 0.03)}>
                 <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ring-1 ring-inset ring-kivo-cyan/25 transition hover:-translate-y-0.5">
                   {badge.icon_url && (
                     <Image

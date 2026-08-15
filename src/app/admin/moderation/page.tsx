@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewModerationData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
+import { staggerDelay } from "@/lib/stagger";
 import { ReportRow, type ReportPreview } from "@/components/admin/report-row";
 import type { Database } from "@/lib/supabase/types";
 
@@ -196,7 +197,7 @@ export default async function ModerationPage() {
       ) : (
         <div className="flex flex-col gap-2">
           {openReports.map((report, index) => (
-            <FadeIn key={report.id} delay={Math.min(0.08 + index * 0.03, 0.5)}>
+            <FadeIn key={report.id} delay={0.08 + staggerDelay(index, 0.03)}>
               <ReportRow
                 id={report.id}
                 targetType={report.target_type}
@@ -222,7 +223,7 @@ export default async function ModerationPage() {
             {resolvedReports.map((report, index) => (
               <FadeIn
                 key={report.id}
-                delay={Math.min(0.6 + index * 0.03, 0.85)}
+                delay={0.6 + staggerDelay(index, 0.03)}
                 className="flex items-center justify-between rounded-xl border border-white/5 px-4 py-3 text-xs text-foreground-subtle transition-colors hover:bg-white/[0.03]"
               >
                 <span>
