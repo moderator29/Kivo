@@ -162,17 +162,17 @@ export default function LandingPage() {
 
             <FadeIn delay={0.32} className="flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/home"
+                href="/sign-up"
                 className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition duration-150 hover:scale-[1.03] hover:opacity-90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
               >
                 Get started
                 <ArrowRight className="h-4 w-4" strokeWidth={2} />
               </Link>
               <Link
-                href="/sign-in"
+                href="/home"
                 className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-all duration-150 hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
               >
-                Sign in
+                Look around first
               </Link>
             </FadeIn>
           </div>
