@@ -13,6 +13,17 @@ const MAX_HISTORY_MESSAGES = 20;
 const AI_CHAT_MAX_REQUESTS = 10;
 const AI_CHAT_WINDOW_SECONDS = 60;
 
+// RECOMMENDATIONS.md item 190 ($0 budget mindset): a per-minute burst limit
+// alone doesn't bound a scripted client's total daily spend. This reuses the
+// exact checkRateLimit()/rate_limit_events sliding-window pattern above
+// (same helper, a second `action` key so it counts independently) rather
+// than summing token usage on every request — a message-count ceiling is
+// enough to keep worst-case daily cost bounded, since max_tokens is fixed
+// per call. Real per-message token usage is still persisted on ai_messages
+// (see the insert below) for future cost reporting.
+const AI_CHAT_DAILY_MAX_REQUESTS = 60;
+const AI_CHAT_DAILY_WINDOW_SECONDS = 60 * 60 * 24;
+
 const SYSTEM_PROMPT = `You are KIVO's AI Copilot, a football intelligence assistant embedded in the KIVO app.
 
 Grounding rules — these override any instinct to be maximally helpful:
@@ -21,6 +32,14 @@ Grounding rules — these override any instinct to be maximally helpful:
 - You MAY answer general, evergreen football knowledge (rules, tactics concepts, what xG means, historical facts you're confident are stable) — but if a claim could plausibly have changed recently (current form, current squad, current manager, this season's standings), say you're not certain and that KIVO doesn't have it synced, rather than guessing from training data.
 - Distinguish explicitly between: verified KIVO data, general football knowledge, and your own inference/opinion — don't blur these together.
 - Be concise. This is a chat interface, not an essay generator.`;
+
+/** One line per NDJSON frame written to the response body. See the streaming
+ * contract note above the POST handler for what each `type` means. */
+type StreamEvent =
+  | { type: "meta"; conversationId: string }
+  | { type: "delta"; text: string }
+  | { type: "done" }
+  | { type: "error"; error: string };
 
 export async function POST(req: Request) {
   const profile = await getOrCreateProfile();
@@ -40,6 +59,19 @@ export async function POST(req: Request) {
   );
   if (!rateLimit.ok) {
     return NextResponse.json({ error: rateLimit.error }, { status: 429 });
+  }
+
+  const dailyLimit = await checkRateLimit(
+    `user:${profile.id}`,
+    "ai_chat_daily",
+    AI_CHAT_DAILY_MAX_REQUESTS,
+    AI_CHAT_DAILY_WINDOW_SECONDS,
+  );
+  if (!dailyLimit.ok) {
+    return NextResponse.json(
+      { error: "You've reached today's AI Copilot usage limit. Try again tomorrow." },
+      { status: 429 },
+    );
   }
 
   let body: { conversationId?: string; message?: string };
@@ -102,52 +134,104 @@ export async function POST(req: Request) {
   }
 
   const grounding = await buildGroundingContext(profile);
+  const anthropic = getAnthropicClient();
+  const finalConversationId = conversationId;
 
-  try {
-    const anthropic = getAnthropicClient();
-    const response = await anthropic.messages.create({
-      model: AI_MODEL,
-      max_tokens: 1024,
-      system: `${SYSTEM_PROMPT}\n\nKIVO CONTEXT:\n${grounding.summary}`,
-      messages: [
-        ...(history ?? [])
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-        { role: "user" as const, content: message },
-      ],
-    });
+  // Streamed as newline-delimited JSON (one frame per line) rather than
+  // full-response JSON — RECOMMENDATIONS.md item 187: tokens render as they
+  // arrive instead of appearing all at once after the whole reply completes.
+  // A plain fetch + ReadableStream reader on the client (src/components/ai/
+  // chat.tsx) parses this; SSE/EventSource wasn't used because EventSource
+  // only supports GET requests, not this endpoint's POST body.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      function send(event: StreamEvent) {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      }
 
-    const reply = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => (block.type === "text" ? block.text : ""))
-      .join("\n")
-      .trim();
+      send({ type: "meta", conversationId: finalConversationId });
 
-    const { error: insertAssistantError } = await supabase
-      .from("ai_messages")
-      .insert({ conversation_id: conversationId, role: "assistant", content: reply });
-    if (insertAssistantError) {
-      console.error("Failed to persist assistant message", insertAssistantError);
-    }
+      try {
+        // The system prompt is long and constant across every request; the
+        // KIVO CONTEXT block is not (it's rebuilt per user/per turn). Only
+        // the constant block carries cache_control, so Anthropic's prompt
+        // caching (RECOMMENDATIONS.md item 191) can reuse it across calls
+        // without ever serving stale grounding data — this reduces cost,
+        // it does not add spend (see AGENTS.md's $0 budget note on this
+        // item). See shared/prompt-caching.md: min cacheable prefix is
+        // model-dependent, so this has no effect (and no downside) if
+        // SYSTEM_PROMPT alone is ever under that model's minimum.
+        const anthropicStream = anthropic.messages.stream({
+          model: AI_MODEL,
+          max_tokens: 1024,
+          system: [
+            { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+            { type: "text", text: `KIVO CONTEXT:\n${grounding.summary}` },
+          ],
+          messages: [
+            ...(history ?? [])
+              .filter((m) => m.role === "user" || m.role === "assistant")
+              .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+            { role: "user" as const, content: message },
+          ],
+        });
 
-    // ai_conversations.updated_at only moves on an update to that row itself
-    // (trg_ai_conversations_updated_at) — inserting into ai_messages doesn't
-    // touch it. The history list orders by updated_at as "most recent
-    // activity", so touch it here on every turn, not just on rename.
-    const { error: touchError } = await supabase
-      .from("ai_conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", conversationId);
-    if (touchError) {
-      console.error("Failed to bump AI conversation updated_at", touchError);
-    }
+        for await (const event of anthropicStream) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            send({ type: "delta", text: event.delta.text });
+          }
+        }
 
-    return NextResponse.json({ conversationId, reply });
-  } catch (err) {
-    console.error("Anthropic request failed", err);
-    return NextResponse.json(
-      { error: "AI Copilot is temporarily unavailable. Try again in a moment." },
-      { status: 502 },
-    );
-  }
+        const finalMessage = await anthropicStream.finalMessage();
+        const reply = finalMessage.content
+          .filter((block) => block.type === "text")
+          .map((block) => (block.type === "text" ? block.text : ""))
+          .join("\n")
+          .trim();
+
+        const { error: insertAssistantError } = await supabase.from("ai_messages").insert({
+          conversation_id: finalConversationId,
+          role: "assistant",
+          content: reply,
+          // RECOMMENDATIONS.md item 190: persist the real per-turn cost so
+          // it's queryable later, even though enforcement above is a
+          // message-count cap rather than a token sum.
+          input_tokens: finalMessage.usage.input_tokens,
+          output_tokens: finalMessage.usage.output_tokens,
+        });
+        if (insertAssistantError) {
+          console.error("Failed to persist assistant message", insertAssistantError);
+        }
+
+        // ai_conversations.updated_at only moves on an update to that row
+        // itself (trg_ai_conversations_updated_at) — inserting into
+        // ai_messages doesn't touch it. The history list orders by
+        // updated_at as "most recent activity", so touch it here on every
+        // turn, not just on rename.
+        const { error: touchError } = await supabase
+          .from("ai_conversations")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", finalConversationId);
+        if (touchError) {
+          console.error("Failed to bump AI conversation updated_at", touchError);
+        }
+
+        send({ type: "done" });
+      } catch (err) {
+        console.error("Anthropic streaming request failed", err);
+        send({ type: "error", error: "AI Copilot is temporarily unavailable. Try again in a moment." });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }

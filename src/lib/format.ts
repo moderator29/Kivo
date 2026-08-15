@@ -29,6 +29,13 @@ export function calculateAge(dateOfBirth: string): number {
   return age;
 }
 
+/** Short clock time ("2:41 PM") for a timestamp already known to be recent —
+ * used on AI Copilot chat messages, where "5m ago"-style relative labels
+ * would need to keep re-rendering to stay accurate as the user reads. */
+export function formatClockTime(isoDate: string): string {
+  return new Date(isoDate).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 /** Long-form date ("14 August 2026") by default — pass `{ month: "short" }`
  * for the abbreviated form transfers uses ("14 Aug 2026"). Both were
  * near-identical standalone `formatDate` functions (`players/[id]` and

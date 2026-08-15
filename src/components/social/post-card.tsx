@@ -6,9 +6,12 @@ import Link from "next/link";
 import { Flag, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { reportContent } from "@/app/(app)/social/report-actions";
+import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
 import { ReactionPicker } from "@/components/social/reaction-picker";
+import { SaveButton } from "@/components/ui/save-button";
 import type { ReactionType } from "@/lib/reactions";
+import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 
@@ -97,6 +100,92 @@ function PostBody({ body }: { body: string }) {
   );
 }
 
+/**
+ * RECOMMENDATIONS.md item 172: real, live vote counts (get_poll_results via
+ * fetchPostsPage) with the viewer's own pick highlighted. Bars are always
+ * visible — voting isn't gated behind seeing results first — and tapping
+ * any option (including the viewer's current one, to change it) calls
+ * voteOnPoll, which is delete-then-insert server-side. Optimistic update
+ * with rollback on error, same shape as PredictionCard's handlePick.
+ */
+function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSummary; signedIn: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [localPoll, setLocalPoll] = useState(poll);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function handleVote(optionId: string) {
+    if (!signedIn) {
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
+      return;
+    }
+    if (pending || optionId === localPoll.viewerOptionId) return;
+    setError(null);
+    const previous = localPoll;
+    const previousOptionId = localPoll.viewerOptionId;
+    setLocalPoll((current) => ({
+      totalVotes: previousOptionId ? current.totalVotes : current.totalVotes + 1,
+      viewerOptionId: optionId,
+      options: current.options.map((option) => {
+        if (option.id === optionId) return { ...option, voteCount: option.voteCount + 1 };
+        if (option.id === previousOptionId) return { ...option, voteCount: Math.max(0, option.voteCount - 1) };
+        return option;
+      }),
+    }));
+    startTransition(async () => {
+      const result = await voteOnPoll(postId, optionId);
+      if (result.error) {
+        setLocalPoll(previous);
+        setError(result.error);
+      }
+    });
+  }
+
+  const total = localPoll.totalVotes;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {localPoll.options.map((option) => {
+        const pct = total > 0 ? Math.round((option.voteCount / total) * 100) : 0;
+        const isOwn = option.id === localPoll.viewerOptionId;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => handleVote(option.id)}
+            disabled={pending}
+            aria-pressed={isOwn}
+            className={cn(
+              "relative overflow-hidden rounded-lg border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
+              isOwn ? "border-kivo-cyan/50" : "border-white/10 hover:bg-white/5",
+            )}
+          >
+            <span className="absolute inset-y-0 left-0 bg-kivo-cyan/10" style={{ width: `${pct}%` }} aria-hidden="true" />
+            <span className="relative flex items-center justify-between gap-2">
+              <span className={cn("flex min-w-0 items-center gap-1 truncate", isOwn ? "font-semibold text-foreground" : "text-foreground-muted")}>
+                {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
+                <span className="truncate">{option.label}</span>
+              </span>
+              <span className="shrink-0 text-xs text-foreground-subtle">{pct}%</span>
+            </span>
+          </button>
+        );
+      })}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-foreground-subtle">
+          {total} vote{total === 1 ? "" : "s"}
+        </p>
+        {error && (
+          <p className="text-[11px] text-critical" role="status" aria-live="polite">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface PostCardProps {
   id: string;
   body: string;
@@ -110,6 +199,15 @@ interface PostCardProps {
   commentCount: number;
   signedIn: boolean;
   index?: number;
+  /** RECOMMENDATIONS item 172: null for an ordinary post. Optional so
+   * existing call sites (Match Room) that don't fetch poll data still
+   * type-check — see post-composer.tsx's comment on why polls are hidden
+   * there. */
+  poll?: PollSummary | null;
+  /** RECOMMENDATIONS item 173: defaults false so Match Room's call site
+   * (which doesn't fetch save state) still type-checks as "not saved"
+   * rather than requiring a change there. */
+  viewerSaved?: boolean;
 }
 
 export function PostCard({
@@ -123,6 +221,8 @@ export function PostCard({
   commentCount,
   signedIn,
   index = 0,
+  poll = null,
+  viewerSaved = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -205,10 +305,14 @@ export function PostCard({
         </div>
       </div>
       <PostBody body={body} />
+      {poll && <PollBlock postId={id} poll={poll} signedIn={signedIn} />}
       <div className="flex items-center justify-between gap-2">
         <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />
 
-        <div ref={reportMenuRef} className="relative">
+        <div className="flex items-center gap-1">
+          <SaveButton targetType="post" targetId={id} initialSaved={viewerSaved} signedIn={signedIn} />
+
+          <div ref={reportMenuRef} className="relative">
           <motion.button
             type="button"
             onClick={handleReportClick}
@@ -255,7 +359,7 @@ export function PostCard({
                 transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                 className="kivo-glass-sharp absolute right-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl p-1"
               >
-                <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Report this post
                 </p>
                 {REPORT_REASONS.map((reason) => (
@@ -274,6 +378,7 @@ export function PostCard({
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
         </div>
       </div>
 

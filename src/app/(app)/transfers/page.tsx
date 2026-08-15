@@ -9,6 +9,7 @@ import { TransfersFilters } from "@/components/transfers/transfers-filters";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { formatDate } from "@/lib/format";
+import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import type { Database } from "@/lib/supabase/types";
 
 const item = getNavItem("transfers");
@@ -16,18 +17,6 @@ const item = getNavItem("transfers");
 export const metadata: Metadata = { title: item.label };
 
 type TransferType = Database["public"]["Enums"]["transfer_type"];
-
-// Plain, honest labels only — API-Football's /transfers endpoint reports real,
-// already-completed moves and nothing else. There is no rumour/reported tier to
-// draw from, so no "Confirmed / Rumour / Advanced Talks" taxonomy belongs here
-// (that would need a news/journalist source KIVO doesn't have — see AGENTS.md).
-const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
-  transfer: "Transfer",
-  loan: "Loan",
-  free: "Free transfer",
-  end_of_loan: "End of loan",
-  unknown: "Fee undisclosed",
-};
 
 // Matches the exact `transfer_type` enum in supabase/migrations/0006_transfers.sql —
 // the filter dropdown's option list has to stay a subset of real values, never a
@@ -190,7 +179,7 @@ export default async function TransfersPage({
                   </div>
 
                   <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>

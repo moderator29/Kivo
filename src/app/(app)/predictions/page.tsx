@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
-import { PredictionCard } from "@/components/predictions/prediction-card";
+import { PredictionCard, type PredictionConsensus } from "@/components/predictions/prediction-card";
 import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/predictions/predictions-leaderboard";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
@@ -49,6 +49,19 @@ export default async function PredictionsPage() {
     : null;
 
   const predictionByFixture = new Map((existingPredictions ?? []).map((p) => [p.fixture_id, p.predicted_outcome]));
+
+  // RECOMMENDATIONS item 168: same predictions_select_own restriction as the
+  // leaderboard below — a plain client query can never see picks other than
+  // the caller's own, so the real per-outcome counts each PredictionCard
+  // shows come from get_prediction_consensus (SECURITY DEFINER), batched for
+  // every fixture on this page in one round trip.
+  const { data: consensusRows } = await supabase.rpc("get_prediction_consensus", { p_fixture_ids: fixtureIds });
+  const consensusByFixture = new Map<string, PredictionConsensus>();
+  for (const row of consensusRows ?? []) {
+    const entry = consensusByFixture.get(row.fixture_id) ?? { home_win: 0, draw: 0, away_win: 0 };
+    entry[row.predicted_outcome] = row.pick_count;
+    consensusByFixture.set(row.fixture_id, entry);
+  }
 
   // `predictions_select_own` restricts a plain select to the caller's own
   // rows, so a cross-user aggregate can't be built from a plain client query
@@ -102,6 +115,7 @@ export default async function PredictionsPage() {
               }}
               initialPrediction={predictionByFixture.get(fixture.id) ?? null}
               signedIn={Boolean(profile)}
+              consensus={consensusByFixture.get(fixture.id) ?? null}
             />
           </FadeIn>
         ))}

@@ -59,7 +59,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
                   : "text-foreground-muted hover:bg-white/[0.06] hover:text-foreground"
               }`}
             >
-              <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
+              <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">
                 {day.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}
               </span>
               <span className="text-sm font-semibold tabular-nums">{day.getUTCDate()}</span>

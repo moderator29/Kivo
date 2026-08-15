@@ -5,15 +5,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Menu } from "lucide-react";
-import { NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
+import { ADMIN_NAV_ITEM, NAV_ITEMS, isActiveRoute } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 
-/** Deliberately curated, not derived from a "primary" flag: a mobile thumb-reach
- * bar only fits four destinations plus More, and that set is a UX call, not data. */
-const BOTTOM_BAR_IDS = ["home", "live", "social", "fantasy"];
+// RECOMMENDATIONS item 131: matches, predictions and fantasy are all real,
+// working features now (not the "Fantasy is unreachable" state the item was
+// originally written against), so this is re-picked for what matchday users
+// actually reach for most: live scores, browsing fixtures, the social feed,
+// and predictions. "home" drops out of the primary four but stays one tap
+// away via the KIVO logo in TopBar (always visible on mobile, see
+// top-bar.tsx) — it isn't stranded, just no longer duplicated here. Fantasy
+// moves into "More", same as matches/predictions were before this change.
+const BOTTOM_BAR_IDS = ["live", "matches", "social", "predictions"];
 
-export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
+export function MobileBottomNav({ aiConfigured, isAdmin }: { aiConfigured: boolean; isAdmin: boolean }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
@@ -21,6 +27,10 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
 
   const barItems = NAV_ITEMS.filter((item) => BOTTOM_BAR_IDS.includes(item.id));
   const moreItems = NAV_ITEMS.filter((item) => !BOTTOM_BAR_IDS.includes(item.id));
+  // Item 134: no link to /admin anywhere in the app shell — appended here,
+  // gated on role, rather than folded into NAV_ITEMS (which every guest
+  // enumerates unconditionally).
+  if (isAdmin) moreItems.push(ADMIN_NAV_ITEM);
 
   useFocusTrap(moreOpen, panelRef, () => setMoreOpen(false), { restoreFocusRef: toggleButtonRef });
 
@@ -43,8 +53,14 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
             transition={{ duration: 0.15 }}
             className="fixed inset-0 z-40 flex flex-col justify-end lg:hidden"
           >
-            <button
-              aria-label="Close menu"
+            {/* Non-focusable backdrop (RECOMMENDATIONS.md item 149): a real
+                `<button>` here sat in tab/reading order before the sheet's
+                own nav links, so a screen reader user hit an unlabelled-in-
+                context "Close menu" control before anything else in the
+                dialog. The panel already has real, focusable nav links to
+                tab through, and Escape (via useFocusTrap) closes it too. */}
+            <div
+              aria-hidden="true"
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setMoreOpen(false)}
             />
@@ -98,7 +114,7 @@ export function MobileBottomNav({ aiConfigured }: { aiConfigured: boolean }) {
                           {item.label}
                         </span>
                         {isComingSoon && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                             Soon
                           </span>
                         )}

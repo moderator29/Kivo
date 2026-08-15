@@ -2,7 +2,8 @@ import Image from "next/image";
 import { SignIn } from "@clerk/nextjs";
 import { FadeIn } from "@/components/ui/fade-in";
 import { sanitizeRedirectPath } from "@/lib/clerk";
-import kivoLogo from "../../../../public/brand/kivo-logo.png";
+import { kivoClerkAppearance } from "@/lib/clerk-appearance";
+import kivoLogo from "../../../../public/brand/kivo-logo-transparent.webp";
 
 export default async function SignInPage({
   searchParams,
@@ -25,7 +26,7 @@ export default async function SignInPage({
 
       <div className="relative z-10 flex flex-col items-center gap-8">
         <FadeIn>
-          <Image src={kivoLogo} alt="KIVO" width={112} height={112} className="h-28 w-28" priority />
+          <Image src={kivoLogo} alt="KIVO" width={144} height={144} className="h-32 w-32" priority />
         </FadeIn>
 
         {clerkConfigured ? (
@@ -33,13 +34,7 @@ export default async function SignInPage({
             <SignIn
               forceRedirectUrl={redirectUrl}
               signUpForceRedirectUrl={redirectUrl}
-              appearance={{
-                elements: {
-                  card: "kivo-glass-brand shadow-none",
-                  headerTitle: "text-foreground",
-                  headerSubtitle: "text-foreground-muted",
-                },
-              }}
+              appearance={kivoClerkAppearance}
             />
           </FadeIn>
         ) : (

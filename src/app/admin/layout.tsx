@@ -7,7 +7,7 @@ import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon } from "l
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
 import { isClerkConfigured } from "@/lib/clerk";
-import kivoLogo from "../../../public/brand/kivo-logo.png";
+import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 // See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
 // the auth check alone.

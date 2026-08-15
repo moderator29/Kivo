@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, X, Check, Plus } from "lucide-react";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
 import { POSITION_GROUPS, SQUAD_RULES, formatFantasyPrice, type PositionGroup } from "./fantasy-rules";
@@ -67,7 +68,11 @@ export function PlayerPicker({
           transition={{ duration: 0.15 }}
           className="fixed inset-0 z-40 flex flex-col justify-end"
         >
-          <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          {/* Non-focusable backdrop (RECOMMENDATIONS.md item 149): a real
+              `<button>` here sat in tab/reading order before the dialog's
+              own content. The panel's own X button (below) is the real,
+              announced close control. */}
+          <div aria-hidden="true" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             ref={panelRef}
             role="dialog"
@@ -117,7 +122,19 @@ export function PlayerPicker({
               ) : error ? (
                 <p className="py-8 text-center text-xs text-critical">{error}</p>
               ) : searching && results.length === 0 ? (
-                <p className="py-8 text-center text-xs text-foreground-subtle">Searching…</p>
+                <div className="flex flex-col divide-y divide-white/5" aria-label="Searching" role="status">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 py-2.5">
+                      <Skeleton className="h-[26px] w-[26px] shrink-0 rounded-full" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <Skeleton className="h-3 w-32" />
+                        <Skeleton className="h-2.5 w-24" />
+                      </div>
+                      <Skeleton className="h-3 w-8 shrink-0" />
+                      <Skeleton className="h-6 w-16 shrink-0 rounded-lg" />
+                    </div>
+                  ))}
+                </div>
               ) : results.length === 0 ? (
                 <p className="py-8 text-center text-xs text-foreground-subtle">
                   No players synced yet. The picker fills in once KIVO&apos;s football data sync has run.

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
-import kivoLogo from "../../../public/brand/kivo-logo.png";
+import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";

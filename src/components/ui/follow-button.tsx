@@ -6,7 +6,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { Star, Check } from "lucide-react";
 import { toggleFollow } from "@/app/(app)/follow-actions";
 
-type FollowTargetType = "team" | "player" | "competition";
+// RECOMMENDATIONS item 175: "user" added so this same button can follow
+// another profile, not just team/player/competition — same star affordance,
+// already used site-wide for "follow", reused rather than inventing a
+// second follow control just for people.
+type FollowTargetType = "team" | "player" | "competition" | "user";
 
 type FollowButtonProps = {
   targetType: FollowTargetType;
@@ -62,6 +66,7 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={handleClick}
         aria-pressed={following}
         aria-label={following ? "Unfollow" : "Follow"}
@@ -82,7 +87,7 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.9 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-2 py-0.5 text-[10px] font-medium text-live shadow-lg"
+            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
           >
             <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
             {flash === "followed" ? "Following" : "Unfollowed"}

@@ -274,44 +274,51 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
   if (standings.length === 0) {
     return <EmptyState message="Standings haven't been synced yet for this competition." />;
   }
+  // Real `<table>` with `scope="col"` headers (RECOMMENDATIONS.md item 150):
+  // this used to be a grid of `<span>`s, which carries no row/column
+  // relationships for assistive tech, unlike the admin users table.
   return (
-    <div className="kivo-glass overflow-hidden rounded-2xl">
-      <div className="grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
-        <span>#</span>
-        <span>Team</span>
-        <span className="text-right">P</span>
-        <span className="text-right">GD</span>
-        <span className="text-right">Pts</span>
-        <span></span>
-      </div>
-      {standings.map((row, index) => {
-        const highlighted = row.teamId === homeTeamId || row.teamId === awayTeamId;
-        return (
-          <motion.div
-            key={row.teamId}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-            className={`grid grid-cols-[2rem_1fr_2rem_2rem_2rem_2rem] items-center gap-2 px-3 py-2 text-xs ${
-              highlighted ? "bg-kivo-cyan/5" : ""
-            }`}
-          >
-            <span className="text-foreground-subtle">{row.position ?? "-"}</span>
-            <span className="flex items-center gap-2 truncate text-foreground">
-              {row.crestUrl ? (
-                <Image src={row.crestUrl} alt={row.teamName} width={16} height={16} className="shrink-0 object-contain" />
-              ) : (
-                <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-              )}
-              <span className="truncate">{row.teamName}</span>
-            </span>
-            <span className="text-right text-foreground-muted">{row.played}</span>
-            <span className="text-right text-foreground-muted">{row.goalsFor - row.goalsAgainst}</span>
-            <span className="text-right font-semibold text-foreground">{row.points}</span>
-            <span />
-          </motion.div>
-        );
-      })}
+    <div className="kivo-glass overflow-x-auto rounded-2xl">
+      <table className="w-full min-w-[26rem] border-collapse text-xs">
+        <thead>
+          <tr className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+            <th scope="col" className="px-3 py-2 text-left font-semibold">#</th>
+            <th scope="col" className="py-2 text-left font-semibold">Team</th>
+            <th scope="col" className="py-2 text-right font-semibold">P</th>
+            <th scope="col" className="py-2 text-right font-semibold">GD</th>
+            <th scope="col" className="px-3 py-2 text-right font-semibold">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((row, index) => {
+            const highlighted = row.teamId === homeTeamId || row.teamId === awayTeamId;
+            return (
+              <motion.tr
+                key={row.teamId}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
+                className={highlighted ? "bg-kivo-cyan/5" : ""}
+              >
+                <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
+                <td className="max-w-0 py-2 text-foreground">
+                  <span className="flex items-center gap-2 truncate">
+                    {row.crestUrl ? (
+                      <Image src={row.crestUrl} alt={row.teamName} width={16} height={16} className="shrink-0 object-contain" />
+                    ) : (
+                      <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                    )}
+                    <span className="truncate">{row.teamName}</span>
+                  </span>
+                </td>
+                <td className="py-2 text-right text-foreground-muted">{row.played}</td>
+                <td className="py-2 text-right text-foreground-muted">{row.goalsFor - row.goalsAgainst}</td>
+                <td className="px-3 py-2 text-right font-semibold text-foreground">{row.points}</td>
+              </motion.tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

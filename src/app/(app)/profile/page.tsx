@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, ArrowRight, Star } from "lucide-react";
+import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { FadeIn } from "@/components/ui/fade-in";
+import { StatTile } from "@/components/home/stat-tile";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -27,16 +28,51 @@ export default async function ProfilePage() {
   }
 
   const supabase = createServerSupabaseClient();
-  const { data: follows } = await supabase
-    .from("follows")
-    .select("followed_type")
-    .eq("follower_profile_id", profile.id)
-    .in("followed_type", ["team", "player", "competition"]);
+  // Item 136: real content instead of a stub — XP total, badge progress and
+  // prediction record, reusing the same RPC/queries /rewards and
+  // /predictions/mine already use rather than rebuilding either page here.
+  // Plain counts (head: true) since this is a summary tile, not a full list.
+  const [
+    { data: follows },
+    { data: xpTotal },
+    { count: totalBadgeCount },
+    { count: earnedBadgeCount },
+    { count: totalPredictionCount },
+    { count: correctPredictionCount },
+    { count: savedCount },
+  ] = await Promise.all([
+    supabase
+      .from("follows")
+      .select("followed_type")
+      .eq("follower_profile_id", profile.id)
+      .in("followed_type", ["team", "player", "competition"]),
+    // Single aggregate round trip, same reasoning as /rewards and /home (see
+    // get_xp_total in supabase/migrations/0023_xp_total_and_sync_run_pruning.sql).
+    supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
+    supabase.from("badges").select("id", { count: "exact", head: true }),
+    supabase.from("user_badges").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
+    supabase.from("predictions").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
+    // points_awarded is only set by the admin scoring pass — same "real
+    // columns only" rule /predictions/mine's resultInfo() follows, not a
+    // guessed outcome from the fixture score.
+    supabase
+      .from("predictions")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", profile.id)
+      .gt("points_awarded", 0),
+    // RECOMMENDATIONS item 173: saves_select_own already scopes this to the
+    // caller's own row.
+    supabase.from("saves").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
+  ]);
 
   const teamCount = (follows ?? []).filter((f) => f.followed_type === "team").length;
   const playerCount = (follows ?? []).filter((f) => f.followed_type === "player").length;
   const competitionCount = (follows ?? []).filter((f) => f.followed_type === "competition").length;
   const totalFollows = teamCount + playerCount + competitionCount;
+
+  const totalXp = xpTotal ?? 0;
+  const totalPredictions = totalPredictionCount ?? 0;
+  const correctPredictions = correctPredictionCount ?? 0;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -50,7 +86,34 @@ export default async function ProfilePage() {
         </div>
       </FadeIn>
 
-      <FadeIn delay={0.08} className="kivo-glass rounded-2xl p-5">
+      <div className="grid grid-cols-3 gap-3">
+        <StatTile
+          href="/rewards"
+          icon={<Flame className="h-4 w-4" strokeWidth={1.75} />}
+          value={`${totalXp}`}
+          label="XP"
+          brand
+          delay={0.05}
+        />
+        <StatTile
+          href="/rewards"
+          icon={<Award className="h-4 w-4" strokeWidth={1.75} />}
+          value={`${earnedBadgeCount ?? 0}/${totalBadgeCount ?? 0}`}
+          label="Badges"
+          brand={false}
+          delay={0.1}
+        />
+        <StatTile
+          href="/predictions/mine"
+          icon={<Target className="h-4 w-4" strokeWidth={1.75} />}
+          value={totalPredictions > 0 ? `${correctPredictions}/${totalPredictions}` : "-"}
+          label="Predictions"
+          brand={false}
+          delay={0.15}
+        />
+      </div>
+
+      <FadeIn delay={0.2} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             <Star className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
@@ -75,6 +138,24 @@ export default async function ProfilePage() {
             here.
           </p>
         )}
+      </FadeIn>
+
+      <FadeIn delay={0.25} className="kivo-glass rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Bookmark className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Saved
+          </h2>
+          <Link href="/saved" className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
+            View all
+            <ArrowRight className="h-3 w-3" strokeWidth={2} />
+          </Link>
+        </div>
+        <p className="mt-2 text-sm text-foreground-muted">
+          {savedCount && savedCount > 0
+            ? `${savedCount} saved ${savedCount === 1 ? "item" : "items"}.`
+            : "Nothing saved yet. Bookmark a post, team or player to find it here."}
+        </p>
       </FadeIn>
     </div>
   );

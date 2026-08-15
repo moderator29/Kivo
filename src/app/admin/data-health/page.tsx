@@ -186,13 +186,32 @@ export default async function DataHealthPage() {
 
   // Data Health's own list below only ever shows the last 10 runs — this is
   // the only place any run-level aggregate exists, so it goes over every
-  // sync_runs row rather than reusing that capped list. Just status and
-  // records_processed, cheap enough to not need a dedicated summary table.
-  const { data: allRuns } = await supabase.from("sync_runs").select("status, records_processed");
+  // sync_runs row rather than reusing that capped list. status/records_processed
+  // for the overall totals below, plus started_at/provider_quota_remaining for
+  // today's quota trend (RECOMMENDATIONS.md item 213).
+  const { data: allRuns } = await supabase
+    .from("sync_runs")
+    .select("status, records_processed, started_at, provider_quota_remaining");
   const totalRuns = allRuns?.length ?? 0;
   const successfulRuns = (allRuns ?? []).filter((r) => r.status === "success").length;
   const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : null;
   const totalRecordsProcessed = (allRuns ?? []).reduce((sum, r) => sum + (r.records_processed ?? 0), 0);
+
+  // Today's quota trend: API-Football's quota resets daily and only counts down
+  // as syncs run, so the highest reading seen today is the best available proxy
+  // for "what today started with" and the lowest is the most depleted (most
+  // recent) reading — both real values off provider_quota_remaining, never
+  // estimated. Matches todayIsoDate()'s UTC-day boundary in
+  // src/lib/football/sync.ts.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todaysQuotaReadings = (allRuns ?? [])
+    .filter(
+      (r): r is typeof r & { provider_quota_remaining: number } =>
+        r.provider_quota_remaining !== null && r.started_at?.slice(0, 10) === todayIso,
+    )
+    .map((r) => r.provider_quota_remaining);
+  const quotaUsedToday =
+    todaysQuotaReadings.length > 0 ? Math.max(...todaysQuotaReadings) - Math.min(...todaysQuotaReadings) : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -253,7 +272,7 @@ export default async function DataHealthPage() {
             <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-white/5 px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-foreground">{step.title}</span>
-                <span className="shrink-0 text-[10px] text-foreground-subtle">{step.where}</span>
+                <span className="shrink-0 text-[11px] text-foreground-subtle">{step.where}</span>
               </div>
               <p className="text-[11px] text-foreground-subtle">{step.requires}</p>
             </li>
@@ -350,7 +369,7 @@ export default async function DataHealthPage() {
                       <span className="font-medium">GW{gw.number}</span>
                       {seasonLabel ? ` · ${seasonLabel}` : ""}
                       {gw.is_current && (
-                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[10px] font-semibold text-kivo-cyan">
+                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[11px] font-semibold text-kivo-cyan">
                           Current
                         </span>
                       )}
@@ -379,13 +398,13 @@ export default async function DataHealthPage() {
       </div>
 
       {totalRuns > 0 && (
-        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-3 gap-3 rounded-2xl p-5">
+        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-4 divide-x divide-white/5 gap-3 rounded-2xl p-5">
           <div className="flex flex-col items-center gap-1 text-center">
             <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
             <span className="text-lg font-semibold text-foreground">{totalRuns}</span>
             <span className="text-[11px] text-foreground-subtle">Total syncs</span>
           </div>
-          <div className="flex flex-col items-center gap-1 border-x border-white/5 text-center">
+          <div className="flex flex-col items-center gap-1 text-center">
             <span
               className={`text-lg font-semibold ${
                 successRate === null ? "text-foreground" : successRate >= 90 ? "text-live" : successRate >= 60 ? "text-warning" : "text-critical"
@@ -398,6 +417,12 @@ export default async function DataHealthPage() {
           <div className="flex flex-col items-center gap-1 text-center">
             <span className="text-lg font-semibold text-foreground">{totalRecordsProcessed.toLocaleString()}</span>
             <span className="text-[11px] text-foreground-subtle">Records synced</span>
+          </div>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <span className="text-lg font-semibold text-foreground">
+              {quotaUsedToday === null ? "-" : quotaUsedToday.toLocaleString()}
+            </span>
+            <span className="text-[11px] text-foreground-subtle">Quota used today</span>
           </div>
         </FadeIn>
       )}
@@ -441,7 +466,7 @@ export default async function DataHealthPage() {
                       </p>
                     </div>
                     <span
-                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.className}`}
+                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${style.className}`}
                     >
                       <StatusIcon className={`h-3 w-3 ${run.status === "running" ? "animate-spin" : ""}`} strokeWidth={2} />
                       {style.label}

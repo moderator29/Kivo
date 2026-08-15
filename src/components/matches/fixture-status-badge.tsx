@@ -30,7 +30,7 @@ export function FixtureStatusBadge({
   const live = isLiveStatus(status);
   return (
     <span
-      className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+      className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
         live
           ? "border-live/30 bg-live/10 text-live"
           : status === "finished"

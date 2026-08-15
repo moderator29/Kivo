@@ -4,9 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
+import { ADMIN_NAV_ITEM, NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
-import kivoLogo from "../../../public/brand/kivo-logo.png";
+import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 /** Purely a presentation grouping for the desktop sidebar — doesn't touch
  * NAV_ITEMS or routing. "home" is rendered standalone above these as the
@@ -20,7 +20,7 @@ const SIDEBAR_GROUPS: { label: string; ids: string[] }[] = [
   { label: "You", ids: ["ai", "rewards", "settings", "profile"] },
 ];
 
-export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
+export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolean; isAdmin: boolean }) {
   const pathname = usePathname();
   const homeItem = NAV_ITEMS.find((item) => item.id === "home");
   const groups = SIDEBAR_GROUPS.map((group) => ({
@@ -56,6 +56,18 @@ export function DesktopSidebar({ aiConfigured }: { aiConfigured: boolean }) {
             ))}
           </div>
         ))}
+        {/* Item 134: no link to /admin anywhere in the app shell — shown only
+            for roles hasAdminAccess() actually grants /admin to (computed
+            server-side in (app)/layout.tsx), same as ADMIN_NAV_ITEM's own
+            reasoning for staying out of NAV_ITEMS/SIDEBAR_GROUPS above. */}
+        {isAdmin && (
+          <div className="mt-3 flex flex-col gap-0.5">
+            <span className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
+              Admin
+            </span>
+            <SidebarLink item={ADMIN_NAV_ITEM} pathname={pathname} aiConfigured={aiConfigured} />
+          </div>
+        )}
       </nav>
     </aside>
   );
@@ -99,7 +111,7 @@ function SidebarLink({
       />
       <span className="relative z-10 flex-1">{item.label}</span>
       {isComingSoon && (
-        <span className="relative z-10 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+        <span className="relative z-10 rounded-full border border-white/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
           Soon
         </span>
       )}

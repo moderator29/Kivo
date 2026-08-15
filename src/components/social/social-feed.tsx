@@ -15,10 +15,15 @@ export function SocialFeed({
   initialPosts,
   initialHasMore,
   signedIn,
+  followingOnly = false,
 }: {
   initialPosts: PostListItem[];
   initialHasMore: boolean;
   signedIn: boolean;
+  /** RECOMMENDATIONS item 175: threaded through to loadMorePosts so "Load
+   * more" keeps respecting the All/Following tab the page was rendered
+   * with. */
+  followingOnly?: boolean;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -28,7 +33,7 @@ export function SocialFeed({
   function handleLoadMore() {
     setError(null);
     startLoading(async () => {
-      const result = await loadMorePosts(posts.length);
+      const result = await loadMorePosts(posts.length, { followingOnly });
       if (result.error) {
         setError(result.error);
         return;
@@ -42,7 +47,11 @@ export function SocialFeed({
     return (
       <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
         <Users className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-        <p className="text-sm text-foreground-muted">Nobody&apos;s posted yet. Be the first to share your take on the game.</p>
+        <p className="text-sm text-foreground-muted">
+          {followingOnly
+            ? "Nobody you follow has posted yet. Follow a user from their profile to see their posts here."
+            : "Nobody's posted yet. Be the first to share your take on the game."}
+        </p>
       </FadeIn>
     );
   }
@@ -62,6 +71,8 @@ export function SocialFeed({
           commentCount={post.commentCount}
           signedIn={signedIn}
           index={index}
+          poll={post.poll}
+          viewerSaved={post.viewerSaved}
         />
       ))}
 

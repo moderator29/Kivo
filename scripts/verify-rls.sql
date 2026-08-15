@@ -76,9 +76,11 @@
 -- each independent (own BEGIN block, own transaction-local id lookups —
 -- nothing carries over between sections or depends on call/section order),
 -- so run: (a) sections 0-1 together as one call to seed, (b) each of
--- 2/3/4/5/6a/6b/6c/6d as its own call — 6a and 6b are EXPECTED to come back as
--- a tool error, that error is the pass signal — then (c) section 7 as its own
--- final call regardless of how section 6 went, so cleanup always happens.
+-- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h as its own call — 6a/6b and several of the
+-- individual statements inside 6e/6f/6g (each clearly marked "PASS = 42501")
+-- are EXPECTED to come back as a tool error, that error is the pass signal —
+-- then (c) section 7 as its own final call regardless of how section 6 went,
+-- so cleanup always happens.
 -- =============================================================================
 
 
@@ -134,6 +136,29 @@ select p.id, f.id, 'away_win'
 from profiles p, fixtures f
 where p.username = 'zzrlstest_bob'
   and f.home_team_id = (select id from teams where name = 'ZZ RLS Test Team A');
+
+-- Additional seed for items 168/170/172/173 (poll_votes, saves, fan_ratings,
+-- get_prediction_consensus — migration 0032/0033/0034): a second, already-
+-- finished fixture (fan_ratings_insert_own requires status = 'finished'),
+-- plus a poll post with two options. Everything below cascades away with
+-- the profiles/fixtures/posts already deleted by section 0's preflight
+-- cleanup and section 7's teardown, so no extra cleanup statements are
+-- needed for these tables specifically.
+insert into fixtures (competition_id, season_id, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
+select c.id, s.id, ta.id, tb.id, now() - interval '2 hours', 'finished', 2, 1
+from competitions c
+join seasons s on s.competition_id = c.id
+join teams ta on ta.name = 'ZZ RLS Test Team A'
+join teams tb on tb.name = 'ZZ RLS Test Team B'
+where c.name = 'ZZ RLS Test Competition';
+
+insert into posts (author_profile_id, body)
+select id, 'zzrlstest poll: who wins?' from profiles where username = 'zzrlstest_alice';
+
+insert into poll_options (post_id, position, label)
+select p.id, 0, 'Team A' from posts p where p.body = 'zzrlstest poll: who wins?'
+union all
+select p.id, 1, 'Team B' from posts p where p.body = 'zzrlstest poll: who wins?';
 
 insert into notifications (profile_id, type, payload)
 select id, 'zzrlstest_marker', '{"note":"alice notification"}'::jsonb
@@ -510,6 +535,295 @@ rollback;
 
 
 -- -----------------------------------------------------------------------------
+-- 6e. poll_votes (RECOMMENDATIONS item 172, migration 0032): predictions'
+-- one-pick-per-user shape, plus a BEFORE INSERT trigger that re-derives
+-- post_id from the real option server-side — the anti-spoofing property
+-- checked first, before the standard cross-user/anon checks.
+-- -----------------------------------------------------------------------------
+
+-- Alice votes for option A while deliberately supplying a wrong post_id —
+-- PASS = the stored row's post_id is the option's real post anyway.
+begin;
+
+select
+  set_config('rls_test.option_a_id', (select o.id::text from poll_options o join posts p on p.id = o.post_id where p.body = 'zzrlstest poll: who wins?' and o.position = 0), true),
+  set_config('rls_test.real_post_id', (select p.id::text from posts p where p.body = 'zzrlstest poll: who wins?'), true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+insert into poll_votes (post_id, option_id, profile_id)
+values (gen_random_uuid(), current_setting('rls_test.option_a_id')::uuid, (select id from profiles where username = 'zzrlstest_alice'));
+
+select 'poll_votes: trigger overwrites a spoofed post_id with the option''s real post_id' as check_name,
+  (select post_id from poll_votes where profile_id = (select id from profiles where username = 'zzrlstest_alice'))
+    = current_setting('rls_test.real_post_id')::uuid as passed;
+
+commit;
+
+-- Bob casts his own real vote on option B (needed for the aggregate checks below).
+begin;
+
+select set_config('rls_test.option_b_id', (select o.id::text from poll_options o join posts p on p.id = o.post_id where p.body = 'zzrlstest poll: who wins?' and o.position = 1), true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+
+insert into poll_votes (post_id, option_id, profile_id)
+values (current_setting('rls_test.option_b_id')::uuid, current_setting('rls_test.option_b_id')::uuid, (select id from profiles where username = 'zzrlstest_bob'));
+
+commit;
+
+-- PASS = 42501 (alice cannot forge a vote as bob, even with his real profile_id).
+begin;
+
+select
+  set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
+  set_config('rls_test.option_b_id', (select o.id::text from poll_options o join posts p on p.id = o.post_id where p.body = 'zzrlstest poll: who wins?' and o.position = 1), true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+insert into poll_votes (post_id, option_id, profile_id)
+values (gen_random_uuid(), current_setting('rls_test.option_b_id')::uuid, current_setting('rls_test.bob_id')::uuid);
+
+rollback;
+
+begin;
+
+select set_config('rls_test.real_post_id', (select p.id::text from posts p where p.body = 'zzrlstest poll: who wins?'), true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+with del_attempt as (
+  delete from poll_votes
+  where profile_id = (select id from profiles where username = 'zzrlstest_bob')
+  returning id
+)
+select check_name, passed from (
+  select 'poll_votes: alice sees exactly her own vote on this poll, not bob''s' as check_name,
+    (select count(*) from poll_votes where post_id = current_setting('rls_test.real_post_id')::uuid) = 1
+    and exists (select 1 from poll_votes v join profiles p on p.id = v.profile_id where p.username = 'zzrlstest_alice')
+    and not exists (select 1 from poll_votes v join profiles p on p.id = v.profile_id where p.username = 'zzrlstest_bob') as passed
+  union all
+  select 'poll_votes: alice deleting bob''s vote affects 0 rows', (select count(*) from del_attempt) = 0
+) checks
+order by check_name;
+
+rollback;
+
+begin;
+
+select set_config('rls_test.real_post_id', (select p.id::text from posts p where p.body = 'zzrlstest poll: who wins?'), true);
+
+set local role anon;
+
+select check_name, passed from (
+  select 'poll_votes: anon cannot read any vote row' as check_name,
+    not exists (select 1 from poll_votes where post_id = current_setting('rls_test.real_post_id')::uuid) as passed
+  union all
+  select 'poll_options: anon CAN read the public options (poll question/choices are public)',
+    (select count(*) from poll_options where post_id = current_setting('rls_test.real_post_id')::uuid) = 2
+  union all
+  select 'get_poll_results: anon gets real per-option counts (1 vote each), never a profile_id',
+    (
+      (select count(*) from public.get_poll_results(current_setting('rls_test.real_post_id')::uuid)) = 2
+      and (select sum(vote_count) from public.get_poll_results(current_setting('rls_test.real_post_id')::uuid)) = 2
+    )
+) checks
+order by check_name;
+
+rollback;
+
+-- PASS = 42501 (no anon insert policy on poll_votes at all).
+begin;
+select set_config('rls_test.option_a_id', (select o.id::text from poll_options o join posts p on p.id = o.post_id where p.body = 'zzrlstest poll: who wins?' and o.position = 0), true);
+set local role anon;
+insert into poll_votes (post_id, option_id, profile_id)
+values (gen_random_uuid(), current_setting('rls_test.option_a_id')::uuid, (select id from profiles where username = 'zzrlstest_alice'));
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6f. saves (RECOMMENDATIONS item 173, migration 0032): exact mirror of
+-- follows' RLS shape — own-row select/insert/delete only.
+-- -----------------------------------------------------------------------------
+
+begin;
+select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest poll: who wins?'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+insert into saves (profile_id, target_type, target_id)
+values ((select id from profiles where username = 'zzrlstest_alice'), 'post', current_setting('rls_test.post_id')::uuid);
+commit;
+
+begin;
+select set_config('rls_test.team_a_id', (select id::text from teams where name = 'ZZ RLS Test Team A'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+insert into saves (profile_id, target_type, target_id)
+values ((select id from profiles where username = 'zzrlstest_bob'), 'team', current_setting('rls_test.team_a_id')::uuid);
+commit;
+
+-- PASS = 42501 (alice cannot forge a save as bob, even with his real profile_id).
+begin;
+select
+  set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
+  set_config('rls_test.team_b_id', (select id::text from teams where name = 'ZZ RLS Test Team B'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+insert into saves (profile_id, target_type, target_id)
+values (current_setting('rls_test.bob_id')::uuid, 'team', current_setting('rls_test.team_b_id')::uuid);
+rollback;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+with del_attempt as (
+  delete from saves
+  where profile_id = (select id from profiles where username = 'zzrlstest_bob')
+  returning id
+)
+select check_name, passed from (
+  select 'saves: alice sees exactly her own save, not bob''s' as check_name,
+    (select count(*) from saves where profile_id in (select id from profiles where username like 'zzrlstest_%')) = 1
+    and exists (select 1 from saves s join profiles p on p.id = s.profile_id where p.username = 'zzrlstest_alice')
+    and not exists (select 1 from saves s join profiles p on p.id = s.profile_id where p.username = 'zzrlstest_bob') as passed
+  union all
+  select 'saves: alice deleting bob''s save affects 0 rows', (select count(*) from del_attempt) = 0
+) checks
+order by check_name;
+
+rollback;
+
+begin;
+set local role anon;
+select 'saves: anon cannot read any save row' as check_name,
+  not exists (select 1 from saves where profile_id in (select id from profiles where username like 'zzrlstest_%')) as passed;
+rollback;
+
+-- PASS = 42501 (no anon insert policy on saves at all).
+begin;
+select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest poll: who wins?'), true);
+set local role anon;
+insert into saves (profile_id, target_type, target_id)
+values ((select id from profiles where username = 'zzrlstest_bob'), 'post', current_setting('rls_test.post_id')::uuid);
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6g. fan_ratings (RECOMMENDATIONS item 170, migration 0032): RLS mirrors
+-- predictions' own-row shape, plus a WITH CHECK requiring the fixture to
+-- actually be finished ("rate a performance after the whistle").
+-- -----------------------------------------------------------------------------
+
+begin;
+select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+insert into fan_ratings (profile_id, fixture_id, rating)
+values ((select id from profiles where username = 'zzrlstest_alice'), current_setting('rls_test.finished_fixture_id')::uuid, 5);
+commit;
+
+begin;
+select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+insert into fan_ratings (profile_id, fixture_id, rating)
+values ((select id from profiles where username = 'zzrlstest_bob'), current_setting('rls_test.finished_fixture_id')::uuid, 3);
+commit;
+
+-- PASS = 42501 (alice cannot rate a fixture that hasn't finished yet — RLS
+-- itself enforces this, not just the server action).
+begin;
+select set_config('rls_test.scheduled_fixture_id', (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+insert into fan_ratings (profile_id, fixture_id, rating)
+values ((select id from profiles where username = 'zzrlstest_alice'), current_setting('rls_test.scheduled_fixture_id')::uuid, 4);
+rollback;
+
+-- PASS = 42501 (alice cannot forge a rating as bob, real finished fixture, wrong owner).
+begin;
+select
+  set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
+  set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+insert into fan_ratings (profile_id, fixture_id, rating)
+values (current_setting('rls_test.bob_id')::uuid, current_setting('rls_test.finished_fixture_id')::uuid, 1);
+rollback;
+
+begin;
+select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true),
+       set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+
+with upd_attempt as (
+  update fan_ratings set rating = 1
+  where profile_id = current_setting('rls_test.bob_id')::uuid
+  returning id
+),
+del_attempt as (
+  delete from fan_ratings
+  where profile_id = current_setting('rls_test.bob_id')::uuid
+  returning id
+)
+select check_name, passed from (
+  select 'fan_ratings: alice sees exactly her own rating on this fixture, not bob''s' as check_name,
+    (select count(*) from fan_ratings where fixture_id = current_setting('rls_test.finished_fixture_id')::uuid) = 1
+    and exists (select 1 from fan_ratings r join profiles p on p.id = r.profile_id where p.username = 'zzrlstest_alice' and r.rating = 5)
+    and not exists (select 1 from fan_ratings r join profiles p on p.id = r.profile_id where p.username = 'zzrlstest_bob') as passed
+  union all
+  select 'fan_ratings: alice updating bob''s rating affects 0 rows', (select count(*) from upd_attempt) = 0
+  union all
+  select 'fan_ratings: alice deleting bob''s rating affects 0 rows', (select count(*) from del_attempt) = 0
+) checks
+order by check_name;
+
+rollback;
+
+begin;
+select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role anon;
+select check_name, passed from (
+  select 'fan_ratings: anon cannot read any individual rating row' as check_name,
+    not exists (select 1 from fan_ratings where fixture_id = current_setting('rls_test.finished_fixture_id')::uuid) as passed
+  union all
+  select 'get_fan_rating_summary: anon gets the real aggregate (count=2, avg=4.0) despite the base table being unreadable to anon',
+    (
+      (select rating_count from public.get_fan_rating_summary(current_setting('rls_test.finished_fixture_id')::uuid)) = 2
+      and (select avg_rating from public.get_fan_rating_summary(current_setting('rls_test.finished_fixture_id')::uuid)) = 4.0
+    )
+) checks
+order by check_name;
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6h. get_prediction_consensus (RECOMMENDATIONS item 168, migration 0032):
+-- real per-outcome pick counts despite predictions_select_own, never an
+-- individual profile_id.
+-- -----------------------------------------------------------------------------
+
+begin;
+select set_config('rls_test.scheduled_fixture_id', (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role anon;
+select check_name, passed from (
+  select 'get_prediction_consensus: anon gets real per-outcome counts (1 home_win, 1 away_win) with no individual picker identity' as check_name,
+    (
+      (select count(*) from public.get_prediction_consensus(array[current_setting('rls_test.scheduled_fixture_id')::uuid])) = 2
+      and (select pick_count from public.get_prediction_consensus(array[current_setting('rls_test.scheduled_fixture_id')::uuid]) where predicted_outcome = 'home_win') = 1
+      and (select pick_count from public.get_prediction_consensus(array[current_setting('rls_test.scheduled_fixture_id')::uuid]) where predicted_outcome = 'away_win') = 1
+    ) as passed
+) checks;
+rollback;
+
+
+-- -----------------------------------------------------------------------------
 -- 7. Teardown — remove every row this script created
 -- -----------------------------------------------------------------------------
 
@@ -520,9 +834,22 @@ delete from seasons where competition_id in (select id from competitions where n
 delete from teams where name like 'ZZ RLS Test%';
 delete from competitions where name like 'ZZ RLS Test%';
 
--- Final sanity check: confirm cleanup left no trace.
+-- Final sanity check: confirm cleanup left no trace. poll_options/poll_votes/
+-- saves/fan_ratings have no zzrlstest-prefixed column of their own to filter
+-- on directly (saves/fan_ratings key off profile_id, poll_options/poll_votes
+-- off post_id) — deleting profiles/fixtures/posts above cascades to all four
+-- via their own FKs (0032), so an unqualified emptiness check on each is a
+-- real assertion, not a tautology: if cascade delete were ever broken, rows
+-- from a completely different, real poll/save/rating would still make this
+-- fail too. Safe only because this script is the sole writer of test data
+-- against a project that otherwise has none yet (rows: 0 per list_tables).
 select 'teardown: no zzrlstest rows remain in any seeded table' as check_name,
   not exists (select 1 from profiles where username like 'zzrlstest_%')
   and not exists (select 1 from teams where name like 'ZZ RLS Test%')
   and not exists (select 1 from competitions where name like 'ZZ RLS Test%')
-  and not exists (select 1 from players where full_name like 'ZZ RLS Test%') as passed;
+  and not exists (select 1 from players where full_name like 'ZZ RLS Test%')
+  and not exists (select 1 from posts where body like 'zzrlstest%')
+  and not exists (select 1 from poll_options)
+  and not exists (select 1 from poll_votes)
+  and not exists (select 1 from saves)
+  and not exists (select 1 from fan_ratings) as passed;

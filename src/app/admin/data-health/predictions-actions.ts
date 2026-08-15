@@ -6,7 +6,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { awardXp, awardBadge } from "@/lib/rewards";
 import { logAudit } from "@/lib/audit";
-import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
+import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP, computeStreaks } from "@/lib/predictions";
 
 type PredictionOutcome = "home_win" | "draw" | "away_win";
 
@@ -108,6 +108,25 @@ export async function scorePredictions(): Promise<{ error: string | null; record
         .gt("points_awarded", 0);
       if ((correctCount ?? 0) >= 5) {
         await awardBadge(row.profile_id, "five_predictions_correct");
+      }
+
+      // RECOMMENDATIONS item 169: a real streak, computed the same way
+      // /predictions/mine displays one (computeStreaks, ordered by fixture
+      // kickoff_at) — awarded the moment this user's own scored history
+      // genuinely reaches a 3-run, never guessed or assumed from this single
+      // row alone.
+      const { data: scoredHistory } = await service
+        .from("predictions")
+        .select("points_awarded, fixture:fixtures(kickoff_at)")
+        .eq("profile_id", row.profile_id)
+        .not("points_awarded", "is", null);
+      const streaks = computeStreaks(
+        (scoredHistory ?? [])
+          .filter((p) => p.fixture !== null)
+          .map((p) => ({ pointsAwarded: p.points_awarded ?? 0, kickoffAt: p.fixture!.kickoff_at })),
+      );
+      if (streaks.current >= 3) {
+        await awardBadge(row.profile_id, "three_prediction_streak");
       }
     }
   }

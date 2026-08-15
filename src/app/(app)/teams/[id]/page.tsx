@@ -1,22 +1,37 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MapPin, Trophy, Users, UserRound, CalendarClock, History, GitCompareArrows } from "lucide-react";
+import {
+  MapPin,
+  Trophy,
+  Users,
+  UserRound,
+  CalendarClock,
+  History,
+  GitCompareArrows,
+  Clock,
+  ShieldAlert,
+  ArrowLeftRight,
+} from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { FormBadges } from "@/components/teams/form-badges";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { resultFor, type FormResult } from "@/lib/football/results";
+import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { parseUuidParam } from "@/lib/params";
-import { calculateAge } from "@/lib/format";
+import { calculateAge, formatDate } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
 
@@ -42,6 +57,12 @@ type FixtureRow = {
   away_team: { id: string; name: string; short_name: string | null; crest_url: string | null } | null;
 };
 
+const RESULT_CLASS: Record<FormResult, string> = {
+  W: "text-live",
+  L: "text-critical",
+  D: "text-foreground-muted",
+};
+
 function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: string }) {
   const isHome = fixture.home_team?.id === teamId;
   const own = isHome ? fixture.home_team : fixture.away_team;
@@ -49,21 +70,21 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
 
   let resultClass = "text-foreground-muted";
+  let result: FormResult | null = null;
   // Checking both fields directly here (rather than via the `hasScore` bool
   // above) lets TypeScript narrow them to `number` on its own, instead of
   // asserting it with `!` — same condition either way.
   if (fixture.status === "finished" && fixture.home_score !== null && fixture.away_score !== null) {
     const ownScore = isHome ? fixture.home_score : fixture.away_score;
     const oppScore = isHome ? fixture.away_score : fixture.home_score;
-    if (ownScore > oppScore) resultClass = "text-live";
-    else if (ownScore < oppScore) resultClass = "text-critical";
-    else resultClass = "text-foreground-muted";
+    result = resultFor(ownScore, oppScore);
+    resultClass = RESULT_CLASS[result];
   }
 
   return (
     <div className="kivo-glass flex items-center justify-between gap-3 rounded-2xl p-4">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="w-4 shrink-0 text-[10px] font-semibold uppercase text-foreground-subtle">
+        <span className="w-4 shrink-0 text-[11px] font-semibold uppercase text-foreground-subtle">
           {isHome ? "H" : "A"}
         </span>
         <TeamCrest crestUrl={opponent?.crest_url ?? null} name={opponent?.name ?? "Opponent"} />
@@ -86,8 +107,16 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
       <div className="flex shrink-0 flex-col items-end gap-1">
         <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} includeWeekday />
         {hasScore && (
-          <span className={`text-sm font-semibold ${resultClass}`}>
-            {own?.id === fixture.home_team?.id ? `${fixture.home_score} – ${fixture.away_score}` : `${fixture.away_score} – ${fixture.home_score}`}
+          <span className="flex items-center gap-1.5">
+            {/* Colour alone (green win, red loss) fails for colour-blind
+                users — a real W/D/L letter alongside it, not just an
+                aria-label, so it doesn't disappear from a screen reader's
+                and a sighted user's experience alike. RECOMMENDATIONS.md
+                item 151. */}
+            {result && <span className={`text-[11px] font-bold ${resultClass}`}>{result}</span>}
+            <span className={`text-sm font-semibold ${resultClass}`}>
+              {own?.id === fixture.home_team?.id ? `${fixture.home_score} – ${fixture.away_score}` : `${fixture.away_score} – ${fixture.home_score}`}
+            </span>
           </span>
         )}
       </div>
@@ -116,70 +145,135 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: team }, { data: standingsRows }, { data: squad }, { data: managers }, { data: upcoming }, { data: recent }, isFollowing, squadLastSyncedAt] =
-    await Promise.all([
-      supabase
-        .from("teams")
-        .select(
-          `id, name, short_name, country, founded_year, crest_url, venue_id,
-           venue:venues(name, city, country, capacity)`,
-        )
-        .eq("id", id)
-        .maybeSingle(),
-      supabase
-        .from("standings")
-        .select(
-          `played, won, drawn, lost, goals_for, goals_against, points, position,
-           season:seasons(id, name, is_current, competition:competitions(id, name, short_name))`,
-        )
-        .eq("team_id", id),
-      supabase
-        .from("players")
-        .select("id, full_name, known_as, position, nationality, photo_url")
-        .eq("current_team_id", id)
-        .order("full_name", { ascending: true }),
-      supabase
-        .from("managers")
-        .select("id, full_name, nationality, date_of_birth")
-        .eq("current_team_id", id)
-        .limit(1),
-      supabase
-        .from("fixtures")
-        .select(
-          `id, kickoff_at, status, home_score, away_score,
-           competition:competitions(name, short_name),
-           home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
-           away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url)`,
-        )
-        .or(`home_team_id.eq.${id},away_team_id.eq.${id}`)
-        .eq("status", "scheduled")
-        .order("kickoff_at", { ascending: true })
-        .limit(10),
-      supabase
-        .from("fixtures")
-        .select(
-          `id, kickoff_at, status, home_score, away_score,
-           competition:competitions(name, short_name),
-           home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
-           away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url)`,
-        )
-        .or(`home_team_id.eq.${id},away_team_id.eq.${id}`)
-        .eq("status", "finished")
-        .order("kickoff_at", { ascending: false })
-        .limit(10),
-      profile
-        ? supabase
-            .from("follows")
-            .select("id", { count: "exact", head: true })
-            .eq("follower_profile_id", profile.id)
-            .eq("followed_type", "team")
-            .eq("followed_id", id)
-            .then(({ count }) => (count ?? 0) > 0)
-        : Promise.resolve(false),
-      // RECOMMENDATIONS.md item 60: squad sync writes entity_type 'player'
-      // (see syncTeamSquad in src/lib/football/sync-squads.ts).
-      getLastSyncedAt(["player"]),
-    ]);
+  const [
+    { data: team },
+    { data: standingsRows },
+    { data: squad },
+    { data: managers },
+    { data: upcoming },
+    { data: recent },
+    isFollowing,
+    isSaved,
+    squadLastSyncedAt,
+    { data: goalEvents },
+    { data: cardEvents },
+    { count: finishedMatchesCount },
+    { data: transfersLedger },
+    transfersLastSyncedAt,
+  ] = await Promise.all([
+    supabase
+      .from("teams")
+      .select(
+        `id, name, short_name, country, founded_year, crest_url, venue_id,
+         venue:venues(name, city, country, capacity)`,
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("standings")
+      .select(
+        `played, won, drawn, lost, goals_for, goals_against, points, position,
+         season:seasons(id, name, is_current, competition:competitions(id, name, short_name))`,
+      )
+      .eq("team_id", id),
+    supabase
+      .from("players")
+      .select("id, full_name, known_as, position, nationality, photo_url")
+      .eq("current_team_id", id)
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("managers")
+      .select("id, full_name, nationality, date_of_birth")
+      .eq("current_team_id", id)
+      .limit(1),
+    supabase
+      .from("fixtures")
+      .select(
+        `id, kickoff_at, status, home_score, away_score,
+         competition:competitions(name, short_name),
+         home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+         away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url)`,
+      )
+      .or(`home_team_id.eq.${id},away_team_id.eq.${id}`)
+      .eq("status", "scheduled")
+      .order("kickoff_at", { ascending: true })
+      .limit(10),
+    supabase
+      .from("fixtures")
+      .select(
+        `id, kickoff_at, status, home_score, away_score,
+         competition:competitions(name, short_name),
+         home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+         away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url)`,
+      )
+      .or(`home_team_id.eq.${id},away_team_id.eq.${id}`)
+      .eq("status", "finished")
+      .order("kickoff_at", { ascending: false })
+      .limit(10),
+    profile
+      ? supabase
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("follower_profile_id", profile.id)
+          .eq("followed_type", "team")
+          .eq("followed_id", id)
+          .then(({ count }) => (count ?? 0) > 0)
+      : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 173: team watchlist — real save state,
+    // saves_select_own already scopes this to the caller's own row.
+    profile
+      ? supabase
+          .from("saves")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", profile.id)
+          .eq("target_type", "team")
+          .eq("target_id", id)
+          .then(({ count }) => (count ?? 0) > 0)
+      : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 60: squad sync writes entity_type 'player'
+    // (see syncTeamSquad in src/lib/football/sync-squads.ts).
+    getLastSyncedAt(["player"]),
+    // RECOMMENDATIONS.md item 162: goal-timing distribution. Deliberately
+    // 'goal' and 'penalty_goal' only, scoped to this team's own team_id —
+    // i.e. goals this team's players actually scored. 'own_goal' rows are
+    // left out entirely rather than guessed at: which side's team_id an
+    // own goal is recorded under is a provider convention this codebase
+    // doesn't rely on elsewhere (fantasy-scoring.ts only ever debits the
+    // scoring player, never credits a team), so it's excluded rather than
+    // risk crediting the wrong side a goal it didn't score.
+    supabase
+      .from("fixture_events")
+      .select("minute")
+      .eq("team_id", id)
+      .in("event_type", ["goal", "penalty_goal"]),
+    // RECOMMENDATIONS.md item 163: discipline table (cards), team + per-player.
+    // `player:players!fixture_events_player_id_fkey` disambiguates from
+    // fixture_events' second FK to players (related_player_id), same as
+    // Match Centre's own events query does for the same reason.
+    supabase
+      .from("fixture_events")
+      .select("event_type, player:players!fixture_events_player_id_fkey(id, full_name, known_as)")
+      .eq("team_id", id)
+      .in("event_type", ["yellow_card", "second_yellow_card", "red_card"]),
+    // Shared sample-size denominator for items 162 and 163's honesty labels.
+    supabase
+      .from("fixtures")
+      .select("id", { count: "exact", head: true })
+      .or(`home_team_id.eq.${id},away_team_id.eq.${id}`)
+      .eq("status", "finished"),
+    // RECOMMENDATIONS.md item 164: club transfer ledger, both directions.
+    supabase
+      .from("transfers")
+      .select(
+        `id, transfer_date, fee_text, transfer_type, from_team_id, to_team_id,
+         player:players(id, full_name, known_as),
+         from_team:teams!transfers_from_team_id_fkey(id, name, short_name, crest_url),
+         to_team:teams!transfers_to_team_id_fkey(id, name, short_name, crest_url)`,
+      )
+      .or(`from_team_id.eq.${id},to_team_id.eq.${id}`)
+      .order("transfer_date", { ascending: false }),
+    getLastSyncedAt(["transfer"]),
+  ]);
 
   if (!team) notFound();
 
@@ -195,6 +289,63 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
   const metaParts = [team.country, team.founded_year ? `Founded ${team.founded_year}` : null].filter(Boolean);
 
+  // RECOMMENDATIONS.md item 160: W/D/L strip from the same `recent` fixtures
+  // already fetched above for the "Recent results" list (limit 10, newest
+  // first) — zero new queries, just the most recent 5 of those 10.
+  const recentForm: FormResult[] = (recent ?? [])
+    .slice(0, 5)
+    .map((fixture): FormResult | null => {
+      if (fixture.home_score === null || fixture.away_score === null) return null;
+      const isHome = fixture.home_team?.id === team.id;
+      const ownScore = isHome ? fixture.home_score : fixture.away_score;
+      const oppScore = isHome ? fixture.away_score : fixture.home_score;
+      return resultFor(ownScore, oppScore);
+    })
+    .filter((result): result is FormResult => result !== null);
+
+  const finishedMatches = finishedMatchesCount ?? 0;
+  const matchSampleLabel = `Based on ${finishedMatches} finished match${finishedMatches === 1 ? "" : "es"} KIVO has synced for ${team.name}.`;
+
+  // RECOMMENDATIONS.md item 162: goal-timing distribution.
+  const goalsScored = goalEvents?.length ?? 0;
+  const goalsAfter70 = (goalEvents ?? []).filter((e) => e.minute >= 70).length;
+
+  // RECOMMENDATIONS.md item 163: discipline, team totals + per-player.
+  type DisciplineRow = { id: string; name: string; yellow: number; red: number };
+  const disciplineByPlayer = new Map<string, DisciplineRow>();
+  let teamYellowCards = 0;
+  let teamRedCards = 0;
+  for (const event of cardEvents ?? []) {
+    const isRed = event.event_type === "red_card" || event.event_type === "second_yellow_card";
+    if (isRed) teamRedCards += 1;
+    else teamYellowCards += 1;
+    if (!event.player) continue;
+    const row = disciplineByPlayer.get(event.player.id) ?? {
+      id: event.player.id,
+      name: event.player.known_as ?? event.player.full_name,
+      yellow: 0,
+      red: 0,
+    };
+    if (isRed) row.red += 1;
+    else row.yellow += 1;
+    disciplineByPlayer.set(event.player.id, row);
+  }
+  const disciplineRows = Array.from(disciplineByPlayer.values()).sort(
+    (a, b) => b.red - a.red || b.yellow - a.yellow,
+  );
+
+  // RECOMMENDATIONS.md item 164: club transfer ledger, both directions.
+  const transferRows = (transfersLedger ?? []).map((t) => ({
+    id: t.id,
+    playerId: t.player?.id ?? null,
+    playerName: t.player ? (t.player.known_as ?? t.player.full_name) : null,
+    direction: t.to_team_id === team.id ? ("in" as const) : ("out" as const),
+    counterpartTeam: t.to_team_id === team.id ? t.from_team : t.to_team,
+    transferDate: t.transfer_date,
+    feeText: t.fee_text,
+    transferType: t.transfer_type,
+  }));
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <TrackView type="team" id={team.id} name={team.name} imageUrl={team.crest_url} />
@@ -207,20 +358,24 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             <h1 className="truncate text-xl font-semibold text-foreground">{team.name}</h1>
             {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>}
           </FadeIn>
-          <FadeIn delay={0.1}>
+          <FadeIn delay={0.1} className="flex items-center gap-2">
+            <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={!!profile} />
             <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} signedIn={!!profile} />
           </FadeIn>
         </div>
         <FadeIn delay={0.15}>
-          {team.venue ? (
-            <div className="mt-4 flex items-start gap-2 text-xs text-foreground-muted">
+          {team.venue && team.venue_id ? (
+            <Link
+              href={`/venues/${team.venue_id}`}
+              className="mt-4 flex items-start gap-2 text-xs text-foreground-muted transition hover:text-kivo-cyan"
+            >
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
               <span>
                 {team.venue.name}
                 {team.venue.city ? `, ${team.venue.city}` : ""}
                 {team.venue.capacity ? ` · Capacity ${team.venue.capacity.toLocaleString()}` : ""}
               </span>
-            </div>
+            </Link>
           ) : (
             <div className="mt-4 flex items-center gap-2 text-xs text-foreground-subtle">
               <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
@@ -267,7 +422,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               ].map(([label, value]) => (
                 <div key={label as string} className="rounded-xl bg-white/5 px-2 py-2">
                   <div className="text-sm font-semibold text-foreground">{value}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-foreground-subtle">{label}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
                 </div>
               ))}
             </div>
@@ -283,7 +438,10 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           Manager
         </h2>
         {manager ? (
-          <div className="kivo-glass flex items-center gap-3 rounded-2xl p-4">
+          <Link
+            href={`/managers/${manager.id}`}
+            className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+          >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/5">
               <UserRound className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} />
             </div>
@@ -295,7 +453,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                   .join(" · ") || "-"}
               </p>
             </div>
-          </div>
+          </Link>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No manager on record yet.
@@ -375,10 +533,15 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       </FadeIn>
 
       <FadeIn delay={0.4} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-          Recent results
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Recent results
+          </h2>
+          {/* RECOMMENDATIONS.md item 160: at-a-glance form strip, derived
+              from these same fixtures rather than a new query. */}
+          {recentForm.length > 0 && <FormBadges form={recentForm} />}
+        </div>
         {recent && recent.length > 0 ? (
           <div className="flex flex-col gap-2">
             {recent.map((fixture) => (
@@ -388,6 +551,146 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No results synced yet.
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.45} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <Clock className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Goal timing
+        </h2>
+        {goalsScored > 0 ? (
+          <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold text-foreground">{goalsAfter70}</span>
+              <span className="text-sm text-foreground-muted">of {goalsScored} goals scored after the 70th minute</span>
+            </div>
+            <p className="text-xs text-foreground-subtle">{matchSampleLabel}</p>
+          </div>
+        ) : (
+          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
+            {finishedMatches > 0
+              ? `No goals recorded yet for this team. ${matchSampleLabel}`
+              : "No finished matches synced yet for this team."}
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.48} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <ShieldAlert className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Discipline
+        </h2>
+        {teamYellowCards + teamRedCards > 0 ? (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="kivo-glass rounded-xl px-2 py-3">
+                <div className="text-lg font-semibold text-foreground">{teamYellowCards}</div>
+                <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">Yellow cards</div>
+              </div>
+              <div className="kivo-glass rounded-xl px-2 py-3">
+                <div className="text-lg font-semibold text-foreground">{teamRedCards}</div>
+                <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">Red cards</div>
+              </div>
+            </div>
+            {disciplineRows.length > 0 && (
+              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+                {disciplineRows.map((row) => (
+                  <Link
+                    key={row.id}
+                    href={`/players/${row.id}`}
+                    className="flex items-center justify-between gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-white/5"
+                  >
+                    <span className="truncate text-sm text-foreground">{row.name}</span>
+                    <span className="flex shrink-0 items-center gap-3 text-xs font-semibold tabular-nums text-foreground-subtle">
+                      {row.yellow > 0 && <span>{row.yellow} yellow</span>}
+                      {row.red > 0 && <span>{row.red} red</span>}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-foreground-subtle">{matchSampleLabel}</p>
+          </div>
+        ) : (
+          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
+            {finishedMatches > 0
+              ? `No cards recorded yet for this team. ${matchSampleLabel}`
+              : "No finished matches synced yet for this team."}
+          </div>
+        )}
+      </FadeIn>
+
+      <FadeIn delay={0.5} className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Transfer activity
+          </h2>
+          <LastSyncedNote timestamp={transfersLastSyncedAt} />
+        </div>
+        {transferRows.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {transferRows.map((transfer) => (
+              <div
+                key={transfer.id}
+                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  {transfer.playerId && transfer.playerName ? (
+                    <Link
+                      href={`/players/${transfer.playerId}`}
+                      className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-kivo-cyan"
+                    >
+                      <UserRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                      <span className="truncate">{transfer.playerName}</span>
+                    </Link>
+                  ) : (
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground-subtle">
+                      <UserRound className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                      Unknown player
+                    </span>
+                  )}
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                      transfer.direction === "in"
+                        ? "border-live/30 bg-live/10 text-live"
+                        : "border-critical/30 bg-critical/10 text-critical"
+                    }`}
+                  >
+                    {transfer.direction === "in" ? "In" : "Out"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-foreground-muted">
+                  {transfer.direction === "in" ? "From" : "To"}
+                  {transfer.counterpartTeam ? (
+                    <Link
+                      href={`/teams/${transfer.counterpartTeam.id}`}
+                      className="flex min-w-0 items-center gap-2 text-foreground transition hover:text-kivo-cyan"
+                    >
+                      <TeamCrest crestUrl={transfer.counterpartTeam.crest_url} name={transfer.counterpartTeam.name} size={22} />
+                      <span className="truncate">{transfer.counterpartTeam.short_name ?? transfer.counterpartTeam.name}</span>
+                    </Link>
+                  ) : (
+                    <span className="text-foreground-subtle">Unknown club</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+                      {TRANSFER_TYPE_LABEL[transfer.transferType]}
+                    </span>
+                    <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transferDate, { month: "short" })}</span>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.feeText ?? "-"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
+            No transfer activity synced for this club yet.
           </div>
         )}
       </FadeIn>

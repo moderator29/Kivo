@@ -1,38 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
+import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { calculateAge, formatDate } from "@/lib/format";
-import type { Database } from "@/lib/supabase/types";
-
-type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
-type TransferType = Database["public"]["Enums"]["transfer_type"];
-
-// Same honesty rule as /transfers — API-Football's transfer data is real,
-// already-completed moves only, so labels stay plain, no rumour/confidence tiers.
-const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
-  transfer: "Transfer",
-  loan: "Loan",
-  free: "Free transfer",
-  end_of_loan: "End of loan",
-  unknown: "Fee undisclosed",
-};
-
-// A lineup row against a fixture in any of these statuses means the player has
-// actually taken the pitch — "scheduled" fixtures don't count as an appearance yet.
-const PLAYED_STATUSES = new Set(["live", "halftime", "finished"]);
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -55,7 +40,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, transfersLastSyncedAt] = await Promise.all([
+  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, isSaved, transfersLastSyncedAt] = await Promise.all([
     supabase
       .from("players")
       .select(
@@ -90,6 +75,17 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           .eq("followed_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 173: player watchlist — real save state,
+    // saves_select_own already scopes this to the caller's own row.
+    profile
+      ? supabase
+          .from("saves")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", profile.id)
+          .eq("target_type", "player")
+          .eq("target_id", id)
+          .then(({ count }) => (count ?? 0) > 0)
+      : Promise.resolve(false),
     // RECOMMENDATIONS.md item 60: transfer sync writes entity_type 'transfer'
     // (see syncPlayerTransfers in src/lib/football/sync-transfers.ts).
     getLastSyncedAt(["transfer"]),
@@ -97,16 +93,8 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
   if (!player) notFound();
 
-  const appearances = (lineupRows ?? []).filter((l) => l.fixture && PLAYED_STATUSES.has(l.fixture.status));
-  const hasMatchData = appearances.length > 0;
-  const starts = appearances.filter((l) => l.is_starting).length;
-
-  const countEvents = (types: FixtureEventType[]) =>
-    (eventRows ?? []).filter((e) => types.includes(e.event_type)).length;
-
-  const goals = countEvents(["goal", "penalty_goal"]);
-  const yellowCards = countEvents(["yellow_card"]);
-  const redCards = countEvents(["red_card", "second_yellow_card"]);
+  const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
+  const hasMatchData = stats.appearances > 0;
 
   const displayName = player.known_as ?? player.full_name;
   const showFullNameSubtitle = Boolean(player.known_as) && player.known_as !== player.full_name;
@@ -123,12 +111,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             <h1 className="truncate text-xl font-semibold text-foreground">{displayName}</h1>
             {showFullNameSubtitle && <p className="truncate text-xs text-foreground-subtle">{player.full_name}</p>}
             {player.position && (
-              <span className="mt-1 inline-block rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+              <span className="mt-1 inline-block rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                 {player.position}
               </span>
             )}
           </FadeIn>
-          <FadeIn delay={0.1}>
+          <FadeIn delay={0.1} className="flex items-center gap-2">
+            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={!!profile} />
             <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} signedIn={!!profile} />
           </FadeIn>
         </div>
@@ -144,6 +133,15 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               ? `${formatDate(player.date_of_birth)} (age ${calculateAge(player.date_of_birth)})`
               : "Date of birth not yet synced"}
           </div>
+        </FadeIn>
+        <FadeIn delay={0.18}>
+          <Link
+            href={`/players/compare?a=${player.id}`}
+            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          >
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            Compare with another player
+          </Link>
         </FadeIn>
       </div>
 
@@ -180,15 +178,15 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         {hasMatchData ? (
           <div className="grid grid-cols-3 gap-2 text-center sm:grid-cols-5">
             {[
-              ["Apps", appearances.length],
-              ["Starts", starts],
-              ["Goals", goals],
-              ["Yellow", yellowCards],
-              ["Red", redCards],
+              ["Apps", stats.appearances],
+              ["Starts", stats.starts],
+              ["Goals", stats.goals],
+              ["Yellow", stats.yellowCards],
+              ["Red", stats.redCards],
             ].map(([label, value]) => (
               <div key={label as string} className="kivo-glass rounded-xl px-2 py-3">
                 <div className="text-lg font-semibold text-foreground">{value}</div>
-                <div className="text-[10px] uppercase tracking-wide text-foreground-subtle">{label}</div>
+                <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
               </div>
             ))}
           </div>
@@ -247,7 +245,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                     </span>
                     <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transfer_date)}</span>

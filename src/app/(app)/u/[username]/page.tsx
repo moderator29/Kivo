@@ -6,6 +6,7 @@ import { CircleUserRound, Flame, Award } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
+import { FollowButton } from "@/components/ui/follow-button";
 import { timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 
@@ -76,6 +77,21 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   const isViewerOwnProfile = viewer?.id === profile.id;
   const displayName = profile.display_name || profile.username;
 
+  // RECOMMENDATIONS item 175: real follow state for this specific user
+  // target, feeding /social's Following tab. follows_select_own already
+  // restricts this to the viewer's own row, so there's nothing to leak by
+  // querying directly (no RPC needed, unlike profile identity above).
+  const { data: followRow } = viewer && !isViewerOwnProfile
+    ? await supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_profile_id", viewer.id)
+        .eq("followed_type", "user")
+        .eq("followed_id", profile.id)
+        .maybeSingle()
+    : { data: null };
+  const isFollowingUser = Boolean(followRow);
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass flex items-center gap-4 rounded-2xl p-5">
@@ -103,13 +119,15 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           <h1 className="truncate text-lg font-semibold text-foreground">{displayName}</h1>
           <span className="truncate text-sm text-foreground-subtle">@{profile.username}</span>
         </div>
-        {isViewerOwnProfile && (
+        {isViewerOwnProfile ? (
           <Link
             href="/profile"
             className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-white/5"
           >
             Edit profile
           </Link>
+        ) : (
+          <FollowButton targetType="user" targetId={profile.id} initialFollowing={isFollowingUser} signedIn={Boolean(viewer)} size="sm" />
         )}
       </FadeIn>
 
@@ -151,7 +169,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                   {badge.description && (
                     <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
                   )}
-                  <span className="text-[10px] text-foreground-subtle">{timeAgo(badge.awarded_at)}</span>
+                  <span className="text-[11px] text-foreground-subtle">{timeAgo(badge.awarded_at)}</span>
                 </div>
               </FadeIn>
             ))}

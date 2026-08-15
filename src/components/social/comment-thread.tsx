@@ -24,14 +24,14 @@ function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () =
         ) : (
           <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
         )}
-        <span className="text-[10px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
+        <span className="text-[11px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
       </div>
       <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>
       {onReply && (
         <button
           type="button"
           onClick={onReply}
-          className="w-fit text-[10px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
+          className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
         >
           Reply
         </button>
