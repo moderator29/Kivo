@@ -23,6 +23,10 @@ export type PostListItem = {
    * vote counts (via get_poll_results) for a poll post — a post "is" a poll
    * purely by having poll_options rows, no post_type column. */
   poll: PollSummary | null;
+  /** RECOMMENDATIONS item 173: whether the viewer has this post in `saves`.
+   * Always false for a signed-out viewer (saves_select_own has nothing to
+   * return them anyway). */
+  viewerSaved: boolean;
 };
 
 /**
@@ -88,7 +92,7 @@ export async function fetchPostsPage(
   // fabricated placeholder.
   const authorIds = [...new Set(pageRows.map((p) => p.author_profile_id))];
 
-  const [{ data: reactions }, { data: authors }, { data: comments }, { data: pollOptionRows }] = await Promise.all([
+  const [{ data: reactions }, { data: authors }, { data: comments }, { data: pollOptionRows }, { data: saveRows }] = await Promise.all([
     postIds.length
       ? supabase
           .from("reactions")
@@ -107,6 +111,12 @@ export async function fetchPostsPage(
     postIds.length
       ? supabase.from("poll_options").select("id, post_id, position, label").in("post_id", postIds).order("position", { ascending: true })
       : Promise.resolve({ data: [] }),
+    // RECOMMENDATIONS item 173: saves_select_own already scopes this to the
+    // viewer's own rows, so an explicit profile_id filter is defence in depth
+    // (and lets this skip the query entirely for a signed-out viewer).
+    postIds.length && viewerProfileId
+      ? supabase.from("saves").select("target_id").eq("profile_id", viewerProfileId).eq("target_type", "post").in("target_id", postIds)
+      : Promise.resolve({ data: [] as { target_id: string }[] }),
   ]);
 
   const authorById = new Map((authors ?? []).map((a) => [a.id, a]));
@@ -147,6 +157,7 @@ export async function fetchPostsPage(
   ]);
   const pollResultsByPost = new Map(pollResultsEntries);
   const viewerVoteByPost = new Map((viewerVoteRows.data ?? []).map((v) => [v.post_id, v.option_id]));
+  const savedPostIds = new Set((saveRows ?? []).map((s) => s.target_id));
 
   return {
     error: null,
@@ -179,6 +190,7 @@ export async function fetchPostsPage(
         viewerReaction: reactionSummary.viewerReaction,
         commentCount: commentCountByPost.get(post.id) ?? 0,
         poll,
+        viewerSaved: savedPostIds.has(post.id),
       };
     }),
   };
