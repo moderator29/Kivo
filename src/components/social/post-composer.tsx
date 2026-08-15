@@ -92,30 +92,35 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
       {/* RECOMMENDATIONS item 172: "a post type ... wire into the post
           composer (a 'create a poll' mode)". Two plain toggle buttons, not a
           full tablist — this switches what one form submits, not between two
-          independently navigable views. */}
-      <div role="group" aria-label="Post type" className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => switchMode("post")}
-          aria-pressed={mode === "post"}
-          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
-            mode === "post" ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
-          }`}
-        >
-          Post
-        </button>
-        <button
-          type="button"
-          onClick={() => switchMode("poll")}
-          aria-pressed={mode === "poll"}
-          className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
-            mode === "poll" ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
-          }`}
-        >
-          <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Poll
-        </button>
-      </div>
+          independently navigable views. Hidden inside a fixture's Match Room
+          (fixtureId set): MatchRoomTab's post rendering doesn't carry poll
+          data through, so offering poll mode there would create a poll with
+          no vote UI ever shown against it — general feed only, for now. */}
+      {!fixtureId && (
+        <div role="group" aria-label="Post type" className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => switchMode("post")}
+            aria-pressed={mode === "post"}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
+              mode === "post" ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
+            }`}
+          >
+            Post
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode("poll")}
+            aria-pressed={mode === "poll"}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
+              mode === "poll" ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
+            }`}
+          >
+            <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Poll
+          </button>
+        </div>
+      )}
 
       <textarea
         name="body"
