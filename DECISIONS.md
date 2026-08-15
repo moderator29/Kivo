@@ -58,3 +58,20 @@ Log of decisions with real consequences (irreversible, costly, or scope-defining
 - **No self-service export.** A user who deletes their account cannot recover their post history, predictions, fantasy history, or XP afterward — deletion is immediate and irreversible. There is no "download your data first" step in the current account-deletion flow (`src/app/(app)/settings/actions.ts` `deleteAccount`).
 - **No grace period.** Deletion is not soft/delayed; there is no undo window.
 - **Future work, if this needs to change**: a soft-delete/tombstone approach (e.g. anonymizing `profiles` in place and leaving a placeholder for authored content instead of cascading the delete) is a real behavior change with product and legal implications beyond a cleanup pass, and should be scoped and decided on its own, not folded into an unrelated change.
+
+---
+
+### 2026-08-15 — Premium stats readiness: market value, contract expiry, heat maps (schema + seam only, no vendor connected)
+
+**Decision**: Build the nullable-schema + gated-UI + provider-seam plumbing for three data categories API-Football's free tier doesn't supply — player market value, contract expiry, and per-player per-match pitch heat maps — without connecting a real vendor or fabricating any value. The founder is now willing to pay for a real data vendor for these three fields (a change from the $0-budget MVP posture in the API-Football decision above) but does not yet have API keys for one.
+
+**What was built**:
+- `supabase/migrations/0036_premium_stats_readiness.sql` — nullable `players.market_value_eur`, `players.market_value_updated_at`, `players.contract_expires_at`; nullable `lineups.pitch_heatmap` (jsonb touch-count zone grid, documented shape in the migration). Every column is null on every existing row and stays that way until a real vendor writes to it.
+- `src/lib/football/premium-stats.ts` — `isPremiumStatsConfigured()` (mirrors `isAiConfigured()` in `src/lib/ai/client.ts`, gated on `SPORTMONKS_API_TOKEN`) plus a typed, deliberately unimplemented `PremiumStatsProvider` interface/stub. Not wired into `getFootballDataProvider()` or the `FootballDataProvider` interface — those are shared by every provider implementation (including the mock) and this seam is speculative until a vendor is actually chosen.
+- Gated display on the player profile page (`src/app/(app)/players/[id]/page.tsx`): a "Market" section that only renders when `market_value_eur` or `contract_expires_at` is non-null. Since both are null for every player today, nothing new is visible in the running app. No heat map viewing surface was built in this pass — the match lineup/pitch UI was mid-flight in a concurrent change at the time, and the brief marked a heat map viewer as optional; the schema and provider seam are ready for one whenever it's built.
+
+**Vendor research findings** (condensed; see git history / the original research pass for detail):
+- **Market value & contract expiry**: no official Transfermarkt API exists; unofficial scrapers are legally gray and conflict with this project's own no-scraping policy (migration 0007, RECOMMENDATIONS.md item 179) — not pursued. Sportmonks (from €29/mo) exposes real `transfers`/`pendingTransfers` player data, which plausibly covers contract expiry, but whether it exposes market value at all is **unconfirmed** in their public docs.
+- **Heat maps**: true per-touch pitch data is an Opta/StatsBomb/Wyscout-tier product; Opta and StatsBomb are enterprise-only with no public pricing. Wyscout (via Hudl) starts around $325/year and is the most accessible real option found, though exact heatmap-endpoint availability at that tier is unconfirmed. Sportmonks offers ball-position/event data that could approximate activity zones but has no dedicated heatmap endpoint — any such visualization would be derived/approximate, not authoritative, and must be labelled as such if ever built.
+
+**Status**: No live integration exists. `isPremiumStatsConfigured()` returns `false` and `getPremiumStatsProvider()` throws until `SPORTMONKS_API_TOKEN` (or an equivalent vendor credential) is actually set — pending the founder buying a real API key.

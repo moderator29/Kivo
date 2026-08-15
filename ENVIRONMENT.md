@@ -67,7 +67,7 @@ These are declared in `.env.example` for a feature that's designed but not built
 | Variable | Purpose once built | Status |
 |---|---|---|
 | `NEXT_PUBLIC_APP_NAME` | Would override the "KIVO" display name in metadata/UI | Not implemented — "KIVO" is hardcoded instead; setting this has no effect |
-| `SPORTMONKS_API_TOKEN` | Reserved for a future second/primary football provider once budget allows | Not implemented — the `FootballDataProvider` interface is ready for this adapter, but nothing reads this variable yet |
+| `SPORTMONKS_API_TOKEN` | Reserved for a future premium provider covering player market value, contract expiry, and per-player match heat maps — the three fields API-Football's free tier doesn't report | Not implemented — `src/lib/football/premium-stats.ts`'s `isPremiumStatsConfigured()` is the function that will read this once a Sportmonks account exists; see that file and `DECISIONS.md` for the readiness work already done (schema + gated UI) and what's still unconfirmed about Sportmonks' actual field coverage |
 | `RESEND_API_KEY` | Transactional email (not auth — Clerk handles verification/reset emails itself) | Not wired — [resend.com](https://resend.com) |
 | `RESEND_FROM_EMAIL` | Sending address for transactional email | Not wired — requires a verified sending domain before production |
 | `CRON_SECRET` | Would authorize scheduled job endpoints if/when background sync jobs exist | Not used — all football syncs today are admin-triggered on demand, not cron |

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, Wallet, FileClock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -17,7 +17,7 @@ import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
-import { calculateAge, formatDate } from "@/lib/format";
+import { calculateAge, formatDate, formatMarketValueEur } from "@/lib/format";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -45,6 +45,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       .from("players")
       .select(
         `id, full_name, known_as, date_of_birth, nationality, position, photo_url, current_team_id,
+         market_value_eur, market_value_updated_at, contract_expires_at,
          current_team:teams(id, name, short_name, crest_url)`,
       )
       .eq("id", id)
@@ -169,6 +170,40 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           </div>
         )}
       </FadeIn>
+
+      {(player.market_value_eur != null || player.contract_expires_at != null) && (
+        // Real vendor data only (supabase/migrations/0036_premium_stats_readiness.sql)
+        // — this whole section is invisible until a premium provider is connected
+        // and has actually written a value for this player, since both columns are
+        // null for every player today. No placeholder card renders in the meantime.
+        <FadeIn delay={0.22} className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Wallet className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Market
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {player.market_value_eur != null && (
+              <div className="kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted">
+                <Wallet className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+                <div>
+                  <div className="text-foreground">{formatMarketValueEur(player.market_value_eur)}</div>
+                  {player.market_value_updated_at && (
+                    <div className="text-[11px] text-foreground-subtle">
+                      Updated {formatDate(player.market_value_updated_at)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {player.contract_expires_at != null && (
+              <div className="kivo-glass flex items-center gap-2 rounded-2xl p-4 text-sm text-foreground-muted">
+                <FileClock className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+                <div className="text-foreground">Contract until {formatDate(player.contract_expires_at)}</div>
+              </div>
+            )}
+          </div>
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">

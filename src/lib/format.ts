@@ -48,3 +48,12 @@ export function formatDate(value: string, options: { month?: "numeric" | "2-digi
     day: "numeric",
   });
 }
+
+/** Compact euro amount ("€45.0M", "€850K") for a real vendor-reported market
+ * value (players.market_value_eur, supabase/migrations/0036) — never called
+ * on an estimated/derived figure. Whole euros in, compact label out. */
+export function formatMarketValueEur(valueEur: number): string {
+  if (valueEur >= 1_000_000) return `€${(valueEur / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (valueEur >= 1_000) return `€${Math.round(valueEur / 1_000)}K`;
+  return `€${valueEur}`;
+}
