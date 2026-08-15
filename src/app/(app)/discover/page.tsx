@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Compass } from "lucide-react";
+import Link from "next/link";
+import { Compass, ShieldCheck } from "lucide-react";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { FadeIn } from "@/components/ui/fade-in";
 import { DiscoverCard } from "@/components/discover/discover-card";
@@ -94,6 +95,21 @@ export default async function DiscoverPage() {
           />
         ))}
       </div>
+
+      {/* RECOMMENDATIONS.md item 176: a link to the full transparency page,
+          not folded into an admin-only surface. */}
+      <FadeIn delay={0.1 + staggerDelay(surfaces.length, 0.06)}>
+        <Link
+          href="/transparency"
+          className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        >
+          <ShieldCheck className="h-5 w-5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+          <span className="flex flex-col">
+            <span className="text-sm font-medium text-foreground">What KIVO knows</span>
+            <span className="text-xs text-foreground-muted">See exactly what&apos;s synced right now, and how fresh it is.</span>
+          </span>
+        </Link>
+      </FadeIn>
     </div>
   );
 }

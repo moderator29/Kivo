@@ -44,3 +44,42 @@ export async function getLastSyncedAt(entityTypes: EntityType[]): Promise<string
   }
   return data?.last_synced_at ?? null;
 }
+
+/**
+ * RECOMMENDATIONS.md item 176: "a 'what KIVO knows' transparency page" —
+ * on a platform whose core promise is never fabricating data, showing users
+ * exactly what is and is not loaded is a differentiating feature, not an
+ * admin tool. Row counts are read from each entity's own public-select RLS
+ * policy (see migration 0001's "Football reference data: readable by
+ * everyone" block) directly in the page component; this helper only carries
+ * the two admin-restricted numbers a public page still needs — overall last
+ * synced timestamp and current provider quota — through the same
+ * service-role-but-narrow pattern getLastSyncedAt already established above.
+ * Only a timestamp and an integer ever leave sync_runs here, nothing else on
+ * the row (no error text, no provider name, no run id).
+ */
+export async function getTransparencyFreshness(): Promise<{ lastSyncedAt: string | null; quotaRemaining: number | null }> {
+  const service = createServiceRoleSupabaseClient();
+  const [{ data: lastRun }, { data: quotaRun }] = await Promise.all([
+    service
+      .from("sync_runs")
+      .select("last_synced_at")
+      .in("status", ["success", "partial"])
+      .not("last_synced_at", "is", null)
+      .order("last_synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    service
+      .from("sync_runs")
+      .select("provider_quota_remaining")
+      .not("provider_quota_remaining", "is", null)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return {
+    lastSyncedAt: lastRun?.last_synced_at ?? null,
+    quotaRemaining: quotaRun?.provider_quota_remaining ?? null,
+  };
+}

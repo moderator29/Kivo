@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check } from "lucide-react";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw } from "lucide-react";
 import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
 import { cn } from "@/lib/utils";
 import { formatClockTime } from "@/lib/format";
@@ -97,26 +97,11 @@ export function AiChat({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [input]);
 
-  async function send(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || pending) return;
-
-    if (!signedIn) {
-      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
-      return;
-    }
-
-    setError(null);
-    setInput("");
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setPending(true);
-
+  // Shared by send() and regenerate() below — everything from the fetch to
+  // the conversations-list bookkeeping is identical between "send a new
+  // message" and "redo the last reply"; only how the request body is built
+  // and what gets prepended to `messages` beforehand differs.
+  async function streamAssistantReply(requestBody: { conversationId?: string; message?: string; regenerate?: boolean }, titleFallback: string) {
     const isNewConversation = !activeConversationId;
     const assistantMessageId = crypto.randomUUID();
     let assistantText = "";
@@ -138,7 +123,7 @@ export function AiChat({
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeConversationId, message: trimmed }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!res.ok || !res.body) {
@@ -198,10 +183,10 @@ export function AiChat({
         const finalId = returnedId;
         setConversations((prev) => {
           if (isNewConversation) {
-            return [{ id: finalId, title: trimmed.slice(0, 80), updated_at: now }, ...prev];
+            return [{ id: finalId, title: titleFallback.slice(0, 80), updated_at: now }, ...prev];
           }
           return [
-            { ...(prev.find((c) => c.id === finalId) ?? { id: finalId, title: trimmed.slice(0, 80) }), updated_at: now },
+            { ...(prev.find((c) => c.id === finalId) ?? { id: finalId, title: titleFallback.slice(0, 80) }), updated_at: now },
             ...prev.filter((c) => c.id !== finalId),
           ];
         });
@@ -211,6 +196,51 @@ export function AiChat({
     } finally {
       setPending(false);
     }
+  }
+
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || pending) return;
+
+    if (!signedIn) {
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
+      return;
+    }
+
+    setError(null);
+    setInput("");
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setPending(true);
+
+    await streamAssistantReply({ conversationId: activeConversationId, message: trimmed }, trimmed);
+  }
+
+  // RECOMMENDATIONS.md item 194: regenerate the last assistant reply without
+  // re-asking the question. Drops the stale reply from local state and asks
+  // the server to redo it against the same conversation history — the
+  // server deletes the corresponding row and reuses the last real user
+  // message rather than inserting a duplicate (see route.ts's
+  // `isRegenerate` handling).
+  async function regenerate() {
+    if (pending || !activeConversationId) return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== "assistant") return;
+
+    setError(null);
+    setMessages((prev) => prev.slice(0, -1));
+    setPending(true);
+
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+    await streamAssistantReply(
+      { conversationId: activeConversationId, regenerate: true },
+      lastUserMessage?.content ?? "Conversation",
+    );
   }
 
   async function handleCopy(id: string, content: string) {
@@ -404,7 +434,7 @@ export function AiChat({
           </>
         )}
 
-        {messages.map((m) => (
+        {messages.map((m, index) => (
           <motion.div
             key={m.id}
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -435,6 +465,22 @@ export function AiChat({
                     <Copy className="h-3 w-3" strokeWidth={1.75} />
                   )}
                 </button>
+                {/* Item 194: regenerate only ever applies to the single most
+                    recent reply — redoing an older one would leave the
+                    conversation's later turns grounded in an answer that no
+                    longer exists. */}
+                {index === messages.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => regenerate()}
+                    disabled={pending}
+                    aria-label="Regenerate response"
+                    title="Regenerate response"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40"
+                  >
+                    <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
+                  </button>
+                )}
                 {m.createdAt && <span className="text-[11px]">{formatClockTime(m.createdAt)}</span>}
               </div>
             )}

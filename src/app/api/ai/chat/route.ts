@@ -74,15 +74,21 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { conversationId?: string; message?: string };
+  let body: { conversationId?: string; message?: string; regenerate?: boolean };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  // RECOMMENDATIONS.md item 194: "regenerate" re-runs the model against the
+  // same existing history instead of appending a new user turn. It never
+  // accepts free-text `message` — only an existing conversationId owned by
+  // this profile, which must already have a prior assistant reply to redo.
+  const isRegenerate = body.regenerate === true;
+
   const message = (body.message ?? "").trim();
-  if (!message || message.length > MAX_MESSAGE_LENGTH) {
+  if (!isRegenerate && (!message || message.length > MAX_MESSAGE_LENGTH)) {
     return NextResponse.json({ error: `Message must be 1-${MAX_MESSAGE_LENGTH} characters.` }, { status: 400 });
   }
 
@@ -99,6 +105,10 @@ export async function POST(req: Request) {
     if (!owned) conversationId = undefined;
   }
 
+  if (isRegenerate && !conversationId) {
+    return NextResponse.json({ error: "No conversation to regenerate." }, { status: 400 });
+  }
+
   if (!conversationId) {
     const { data: created, error } = await supabase
       .from("ai_conversations")
@@ -110,6 +120,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Couldn't start a conversation." }, { status: 500 });
     }
     conversationId = created.id;
+  }
+
+  if (isRegenerate) {
+    // Delete only the most recent assistant reply so regenerating doesn't
+    // leave two answers stacked for the same user turn — the last user
+    // message stays in place and gets reused as-is via the history fetch
+    // below.
+    const { data: lastAssistant } = await supabase
+      .from("ai_messages")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastAssistant) {
+      await supabase.from("ai_messages").delete().eq("id", lastAssistant.id);
+    }
   }
 
   // Fetch the most recent MAX_HISTORY_MESSAGES (newest first via the
@@ -126,11 +154,13 @@ export async function POST(req: Request) {
 
   const history = recentHistory ? [...recentHistory].reverse() : recentHistory;
 
-  const { error: insertUserError } = await supabase
-    .from("ai_messages")
-    .insert({ conversation_id: conversationId, role: "user", content: message });
-  if (insertUserError) {
-    console.error("Failed to persist user message", insertUserError);
+  if (!isRegenerate) {
+    const { error: insertUserError } = await supabase
+      .from("ai_messages")
+      .insert({ conversation_id: conversationId, role: "user", content: message });
+    if (insertUserError) {
+      console.error("Failed to persist user message", insertUserError);
+    }
   }
 
   const grounding = await buildGroundingContext(profile);
@@ -173,7 +203,10 @@ export async function POST(req: Request) {
             ...(history ?? [])
               .filter((m) => m.role === "user" || m.role === "assistant")
               .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-            { role: "user" as const, content: message },
+            // Regenerate reuses the last user message already present in
+            // `history` above (only the trailing assistant reply was
+            // deleted) — appending it again here would double it up.
+            ...(isRegenerate ? [] : [{ role: "user" as const, content: message }]),
           ],
         });
 
