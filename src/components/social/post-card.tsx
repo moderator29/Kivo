@@ -9,6 +9,7 @@ import { reportContent } from "@/app/(app)/social/report-actions";
 import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
 import { ReactionPicker } from "@/components/social/reaction-picker";
+import { SaveButton } from "@/components/ui/save-button";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
@@ -203,6 +204,10 @@ interface PostCardProps {
    * type-check — see post-composer.tsx's comment on why polls are hidden
    * there. */
   poll?: PollSummary | null;
+  /** RECOMMENDATIONS item 173: defaults false so Match Room's call site
+   * (which doesn't fetch save state) still type-checks as "not saved"
+   * rather than requiring a change there. */
+  viewerSaved?: boolean;
 }
 
 export function PostCard({
@@ -217,6 +222,7 @@ export function PostCard({
   signedIn,
   index = 0,
   poll = null,
+  viewerSaved = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -303,7 +309,10 @@ export function PostCard({
       <div className="flex items-center justify-between gap-2">
         <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />
 
-        <div ref={reportMenuRef} className="relative">
+        <div className="flex items-center gap-1">
+          <SaveButton targetType="post" targetId={id} initialSaved={viewerSaved} signedIn={signedIn} />
+
+          <div ref={reportMenuRef} className="relative">
           <motion.button
             type="button"
             onClick={handleReportClick}
@@ -369,6 +378,7 @@ export function PostCard({
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
         </div>
       </div>
 
