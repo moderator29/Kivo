@@ -240,6 +240,48 @@ export type Database = {
         }
         Relationships: []
       }
+      fan_ratings: {
+        Row: {
+          created_at: string
+          fixture_id: string
+          id: string
+          profile_id: string
+          rating: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fixture_id: string
+          id?: string
+          profile_id: string
+          rating: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fixture_id?: string
+          id?: string
+          profile_id?: string
+          rating?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fan_ratings_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fan_ratings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fantasy_gameweeks: {
         Row: {
           created_at: string
@@ -1113,6 +1155,84 @@ export type Database = {
           },
         ]
       }
+      poll_options: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          position: number
+          post_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          position: number
+          post_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          position?: number
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_options_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll_votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_id: string
+          post_id: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_id: string
+          post_id: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_id?: string
+          post_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "poll_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_votes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_votes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_profile_id: string
@@ -1399,6 +1519,38 @@ export type Database = {
           {
             foreignKeyName: "reports_resolved_by_profile_id_fkey"
             columns: ["resolved_by_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saves: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["save_target_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["save_target_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          target_id?: string
+          target_type?: Database["public"]["Enums"]["save_target_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saves_profile_id_fkey"
+            columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1765,6 +1917,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_fan_rating_summary: {
+        Args: { p_fixture_id: string }
+        Returns: {
+          avg_rating: number
+          rating_count: number
+        }[]
+      }
       get_fantasy_league_leaderboard: {
         Args: { p_team_id: string }
         Returns: {
@@ -1785,6 +1944,21 @@ export type Database = {
           max_teams: number
           season_id: string
           team_count: number
+        }[]
+      }
+      get_poll_results: {
+        Args: { p_post_id: string }
+        Returns: {
+          option_id: string
+          vote_count: number
+        }[]
+      }
+      get_prediction_consensus: {
+        Args: { p_fixture_ids: string[] }
+        Returns: {
+          fixture_id: string
+          pick_count: number
+          predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
         }[]
       }
       get_predictions_leaderboard: {
@@ -1951,6 +2125,7 @@ export type Database = {
       reaction_target_type: "post" | "comment"
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
+      save_target_type: "post" | "team" | "player"
       sync_status: "running" | "success" | "partial" | "failed"
       transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
@@ -2132,6 +2307,7 @@ export const Constants = {
       reaction_target_type: ["post", "comment"],
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
       report_status: ["pending", "reviewing", "actioned", "dismissed"],
+      save_target_type: ["post", "team", "player"],
       sync_status: ["running", "success", "partial", "failed"],
       transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [
