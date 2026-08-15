@@ -10,6 +10,7 @@ export const STATUS_LABEL: Record<FixtureStatus, string> = {
   postponed: "Postponed",
   cancelled: "Cancelled",
   abandoned: "Abandoned",
+  unknown: "Unknown",
 };
 
 export function isLiveStatus(status: FixtureStatus): boolean {
@@ -31,11 +32,19 @@ export function formatKickoff(kickoffAt: string, options: { includeWeekday?: boo
   });
 }
 
+/**
+ * `minuteElapsed` (fixtures.minute_elapsed, RECOMMENDATIONS.md item 57) only
+ * ever overrides the label while the match is actually live — halftime,
+ * finished, etc. keep their own fixed label since the provider doesn't keep
+ * incrementing the clock once play has stopped, and a stale last-known
+ * minute would be misleading rather than informative there.
+ */
 export function statusBadgeText(
   status: FixtureStatus,
   kickoffAt: string,
-  options: { includeWeekday?: boolean } = {},
+  options: { includeWeekday?: boolean; minuteElapsed?: number | null } = {},
 ): string {
   if (status === "scheduled") return formatKickoff(kickoffAt, options);
+  if (status === "live" && options.minuteElapsed != null) return `${options.minuteElapsed}'`;
   return STATUS_LABEL[status];
 }

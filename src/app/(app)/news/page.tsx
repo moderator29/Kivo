@@ -1,7 +1,7 @@
 import { ComingSoon } from "@/components/ui/coming-soon";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
 
-const item = NAV_ITEMS.find((i) => i.id === "news")!;
+const item = getNavItem("news");
 
 export default function NewsPage() {
   return (

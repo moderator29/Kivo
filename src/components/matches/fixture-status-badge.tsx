@@ -15,11 +15,17 @@ export function FixtureStatusBadge({
   kickoffAt,
   includeWeekday = false,
   showLiveDot = true,
+  minuteElapsed = null,
 }: {
   status: FixtureStatus;
   kickoffAt: string;
   includeWeekday?: boolean;
   showLiveDot?: boolean;
+  /** fixtures.minute_elapsed (RECOMMENDATIONS.md item 57) — when the fixture
+   * is live and this is set, shows "67'" instead of the generic "Live" label.
+   * Omit (or pass null) anywhere the caller hasn't selected the column yet;
+   * every other status ignores this and keeps its own fixed label. */
+  minuteElapsed?: number | null;
 }) {
   const live = isLiveStatus(status);
   return (
@@ -38,7 +44,7 @@ export function FixtureStatusBadge({
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
         </span>
       )}
-      {statusBadgeText(status, kickoffAt, { includeWeekday })}
+      {statusBadgeText(status, kickoffAt, { includeWeekday, minuteElapsed })}
     </span>
   );
 }

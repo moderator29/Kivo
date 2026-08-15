@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { positionGroup, type PositionGroup } from "@/app/(app)/fantasy/fantasy-rules";
+import { escapeLikePattern } from "@/lib/text";
 
 export type PlayerSearchResult = {
   id: string;
@@ -9,6 +10,7 @@ export type PlayerSearchResult = {
   position: string | null;
   nationality: string | null;
   teamName: string | null;
+  photoUrl: string | null;
 };
 
 const RESULTS_LIMIT = 100;
@@ -47,11 +49,11 @@ export async function searchPlayers(
 
   let request = supabase
     .from("players")
-    .select("id, full_name, known_as, position, nationality, current_team_id, team:teams(name, short_name)")
+    .select("id, full_name, known_as, position, nationality, photo_url, current_team_id, team:teams(name, short_name)")
     .order("full_name", { ascending: true });
 
   const trimmed = query.trim();
-  if (trimmed) request = request.ilike("full_name", `%${trimmed}%`);
+  if (trimmed) request = request.ilike("full_name", `%${escapeLikePattern(trimmed)}%`);
   if (teamId !== "All") request = request.eq("current_team_id", teamId);
   if (position !== "All") request = request.or(POSITION_ILIKE_FILTERS[position]);
 
@@ -74,6 +76,7 @@ export async function searchPlayers(
       position: p.position,
       nationality: p.nationality,
       teamName: p.team?.short_name ?? p.team?.name ?? null,
+      photoUrl: p.photo_url,
     })),
   };
 }

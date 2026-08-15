@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapEventType, mapStatus, mapTransferType } from "./normalizers";
+import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
 
 describe("mapStatus", () => {
   it.each([
@@ -130,5 +130,71 @@ describe("mapTransferType", () => {
 
   it("returns unknown for free text that matches no known bucket", () => {
     expect(mapTransferType("Undisclosed")).toBe("unknown");
+  });
+});
+
+describe("mapFixtureStatistics", () => {
+  it("maps a full, real-shaped statistics array onto every field", () => {
+    expect(
+      mapFixtureStatistics([
+        { type: "Shots on Goal", value: 6 },
+        { type: "Shots off Goal", value: 4 },
+        { type: "Total Shots", value: 13 },
+        { type: "Blocked Shots", value: 3 },
+        { type: "Shots insidebox", value: 8 },
+        { type: "Shots outsidebox", value: 5 },
+        { type: "Fouls", value: 11 },
+        { type: "Corner Kicks", value: 6 },
+        { type: "Offsides", value: 2 },
+        { type: "Ball Possession", value: "56%" },
+        { type: "Yellow Cards", value: 3 },
+        { type: "Red Cards", value: null },
+        { type: "Goalkeeper Saves", value: 2 },
+        { type: "Total passes", value: 512 },
+        { type: "Passes accurate", value: 431 },
+        { type: "Passes %", value: "84%" },
+        { type: "expected_goals", value: "1.87" },
+      ]),
+    ).toEqual({
+      shotsTotal: 13,
+      shotsOnTarget: 6,
+      shotsOffTarget: 4,
+      shotsBlocked: 3,
+      shotsInsideBox: 8,
+      shotsOutsideBox: 5,
+      fouls: 11,
+      corners: 6,
+      offsides: 2,
+      possessionPct: 56,
+      yellowCards: 3,
+      redCards: null,
+      saves: 2,
+      passesTotal: 512,
+      passesAccurate: 431,
+      passesPct: 84,
+      expectedGoals: 1.87,
+    });
+  });
+
+  it("is case-insensitive on the type label", () => {
+    expect(mapFixtureStatistics([{ type: "BALL POSSESSION", value: "40%" }]).possessionPct).toBe(40);
+  });
+
+  it("returns null for every field when given an empty array", () => {
+    const result = mapFixtureStatistics([]);
+    expect(Object.values(result).every((v) => v === null)).toBe(true);
+  });
+
+  it("drops a type it doesn't recognise instead of guessing", () => {
+    const result = mapFixtureStatistics([{ type: "Some New Stat API-Football Adds Later", value: 99 }]);
+    expect(Object.values(result).every((v) => v === null)).toBe(true);
+  });
+
+  it("treats an empty string value as null, not zero", () => {
+    expect(mapFixtureStatistics([{ type: "Fouls", value: "" }]).fouls).toBeNull();
+  });
+
+  it("treats non-numeric text as null", () => {
+    expect(mapFixtureStatistics([{ type: "Fouls", value: "N/A" }]).fouls).toBeNull();
   });
 });

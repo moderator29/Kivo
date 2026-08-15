@@ -3,54 +3,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
+import { createMapping, findMappedId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedManager, NormalizedPlayer } from "./types";
 
 type ServiceClient = SupabaseClient<Database>;
-type EntityType = Database["public"]["Enums"]["provider_entity_type"];
-
-// Deliberately duplicated from sync.ts rather than imported/exported from it — see
-// AGENTS.md/the task brief for why sync.ts stays untouched: these two small helpers
-// (find/create a provider_mappings row) are the only pieces this file needs from it.
-async function findMappedId(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("kivo_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .eq("provider_entity_id", providerEntityId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.kivo_entity_id ?? null;
-}
-
-async function createMapping(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-  kivoEntityId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("provider_mappings")
-    .insert({ provider, entity_type: entityType, provider_entity_id: providerEntityId, kivo_entity_id: kivoEntityId });
-  // 23505 = another concurrent sync already created this mapping — fine, it points
-  // at the same kivo entity either way.
-  if (error && error.code !== "23505") throw error;
-}
 
 /**
  * Upserts a player by provider mapping. On an update, only fields the provider
  * actually supplied a non-null value for are touched — the free-tier squads
  * endpoint never returns dateOfBirth/nationality (see getSquad() in
  * providers/api-football.ts), and re-syncing must never clobber richer data a
- * future/paid source (or an admin) may have filled in with nulls.
+ * future/paid source (or an admin) may have filled in with nulls. photoUrl
+ * follows the same never-clobber-with-null rule (RECOMMENDATIONS.md item 56)
+ * even though the free tier *does* return it on every call — a provider
+ * response that briefly omits it for one player should never blank out a
+ * photo already on file.
  */
 async function upsertPlayer(
   supabase: ServiceClient,
@@ -69,6 +37,7 @@ async function upsertPlayer(
     if (player.dateOfBirth !== null) update.date_of_birth = player.dateOfBirth;
     if (player.nationality !== null) update.nationality = player.nationality;
     if (player.position !== null) update.position = player.position;
+    if (player.photoUrl !== null) update.photo_url = player.photoUrl;
 
     const { error } = await supabase.from("players").update(update).eq("id", existing);
     if (error) throw error;
@@ -83,6 +52,7 @@ async function upsertPlayer(
       date_of_birth: player.dateOfBirth,
       nationality: player.nationality,
       position: player.position,
+      photo_url: player.photoUrl,
       current_team_id: teamId,
     })
     .select("id")
@@ -141,7 +111,7 @@ async function upsertManager(
  */
 export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = getFootballDataProvider();
+  const provider = await getFootballDataProvider();
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -166,6 +136,8 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
         finished_at: new Date().toISOString(),
         records_processed: 0,
         error_message: message,
+        // RECOMMENDATIONS.md item 53: real quota data even on a hard failure.
+        provider_quota_remaining: provider.getQuotaRemaining(),
       })
       .eq("id", syncRun.id);
     return { status: "failed", recordsProcessed: 0, error: message };
@@ -235,6 +207,9 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
       last_synced_at: finishedAt,
       records_processed: processed,
       error_message: errorMessage,
+      // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
+      // not an estimate — see ApiFootballProvider.getQuotaRemaining().
+      provider_quota_remaining: provider.getQuotaRemaining(),
     })
     .eq("id", syncRun.id);
 

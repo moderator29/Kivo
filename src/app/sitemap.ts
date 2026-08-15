@@ -2,8 +2,9 @@ import type { MetadataRoute } from "next";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
-// Same env var convention as the root layout's metadataBase (src/app/layout.tsx).
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+// `||`, not `??` — see the root layout's metadataBase (src/app/layout.tsx)
+// for why: an unset-but-declared env var can be "" rather than undefined.
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 type ChangeFrequency = MetadataRoute.Sitemap[number]["changeFrequency"];
 
@@ -40,24 +41,31 @@ const COMPETITION_LIMIT = 1000;
  * list page already reads unauthenticated), so a plain anon-key client is
  * both correct here and simpler than routing through Clerk.
  */
+// Returns null instead of throwing when the env vars aren't set yet — this
+// runs at build time (sitemap.xml is statically generated), so a missing var
+// must degrade to "skip the DB-derived entries," never fail the whole build.
 function createAnonSupabaseClient() {
-  return createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient<Database>(url, key);
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
+    url: `${siteUrl}${route.path}`,
+    changeFrequency: route.changeFrequency,
+    priority: route.priority,
+  }));
+
   const supabase = createAnonSupabaseClient();
+  if (!supabase) return staticEntries;
 
   const [{ data: teams }, { data: players }, { data: competitions }] = await Promise.all([
     supabase.from("teams").select("id, updated_at").limit(TEAM_LIMIT),
     supabase.from("players").select("id, updated_at").limit(PLAYER_LIMIT),
     supabase.from("competitions").select("id, updated_at").limit(COMPETITION_LIMIT),
   ]);
-
-  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
-    url: `${siteUrl}${route.path}`,
-    changeFrequency: route.changeFrequency,
-    priority: route.priority,
-  }));
 
   const teamEntries: MetadataRoute.Sitemap = (teams ?? []).map((team) => ({
     url: `${siteUrl}/teams/${team.id}`,

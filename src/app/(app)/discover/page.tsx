@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Compass } from "lucide-react";
-import { ComingSoon } from "@/components/ui/coming-soon";
+import { NoDataYet } from "@/components/ui/no-data-yet";
 import { FadeIn } from "@/components/ui/fade-in";
 import { DiscoverCard } from "@/components/discover/discover-card";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { staggerDelay } from "@/lib/stagger";
 
-const item = NAV_ITEMS.find((i) => i.id === "discover")!;
+const item = getNavItem("discover");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -27,7 +28,7 @@ export default async function DiscoverPage() {
   const transfers = transferCount ?? 0;
 
   if (leagues === 0 && teams === 0 && players === 0 && transfers === 0) {
-    return <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />;
+    return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />;
   }
 
   const surfaces = [
@@ -61,7 +62,7 @@ export default async function DiscoverPage() {
       label: "Transfers",
       count: transfers,
       countLabel: transfers === 1 ? "transfer synced" : "transfers synced",
-      description: "Confirmed transfers, tracked as they're synced from the data pipeline.",
+      description: "Confirmed transfers for players synced so far, not the full transfer market.",
     },
   ];
 
@@ -89,7 +90,7 @@ export default async function DiscoverPage() {
             count={surface.count}
             countLabel={surface.countLabel}
             description={surface.description}
-            delay={0.1 + Math.min(index * 0.06, 0.3)}
+            delay={0.1 + staggerDelay(index, 0.06)}
           />
         ))}
       </div>

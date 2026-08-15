@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { Trophy, KeyRound, Plus, Lock, Globe } from "lucide-react";
+import Link from "next/link";
+import { Trophy, KeyRound, Plus, Lock, Globe, Compass } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { createFantasyLeague, joinFantasyLeague } from "./actions";
 
@@ -29,6 +30,16 @@ export function FantasyOnboarding({ availableSeasons }: { availableSeasons: Seas
 
       <FadeIn delay={0.1}>
         <JoinLeagueCard />
+      </FadeIn>
+
+      <FadeIn delay={0.15}>
+        <Link
+          href="/fantasy/browse"
+          className="kivo-glass flex items-center justify-center gap-2 rounded-2xl p-4 text-sm font-semibold text-foreground-muted transition hover:bg-white/5 hover:text-foreground"
+        >
+          <Compass className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Browse public leagues
+        </Link>
       </FadeIn>
     </div>
   );

@@ -57,7 +57,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const hasScore = fixture?.home_score !== null && fixture?.away_score !== null && status !== null && status !== "scheduled";
   const scoreOrKickoff =
     hasScore && fixture
-      ? `${fixture.home_score} - ${fixture.away_score}`
+      ? `${fixture.home_score} – ${fixture.away_score}`
       : fixture && status === "scheduled"
         ? formatKickoff(fixture.kickoff_at)
         : "VS";

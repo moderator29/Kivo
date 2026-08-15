@@ -2,8 +2,32 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Check, X, Clock } from "lucide-react";
+import { Check, X, Clock, FileQuestion } from "lucide-react";
 import { resolveReport } from "@/app/admin/moderation/actions";
+
+/**
+ * Resolved reported content for the moderation queue (RECOMMENDATIONS.md
+ * item 46). `live: true` means this came straight from the current row;
+ * `live: false` means the target has already been deleted and this is the
+ * `content_snapshot` captured at report-creation time (item 45). Both cases
+ * only ever carry real values captured from a real row, never placeholders.
+ */
+export type ReportPreview =
+  | {
+      kind: "post" | "comment";
+      body: string;
+      authorUsername: string | null;
+      authorDisplayName: string | null;
+      live: boolean;
+    }
+  | {
+      kind: "profile";
+      username: string | null;
+      displayName: string | null;
+      bio: string | null;
+      live: boolean;
+    }
+  | null;
 
 type ReportRowProps = {
   id: string;
@@ -11,7 +35,63 @@ type ReportRowProps = {
   reason: string;
   reporterUsername: string;
   createdAt: string;
+  preview?: ReportPreview;
 };
+
+const PREVIEW_BODY_MAX_LENGTH = 240;
+
+function truncate(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
+
+function ContentPreview({ preview }: { preview: ReportPreview }) {
+  if (!preview) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-foreground-subtle">
+        <FileQuestion className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+        Content no longer available.
+      </div>
+    );
+  }
+
+  const staleBadge = !preview.live && (
+    <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground-subtle">
+      Deleted, from report snapshot
+    </span>
+  );
+
+  if (preview.kind === "profile") {
+    return (
+      <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium text-foreground-muted">
+            {preview.displayName ?? preview.username ?? "unknown profile"}
+            {preview.username ? <span className="text-foreground-subtle"> @{preview.username}</span> : null}
+          </span>
+          {staleBadge}
+        </div>
+        {preview.bio ? (
+          <p className="text-xs text-foreground">{truncate(preview.bio, PREVIEW_BODY_MAX_LENGTH)}</p>
+        ) : (
+          <p className="text-xs text-foreground-subtle">No bio.</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium text-foreground-muted">
+          {preview.authorDisplayName ?? preview.authorUsername ?? "unknown author"}
+          {preview.authorUsername ? <span className="text-foreground-subtle"> @{preview.authorUsername}</span> : null}
+        </span>
+        {staleBadge}
+      </div>
+      <p className="text-xs text-foreground">{truncate(preview.body, PREVIEW_BODY_MAX_LENGTH)}</p>
+    </div>
+  );
+}
 
 function urgency(createdAt: string): { label: string; className: string } {
   const ageHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
@@ -20,7 +100,7 @@ function urgency(createdAt: string): { label: string; className: string } {
   return { label: "New", className: "border-white/10 text-foreground-subtle" };
 }
 
-export function ReportRow({ id, targetType, reason, reporterUsername, createdAt }: ReportRowProps) {
+export function ReportRow({ id, targetType, reason, reporterUsername, createdAt, preview = null }: ReportRowProps) {
   const [resolved, setResolved] = useState<"actioned" | "dismissed" | null>(null);
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState<"actioned" | "dismissed" | null>(null);
@@ -83,6 +163,8 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt 
               {badge.label}
             </span>
           </div>
+
+          <ContentPreview preview={preview} />
 
           {showNote && (
             <input

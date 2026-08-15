@@ -1,7 +1,7 @@
-// Must line up with the `fixture_status` Postgres enum (supabase/migrations/0001) except
-// for "unknown", which exists only at this normalization layer — provider status codes
-// that don't map cleanly to a DB value land here, and the sync pipeline is responsible
-// for translating "unknown" into a safe DB-enum value before writing (see sync.ts).
+// Lines up 1:1 with the `fixture_status` Postgres enum (supabase/migrations/0001,
+// 0017) — provider status codes that don't map cleanly to a known value land on
+// "unknown" here, which is itself a real enum value rather than an app-layer-only
+// placeholder.
 export type FixtureStatus =
   | "scheduled"
   | "live"
@@ -35,6 +35,12 @@ export interface NormalizedFixture {
   awayTeam: NormalizedTeam;
   homeScore: number | null;
   awayScore: number | null;
+  /** Half-time score, mirrors fixtures.home_score_ht/away_score_ht — null until
+   * half-time has actually happened for this fixture (pre-kickoff, or a fixture
+   * that never reached HT), same "not reported yet" convention as homeScore/
+   * awayScore pre-kickoff. Never estimated from the full-time score. */
+  homeScoreHt: number | null;
+  awayScoreHt: number | null;
   /** Null when the provider doesn't report a stable venue id for this fixture — the sync
    * pipeline leaves fixtures.venue_id null in that case rather than dedupe-by-name. */
   venueProviderId: string | null;
@@ -69,6 +75,11 @@ export interface NormalizedPlayer {
   /** Free text on purpose, mirrors players.position in the schema — providers
    * report coarse buckets (e.g. "Goalkeeper") rather than a fixed taxonomy. */
   position: string | null;
+  /** Provider-hosted headshot URL, mirrors players.photo_url (migration 0030,
+   * RECOMMENDATIONS.md item 56) — real provider data already fetched by
+   * getSquad(), not a KIVO-hosted asset. Null when the provider has none on
+   * file, never a placeholder image URL. */
+  photoUrl: string | null;
 }
 
 export interface NormalizedManager {
@@ -99,9 +110,9 @@ export interface NormalizedLineups {
 }
 
 // Must line up with the `fixture_event_type` Postgres enum (supabase/migrations/0001)
-// except for "unknown", the same normalization-layer pattern as FixtureStatus above —
-// a provider type/detail combination that doesn't map cleanly lands here, and the
-// sync pipeline skips (never fabricates) rather than writing a bad enum value.
+// except for "unknown" — unlike FixtureStatus, this enum has no DB-side "unknown"
+// slot, so a provider type/detail combination that doesn't map cleanly lands here
+// and the sync pipeline skips (never fabricates) rather than writing a bad enum value.
 export type NormalizedMatchEventType =
   | "goal"
   | "own_goal"
@@ -113,6 +124,36 @@ export type NormalizedMatchEventType =
   | "substitution"
   | "var_review"
   | "unknown";
+
+export interface NormalizedFixtureTeamStatistics {
+  team: NormalizedTeam;
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  shotsOffTarget: number | null;
+  shotsBlocked: number | null;
+  shotsInsideBox: number | null;
+  shotsOutsideBox: number | null;
+  fouls: number | null;
+  corners: number | null;
+  offsides: number | null;
+  possessionPct: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  saves: number | null;
+  passesTotal: number | null;
+  passesAccurate: number | null;
+  passesPct: number | null;
+  /** Only some competitions/providers report xG — stays null rather than 0 when
+   * unknown, mirrors fixture_statistics.expected_goals in the schema. */
+  expectedGoals: number | null;
+}
+
+/** One fixture's team statistics — one entry per side (normally exactly two),
+ * same "one entry per side" shape as NormalizedLineups. */
+export interface NormalizedFixtureStatistics {
+  fixtureProviderId: string;
+  teams: NormalizedFixtureTeamStatistics[];
+}
 
 export interface NormalizedMatchEvent {
   /** Synthetic composite id — API-Football's /fixtures/events response has no
@@ -162,6 +203,11 @@ export interface NormalizedTransfer {
 
 export interface FootballDataProvider {
   readonly name: string;
+  /** Most recent remaining-quota count the provider itself reported, or null if
+   * no request has completed yet (or the provider doesn't report one at all —
+   * see MockFootballProvider). Real provider data, not an estimate
+   * (RECOMMENDATIONS.md item 53). */
+  getQuotaRemaining(): number | null;
   getFixturesByDate(date: string): Promise<NormalizedFixture[]>;
   getFixtureById(providerId: string): Promise<NormalizedFixture | null>;
   getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]>;
@@ -173,6 +219,9 @@ export interface FootballDataProvider {
   /** Null when the provider has no lineups published yet for this fixture. */
   getLineups(fixtureProviderId: string): Promise<NormalizedLineups | null>;
   getMatchEvents(fixtureProviderId: string): Promise<NormalizedMatchEvent[]>;
+  /** Null when the provider has no statistics published yet for this fixture
+   * (common before kickoff, or on a competition tier that doesn't report them). */
+  getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null>;
   /** Full recorded transfer history for one player — real, already-happened moves only
    * (see AGENTS.md: no rumour/reported tier exists on the free tier). Newest-first is
    * not guaranteed by the provider; sync-transfers.ts does not assume an order. */

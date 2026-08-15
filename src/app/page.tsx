@@ -1,15 +1,23 @@
-"use client";
-
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
-import { motion } from "motion/react";
 import kivoLogo from "../../public/brand/kivo-logo.png";
 import kivoTrophyCrown from "../../public/brand/kivo-trophy-crown.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
+
+// This page used to be `"use client"` in full just so two elements could
+// float via `motion.div` — that shipped React, `motion` and the whole page
+// tree as client JS on the highest-traffic, most bounce-sensitive route.
+// Both floats are now pure CSS keyframes (`.kivo-hero-trophy-float` /
+// `.kivo-hero-logo-float` below), same pattern as the aurora background and
+// `KivoMarkGlyph`, so this can be a Server Component again. The CTA
+// buttons' hover/tap scale moved to Tailwind's `hover:`/`active:` utilities
+// for the same reason. `FadeIn` (src/components/ui/fade-in.tsx) is also a
+// plain CSS entrance now, not a `motion` mount, so it stays usable here
+// too. See RECOMMENDATIONS.md item 73.
 
 const PROOF_POINTS = [
   {
@@ -70,23 +78,47 @@ export default function LandingPage() {
 
       <main className="flex flex-1 flex-col">
         <section className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-6 overflow-hidden px-6 py-20 text-center lg:py-32">
+          {/* Two page-scoped keyframes, same inline-`<style>` pattern as
+              transfers/page.tsx and rewards/page.tsx: a one-time fade-in
+              (opacity only) plus an infinite float (transform only), applied
+              together as two independent animations on the trophy wrapper
+              below. Splitting them like this (rather than one keyframe with
+              both properties) lets the fade finish once while the float
+              keeps looping, matching the original motion.js timing exactly
+              (opacity over 1s, y-bounce over 8s, forever). Clamped by the
+              sitewide prefers-reduced-motion block in globals.css like every
+              other animation on this page. */}
+          <style>{`
+            @keyframes kivo-hero-trophy-fade-in {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes kivo-hero-trophy-float {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-10px); }
+            }
+            @keyframes kivo-hero-logo-float {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-6px); }
+            }
+          `}</style>
+
           {/* The page-wide aurora above already covers this section. This is
               the hero's real visual anchor: big, genuinely visible (not a
               faint hint), fading into the page at its edges so it reads as
               part of the background rather than a pasted-on rectangle. */}
-          <motion.div
-            initial={{ opacity: 0, y: 0 }}
-            animate={{ opacity: 1, y: [0, -10, 0] }}
-            transition={{ opacity: { duration: 1 }, y: { duration: 8, repeat: Infinity, ease: "easeInOut" } }}
+          <div
             className="pointer-events-none absolute -right-16 -top-10 h-[480px] w-[340px] sm:-right-8 sm:h-[600px] sm:w-[420px] lg:right-0 lg:h-[720px] lg:w-[500px]"
             style={{
               maskImage: "radial-gradient(ellipse 85% 75% at 60% 35%, black 45%, transparent 85%)",
               WebkitMaskImage: "radial-gradient(ellipse 85% 75% at 60% 35%, black 45%, transparent 85%)",
+              animation:
+                "kivo-hero-trophy-fade-in 1s ease forwards, kivo-hero-trophy-float 8s ease-in-out infinite",
             }}
             aria-hidden="true"
           >
             <Image src={kivoTrophyCrown} alt="" fill sizes="500px" className="object-contain object-top opacity-45" priority />
-          </motion.div>
+          </div>
 
           <KivoMarkGlyph
             size={360}
@@ -96,11 +128,7 @@ export default function LandingPage() {
 
           <div className="relative z-10 flex flex-col items-center gap-6">
             <FadeIn delay={0}>
-              <motion.div
-                initial={{ y: 0 }}
-                animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              >
+              <div style={{ animation: "kivo-hero-logo-float 5s ease-in-out infinite" }}>
                 <Image
                   src={kivoLogo}
                   alt=""
@@ -110,7 +138,7 @@ export default function LandingPage() {
                   sizes="(min-width: 1024px) 204px, 153px"
                   priority
                 />
-              </motion.div>
+              </div>
             </FadeIn>
 
             <FadeIn delay={0.08}>
@@ -133,23 +161,19 @@ export default function LandingPage() {
             </FadeIn>
 
             <FadeIn delay={0.32} className="flex flex-col gap-3 sm:flex-row">
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <Link
-                  href="/home"
-                  className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
-                >
-                  Get started
-                  <ArrowRight className="h-4 w-4" strokeWidth={2} />
-                </Link>
-              </motion.div>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <Link
-                  href="/sign-in"
-                  className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
-                >
-                  Sign in
-                </Link>
-              </motion.div>
+              <Link
+                href="/sign-up"
+                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition duration-150 hover:scale-[1.03] hover:opacity-90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              >
+                Get started
+                <ArrowRight className="h-4 w-4" strokeWidth={2} />
+              </Link>
+              <Link
+                href="/home"
+                className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-all duration-150 hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              >
+                Look around first
+              </Link>
             </FadeIn>
           </div>
         </section>

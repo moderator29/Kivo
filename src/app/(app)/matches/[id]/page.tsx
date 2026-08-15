@@ -7,9 +7,12 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
+import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { fetchPostsPage } from "@/app/(app)/social/posts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -54,7 +57,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
 
   if (!fixture) notFound();
 
-  const [{ data: events }, { data: lineups }, { data: standings }, { data: roomPosts }] = await Promise.all([
+  const [{ data: events }, { data: lineups }, { data: stats }, { data: standings }, { posts: roomPosts }, fixturesLastSyncedAt, detailsLastSyncedAt] = await Promise.all([
     supabase
       .from("fixture_events")
       .select(
@@ -69,65 +72,59 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
       .select("team_id, is_starting, shirt_number, position, player:players(id, full_name, known_as)")
       .eq("fixture_id", id),
     supabase
+      .from("fixture_statistics")
+      .select(
+        `team_id, shots_total, shots_on_target, shots_off_target, shots_blocked, shots_inside_box,
+         shots_outside_box, fouls, corners, offsides, possession_pct, yellow_cards, red_cards, saves,
+         passes_total, passes_accurate, passes_pct, expected_goals`,
+      )
+      .eq("fixture_id", id),
+    supabase
       .from("standings")
       .select("team_id, played, won, drawn, lost, goals_for, goals_against, points, position, team:teams(name, crest_url)")
       .eq("season_id", fixture.season_id)
       .order("position", { ascending: true }),
-    supabase
-      .from("posts")
-      .select("id, body, created_at, author_profile_id")
-      .eq("fixture_id", id)
-      .order("created_at", { ascending: false })
-      .limit(50),
+    // Same shared query as /social and its own "Load more" — just scoped to
+    // this fixture's posts. See app/(app)/social/posts.ts.
+    fetchPostsPage(0, profile?.id ?? null, { fixtureId: id, limit: 50 }),
+    // RECOMMENDATIONS.md item 60: "last synced" freshness for this fixture's core
+    // score/status (entity_type 'fixture', written by syncTodayFixtures) and,
+    // separately, its lineups/events/stats (entity_type 'lineup', written by
+    // syncFixtureDetails) — see getLastSyncedAt() and MatchCentreTabs.
+    getLastSyncedAt(["fixture"]),
+    getLastSyncedAt(["lineup"]),
   ]);
 
-  // Same reactions + get_public_profiles + comment-count pattern as
-  // src/app/(app)/social/page.tsx, just scoped to this fixture's posts —
-  // see that file for why author identity goes through the SECURITY DEFINER
-  // RPC rather than a plain profiles select.
-  const roomPostIds = (roomPosts ?? []).map((p) => p.id);
-  const roomAuthorIds = [...new Set((roomPosts ?? []).map((p) => p.author_profile_id))];
-  const [{ data: roomReactions }, { data: roomAuthors }, { data: roomComments }] = await Promise.all([
-    roomPostIds.length
-      ? supabase
-          .from("reactions")
-          .select("target_id, profile_id")
-          .eq("target_type", "post")
-          .eq("reaction_type", "like")
-          .in("target_id", roomPostIds)
-      : Promise.resolve({ data: [] }),
-    roomAuthorIds.length ? supabase.rpc("get_public_profiles", { p_ids: roomAuthorIds }) : Promise.resolve({ data: [] }),
-    roomPostIds.length ? supabase.from("comments").select("post_id").in("post_id", roomPostIds) : Promise.resolve({ data: [] }),
-  ]);
+  const statsForTab = (stats ?? []).map((s) => ({
+    teamId: s.team_id,
+    shotsTotal: s.shots_total,
+    shotsOnTarget: s.shots_on_target,
+    shotsOffTarget: s.shots_off_target,
+    shotsBlocked: s.shots_blocked,
+    shotsInsideBox: s.shots_inside_box,
+    shotsOutsideBox: s.shots_outside_box,
+    fouls: s.fouls,
+    corners: s.corners,
+    offsides: s.offsides,
+    possessionPct: s.possession_pct,
+    yellowCards: s.yellow_cards,
+    redCards: s.red_cards,
+    saves: s.saves,
+    passesTotal: s.passes_total,
+    passesAccurate: s.passes_accurate,
+    passesPct: s.passes_pct,
+    expectedGoals: s.expected_goals,
+  }));
 
-  const roomAuthorById = new Map((roomAuthors ?? []).map((a) => [a.id, a]));
-
-  const roomLikesByPost = new Map<string, { count: number; likedByViewer: boolean }>();
-  for (const reaction of roomReactions ?? []) {
-    const entry = roomLikesByPost.get(reaction.target_id) ?? { count: 0, likedByViewer: false };
-    entry.count += 1;
-    if (profile && reaction.profile_id === profile.id) entry.likedByViewer = true;
-    roomLikesByPost.set(reaction.target_id, entry);
-  }
-
-  const roomCommentCountByPost = new Map<string, number>();
-  for (const comment of roomComments ?? []) {
-    roomCommentCountByPost.set(comment.post_id, (roomCommentCountByPost.get(comment.post_id) ?? 0) + 1);
-  }
-
-  const roomPostsForTab = (roomPosts ?? []).map((post) => {
-    const likes = roomLikesByPost.get(post.id) ?? { count: 0, likedByViewer: false };
-    const author = roomAuthorById.get(post.author_profile_id);
-    return {
-      id: post.id,
-      body: post.body,
-      createdAt: post.created_at,
-      authorName: author?.display_name || author?.username || "KIVO fan",
-      likeCount: likes.count,
-      likedByViewer: likes.likedByViewer,
-      commentCount: roomCommentCountByPost.get(post.id) ?? 0,
-    };
-  });
+  const roomPostsForTab = roomPosts.map((post) => ({
+    id: post.id,
+    body: post.body,
+    createdAt: post.createdAt,
+    authorName: post.authorName,
+    reactionCount: post.reactionCount,
+    viewerReaction: post.viewerReaction,
+    commentCount: post.commentCount,
+  }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
   const live = isLiveStatus(fixture.status);
@@ -167,6 +164,8 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             </span>
           )}
         </div>
+
+        <LastSyncedNote timestamp={fixturesLastSyncedAt} label="Score and status synced" />
 
         <div className="flex items-center justify-between gap-3">
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
@@ -212,9 +211,11 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           homeTeamId={fixture.home_team?.id ?? ""}
           awayTeamId={fixture.away_team?.id ?? ""}
           roomPosts={roomPostsForTab}
+          stats={statsForTab}
           signedIn={Boolean(profile)}
           canSyncDetails={canManageFootballData(profile?.role)}
           syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
+          detailsLastSyncedAt={detailsLastSyncedAt}
           events={(events ?? []).map((e) => ({
             id: e.id,
             eventType: e.event_type,

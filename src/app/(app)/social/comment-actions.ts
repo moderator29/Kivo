@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { awardBadge } from "@/lib/rewards";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -98,6 +99,10 @@ export async function createComment(postId: string, body: string, parentCommentI
     console.error("Failed to create comment", error);
     return { error: "Couldn't post your comment. Try again.", comment: null };
   }
+
+  // awardBadge is a harmless no-op on repeat comments (unique constraint on
+  // user_badges swallows the duplicate) — same pattern as first_post.
+  await awardBadge(profile.id, "first_comment");
 
   revalidatePath("/social");
 

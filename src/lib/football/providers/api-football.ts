@@ -2,6 +2,7 @@ import "server-only";
 import type {
   FootballDataProvider,
   NormalizedFixture,
+  NormalizedFixtureStatistics,
   NormalizedLineups,
   NormalizedManager,
   NormalizedMatchEvent,
@@ -9,7 +10,8 @@ import type {
   NormalizedStandingRow,
   NormalizedTransfer,
 } from "../types";
-import { mapEventType, mapStatus, mapTransferType } from "./normalizers";
+import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
+import { ApiFootballError, requestWithRetry } from "./api-football-request";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 
@@ -23,10 +25,12 @@ const FIXTURE_CACHE_SECONDS = 300;
 /** Squads/managers change rarely — cache a full day. */
 const SQUAD_CACHE_SECONDS = 86_400;
 const MANAGER_CACHE_SECONDS = 86_400;
-/** Lineups/events can change during a live match — short cache, but never zero, so a
- * busy admin screen re-triggering a sync repeatedly can't hammer the daily quota. */
+/** Lineups/events/statistics can change during a live match — short cache, but never
+ * zero, so a busy admin screen re-triggering a sync repeatedly can't hammer the daily
+ * quota. */
 const LINEUP_CACHE_SECONDS = 120;
 const EVENTS_CACHE_SECONDS = 120;
+const STATISTICS_CACHE_SECONDS = 120;
 /** Standings settle slowly outside of matchdays — an hour is plenty fresh. */
 const STANDINGS_CACHE_SECONDS = 3_600;
 /** Transfer history is append-only and barely changes day to day — cache well beyond
@@ -76,6 +80,13 @@ interface ApiFootballEventsResponse {
     assist: { id: number | null; name: string | null };
     type: string;
     detail: string;
+  }>;
+}
+
+interface ApiFootballStatisticsResponse {
+  response: Array<{
+    team: { id: number; name: string; logo: string | null };
+    statistics: Array<{ type: string; value: number | string | null }>;
   }>;
 }
 
@@ -133,6 +144,11 @@ interface ApiFootballFixtureResponse {
       away: { id: number; name: string; logo: string | null };
     };
     goals: { home: number | null; away: number | null };
+    // `score.halftime` is always present on a real /fixtures response (alongside
+    // fulltime/extratime/penalty siblings, none of which KIVO models yet) — both
+    // sides are null until half-time has actually happened for this fixture, the
+    // same "not reported yet" convention as goals.home/away pre-kickoff.
+    score: { halftime: { home: number | null; away: number | null } };
   }>;
 }
 
@@ -144,19 +160,46 @@ interface ApiFootballFixtureResponse {
 export class ApiFootballProvider implements FootballDataProvider {
   readonly name = "api-football";
 
+  /** Most recent `x-ratelimit-requests-remaining` value seen on any response
+   * from this provider instance (RECOMMENDATIONS item 53) — updated on both
+   * successful and failed responses (the header is sent either way), never on
+   * a network error (no response to read it from). Null until the first
+   * request completes. */
+  private quotaRemaining: number | null = null;
+
   constructor(private readonly apiKey: string) {}
 
+  /**
+   * Distinguishes 429 (quota exhausted) from 403 (bad key) from other 4xx/5xx
+   * (RECOMMENDATIONS item 54), retries exactly once with jitter for a network
+   * error or 5xx and never for a 429 (item 55), and records the provider's own
+   * remaining-quota header (item 53). The actual fetch/retry/classify logic
+   * lives in ./api-football-request so it can be unit-tested with a mocked
+   * fetch without importing this server-only module.
+   */
   private async request<T>(path: string, revalidateSeconds: number): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      headers: { "x-apisports-key": this.apiKey },
-      next: { revalidate: revalidateSeconds },
-    });
-
-    if (!res.ok) {
-      throw new Error(`API-Football request failed (${res.status}): ${path}`);
+    try {
+      const { response, quotaRemaining } = await requestWithRetry({
+        path,
+        url: `${BASE_URL}${path}`,
+        headers: { "x-apisports-key": this.apiKey },
+        revalidateSeconds,
+      });
+      if (quotaRemaining !== null) this.quotaRemaining = quotaRemaining;
+      return (await response.json()) as T;
+    } catch (err) {
+      if (err instanceof ApiFootballError && err.quotaRemaining !== null) {
+        this.quotaRemaining = err.quotaRemaining;
+      }
+      throw err;
     }
+  }
 
-    return res.json() as Promise<T>;
+  /** Surfaced on Data Health via sync_runs.provider_quota_remaining — real
+   * provider data, not an estimate (RECOMMENDATIONS item 53). Null until at
+   * least one request has completed. */
+  getQuotaRemaining(): number | null {
+    return this.quotaRemaining;
   }
 
   async getFixturesByDate(date: string): Promise<NormalizedFixture[]> {
@@ -186,6 +229,8 @@ export class ApiFootballProvider implements FootballDataProvider {
       },
       homeScore: item.goals.home,
       awayScore: item.goals.away,
+      homeScoreHt: item.score.halftime.home,
+      awayScoreHt: item.score.halftime.away,
       venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
@@ -221,6 +266,8 @@ export class ApiFootballProvider implements FootballDataProvider {
       },
       homeScore: item.goals.home,
       awayScore: item.goals.away,
+      homeScoreHt: item.score.halftime.home,
+      awayScoreHt: item.score.halftime.away,
       venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
@@ -264,6 +311,11 @@ export class ApiFootballProvider implements FootballDataProvider {
    * whole squad would burn the 100-requests/day free quota in a couple of
    * teams, so it's intentionally not called here. dateOfBirth/nationality are
    * left null rather than estimated from `age`.
+   *
+   * `photo` IS mapped through (RECOMMENDATIONS.md item 56) — it's real
+   * provider data already fetched and paid for in quota on every call this
+   * method makes, unlike dateOfBirth/nationality which would cost an
+   * additional per-player request the free tier can't afford.
    */
   async getSquad(teamProviderId: string): Promise<NormalizedPlayer[]> {
     const data = await this.request<ApiFootballSquadResponse>(`/players/squads?team=${teamProviderId}`, SQUAD_CACHE_SECONDS);
@@ -277,6 +329,7 @@ export class ApiFootballProvider implements FootballDataProvider {
       dateOfBirth: null,
       nationality: null,
       position: p.position,
+      photoUrl: p.photo,
     }));
   }
 
@@ -370,6 +423,35 @@ export class ApiFootballProvider implements FootballDataProvider {
         detail: item.detail,
       };
     });
+  }
+
+  /**
+   * `/fixtures/statistics?fixture={id}` returns one entry per side, each with a flat
+   * `statistics` array of {type, value} pairs — see mapFixtureStatistics's doc comment
+   * in normalizers.ts for how those get matched onto fixture_statistics' fixed columns.
+   * Returns null (not an empty array) when the provider has no statistics published
+   * yet for this fixture — the same "nothing yet" convention as getLineups, common
+   * before kickoff or on a competition tier that doesn't report them.
+   */
+  async getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null> {
+    const data = await this.request<ApiFootballStatisticsResponse>(
+      `/fixtures/statistics?fixture=${fixtureProviderId}`,
+      STATISTICS_CACHE_SECONDS,
+    );
+    if (data.response.length === 0) return null;
+
+    return {
+      fixtureProviderId,
+      teams: data.response.map((side) => ({
+        team: {
+          providerId: String(side.team.id),
+          name: side.team.name,
+          shortName: null,
+          crestUrl: side.team.logo,
+        },
+        ...mapFixtureStatistics(side.statistics),
+      })),
+    };
   }
 
   /**

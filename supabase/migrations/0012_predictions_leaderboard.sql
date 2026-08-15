@@ -39,3 +39,5 @@ $$;
 
 revoke execute on function public.get_predictions_leaderboard(int) from public;
 grant execute on function public.get_predictions_leaderboard(int) to anon, authenticated;
+
+-- To reverse: drop function public.get_predictions_leaderboard(int).

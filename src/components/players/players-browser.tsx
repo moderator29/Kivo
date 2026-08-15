@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Search, UserRound } from "lucide-react";
+import { Search } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { PlayerAvatar } from "@/components/ui/player-avatar";
+import { StaggeredList } from "@/components/ui/staggered-list";
+import { staggerDelay } from "@/lib/stagger";
 import { searchPlayers, type PlayerSearchResult } from "@/app/(app)/players/actions";
 import { POSITION_GROUPS } from "@/app/(app)/fantasy/fantasy-rules";
 
@@ -106,26 +109,26 @@ export function PlayersBrowser({
           {searching ? "Searching…" : "No players match those filters."}
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {players.map((player, index) => (
-            <FadeIn key={player.id} delay={Math.min(index * 0.02, 0.24)}>
-              <Link
-                href={`/players/${player.id}`}
-                className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
-                  <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-                </div>
-                <div className="flex flex-1 flex-col overflow-hidden">
-                  <span className="truncate text-sm font-medium text-foreground">{player.name}</span>
-                  <span className="truncate text-xs text-foreground-subtle">
-                    {[player.position, player.teamName, player.nationality].filter(Boolean).join(" · ")}
-                  </span>
-                </div>
-              </Link>
-            </FadeIn>
-          ))}
-        </div>
+        <StaggeredList
+          items={players}
+          keyExtractor={(player) => player.id}
+          delay={(index) => staggerDelay(index, 0.02)}
+          className="flex flex-col gap-2"
+          renderItem={(player) => (
+            <Link
+              href={`/players/${player.id}`}
+              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            >
+              <PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={36} />
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <span className="truncate text-sm font-medium text-foreground">{player.name}</span>
+                <span className="truncate text-xs text-foreground-subtle">
+                  {[player.position, player.teamName, player.nationality].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            </Link>
+          )}
+        />
       )}
     </div>
   );

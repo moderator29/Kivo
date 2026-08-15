@@ -5,10 +5,11 @@ import { Flame, Award, History } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
+import { staggerDelay } from "@/lib/stagger";
 import { timeAgo } from "@/lib/format";
 
-const item = NAV_ITEMS.find((i) => i.id === "rewards")!;
+const item = getNavItem("rewards");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -30,14 +31,17 @@ export default async function RewardsPage() {
   }
 
   const supabase = createServerSupabaseClient();
-  const [{ data: xpEntries }, { data: earnedBadges }, { data: allBadges }, { data: xpHistory }] = await Promise.all([
-    supabase.from("xp_ledger").select("amount"),
+  const [{ data: xpTotal }, { data: earnedBadges }, { data: allBadges }, { data: xpHistory }] = await Promise.all([
+    // Single aggregate round trip instead of fetching every xp_ledger row
+    // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
+    // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
+    supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
     supabase.from("user_badges").select("badge_id, awarded_at, badge:badges(code, name, description, icon_url)"),
     supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
     supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
   ]);
 
-  const totalXp = (xpEntries ?? []).reduce((sum, entry) => sum + entry.amount, 0);
+  const totalXp = xpTotal ?? 0;
   const earnedBadgeIds = new Set((earnedBadges ?? []).map((b) => b.badge_id));
 
   // Discrete count-up keyframes for the XP number: each step resets the
@@ -110,7 +114,7 @@ export default async function RewardsPage() {
             {allBadges.map((badge, index) => {
               const earned = earnedBadgeIds.has(badge.id);
               return (
-                <FadeIn key={badge.id} delay={0.12 + Math.min(index * 0.03, 0.3)}>
+                <FadeIn key={badge.id} delay={0.12 + staggerDelay(index, 0.03)}>
                   <div
                     className={`kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ${
                       earned

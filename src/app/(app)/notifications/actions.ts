@@ -9,12 +9,20 @@ export async function markNotificationRead(notificationId: string) {
   if (!profile) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", notificationId)
-    .eq("profile_id", profile.id);
-  revalidatePath("/", "layout");
+  // Goes through the mark_notifications_read RPC rather than a raw
+  // `.update()` (RECOMMENDATIONS item 38) — notifications has no client-facing
+  // UPDATE policy any more, so a raw update would silently touch zero rows.
+  // The RPC only ever sets read_at, scoped server-side to the caller's own
+  // profile.
+  await supabase.rpc("mark_notifications_read", { p_notification_ids: [notificationId] });
+  // Only /notifications actually re-renders server-side from this write —
+  // NotificationBell (rendered in every page's shared layout) already
+  // reflects reads instantly via its own optimistic state and re-syncs the
+  // badge count on tab focus via getUnreadNotificationCount(), not through a
+  // server re-render. Was revalidatePath("/", "layout"), which dropped the
+  // entire app's cache for marking one notification read (RECOMMENDATIONS
+  // item 81).
+  revalidatePath("/notifications");
 }
 
 export async function markAllNotificationsRead() {
@@ -22,12 +30,18 @@ export async function markAllNotificationsRead() {
   if (!profile) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase
+  const { data: unread } = await supabase
     .from("notifications")
-    .update({ read_at: new Date().toISOString() })
+    .select("id")
     .eq("profile_id", profile.id)
     .is("read_at", null);
-  revalidatePath("/", "layout");
+
+  const ids = (unread ?? []).map((n) => n.id);
+  if (ids.length > 0) {
+    await supabase.rpc("mark_notifications_read", { p_notification_ids: ids });
+  }
+  // See the comment in markNotificationRead above — same scoping fix.
+  revalidatePath("/notifications");
 }
 
 /**

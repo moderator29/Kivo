@@ -5,6 +5,8 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp } from "@/lib/rewards";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isReactionType, type ReactionType } from "@/lib/reactions";
+import { fetchPostsPage, type PostListItem } from "./posts";
 
 const MAX_POST_LENGTH = 2000;
 
@@ -39,45 +41,81 @@ export async function createPost(formData: FormData) {
   // user_badges swallows the duplicate) — no need to check "is this their first."
   await Promise.all([awardXp(profile.id, 2, "Posted in the community"), awardBadge(profile.id, "first_post")]);
 
+  // Real running total, not a separate counter — counts this user's actual
+  // posts rows straight from the table that was just inserted into.
+  const { count: postCount } = await supabase
+    .from("posts")
+    .select("id", { count: "exact", head: true })
+    .eq("author_profile_id", profile.id);
+  if ((postCount ?? 0) >= 10) {
+    await awardBadge(profile.id, "ten_posts");
+  }
+
   revalidatePath("/social");
   if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
   return { error: null };
 }
 
-export async function toggleLike(postId: string, alreadyLiked: boolean) {
+/**
+ * Sets (or clears) the caller's reaction on a post or comment. Reactions are
+ * single-choice per user per target — `reactions_unique_per_target` in
+ * supabase/migrations/0001_kivo_core_schema.sql documents "changing reaction
+ * = delete + insert, not an update-in-place" — so this always clears any
+ * existing row first, then inserts the new one unless `reactionType` is null
+ * (the caller tapped their active reaction again to remove it).
+ */
+export async function setReaction(targetType: "post" | "comment", targetId: string, reactionType: ReactionType | null) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in to react." };
 
-  const rateLimit = await checkRateLimit(`user:${profile.id}`, "toggle_like", 30, 60);
+  if (reactionType !== null && !isReactionType(reactionType)) {
+    return { error: "Invalid reaction." };
+  }
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "set_reaction", 30, 60);
   if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
 
-  const { error } = alreadyLiked
-    ? await supabase
-        .from("reactions")
-        .delete()
-        .eq("target_type", "post")
-        .eq("target_id", postId)
-        .eq("profile_id", profile.id)
-    : await supabase.from("reactions").insert({
-        target_type: "post",
-        target_id: postId,
-        profile_id: profile.id,
-        reaction_type: "like",
-      });
+  const { error: deleteError } = await supabase
+    .from("reactions")
+    .delete()
+    .eq("target_type", targetType)
+    .eq("target_id", targetId)
+    .eq("profile_id", profile.id);
 
-  if (error) {
-    console.error("Failed to toggle reaction", error);
+  if (deleteError) {
+    console.error("Failed to clear existing reaction", deleteError);
     return { error: "Couldn't update your reaction." };
   }
 
-  if (!alreadyLiked) {
-    await notifyPostLiked(postId, profile);
+  if (reactionType !== null) {
+    const { error: insertError } = await supabase.from("reactions").insert({
+      target_type: targetType,
+      target_id: targetId,
+      profile_id: profile.id,
+      reaction_type: reactionType,
+    });
+
+    if (insertError) {
+      console.error("Failed to set reaction", insertError);
+      return { error: "Couldn't update your reaction." };
+    }
+
+    if (targetType === "post") {
+      await notifyPostLiked(targetId, profile);
+    }
   }
 
   revalidatePath("/social");
   return { error: null };
+}
+
+/** Appends the next page of `/social` posts, offset-based to match the
+ * `loadMoreLeagues` / `loadMoreTeams` pattern (see components/leagues/leagues-list.tsx). */
+export async function loadMorePosts(offset: number): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
+  const profile = await getOrCreateProfile();
+  return fetchPostsPage(offset, profile?.id ?? null);
 }
 
 /**

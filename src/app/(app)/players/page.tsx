@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { FadeIn } from "@/components/ui/fade-in";
-import { ComingSoon } from "@/components/ui/coming-soon";
+import { NoDataYet } from "@/components/ui/no-data-yet";
+import { EntityListPage } from "@/components/ui/entity-list-page";
 import { PlayersBrowser } from "@/components/players/players-browser";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItem } from "@/lib/navigation";
 
-const item = NAV_ITEMS.find((i) => i.id === "players")!;
+const item = getNavItem("players");
 
 export const metadata: Metadata = { title: item.label };
 
@@ -15,7 +15,7 @@ export default async function PlayersPage() {
   const [{ data: players }, { data: clubs }] = await Promise.all([
     supabase
       .from("players")
-      .select("id, full_name, known_as, position, nationality, team:teams(name, short_name)")
+      .select("id, full_name, known_as, position, nationality, photo_url, team:teams(name, short_name)")
       .order("full_name", { ascending: true })
       .limit(100),
     supabase.from("teams").select("id, name, short_name").order("name", { ascending: true }),
@@ -23,17 +23,12 @@ export default async function PlayersPage() {
 
   if (!players || players.length === 0) {
     return (
-      <ComingSoon icon={<item.icon className="h-9 w-9 text-kivo-white" strokeWidth={1.75} />} image={item.comingSoonImage} title={item.label} description={item.comingSoonDescription ?? "Check back soon."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Players</h1>
-        <p className="text-sm text-foreground-muted">Search KIVO&apos;s synced squad players by name, position or club.</p>
-      </FadeIn>
-
+    <EntityListPage title="Players" description="Search KIVO's synced squad players by name, position or club.">
       <PlayersBrowser
         initialPlayers={players.map((player) => ({
           id: player.id,
@@ -41,9 +36,10 @@ export default async function PlayersPage() {
           position: player.position,
           nationality: player.nationality,
           teamName: player.team?.short_name ?? player.team?.name ?? null,
+          photoUrl: player.photo_url,
         }))}
         clubs={(clubs ?? []).map((club) => ({ id: club.id, name: club.name, shortName: club.short_name }))}
       />
-    </div>
+    </EntityListPage>
   );
 }

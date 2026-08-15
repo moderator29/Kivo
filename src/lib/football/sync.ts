@@ -15,65 +15,91 @@ export interface SyncResult {
   error?: string;
 }
 
-/** "unknown" exists only at the normalization layer (see types.ts) — the DB's
- * fixture_status enum has no matching value. "postponed" is the closest honest
- * reading of a provider status we couldn't otherwise classify (e.g. TBD/SUSP/INT). */
+/** FixtureStatus and the DB's fixture_status enum are 1:1 (see types.ts and
+ * migration 0017) — no translation needed, but keep the named function so a
+ * future divergence between the two types is a type error here, not a typo. */
 function toDbFixtureStatus(status: FixtureStatus): DbFixtureStatus {
-  return status === "unknown" ? "postponed" : status;
+  return status;
 }
 
-async function findMappedId(
+/**
+ * RECOMMENDATIONS.md item 27: one `provider_mappings` round trip for every distinct
+ * provider id of a given entity type, instead of one round trip per fixture. Called
+ * once up front per entity type (competition/team/venue) with every distinct id the
+ * whole day's fixture batch references; the returned map is then threaded through
+ * upsertCompetition/upsertTeam/upsertVenue below as their existence check, and each
+ * of those mutates it in place when it inserts a brand-new row so a later fixture in
+ * the same run that references the same provider id reuses it instead of inserting
+ * again. Empty input skips the request entirely — a day with e.g. no venue ids at
+ * all shouldn't fire an empty `.in()` query.
+ */
+async function batchFindMappedIds(
   supabase: ServiceClient,
   provider: string,
   entityType: EntityType,
-  providerEntityId: string,
-): Promise<string | null> {
+  providerEntityIds: string[],
+): Promise<Map<string, string>> {
+  const known = new Map<string, string>();
+  if (providerEntityIds.length === 0) return known;
+
   const { data, error } = await supabase
     .from("provider_mappings")
-    .select("kivo_entity_id")
+    .select("provider_entity_id, kivo_entity_id")
     .eq("provider", provider)
     .eq("entity_type", entityType)
-    .eq("provider_entity_id", providerEntityId)
-    .maybeSingle();
+    .in("provider_entity_id", providerEntityIds);
 
   if (error) throw error;
-  return data?.kivo_entity_id ?? null;
+  for (const row of data ?? []) known.set(row.provider_entity_id, row.kivo_entity_id);
+  return known;
 }
 
-async function createMapping(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-  kivoEntityId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("provider_mappings")
-    .insert({ provider, entity_type: entityType, provider_entity_id: providerEntityId, kivo_entity_id: kivoEntityId });
-  // 23505 = another concurrent sync already created this mapping — fine, it points
-  // at the same kivo entity either way.
-  if (error && error.code !== "23505") throw error;
-}
-
+/** Updates the row on every sync (a renamed competition or a new short name
+ * should actually land), same "sync is the source of truth for what the
+ * provider reports" rule as upsertFixture below. `knownMappings` is the batched
+ * lookup from batchFindMappedIds — see its doc comment for why this takes a map
+ * instead of querying provider_mappings itself.
+ *
+ * The already-known branch stays a plain client-side update (no atomicity
+ * concern — there's no second write to lose). The new-entity branch goes
+ * through upsert_competition_with_mapping (migration 0018) instead of a
+ * separate insert-then-createMapping pair, so a mapping insert failure can no
+ * longer leave an orphan competition row behind (RECOMMENDATIONS.md item 22). */
 async function upsertCompetition(
   supabase: ServiceClient,
   provider: string,
   competitionProviderId: string,
   name: string,
+  knownMappings: Map<string, string>,
 ): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "competition", competitionProviderId);
-  if (existing) return existing;
+  const existing = knownMappings.get(competitionProviderId) ?? null;
+  if (existing) {
+    const { error } = await supabase.from("competitions").update({ name }).eq("id", existing);
+    if (error) throw error;
+    return existing;
+  }
 
-  const { data, error } = await supabase.from("competitions").insert({ name }).select("id").single();
-  if (error || !data) throw error ?? new Error("Failed to insert competition");
+  const { data, error } = await supabase.rpc("upsert_competition_with_mapping", {
+    p_provider: provider,
+    p_provider_entity_id: competitionProviderId,
+    p_name: name,
+  });
+  if (error || !data) throw error ?? new Error("upsert_competition_with_mapping returned no id");
 
-  await createMapping(supabase, provider, "competition", competitionProviderId, data.id);
-  return data.id;
+  knownMappings.set(competitionProviderId, data);
+  return data;
 }
 
 /** Seasons aren't provider-mapped (the provider only reports a bare year, no
  * stable season id) — deduped instead on the table's own (competition_id, name)
  * unique constraint, same race-safe select/insert/re-select shape as profile.ts.
+ *
+ * `name` is the "YYYY/YYYY+1" display string the seasons.name column comment
+ * (migration 0001) has always promised — it's genuinely rendered to users
+ * (teams/[id]'s "League position" card, admin/data-health's gameweek list).
+ * `provider_year` (migration 0028) is the bare year the dedupe key and every
+ * provider-facing lookup (syncStandings in sync-match-details.ts) should read
+ * instead of parsing it back out of `name` — see RECOMMENDATIONS.md item 30.
  *
  * Every fixture sync only ever asks for *today's* fixtures (see
  * syncTodayFixtures below), so whatever season year the provider reports for a
@@ -87,7 +113,7 @@ async function upsertCompetition(
  * default), which is exactly what made "/fantasy" and every team's "League
  * position" permanently empty — see RECOMMENDATIONS.md item 1. */
 async function upsertSeason(supabase: ServiceClient, competitionId: string, seasonYear: number): Promise<string> {
-  const name = String(seasonYear);
+  const name = `${seasonYear}/${seasonYear + 1}`;
 
   const { data: existing, error: selectError } = await supabase
     .from("seasons")
@@ -103,7 +129,7 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
   } else {
     const { data: created, error: insertError } = await supabase
       .from("seasons")
-      .insert({ competition_id: competitionId, name })
+      .insert({ competition_id: competitionId, name, provider_year: seasonYear })
       .select("id")
       .single();
 
@@ -146,39 +172,90 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
   return seasonId;
 }
 
+/** `name` is nullable (migration 0017) rather than backfilled with a fabricated
+ * "Unknown venue" string — a provider id with no reported name stays honestly
+ * unnamed. Never overwrites a real name with a later null, same rule as
+ * upsertPlayer in sync-squads.ts. `knownMappings` is the batched lookup from
+ * batchFindMappedIds — see its doc comment.
+ *
+ * The new-entity branch goes through upsert_venue_with_mapping (migration
+ * 0018) so a mapping insert failure can no longer leave an orphan, unmapped
+ * venue row behind (RECOMMENDATIONS.md item 22). */
 async function upsertVenue(
   supabase: ServiceClient,
   provider: string,
   venueProviderId: string,
   name: string | null,
+  knownMappings: Map<string, string>,
 ): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "venue", venueProviderId);
-  if (existing) return existing;
+  const existing = knownMappings.get(venueProviderId) ?? null;
+  if (existing) {
+    if (name !== null) {
+      const { error } = await supabase.from("venues").update({ name }).eq("id", existing);
+      if (error) throw error;
+    }
+    return existing;
+  }
 
-  const { data, error } = await supabase
-    .from("venues")
-    .insert({ name: name ?? "Unknown venue" })
-    .select("id")
-    .single();
-  if (error || !data) throw error ?? new Error("Failed to insert venue");
+  // p_name is an optional RPC arg backed by a `default null` SQL parameter
+  // (migration 0018) — the generated Args type is `p_name?: string`, never
+  // `string | null` (Postgres has no not-null concept for a plain function
+  // argument), so a null name is conveyed by omitting the key entirely rather
+  // than by passing null through it.
+  const args: Database["public"]["Functions"]["upsert_venue_with_mapping"]["Args"] = {
+    p_provider: provider,
+    p_provider_entity_id: venueProviderId,
+  };
+  if (name !== null) args.p_name = name;
 
-  await createMapping(supabase, provider, "venue", venueProviderId, data.id);
-  return data.id;
+  const { data, error } = await supabase.rpc("upsert_venue_with_mapping", args);
+  if (error || !data) throw error ?? new Error("upsert_venue_with_mapping returned no id");
+
+  knownMappings.set(venueProviderId, data);
+  return data;
 }
 
-async function upsertTeam(supabase: ServiceClient, provider: string, team: NormalizedTeam): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "team", team.providerId);
-  if (existing) return existing;
+/** Updates name on every sync (always provided). short_name/crest_url only
+ * overwrite when the provider actually reported one this time — same
+ * never-clobber-with-null rule as upsertPlayer in sync-squads.ts, so a crest
+ * an admin filled in by hand never gets nulled out by a leaner provider response.
+ * `knownMappings` is the batched lookup from batchFindMappedIds — see its doc comment.
+ *
+ * The new-entity branch goes through upsert_team_with_mapping (migration 0018)
+ * so a mapping insert failure can no longer leave an orphan team row behind
+ * (RECOMMENDATIONS.md item 22). */
+async function upsertTeam(
+  supabase: ServiceClient,
+  provider: string,
+  team: NormalizedTeam,
+  knownMappings: Map<string, string>,
+): Promise<string> {
+  const existing = knownMappings.get(team.providerId) ?? null;
+  if (existing) {
+    const update: Database["public"]["Tables"]["teams"]["Update"] = { name: team.name };
+    if (team.shortName !== null) update.short_name = team.shortName;
+    if (team.crestUrl !== null) update.crest_url = team.crestUrl;
 
-  const { data, error } = await supabase
-    .from("teams")
-    .insert({ name: team.name, short_name: team.shortName, crest_url: team.crestUrl })
-    .select("id")
-    .single();
-  if (error || !data) throw error ?? new Error("Failed to insert team");
+    const { error } = await supabase.from("teams").update(update).eq("id", existing);
+    if (error) throw error;
+    return existing;
+  }
 
-  await createMapping(supabase, provider, "team", team.providerId, data.id);
-  return data.id;
+  // p_short_name/p_crest_url are optional RPC args for the same reason as
+  // upsert_venue_with_mapping's p_name above — see its comment.
+  const args: Database["public"]["Functions"]["upsert_team_with_mapping"]["Args"] = {
+    p_provider: provider,
+    p_provider_entity_id: team.providerId,
+    p_name: team.name,
+  };
+  if (team.shortName !== null) args.p_short_name = team.shortName;
+  if (team.crestUrl !== null) args.p_crest_url = team.crestUrl;
+
+  const { data, error } = await supabase.rpc("upsert_team_with_mapping", args);
+  if (error || !data) throw error ?? new Error("upsert_team_with_mapping returned no id");
+
+  knownMappings.set(team.providerId, data);
+  return data;
 }
 
 interface ResolvedFixtureRefs {
@@ -189,36 +266,52 @@ interface ResolvedFixtureRefs {
   venueId: string | null;
 }
 
+/**
+ * Update-in-place when already mapped, insert-plus-map otherwise — both branches
+ * (and the findMappedId lookup that used to pick between them) now live inside
+ * upsert_fixture_with_mapping (migration 0018), one round trip either way. Unlike
+ * competition/team/venue above there's no batched knownMappings map here: every
+ * fixture's provider id is unique to that fixture, so there's no within-batch
+ * reuse to short-circuit, and folding the lookup into the RPC also closes the
+ * same orphan-fixture-row gap item 22 describes (a mapping insert failing right
+ * after the fixture insert had already committed on its own round trip). */
 async function upsertFixture(
   supabase: ServiceClient,
   provider: string,
   fixture: NormalizedFixture,
   refs: ResolvedFixtureRefs,
 ): Promise<void> {
-  const payload = {
-    competition_id: refs.competitionId,
-    season_id: refs.seasonId,
-    home_team_id: refs.homeTeamId,
-    away_team_id: refs.awayTeamId,
-    venue_id: refs.venueId,
-    status: toDbFixtureStatus(fixture.status),
-    kickoff_at: fixture.kickoffAt,
-    home_score: fixture.homeScore,
-    away_score: fixture.awayScore,
+  // p_venue_id/p_home_score/p_away_score/p_home_score_ht/p_away_score_ht/
+  // p_minute_elapsed are optional RPC args for the same reason as
+  // upsert_venue_with_mapping's p_name — see its comment. Omitting them
+  // (rather than passing null explicitly) still lands as null inside the
+  // function once Postgres substitutes each parameter's `default null`, so
+  // this is exactly equivalent to the old payload object always carrying
+  // fixture.homeScore/awayScore/refs.venueId verbatim, null or not.
+  //
+  // home_score_ht/away_score_ht/minute_elapsed (migration 0028,
+  // RECOMMENDATIONS.md items 57/58) are wired through the same way: real
+  // provider data when the provider reports it, left null (never guessed)
+  // otherwise — see the doc comments on NormalizedFixture in types.ts.
+  const args: Database["public"]["Functions"]["upsert_fixture_with_mapping"]["Args"] = {
+    p_provider: provider,
+    p_provider_entity_id: fixture.providerId,
+    p_competition_id: refs.competitionId,
+    p_season_id: refs.seasonId,
+    p_home_team_id: refs.homeTeamId,
+    p_away_team_id: refs.awayTeamId,
+    p_status: toDbFixtureStatus(fixture.status),
+    p_kickoff_at: fixture.kickoffAt,
   };
+  if (refs.venueId !== null) args.p_venue_id = refs.venueId;
+  if (fixture.homeScore !== null) args.p_home_score = fixture.homeScore;
+  if (fixture.awayScore !== null) args.p_away_score = fixture.awayScore;
+  if (fixture.homeScoreHt !== null) args.p_home_score_ht = fixture.homeScoreHt;
+  if (fixture.awayScoreHt !== null) args.p_away_score_ht = fixture.awayScoreHt;
+  if (fixture.minute !== null) args.p_minute_elapsed = fixture.minute;
 
-  const existingId = await findMappedId(supabase, provider, "fixture", fixture.providerId);
-
-  if (existingId) {
-    const { error } = await supabase.from("fixtures").update(payload).eq("id", existingId);
-    if (error) throw error;
-    return;
-  }
-
-  const { data, error } = await supabase.from("fixtures").insert(payload).select("id").single();
-  if (error || !data) throw error ?? new Error("Failed to insert fixture");
-
-  await createMapping(supabase, provider, "fixture", fixture.providerId, data.id);
+  const { error } = await supabase.rpc("upsert_fixture_with_mapping", args);
+  if (error) throw error;
 }
 
 function todayIsoDate(): string {
@@ -232,10 +325,17 @@ function todayIsoDate(): string {
  * per the schema's RLS design (see supabase/migrations/0001, "a future sync job should use
  * the service_role key"). A bad fixture never aborts the whole batch; every fixture-level
  * failure is caught, logged and rolled into the run's error_message instead.
+ *
+ * Competition/team/venue provider_mappings lookups are batched once up front across the
+ * whole fixtures array (RECOMMENDATIONS.md item 27) rather than re-queried per fixture —
+ * an unfiltered day can be hundreds of fixtures, and this turns the ~6 sequential round
+ * trips per fixture that used to invite a server-action timeout into 3 batch lookups plus
+ * per-fixture work that's now limited to season/fixture resolution and inserts for
+ * whatever competitions/teams/venues actually turned out to be new.
  */
 export async function syncTodayFixtures(): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = getFootballDataProvider();
+  const provider = await getFootballDataProvider();
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -265,10 +365,31 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
         finished_at: new Date().toISOString(),
         records_processed: 0,
         error_message: message,
+        // RECOMMENDATIONS.md item 53: real quota data even on a hard failure —
+        // a rate-limited or otherwise non-OK response still updates this via
+        // ApiFootballError.quotaRemaining (see api-football-request.ts).
+        provider_quota_remaining: provider.getQuotaRemaining(),
       })
       .eq("id", syncRun.id);
     return { status: "failed", recordsProcessed: 0, error: message };
   }
+
+  // RECOMMENDATIONS.md item 27: resolve every distinct competition/team/venue
+  // provider id this whole batch needs in three round trips total, up front,
+  // instead of a findMappedId query per entity per fixture. The per-fixture loop
+  // below then only issues an insert for provider ids that came back missing,
+  // and only ever hits provider_mappings again to write those new rows.
+  const competitionProviderIds = Array.from(new Set(fixtures.map((f) => f.competitionProviderId)));
+  const teamProviderIds = Array.from(new Set(fixtures.flatMap((f) => [f.homeTeam.providerId, f.awayTeam.providerId])));
+  const venueProviderIds = Array.from(
+    new Set(fixtures.map((f) => f.venueProviderId).filter((id): id is string => id !== null)),
+  );
+
+  const [competitionMappings, teamMappings, venueMappings] = await Promise.all([
+    batchFindMappedIds(supabase, provider.name, "competition", competitionProviderIds),
+    batchFindMappedIds(supabase, provider.name, "team", teamProviderIds),
+    batchFindMappedIds(supabase, provider.name, "venue", venueProviderIds),
+  ]);
 
   let processed = 0;
   const errors: string[] = [];
@@ -280,12 +401,13 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
         provider.name,
         fixture.competitionProviderId,
         fixture.competitionName,
+        competitionMappings,
       );
       const seasonId = await upsertSeason(supabase, competitionId, fixture.season);
-      const homeTeamId = await upsertTeam(supabase, provider.name, fixture.homeTeam);
-      const awayTeamId = await upsertTeam(supabase, provider.name, fixture.awayTeam);
+      const homeTeamId = await upsertTeam(supabase, provider.name, fixture.homeTeam, teamMappings);
+      const awayTeamId = await upsertTeam(supabase, provider.name, fixture.awayTeam, teamMappings);
       const venueId = fixture.venueProviderId
-        ? await upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName)
+        ? await upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName, venueMappings)
         : null;
 
       await upsertFixture(supabase, provider.name, fixture, {
@@ -318,6 +440,9 @@ export async function syncTodayFixtures(): Promise<SyncResult> {
       last_synced_at: finishedAt,
       records_processed: processed,
       error_message: errorMessage,
+      // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
+      // not an estimate — see ApiFootballProvider.getQuotaRemaining().
+      provider_quota_remaining: provider.getQuotaRemaining(),
     })
     .eq("id", syncRun.id);
 

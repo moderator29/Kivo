@@ -678,6 +678,7 @@ export type Database = {
           id: string
           kickoff_at: string
           matchday: number | null
+          minute_elapsed: number | null
           season_id: string
           status: Database["public"]["Enums"]["fixture_status"]
           updated_at: string
@@ -695,6 +696,7 @@ export type Database = {
           id?: string
           kickoff_at: string
           matchday?: number | null
+          minute_elapsed?: number | null
           season_id: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -712,6 +714,7 @@ export type Database = {
           id?: string
           kickoff_at?: string
           matchday?: number | null
+          minute_elapsed?: number | null
           season_id?: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -1066,6 +1069,7 @@ export type Database = {
           id: string
           known_as: string | null
           nationality: string | null
+          photo_url: string | null
           position: string | null
           updated_at: string
         }
@@ -1077,6 +1081,7 @@ export type Database = {
           id?: string
           known_as?: string | null
           nationality?: string | null
+          photo_url?: string | null
           position?: string | null
           updated_at?: string
         }
@@ -1088,6 +1093,7 @@ export type Database = {
           id?: string
           known_as?: string | null
           nationality?: string | null
+          photo_url?: string | null
           position?: string | null
           updated_at?: string
         }
@@ -1338,6 +1344,7 @@ export type Database = {
       }
       reports: {
         Row: {
+          content_snapshot: Json | null
           created_at: string
           id: string
           reason: string
@@ -1350,6 +1357,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          content_snapshot?: Json | null
           created_at?: string
           id?: string
           reason: string
@@ -1362,6 +1370,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          content_snapshot?: Json | null
           created_at?: string
           id?: string
           reason?: string
@@ -1398,6 +1407,7 @@ export type Database = {
           id: string
           is_current: boolean
           name: string
+          provider_year: number
           start_date: string | null
           updated_at: string
         }
@@ -1408,6 +1418,7 @@ export type Database = {
           id?: string
           is_current?: boolean
           name: string
+          provider_year: number
           start_date?: string | null
           updated_at?: string
         }
@@ -1418,6 +1429,7 @@ export type Database = {
           id?: string
           is_current?: boolean
           name?: string
+          provider_year?: number
           start_date?: string | null
           updated_at?: string
         }
@@ -1503,6 +1515,7 @@ export type Database = {
           id: string
           last_synced_at: string | null
           provider: string
+          provider_quota_remaining: number | null
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
@@ -1515,6 +1528,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           provider: string
+          provider_quota_remaining?: number | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1527,6 +1541,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           provider?: string
+          provider_quota_remaining?: number | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1582,9 +1597,11 @@ export type Database = {
           created_at: string
           fee_text: string | null
           from_team_id: string | null
+          from_team_provider_id: string | null
           id: string
           player_id: string
           to_team_id: string | null
+          to_team_provider_id: string | null
           transfer_date: string
           transfer_type: Database["public"]["Enums"]["transfer_type"]
           updated_at: string
@@ -1593,9 +1610,11 @@ export type Database = {
           created_at?: string
           fee_text?: string | null
           from_team_id?: string | null
+          from_team_provider_id?: string | null
           id?: string
           player_id: string
           to_team_id?: string | null
+          to_team_provider_id?: string | null
           transfer_date: string
           transfer_type?: Database["public"]["Enums"]["transfer_type"]
           updated_at?: string
@@ -1604,9 +1623,11 @@ export type Database = {
           created_at?: string
           fee_text?: string | null
           from_team_id?: string | null
+          from_team_provider_id?: string | null
           id?: string
           player_id?: string
           to_team_id?: string | null
+          to_team_provider_id?: string | null
           transfer_date?: string
           transfer_type?: Database["public"]["Enums"]["transfer_type"]
           updated_at?: string
@@ -1678,7 +1699,7 @@ export type Database = {
           country: string | null
           created_at: string
           id: string
-          name: string
+          name: string | null
           updated_at: string
         }
         Insert: {
@@ -1687,7 +1708,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           id?: string
-          name: string
+          name?: string | null
           updated_at?: string
         }
         Update: {
@@ -1696,7 +1717,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           id?: string
-          name?: string
+          name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1794,18 +1815,93 @@ export type Database = {
           username: string
         }[]
       }
+      get_xp_total: { Args: { p_profile_id: string }; Returns: number }
       is_username_available: {
         Args: { p_exclude_profile_id?: string; p_username: string }
         Returns: boolean
       }
-      redeem_invite_code: {
-        Args: { p_invite_code: string }
+      join_public_fantasy_league: {
+        Args: { p_league_id: string }
         Returns: {
           id: string
           max_teams: number
           name: string
           season_id: string
         }[]
+      }
+      list_public_fantasy_leagues: {
+        Args: { p_limit?: number; p_offset?: number; p_search_pattern?: string }
+        Returns: {
+          competition_name: string
+          competition_short_name: string
+          created_at: string
+          id: string
+          max_teams: number
+          name: string
+          season_id: string
+          season_name: string
+          team_count: number
+        }[]
+      }
+      mark_notifications_read: {
+        Args: { p_notification_ids: string[] }
+        Returns: undefined
+      }
+      prune_sync_runs: { Args: { p_older_than_days?: number }; Returns: number }
+      redeem_invite_code: {
+        Args: { p_invite_code: string }
+        Returns: {
+          error_message: string
+          id: string
+          max_teams: number
+          name: string
+          season_id: string
+        }[]
+      }
+      upsert_competition_with_mapping: {
+        Args: {
+          p_name: string
+          p_provider: string
+          p_provider_entity_id: string
+        }
+        Returns: string
+      }
+      upsert_fixture_with_mapping: {
+        Args: {
+          p_away_score?: number
+          p_away_score_ht?: number
+          p_away_team_id: string
+          p_competition_id: string
+          p_home_score?: number
+          p_home_score_ht?: number
+          p_home_team_id: string
+          p_kickoff_at: string
+          p_minute_elapsed?: number
+          p_provider: string
+          p_provider_entity_id: string
+          p_season_id: string
+          p_status: Database["public"]["Enums"]["fixture_status"]
+          p_venue_id?: string
+        }
+        Returns: string
+      }
+      upsert_team_with_mapping: {
+        Args: {
+          p_crest_url?: string
+          p_name: string
+          p_provider: string
+          p_provider_entity_id: string
+          p_short_name?: string
+        }
+        Returns: string
+      }
+      upsert_venue_with_mapping: {
+        Args: {
+          p_name?: string
+          p_provider: string
+          p_provider_entity_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
@@ -1830,6 +1926,7 @@ export type Database = {
         | "postponed"
         | "cancelled"
         | "abandoned"
+        | "unknown"
       follow_target_type: "team" | "player" | "competition" | "user"
       moderation_target_type: "post" | "comment" | "profile"
       prediction_outcome: "home_win" | "draw" | "away_win"
@@ -1843,6 +1940,8 @@ export type Database = {
         | "fixture"
         | "fixture_event"
         | "transfer"
+        | "lineup"
+        | "standing"
       reaction_target_type: "post" | "comment"
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
@@ -2006,6 +2105,7 @@ export const Constants = {
         "postponed",
         "cancelled",
         "abandoned",
+        "unknown",
       ],
       follow_target_type: ["team", "player", "competition", "user"],
       moderation_target_type: ["post", "comment", "profile"],
@@ -2020,6 +2120,8 @@ export const Constants = {
         "fixture",
         "fixture_event",
         "transfer",
+        "lineup",
+        "standing",
       ],
       reaction_target_type: ["post", "comment"],
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],

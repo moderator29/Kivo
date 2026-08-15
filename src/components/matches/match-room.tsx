@@ -3,14 +3,15 @@
 import { Radio } from "lucide-react";
 import { PostComposer } from "@/components/social/post-composer";
 import { PostCard } from "@/components/social/post-card";
+import type { ReactionType } from "@/lib/reactions";
 
 export type RoomPost = {
   id: string;
   body: string;
   createdAt: string;
   authorName: string;
-  likeCount: number;
-  likedByViewer: boolean;
+  reactionCount: number;
+  viewerReaction: ReactionType | null;
   commentCount: number;
 };
 
@@ -51,8 +52,8 @@ export function MatchRoomTab({
               body={post.body}
               createdAt={post.createdAt}
               authorName={post.authorName}
-              likeCount={post.likeCount}
-              likedByViewer={post.likedByViewer}
+              reactionCount={post.reactionCount}
+              viewerReaction={post.viewerReaction}
               commentCount={post.commentCount}
               signedIn={signedIn}
               index={index}

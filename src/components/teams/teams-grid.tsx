@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Shield } from "lucide-react";
-import { FadeIn } from "@/components/ui/fade-in";
+import { StaggeredList } from "@/components/ui/staggered-list";
+import { staggerDelay } from "@/lib/stagger";
 import { loadMoreTeams, type TeamListItem } from "@/app/(app)/teams/actions";
 
 /**
@@ -34,26 +35,28 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {teams.map((team, index) => (
-          <FadeIn key={team.id} delay={Math.min((index % 60) * 0.03, 0.3)}>
-            <Link
-              href={`/teams/${team.id}`}
-              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-            >
-              {team.crestUrl ? (
-                <Image src={team.crestUrl} alt={team.name} width={36} height={36} className="h-9 w-9 object-contain" />
-              ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5">
-                  <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-                </div>
-              )}
-              <span className="truncate text-xs font-semibold text-foreground">{team.shortName ?? team.name}</span>
-              {team.country && <span className="truncate text-[10px] text-foreground-subtle">{team.country}</span>}
-            </Link>
-          </FadeIn>
-        ))}
-      </div>
+      <StaggeredList
+        items={teams}
+        keyExtractor={(team) => team.id}
+        delay={(index) => staggerDelay(index % 60, 0.03)}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+        renderItem={(team) => (
+          <Link
+            href={`/teams/${team.id}`}
+            className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+          >
+            {team.crestUrl ? (
+              <Image src={team.crestUrl} alt={team.name} width={36} height={36} className="h-9 w-9 object-contain" />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5">
+                <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
+              </div>
+            )}
+            <span className="truncate text-xs font-semibold text-foreground">{team.shortName ?? team.name}</span>
+            {team.country && <span className="truncate text-[10px] text-foreground-subtle">{team.country}</span>}
+          </Link>
+        )}
+      />
 
       {error && <p className="text-center text-xs text-critical">{error}</p>}
 

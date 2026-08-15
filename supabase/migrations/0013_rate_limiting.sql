@@ -37,3 +37,6 @@ alter table rate_limit_events enable row level security;
 -- same reasoning as xp_ledger — this is trust-sensitive bookkeeping that
 -- only server-side code using the service_role key (which bypasses RLS
 -- entirely) should ever touch.
+
+-- To reverse: drop table rate_limit_events (cascades its index) — every
+-- checkRateLimit() call site in the app would start failing without it.

@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 
-// Same env var convention as the root layout's metadataBase (src/app/layout.tsx).
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+// `||`, not `??` — see the root layout's metadataBase (src/app/layout.tsx)
+// for why: an unset-but-declared env var can be "" rather than undefined.
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 // Robots.txt path matching is prefix-based, so allowing "/teams" also covers
 // "/teams/{id}" detail pages (same for players and leagues) without needing

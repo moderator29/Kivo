@@ -2,6 +2,7 @@ import "server-only";
 import type {
   FootballDataProvider,
   NormalizedFixture,
+  NormalizedFixtureStatistics,
   NormalizedLineups,
   NormalizedManager,
   NormalizedMatchEvent,
@@ -28,6 +29,8 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
     awayTeam: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
     homeScore: null,
     awayScore: null,
+    homeScoreHt: null,
+    awayScoreHt: null,
     venueProviderId: "mock-venue-1",
     venueName: "Remo Stars Stadium",
     retrievedAt: new Date().toISOString(),
@@ -35,19 +38,20 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
 ];
 
 /** Deliberately mirrors the real provider's limitation: no dateOfBirth/nationality
- * from a squads-style listing — see the doc comment on getSquad() in api-football.ts. */
+ * from a squads-style listing — see the doc comment on getSquad() in api-football.ts.
+ * photoUrl stays null too, same zero-fake-data rule — there is no real photo to mock. */
 const MOCK_SQUADS: Record<string, NormalizedPlayer[]> = {
   "mock-team-1": [
-    { providerId: "mock-player-1", fullName: "Chidi Okafor", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper" },
-    { providerId: "mock-player-2", fullName: "Tunde Bakare", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender" },
-    { providerId: "mock-player-3", fullName: "Femi Adisa", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder" },
-    { providerId: "mock-player-4", fullName: "Kelechi Uzo", knownAs: "K. Uzo", dateOfBirth: null, nationality: null, position: "Attacker" },
+    { providerId: "mock-player-1", fullName: "Chidi Okafor", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper", photoUrl: null },
+    { providerId: "mock-player-2", fullName: "Tunde Bakare", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender", photoUrl: null },
+    { providerId: "mock-player-3", fullName: "Femi Adisa", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder", photoUrl: null },
+    { providerId: "mock-player-4", fullName: "Kelechi Uzo", knownAs: "K. Uzo", dateOfBirth: null, nationality: null, position: "Attacker", photoUrl: null },
   ],
   "mock-team-2": [
-    { providerId: "mock-player-5", fullName: "Emeka Nwosu", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper" },
-    { providerId: "mock-player-6", fullName: "Yusuf Danladi", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender" },
-    { providerId: "mock-player-7", fullName: "Obinna Chukwu", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder" },
-    { providerId: "mock-player-8", fullName: "Ahmed Musa Jr", knownAs: null, dateOfBirth: null, nationality: null, position: "Attacker" },
+    { providerId: "mock-player-5", fullName: "Emeka Nwosu", knownAs: null, dateOfBirth: null, nationality: null, position: "Goalkeeper", photoUrl: null },
+    { providerId: "mock-player-6", fullName: "Yusuf Danladi", knownAs: null, dateOfBirth: null, nationality: null, position: "Defender", photoUrl: null },
+    { providerId: "mock-player-7", fullName: "Obinna Chukwu", knownAs: null, dateOfBirth: null, nationality: null, position: "Midfielder", photoUrl: null },
+    { providerId: "mock-player-8", fullName: "Ahmed Musa Jr", knownAs: null, dateOfBirth: null, nationality: null, position: "Attacker", photoUrl: null },
   ],
 };
 
@@ -106,6 +110,55 @@ const MOCK_EVENTS: NormalizedMatchEvent[] = [
     detail: "Yellow Card",
   },
 ];
+
+/** Deliberately leaves the away side's expectedGoals null — not every competition
+ * reports xG on the free tier (see NormalizedFixtureTeamStatistics.expectedGoals'
+ * doc comment), so the mock mirrors that rather than fabricating a number for both. */
+const MOCK_STATISTICS: NormalizedFixtureStatistics = {
+  fixtureProviderId: "mock-1",
+  teams: [
+    {
+      team: { providerId: "mock-team-1", name: "Remo Stars", shortName: "REM", crestUrl: null },
+      shotsTotal: 13,
+      shotsOnTarget: 6,
+      shotsOffTarget: 4,
+      shotsBlocked: 3,
+      shotsInsideBox: 8,
+      shotsOutsideBox: 5,
+      fouls: 9,
+      corners: 6,
+      offsides: 2,
+      possessionPct: 58,
+      yellowCards: 1,
+      redCards: 0,
+      saves: 3,
+      passesTotal: 512,
+      passesAccurate: 441,
+      passesPct: 86,
+      expectedGoals: 1.74,
+    },
+    {
+      team: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
+      shotsTotal: 9,
+      shotsOnTarget: 3,
+      shotsOffTarget: 4,
+      shotsBlocked: 2,
+      shotsInsideBox: 5,
+      shotsOutsideBox: 4,
+      fouls: 12,
+      corners: 3,
+      offsides: 1,
+      possessionPct: 42,
+      yellowCards: 2,
+      redCards: 0,
+      saves: 4,
+      passesTotal: 371,
+      passesAccurate: 298,
+      passesPct: 80,
+      expectedGoals: null,
+    },
+  ],
+};
 
 const MOCK_STANDINGS: NormalizedStandingRow[] = [
   {
@@ -200,6 +253,13 @@ const MOCK_TRANSFERS: Record<string, NormalizedTransfer[]> = {
 export class MockFootballProvider implements FootballDataProvider {
   readonly name = "mock";
 
+  /** The mock never talks to a real provider, so there's no real quota header
+   * to report — null, not a fabricated number (see FootballDataProvider's doc
+   * comment on this method). */
+  getQuotaRemaining(): number | null {
+    return null;
+  }
+
   async getFixturesByDate(): Promise<NormalizedFixture[]> {
     return MOCK_FIXTURES;
   }
@@ -230,5 +290,9 @@ export class MockFootballProvider implements FootballDataProvider {
 
   async getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]> {
     return MOCK_TRANSFERS[playerProviderId] ?? [];
+  }
+
+  async getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null> {
+    return fixtureProviderId === MOCK_STATISTICS.fixtureProviderId ? MOCK_STATISTICS : null;
   }
 }

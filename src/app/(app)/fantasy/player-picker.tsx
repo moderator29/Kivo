@@ -1,0 +1,171 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Search, X, Check, Plus } from "lucide-react";
+import { TeamCrest } from "@/components/ui/team-crest";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
+import { POSITION_GROUPS, SQUAD_RULES, formatFantasyPrice, type PositionGroup } from "./fantasy-rules";
+
+export function PlayerPicker({
+  open,
+  seasonId,
+  filter,
+  onFilterChange,
+  onClose,
+  onAdd,
+  squadPlayerIds,
+  squadCounts,
+  remaining,
+  locked,
+}: {
+  open: boolean;
+  seasonId: string;
+  filter: PositionGroup | "All";
+  onFilterChange: (f: PositionGroup | "All") => void;
+  onClose: () => void;
+  onAdd: (p: FantasyPlayerSearchResult) => void;
+  squadPlayerIds: string[];
+  squadCounts: Record<PositionGroup, number>;
+  remaining: number;
+  locked: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<FantasyPlayerSearchResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [searching, startSearching] = useTransition();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, panelRef, onClose);
+  // Bumped on every search actually fired so a slow earlier response can't
+  // overwrite a faster later one (RECOMMENDATIONS item 85) — a response only
+  // applies if its captured sequence number is still the latest when it
+  // resolves.
+  const searchSeqRef = useRef(0);
+
+  useEffect(() => {
+    if (!open) return;
+    const timeout = setTimeout(() => {
+      const seq = ++searchSeqRef.current;
+      startSearching(async () => {
+        const result = await searchFantasyPlayers(seasonId, query, filter);
+        if (seq !== searchSeqRef.current) return; // superseded by a newer search
+        setError(result.error);
+        setResults(result.players);
+      });
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [open, query, filter, seasonId]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-40 flex flex-col justify-end"
+        >
+          <button aria-label="Close" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="player-picker-title"
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 40, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 36 }}
+            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex max-h-[75vh] flex-col gap-3 rounded-2xl p-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="player-picker-title" className="text-sm font-semibold text-foreground">Add a player</h2>
+              <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5">
+                <X className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search players…"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {(["All", ...POSITION_GROUPS] as const).map((group) => (
+                <button
+                  key={group}
+                  type="button"
+                  onClick={() => onFilterChange(group)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                    filter === group ? "kivo-gradient-victory text-kivo-white" : "border border-white/10 text-foreground-muted hover:bg-white/5"
+                  }`}
+                >
+                  {group}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {locked ? (
+                <p className="py-8 text-center text-xs text-foreground-subtle">This gameweek is locked. Changes are closed.</p>
+              ) : error ? (
+                <p className="py-8 text-center text-xs text-critical">{error}</p>
+              ) : searching && results.length === 0 ? (
+                <p className="py-8 text-center text-xs text-foreground-subtle">Searching…</p>
+              ) : results.length === 0 ? (
+                <p className="py-8 text-center text-xs text-foreground-subtle">
+                  No players synced yet. The picker fills in once KIVO&apos;s football data sync has run.
+                </p>
+              ) : (
+                <div className="flex flex-col divide-y divide-white/5">
+                  {results.map((p) => {
+                    const already = squadPlayerIds.includes(p.id);
+                    const group = p.positionGroup;
+                    const groupFull = group !== "Other" && squadCounts[group] >= SQUAD_RULES[group];
+                    const overBudget = p.price > remaining + 1e-9;
+                    const disabled = already || locked || groupFull || overBudget || group === "Other";
+                    return (
+                      <div key={p.id} className="flex items-center gap-3 py-2.5">
+                        <TeamCrest crestUrl={p.teamCrestUrl} name={p.teamName ?? ""} size={26} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm text-foreground">{p.name}</p>
+                          <p className="truncate text-[11px] text-foreground-subtle">
+                            {[p.position, p.teamName].filter(Boolean).join(" · ") || "-"}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">{formatFantasyPrice(p.price)}</span>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => onAdd(p)}
+                          title={already ? "Already in your squad" : groupFull ? `${group} slots are full` : overBudget ? "Over budget" : undefined}
+                          className="flex shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-40"
+                        >
+                          {already ? (
+                            <>
+                              <Check className="h-3 w-3" strokeWidth={2} /> Added
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-3 w-3" strokeWidth={2} /> Add
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

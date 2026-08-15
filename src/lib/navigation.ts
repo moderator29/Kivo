@@ -58,7 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/matches",
     icon: CalendarDays,
     status: "live",
-    comingSoonDescription: "No fixtures synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No fixtures synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/matches.webp",
   },
   {
@@ -104,7 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/teams",
     icon: Shield,
     status: "live",
-    comingSoonDescription: "No teams synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No teams synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/teams.webp",
   },
   {
@@ -113,7 +113,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/players",
     icon: UserRound,
     status: "live",
-    comingSoonDescription: "No players synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No players synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/players.webp",
   },
   {
@@ -122,7 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/leagues",
     icon: ListOrdered,
     status: "live",
-    comingSoonDescription: "No competitions synced yet. An admin can trigger a sync from Data Health.",
+    comingSoonDescription: "No competitions synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/leagues.webp",
   },
   {
@@ -139,3 +139,20 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "settings", label: "Settings", href: "/settings", icon: Settings, status: "live" },
   { id: "profile", label: "Profile", href: "/profile", icon: CircleUserRound, status: "live" },
 ];
+
+/**
+ * Looks up a nav item by id, throwing a clear, named error immediately if
+ * the id doesn't exist. Every top-level page module resolves its own nav
+ * entry once at module scope (`const item = getNavItem("teams")`) purely to
+ * read its label/icon/coming-soon copy — a typo'd id used to silently
+ * produce `undefined` via `NAV_ITEMS.find(...)!`, surfacing later as an
+ * opaque `Cannot read properties of undefined (reading 'icon')` crash far
+ * from the actual mistake. This fails at the source instead.
+ */
+export function getNavItem(id: string): NavItem {
+  const item = NAV_ITEMS.find((navItem) => navItem.id === id);
+  if (!item) {
+    throw new Error(`getNavItem: no NAV_ITEMS entry with id "${id}"`);
+  }
+  return item;
+}

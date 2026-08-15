@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Trophy } from "lucide-react";
-import { FadeIn } from "@/components/ui/fade-in";
+import { StaggeredList } from "@/components/ui/staggered-list";
+import { staggerDelay } from "@/lib/stagger";
 import { loadMoreLeagues, type LeagueListItem } from "@/app/(app)/leagues/actions";
 
 /**
@@ -34,31 +35,33 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        {leagues.map((league, index) => (
-          <FadeIn key={league.id} delay={Math.min((index % 60) * 0.03, 0.3)}>
-            <Link
-              href={league.hasSeason ? `/leagues/${league.id}` : "#"}
-              className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-            >
-              {league.logoUrl ? (
-                <Image src={league.logoUrl} alt={league.name} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
-              ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
-                  <Trophy className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-                </div>
-              )}
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-foreground">{league.name}</span>
-                <span className="text-xs text-foreground-subtle">
-                  {league.country ?? "International"}
-                  {league.currentSeasonName ? ` · ${league.currentSeasonName}` : ""}
-                </span>
+      <StaggeredList
+        items={leagues}
+        keyExtractor={(league) => league.id}
+        delay={(index) => staggerDelay(index % 60, 0.03)}
+        className="flex flex-col gap-2"
+        renderItem={(league) => (
+          <Link
+            href={league.hasSeason ? `/leagues/${league.id}` : "#"}
+            className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+          >
+            {league.logoUrl ? (
+              <Image src={league.logoUrl} alt={league.name} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
+                <Trophy className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
               </div>
-            </Link>
-          </FadeIn>
-        ))}
-      </div>
+            )}
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-foreground">{league.name}</span>
+              <span className="text-xs text-foreground-subtle">
+                {league.country ?? "International"}
+                {league.currentSeasonName ? ` · ${league.currentSeasonName}` : ""}
+              </span>
+            </div>
+          </Link>
+        )}
+      />
 
       {error && <p className="text-center text-xs text-critical">{error}</p>}
 

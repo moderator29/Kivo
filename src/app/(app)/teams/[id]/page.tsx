@@ -9,36 +9,27 @@ import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { parseUuidParam } from "@/lib/params";
+import { calculateAge } from "@/lib/format";
+import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
-function calculateAge(dateOfBirth: string): number {
-  const dob = new Date(dateOfBirth);
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const monthDiff = now.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age--;
-  return age;
-}
-
-const POSITION_GROUPS = ["Goalkeepers", "Defenders", "Midfielders", "Forwards", "Other"] as const;
+/**
+ * Same 5-way bucketing as fantasy's `positionGroup()` (imported above) — this
+ * page just displays "Other" as a real squad section instead of treating it
+ * as an invalid pick like fantasy does, so it keeps its own group list while
+ * sharing the underlying free-text classifier.
+ */
+const POSITION_GROUPS = ["Goalkeepers", "Defenders", "Midfielders", "Forwards", "Other"] as const satisfies readonly PositionGroupOrOther[];
 type PositionGroup = (typeof POSITION_GROUPS)[number];
-
-function positionGroup(position: string | null): PositionGroup {
-  if (!position) return "Other";
-  const p = position.toLowerCase();
-  if (p.includes("keeper") || p === "gk") return "Goalkeepers";
-  if (p.includes("back") || p.includes("defen") || p === "df") return "Defenders";
-  if (p.includes("mid") || p === "mf") return "Midfielders";
-  if (p.includes("forward") || p.includes("striker") || p.includes("wing") || p === "fw" || p === "st") {
-    return "Forwards";
-  }
-  return "Other";
-}
 
 type FixtureRow = {
   id: string;
@@ -120,11 +111,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function TeamProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parseUuidParam(rawId);
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: team }, { data: standingsRows }, { data: squad }, { data: managers }, { data: upcoming }, { data: recent }, isFollowing] =
+  const [{ data: team }, { data: standingsRows }, { data: squad }, { data: managers }, { data: upcoming }, { data: recent }, isFollowing, squadLastSyncedAt] =
     await Promise.all([
       supabase
         .from("teams")
@@ -143,7 +135,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         .eq("team_id", id),
       supabase
         .from("players")
-        .select("id, full_name, known_as, position, nationality")
+        .select("id, full_name, known_as, position, nationality, photo_url")
         .eq("current_team_id", id)
         .order("full_name", { ascending: true }),
       supabase
@@ -184,6 +176,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             .eq("followed_id", id)
             .then(({ count }) => (count ?? 0) > 0)
         : Promise.resolve(false),
+      // RECOMMENDATIONS.md item 60: squad sync writes entity_type 'player'
+      // (see syncTeamSquad in src/lib/football/sync-squads.ts).
+      getLastSyncedAt(["player"]),
     ]);
 
   if (!team) notFound();
@@ -253,7 +248,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-semibold text-foreground">
-                {currentStanding.position !== null ? `#${currentStanding.position}` : "–"}
+                {currentStanding.position !== null ? `#${currentStanding.position}` : "-"}
               </span>
               <span className="text-xs text-foreground-subtle">
                 {currentStanding.season?.competition?.short_name ?? currentStanding.season?.competition?.name} ·{" "}
@@ -297,7 +292,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               <p className="text-[11px] text-foreground-subtle">
                 {[manager.nationality, manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : null]
                   .filter(Boolean)
-                  .join(" · ") || "No further details on record"}
+                  .join(" · ") || "-"}
               </p>
             </div>
           </div>
@@ -309,10 +304,13 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       </FadeIn>
 
       <FadeIn delay={0.3} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Users className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-          Squad
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Users className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Squad
+          </h2>
+          <LastSyncedNote timestamp={squadLastSyncedAt} />
+        </div>
         {hasSquad ? (
           <div className="flex flex-col gap-4">
             {POSITION_GROUPS.map((group) => {
@@ -330,13 +328,11 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                         href={`/players/${player.id}`}
                         className="flex items-center gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-white/5"
                       >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
-                          <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-                        </div>
+                        <PlayerAvatar photoUrl={player.photo_url} name={player.known_as ?? player.full_name} size={36} />
                         <div className="min-w-0">
                           <p className="truncate text-sm text-foreground">{player.known_as ?? player.full_name}</p>
                           <p className="truncate text-[11px] text-foreground-subtle">
-                            {[player.position, player.nationality].filter(Boolean).join(" · ") || "—"}
+                            {[player.position, player.nationality].filter(Boolean).join(" · ") || "-"}
                           </p>
                         </div>
                       </Link>
@@ -350,7 +346,11 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-5 text-center text-sm text-foreground-muted">
             Squad not yet synced for this team.
             {canManageFootballData(profile?.role) && (
-              <InlineSyncButton label="Sync squad" action={triggerTeamSquadSync.bind(null, team.id)} />
+              <InlineSyncButton
+                label="Sync squad"
+                action={triggerTeamSquadSync.bind(null, team.id)}
+                hint="Needs this team's fixtures synced first, so it has a provider mapping to sync against."
+              />
             )}
           </div>
         )}

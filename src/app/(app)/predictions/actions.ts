@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
-
-type PredictionOutcome = "home_win" | "draw" | "away_win";
+import type { PredictionOutcome } from "@/lib/predictions";
 
 /**
  * No cron/live-polling job exists to flip `locked_at` at kickoff (see

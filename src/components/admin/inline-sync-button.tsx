@@ -6,13 +6,17 @@ import { RefreshCw, Check, AlertTriangle } from "lucide-react";
 type InlineSyncButtonProps = {
   label: string;
   action: () => Promise<{ error: string | null; recordsProcessed?: number }>;
+  /** Optional dependency-chain reminder shown under the button (RECOMMENDATIONS.md
+   * item 61) — e.g. "Requires this team's fixtures synced first". Only worth
+   * setting on a sync action whose prerequisite isn't already obvious from context. */
+  hint?: string;
 };
 
 /** Small inline variant of the Data Health "Sync now" button, dropped into an
  * empty-state section (team squad, match lineups, league standings) so an
  * admin can pull real data right where they noticed it's missing — no need to
  * hop over to the Data Health screen. Same server actions, same guards. */
-export function InlineSyncButton({ label, action }: InlineSyncButtonProps) {
+export function InlineSyncButton({ label, action, hint }: InlineSyncButtonProps) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ error: string | null; recordsProcessed?: number } | null>(null);
 
@@ -35,6 +39,7 @@ export function InlineSyncButton({ label, action }: InlineSyncButtonProps) {
         <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} strokeWidth={2} />
         {pending ? "Syncing…" : label}
       </button>
+      {hint && !result && <p className="max-w-[16rem] text-center text-[10px] text-foreground-subtle">{hint}</p>}
       {result && (
         <p className={`flex items-center gap-1 text-[11px] ${result.error ? "text-critical" : "text-live"}`} role="status">
           {result.error ? (

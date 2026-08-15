@@ -10,7 +10,9 @@ import { triggerStandingsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
+import { getLastSyncedAt } from "@/lib/football/last-synced";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -37,7 +39,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: competition }, isFollowing] = await Promise.all([
+  const [{ data: competition }, isFollowing, standingsLastSyncedAt] = await Promise.all([
     supabase
       .from("competitions")
       .select("id, name, short_name, country, logo_url, seasons(id, name, is_current)")
@@ -52,6 +54,9 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           .eq("followed_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 60: standings sync writes entity_type 'standing'
+    // (see syncStandings in src/lib/football/sync-match-details.ts).
+    getLastSyncedAt(["standing"]),
   ]);
 
   if (!competition) notFound();
@@ -105,12 +110,19 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
       </div>
 
       <FadeIn delay={0.15} className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Standings</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Standings</h2>
+          <LastSyncedNote timestamp={standingsLastSyncedAt} />
+        </div>
         {!standings || standings.length === 0 ? (
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
             Standings haven&apos;t been synced yet for this competition.
             {currentSeason && canManageFootballData(profile?.role) && (
-              <InlineSyncButton label="Sync standings" action={triggerStandingsSync.bind(null, currentSeason.id)} />
+              <InlineSyncButton
+                label="Sync standings"
+                action={triggerStandingsSync.bind(null, currentSeason.id)}
+                hint="Needs this competition's fixtures synced first, so it has a provider mapping."
+              />
             )}
           </div>
         ) : (

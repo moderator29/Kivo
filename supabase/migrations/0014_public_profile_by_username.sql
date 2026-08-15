@@ -81,3 +81,7 @@ $$;
 
 revoke execute on function public.get_public_profile_stats(uuid) from public;
 grant execute on function public.get_public_profile_stats(uuid) to anon, authenticated;
+
+-- To reverse: drop function public.get_public_profile_by_username(text);
+-- drop function public.get_public_profile_stats(uuid) — /u/[username] and any
+-- public profile stats display depend on both.

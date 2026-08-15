@@ -1,17 +1,101 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Heart, Flag, Check } from "lucide-react";
+import { Flag, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { toggleLike } from "@/app/(app)/social/actions";
 import { reportContent } from "@/app/(app)/social/report-actions";
 import { CommentThread } from "@/components/social/comment-thread";
+import { ReactionPicker } from "@/components/social/reaction-picker";
+import type { ReactionType } from "@/lib/reactions";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 
 const REPORT_REASONS = ["Spam", "Harassment or abuse", "Misinformation", "Inappropriate content", "Other"] as const;
+
+// Matches bare http(s) URLs; the capturing group means String.split() keeps the
+// matched substrings in the result, alternating with the surrounding plain text.
+const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
+// Trailing punctuation that's almost always sentence punctuation rather than
+// part of the URL itself (e.g. "check this out: https://kivo.app." -> the
+// period shouldn't be swallowed into the href).
+const TRAILING_PUNCTUATION = /[),.;:!?'"\]}]+$/;
+
+/**
+ * Splits a post body into plain-text and link segments for safe rendering.
+ * Never builds HTML strings - each URL becomes a real React <a> element, so
+ * JSX escaping (not string concatenation) is what keeps this XSS-safe.
+ */
+function linkifyBody(body: string) {
+  const parts = body.split(URL_PATTERN);
+  return parts.map((part, i) => {
+    // split() with a single capturing group alternates plain text (even
+    // indices) with matched URLs (odd indices).
+    if (i % 2 === 0 || !part) return part;
+    const trailingMatch = part.match(TRAILING_PUNCTUATION);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    const url = trailing ? part.slice(0, -trailing.length) : part;
+    if (!url) return part;
+    return (
+      <Fragment key={i}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-kivo-cyan underline underline-offset-2 hover:text-kivo-cyan/80"
+        >
+          {url}
+        </a>
+        {trailing}
+      </Fragment>
+    );
+  });
+}
+
+function PostBody({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const bodyRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    function measure() {
+      if (!el) return;
+      setIsOverflowing(el.scrollHeight - el.clientHeight > 1);
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [body]);
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <p
+        ref={bodyRef}
+        className={cn(
+          "whitespace-pre-wrap text-sm leading-relaxed text-foreground",
+          // Tailwind needs the full class name literal in source to generate it,
+          // so this can't be built from a dynamic line-count constant.
+          !expanded && "line-clamp-5",
+        )}
+      >
+        {linkifyBody(body)}
+      </p>
+      {(isOverflowing || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 interface PostCardProps {
   id: string;
@@ -21,8 +105,8 @@ interface PostCardProps {
   /** Optional so existing call sites that haven't wired author identity through
    * yet still type-check; the name simply doesn't link without it. */
   authorUsername?: string | null;
-  likeCount: number;
-  likedByViewer: boolean;
+  reactionCount: number;
+  viewerReaction: ReactionType | null;
   commentCount: number;
   signedIn: boolean;
   index?: number;
@@ -34,17 +118,14 @@ export function PostCard({
   createdAt,
   authorName,
   authorUsername = null,
-  likeCount,
-  likedByViewer,
+  reactionCount,
+  viewerReaction,
   commentCount,
   signedIn,
   index = 0,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [optimisticLiked, setOptimisticLiked] = useState(likedByViewer);
-  const [optimisticCount, setOptimisticCount] = useState(likeCount);
-  const [pending, startTransition] = useTransition();
 
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [reported, setReported] = useState(false);
@@ -92,32 +173,6 @@ export function PostCard({
     });
   }
 
-  function handleLike() {
-    if (!signedIn) {
-      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
-      return;
-    }
-    // Guard against rapid double-clicks racing two toggles against the server —
-    // the button is also disabled while pending, this is defense in depth.
-    if (pending) return;
-
-    const previousCount = optimisticCount;
-    const nextLiked = !optimisticLiked;
-    setOptimisticLiked(nextLiked);
-    setOptimisticCount((c) => c + (nextLiked ? 1 : -1));
-    startTransition(async () => {
-      const result = await toggleLike(id, optimisticLiked);
-      if (result.error) {
-        // Revert on failure — never leave the UI claiming a reaction that didn't
-        // persist. Reverts to the pre-click optimistic count, not the original
-        // server-rendered `likeCount` prop, which can be stale after an earlier
-        // successful toggle in the same session.
-        setOptimisticLiked(optimisticLiked);
-        setOptimisticCount(previousCount);
-      }
-    });
-  }
-
   return (
     <motion.article
       // Anchor target for notification click-through (see postHref() in
@@ -149,29 +204,9 @@ export function PostCard({
           <span className="text-xs text-foreground-subtle">{timeAgo(createdAt)}</span>
         </div>
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{body}</p>
+      <PostBody body={body} />
       <div className="flex items-center justify-between gap-2">
-        <motion.button
-          onClick={handleLike}
-          disabled={pending}
-          aria-pressed={optimisticLiked}
-          whileTap={{ scale: 0.88 }}
-          className={cn(
-            "flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-70",
-            optimisticLiked ? "text-critical" : "text-foreground-subtle hover:text-foreground-muted",
-          )}
-        >
-          <motion.span
-            key={optimisticLiked ? "liked" : "unliked"}
-            initial={{ scale: 0.5 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 600, damping: 12 }}
-            className="flex items-center"
-          >
-            <Heart className="h-4 w-4" strokeWidth={1.75} fill={optimisticLiked ? "currentColor" : "none"} />
-          </motion.span>
-          {optimisticCount > 0 ? optimisticCount : "Like"}
-        </motion.button>
+        <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />
 
         <div ref={reportMenuRef} className="relative">
           <motion.button

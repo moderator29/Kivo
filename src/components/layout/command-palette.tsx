@@ -28,6 +28,11 @@ export function CommandPalette() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeOptionRef = useRef<HTMLButtonElement | null>(null);
+  // Bumped on every search actually fired so a slow earlier response can't
+  // overwrite a faster later one (RECOMMENDATIONS item 85) — a response only
+  // applies if its captured sequence number is still the latest when it
+  // resolves.
+  const searchSeqRef = useRef(0);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -96,12 +101,15 @@ export function CommandPalette() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       if (query.trim().length < 2) {
+        searchSeqRef.current += 1; // invalidate any still in-flight search
         setResults([]);
         setActiveIndex(0);
         return;
       }
+      const seq = ++searchSeqRef.current;
       startTransition(async () => {
         const next = await searchPlatform(query);
+        if (seq !== searchSeqRef.current) return; // superseded by a newer search
         setResults(next);
         setActiveIndex(0);
       });

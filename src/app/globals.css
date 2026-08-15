@@ -172,6 +172,31 @@ body {
   }
 }
 
+/* Backs the `<FadeIn>` component (src/components/ui/fade-in.tsx): a plain CSS
+   entrance so server-rendered content becomes visible the instant it paints,
+   never gated on client JS hydrating and a `motion` component mounting.
+   `both` fill mode applies the `from` state during any `animation-delay` (so
+   content still starts hidden/offset, matching the old JS-driven timing) and
+   holds the `to` state once finished — no separate base `opacity: 0` needed,
+   so if animations somehow don't run at all the content still ends up fully
+   visible rather than stuck invisible. Clamped to near-instant by the
+   prefers-reduced-motion block below, same as every other animation here.
+   RECOMMENDATIONS.md item 76. */
+@keyframes kivo-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kivo-fade-in {
+  animation: kivo-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
