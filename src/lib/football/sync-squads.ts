@@ -3,47 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
+import { createMapping, findMappedId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedManager, NormalizedPlayer } from "./types";
 
 type ServiceClient = SupabaseClient<Database>;
-type EntityType = Database["public"]["Enums"]["provider_entity_type"];
-
-// Deliberately duplicated from sync.ts rather than imported/exported from it — see
-// AGENTS.md/the task brief for why sync.ts stays untouched: these two small helpers
-// (find/create a provider_mappings row) are the only pieces this file needs from it.
-async function findMappedId(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("kivo_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .eq("provider_entity_id", providerEntityId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.kivo_entity_id ?? null;
-}
-
-async function createMapping(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-  kivoEntityId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("provider_mappings")
-    .insert({ provider, entity_type: entityType, provider_entity_id: providerEntityId, kivo_entity_id: kivoEntityId });
-  // 23505 = another concurrent sync already created this mapping — fine, it points
-  // at the same kivo entity either way.
-  if (error && error.code !== "23505") throw error;
-}
 
 /**
  * Upserts a player by provider mapping. On an update, only fields the provider

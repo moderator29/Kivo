@@ -1401,6 +1401,7 @@ export type Database = {
           id: string
           is_current: boolean
           name: string
+          provider_year: number
           start_date: string | null
           updated_at: string
         }
@@ -1411,6 +1412,7 @@ export type Database = {
           id?: string
           is_current?: boolean
           name: string
+          provider_year: number
           start_date?: string | null
           updated_at?: string
         }
@@ -1421,6 +1423,7 @@ export type Database = {
           id?: string
           is_current?: boolean
           name?: string
+          provider_year?: number
           start_date?: string | null
           updated_at?: string
         }

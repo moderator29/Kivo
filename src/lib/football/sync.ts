@@ -94,6 +94,13 @@ async function upsertCompetition(
  * stable season id) — deduped instead on the table's own (competition_id, name)
  * unique constraint, same race-safe select/insert/re-select shape as profile.ts.
  *
+ * `name` is the "YYYY/YYYY+1" display string the seasons.name column comment
+ * (migration 0001) has always promised — it's genuinely rendered to users
+ * (teams/[id]'s "League position" card, admin/data-health's gameweek list).
+ * `provider_year` (migration 0028) is the bare year the dedupe key and every
+ * provider-facing lookup (syncStandings in sync-match-details.ts) should read
+ * instead of parsing it back out of `name` — see RECOMMENDATIONS.md item 30.
+ *
  * Every fixture sync only ever asks for *today's* fixtures (see
  * syncTodayFixtures below), so whatever season year the provider reports for a
  * competition right now is, by definition, that competition's current season —
@@ -106,7 +113,7 @@ async function upsertCompetition(
  * default), which is exactly what made "/fantasy" and every team's "League
  * position" permanently empty — see RECOMMENDATIONS.md item 1. */
 async function upsertSeason(supabase: ServiceClient, competitionId: string, seasonYear: number): Promise<string> {
-  const name = String(seasonYear);
+  const name = `${seasonYear}/${seasonYear + 1}`;
 
   const { data: existing, error: selectError } = await supabase
     .from("seasons")
@@ -122,7 +129,7 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
   } else {
     const { data: created, error: insertError } = await supabase
       .from("seasons")
-      .insert({ competition_id: competitionId, name })
+      .insert({ competition_id: competitionId, name, provider_year: seasonYear })
       .select("id")
       .single();
 

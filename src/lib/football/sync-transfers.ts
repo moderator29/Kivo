@@ -3,69 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
+import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedTransfer } from "./types";
 
 type ServiceClient = SupabaseClient<Database>;
-type EntityType = Database["public"]["Enums"]["provider_entity_type"];
-
-// Deliberately duplicated from sync.ts — see the doc comment at the top of
-// sync-squads.ts for why these small helpers live here again instead of being
-// imported from (or added to) the already-reviewed sync.ts.
-async function findMappedId(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("kivo_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .eq("provider_entity_id", providerEntityId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.kivo_entity_id ?? null;
-}
-
-/** Reverse of findMappedId — given a KIVO id, find the provider's own id for it.
- * Needed here (unlike sync.ts) because the caller passes in a KIVO player id and
- * this file has to go the other direction to call the provider API. Same pattern
- * as findProviderEntityId in sync-match-details.ts. */
-async function findProviderEntityId(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  kivoEntityId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("provider_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .eq("kivo_entity_id", kivoEntityId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.provider_entity_id ?? null;
-}
-
-async function createMapping(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-  kivoEntityId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("provider_mappings")
-    .insert({ provider, entity_type: entityType, provider_entity_id: providerEntityId, kivo_entity_id: kivoEntityId });
-  // 23505 = another concurrent sync already created this mapping — fine, it points
-  // at the same kivo entity either way.
-  if (error && error.code !== "23505") throw error;
-}
 
 /**
  * Resolves a transfer's team side to a KIVO team id. Both sides are optional per

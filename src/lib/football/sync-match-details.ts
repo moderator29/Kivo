@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
+import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
 import type {
@@ -15,64 +16,6 @@ import type {
 } from "./types";
 
 type ServiceClient = SupabaseClient<Database>;
-type EntityType = Database["public"]["Enums"]["provider_entity_type"];
-
-// Deliberately duplicated from sync.ts — see the doc comment at the top of
-// sync-squads.ts for why these small helpers live here again instead of being
-// imported from (or added to) the already-reviewed sync.ts.
-async function findMappedId(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("kivo_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .eq("provider_entity_id", providerEntityId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.kivo_entity_id ?? null;
-}
-
-/** Reverse of findMappedId — given a KIVO id, find the provider's own id for it.
- * Needed here (unlike sync.ts) because callers pass in a KIVO fixture/season id
- * and this file has to go the other direction to call the provider API. */
-async function findProviderEntityId(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  kivoEntityId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("provider_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .eq("kivo_entity_id", kivoEntityId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.provider_entity_id ?? null;
-}
-
-async function createMapping(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityId: string,
-  kivoEntityId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("provider_mappings")
-    .insert({ provider, entity_type: entityType, provider_entity_id: providerEntityId, kivo_entity_id: kivoEntityId });
-  // 23505 = another concurrent sync already created this mapping — fine, it points
-  // at the same kivo entity either way.
-  if (error && error.code !== "23505") throw error;
-}
 
 async function upsertTeam(supabase: ServiceClient, provider: string, team: NormalizedTeam): Promise<string> {
   const existing = await findMappedId(supabase, provider, "team", team.providerId);
@@ -453,18 +396,19 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
     return { status: "failed", recordsProcessed: 0, error: message };
   };
 
+  // provider_year (migration 0028, RECOMMENDATIONS.md item 30) is the bare
+  // year upsertSeason in sync.ts recorded alongside the "YYYY/YYYY+1" display
+  // string it writes to `name` — read that directly instead of parsing it
+  // back out of the display string.
   const { data: season, error: seasonError } = await supabase
     .from("seasons")
-    .select("id, competition_id, name")
+    .select("id, competition_id, provider_year")
     .eq("id", seasonId)
     .maybeSingle();
   if (seasonError) return fail(seasonError.message);
   if (!season) return fail(`Season ${seasonId} not found.`);
 
-  const year = Number(season.name);
-  if (!Number.isFinite(year)) {
-    return fail(`Season ${seasonId} has a non-numeric name ("${season.name}") that can't be mapped to a provider year.`);
-  }
+  const year = season.provider_year;
 
   const leagueProviderId = await findProviderEntityId(supabase, provider.name, "competition", season.competition_id);
   if (!leagueProviderId) {
