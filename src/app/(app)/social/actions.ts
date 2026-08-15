@@ -41,6 +41,16 @@ export async function createPost(formData: FormData) {
   // user_badges swallows the duplicate) — no need to check "is this their first."
   await Promise.all([awardXp(profile.id, 2, "Posted in the community"), awardBadge(profile.id, "first_post")]);
 
+  // Real running total, not a separate counter — counts this user's actual
+  // posts rows straight from the table that was just inserted into.
+  const { count: postCount } = await supabase
+    .from("posts")
+    .select("id", { count: "exact", head: true })
+    .eq("author_profile_id", profile.id);
+  if ((postCount ?? 0) >= 10) {
+    await awardBadge(profile.id, "ten_posts");
+  }
+
   revalidatePath("/social");
   if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
   return { error: null };

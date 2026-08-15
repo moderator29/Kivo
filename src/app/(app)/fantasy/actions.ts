@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { getOrCreateFantasyTeam, ensureFantasyPlayerPrices } from "@/lib/fantasy";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { awardBadge } from "@/lib/rewards";
 import {
   generateInviteCode,
   positionGroup,
@@ -57,6 +58,9 @@ export async function createFantasyLeague(input: {
     if (!error && league) {
       const { error: teamError } = await getOrCreateFantasyTeam(profile.id, league.id);
       if (teamError) return { error: teamError, leagueId: null };
+      // A real fantasy_teams row now exists for this profile — genuinely
+      // "joined" a league, same condition redeem_invite_code satisfies below.
+      await awardBadge(profile.id, "fantasy_league_joined");
       revalidatePath("/fantasy");
       return { error: null, leagueId: league.id };
     }
@@ -88,6 +92,8 @@ export async function joinFantasyLeague(inviteCode: string) {
     // them straight through instead of a generic fallback.
     return { error: error.message || "Couldn't join that league. Try again." };
   }
+
+  await awardBadge(profile.id, "fantasy_league_joined");
 
   revalidatePath("/fantasy");
   return { error: null };

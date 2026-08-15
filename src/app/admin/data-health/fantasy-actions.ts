@@ -5,6 +5,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
+import { awardBadge } from "@/lib/rewards";
 import { groupFixturesByGameweek } from "@/lib/fantasy";
 import {
   computePlayerMatchFacts,
@@ -277,6 +278,22 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   if (upsertError) {
     console.error("Failed to write fantasy points", upsertError);
     return { error: "Couldn't save fantasy points. Try again." };
+  }
+
+  // "Scored" means a real positive fantasy_points row just written above —
+  // never awarded for a zero or unplayed gameweek. Resolve team -> owner via
+  // fantasy_teams (fantasy_points has no profile_id column of its own).
+  const scoringTeamIds = upsertRows.filter((r) => r.points > 0).map((r) => r.fantasy_team_id);
+  if (scoringTeamIds.length > 0) {
+    const { data: scoringTeams, error: scoringTeamsError } = await service
+      .from("fantasy_teams")
+      .select("id, owner_profile_id")
+      .in("id", scoringTeamIds);
+    if (scoringTeamsError) {
+      console.error("Failed to load fantasy team owners for badge awarding", scoringTeamsError);
+    } else {
+      await Promise.all((scoringTeams ?? []).map((t) => awardBadge(t.owner_profile_id, "fantasy_gameweek_scored")));
+    }
   }
 
   await logAudit(profile.id, "score_fantasy_gameweek", "fantasy_points", {

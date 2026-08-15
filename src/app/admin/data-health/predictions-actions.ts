@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { awardXp } from "@/lib/rewards";
+import { awardXp, awardBadge } from "@/lib/rewards";
 import { logAudit } from "@/lib/audit";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 
@@ -96,6 +96,19 @@ export async function scorePredictions(): Promise<{ error: string | null; record
     processed += 1;
     if (correct) {
       await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction");
+      await awardBadge(row.profile_id, "first_prediction_correct");
+
+      // Real running total, not a guessed streak — counts this user's
+      // actually-scored correct predictions straight from the predictions
+      // table (points_awarded is only ever set by this same scoring pass).
+      const { count: correctCount } = await service
+        .from("predictions")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", row.profile_id)
+        .gt("points_awarded", 0);
+      if ((correctCount ?? 0) >= 5) {
+        await awardBadge(row.profile_id, "five_predictions_correct");
+      }
     }
   }
 
