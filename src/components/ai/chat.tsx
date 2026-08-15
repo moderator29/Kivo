@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image";
 import { motion } from "motion/react";
 import { Sparkles, ArrowUp, SquarePen, Copy, Check } from "lucide-react";
+import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
 import { cn } from "@/lib/utils";
 import { formatClockTime } from "@/lib/format";
 import { ConversationHistoryPanel } from "@/components/ai/conversation-history";
@@ -352,33 +354,54 @@ export function AiChat({
         )}
 
         {!loadingConversation && messages.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-            className="kivo-glass flex flex-col gap-3 rounded-2xl p-5"
-          >
-            <p className="text-sm text-foreground-muted">
-              Ask me anything about football. I only state facts KIVO has actually verified. If the data isn&apos;t
-              synced yet, I&apos;ll say so instead of guessing.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((s, i) => (
-                <motion.button
-                  key={s}
-                  onClick={() => send(s)}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.14 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                  whileHover={{ y: -2, transition: { duration: 0.15 } }}
-                  whileTap={{ scale: 0.96 }}
-                  className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-kivo-cyan/40 hover:bg-white/[0.06] hover:text-foreground"
-                >
-                  {s}
-                </motion.button>
-              ))}
-            </div>
-          </motion.div>
+          <>
+            {/* Third of the three commissioned KIVO artwork pieces placed off
+                the landing page this session (see the hero's placement
+                comment in src/app/page.tsx for the trademark check they went
+                through) — a "command center" composite that reads naturally
+                as the Copilot's own welcome visual. Same edge-masked,
+                floating treatment as the hero, only shown before a
+                conversation actually starts so it never competes with real
+                chat messages. */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="flex justify-center"
+            >
+              <div className="kivo-artwork-float kivo-artwork-mask relative h-40 w-64 sm:h-48 sm:w-80">
+                <Image src={kivoCommandArtwork} alt="" fill className="object-contain" sizes="320px" />
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+              className="kivo-glass flex flex-col gap-3 rounded-2xl p-5"
+            >
+              <p className="text-sm text-foreground-muted">
+                Ask me anything about football. I only state facts KIVO has actually verified. If the data isn&apos;t
+                synced yet, I&apos;ll say so instead of guessing.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s, i) => (
+                  <motion.button
+                    key={s}
+                    onClick={() => send(s)}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.14 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                    whileHover={{ y: -2, transition: { duration: 0.15 } }}
+                    whileTap={{ scale: 0.96 }}
+                    className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-kivo-cyan/40 hover:bg-white/[0.06] hover:text-foreground"
+                  >
+                    {s}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          </>
         )}
 
         {messages.map((m) => (

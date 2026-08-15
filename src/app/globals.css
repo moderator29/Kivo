@@ -211,6 +211,31 @@ body {
   animation: kivo-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Shared treatment for the commissioned KIVO artwork pieces (public/brand/
+   kivo-artwork-*.webp) wherever they're used past the landing hero: a slow
+   float plus a radial mask so the image's own soft glow dissolves into the
+   page background at its edges instead of showing a hard rectangle. Same
+   values as the hero's inline version in src/app/page.tsx, pulled out here
+   since more than one page now reuses it. */
+@keyframes kivo-artwork-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.kivo-artwork-float {
+  animation: kivo-artwork-float 7s ease-in-out infinite;
+}
+
+.kivo-artwork-mask {
+  mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+  -webkit-mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* RECOMMENDATIONS.md item 155: this used to clamp `transition-duration`
      on every element too, which also snapped non-motion feedback —
