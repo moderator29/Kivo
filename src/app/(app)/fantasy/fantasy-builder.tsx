@@ -24,6 +24,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { setGameweekRoster, setFantasyCaptain, searchFantasyPlayers, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
+import { HowScoringWorks } from "./how-scoring-works";
 import {
   POSITION_GROUPS,
   SQUAD_RULES,
@@ -382,6 +383,10 @@ export function FantasyBuilder({
               valueClass="text-foreground"
               caption={pointsAvailable ? undefined : "Available after this gameweek's matches finish"}
             />
+          </FadeIn>
+
+          <FadeIn delay={0.08}>
+            <HowScoringWorks />
           </FadeIn>
 
           <FadeIn delay={0.1} className="flex flex-wrap gap-2">

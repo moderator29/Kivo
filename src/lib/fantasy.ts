@@ -194,6 +194,64 @@ export async function carryForwardFantasyRoster(
   return { carriedFromGameweekNumber: null };
 }
 
+const GAMEWEEK_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type GameweekFixtureGroup = { number: number; deadlineAt: string; fixtureIds: string[] };
+
+/**
+ * Groups a season's fixtures (must already be ordered by kickoff_at
+ * ascending — both callers below query that way) into gameweeks: by the
+ * provider's own `matchday` when every fixture in the season has one, else
+ * bucketed by calendar week from the season's first kickoff and renumbered
+ * 1..N chronologically. This is the exact grouping generateFantasyGameweeks
+ * (src/app/admin/data-health/fantasy-actions.ts) uses to create
+ * fantasy_gameweeks rows in the first place, extracted here so
+ * scoreFantasyGameweek can find precisely the same fixture set for a given
+ * gameweek's scoring pass — the two must never disagree about which
+ * fixtures belong to which gameweek number.
+ */
+export function groupFixturesByGameweek(
+  fixtures: { id: string; matchday: number | null; kickoff_at: string }[],
+): Map<number, GameweekFixtureGroup> {
+  const groups = new Map<number, GameweekFixtureGroup>();
+  if (fixtures.length === 0) return groups;
+
+  const allHaveMatchday = fixtures.every((f) => f.matchday !== null);
+  if (allHaveMatchday) {
+    for (const f of fixtures) {
+      const number = f.matchday as number;
+      const existing = groups.get(number);
+      if (!existing) {
+        groups.set(number, { number, deadlineAt: f.kickoff_at, fixtureIds: [f.id] });
+      } else {
+        existing.fixtureIds.push(f.id);
+        if (f.kickoff_at < existing.deadlineAt) existing.deadlineAt = f.kickoff_at;
+      }
+    }
+    return groups;
+  }
+
+  const seasonStartMs = new Date(fixtures[0].kickoff_at).getTime();
+  const byWeekIndex = new Map<number, { deadlineAt: string; fixtureIds: string[] }>();
+  for (const f of fixtures) {
+    const weekIndex = Math.floor((new Date(f.kickoff_at).getTime() - seasonStartMs) / GAMEWEEK_WEEK_MS);
+    const existing = byWeekIndex.get(weekIndex);
+    if (!existing) {
+      byWeekIndex.set(weekIndex, { deadlineAt: f.kickoff_at, fixtureIds: [f.id] });
+    } else {
+      existing.fixtureIds.push(f.id);
+      if (f.kickoff_at < existing.deadlineAt) existing.deadlineAt = f.kickoff_at;
+    }
+  }
+  const sortedWeekIndexes = [...byWeekIndex.keys()].sort((a, b) => a - b);
+  sortedWeekIndexes.forEach((weekIndex, i) => {
+    const number = i + 1;
+    const bucket = byWeekIndex.get(weekIndex)!;
+    groups.set(number, { number, deadlineAt: bucket.deadlineAt, fixtureIds: bucket.fixtureIds });
+  });
+  return groups;
+}
+
 /** Fetches fantasy_price for a set of players in a season, defaulting any
  * still-missing row to DEFAULT_FANTASY_PRICE in memory (does not write) —
  * used where a fire-and-forget backfill isn't warranted (e.g. read paths

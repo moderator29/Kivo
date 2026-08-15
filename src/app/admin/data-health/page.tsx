@@ -1,11 +1,13 @@
-import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Activity } from "lucide-react";
+import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Activity, ShieldCheck } from "lucide-react";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
 import { ScorePredictionsButton } from "@/components/admin/score-predictions-button";
+import { ScoreFantasyGameweekButton } from "@/components/admin/score-fantasy-gameweek-button";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
+import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
 
 type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
@@ -79,6 +81,24 @@ export default async function DataHealthPage() {
     unscoredPredictions = count ?? 0;
   }
 
+  // fantasy_gameweeks is public-read, but fantasy_points is owner-only RLS
+  // (fantasy_points_select_own) — a plain client can't see whether other
+  // teams' gameweeks have been scored, so that check goes through the
+  // service-role client, same rationale as unscoredPredictions above.
+  const { data: recentGameweeks } = await supabase
+    .from("fantasy_gameweeks")
+    .select("id, number, deadline_at, is_current, season:seasons(name, competition:competitions(short_name, name))")
+    .order("deadline_at", { ascending: false })
+    .limit(8);
+
+  const gameweekIds = (recentGameweeks ?? []).map((g) => g.id);
+  let scoredGameweekIds = new Set<string>();
+  if (gameweekIds.length > 0) {
+    const service = createServiceRoleSupabaseClient();
+    const { data: pointsRows } = await service.from("fantasy_points").select("gameweek_id").in("gameweek_id", gameweekIds);
+    scoredGameweekIds = new Set((pointsRows ?? []).map((p) => p.gameweek_id));
+  }
+
   // Data Health's own list below only ever shows the last 10 runs — this is
   // the only place any run-level aggregate exists, so it goes over every
   // sync_runs row rather than reusing that capped list. Just status and
@@ -144,6 +164,65 @@ export default async function DataHealthPage() {
         </div>
         <ScorePredictionsButton />
       </FadeIn>
+
+      <div className="flex flex-col gap-3">
+        <FadeIn delay={0.11} className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Fantasy scoring</h2>
+          <span className="flex items-center gap-1 text-[11px] text-foreground-subtle">
+            <ShieldCheck className="h-3 w-3" strokeWidth={2} />
+            {SCORING_RULES_SUMMARY.length} published rules
+          </span>
+        </FadeIn>
+
+        {!recentGameweeks || recentGameweeks.length === 0 ? (
+          <FadeIn delay={0.12} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
+            No fantasy gameweeks exist yet. Generate gameweeks from a season on the Fantasy page first.
+          </FadeIn>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {recentGameweeks.map((gw, index) => {
+              const seasonLabel = [gw.season?.competition?.short_name ?? gw.season?.competition?.name, gw.season?.name]
+                .filter(Boolean)
+                .join(" · ");
+              const scored = scoredGameweekIds.has(gw.id);
+              return (
+                <FadeIn
+                  key={gw.id}
+                  delay={Math.min(0.12 + index * 0.03, 0.3)}
+                  className="kivo-glass flex items-center justify-between gap-3 rounded-xl p-4"
+                >
+                  <div>
+                    <p className="text-sm text-foreground">
+                      <span className="font-medium">GW{gw.number}</span>
+                      {seasonLabel ? ` · ${seasonLabel}` : ""}
+                      {gw.is_current && (
+                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[10px] font-semibold text-kivo-cyan">
+                          Current
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-foreground-subtle">
+                      Deadline {formatTimestamp(gw.deadline_at)}
+                      {" · "}
+                      {scored ? "Already scored (re-run to refresh)" : "Not scored yet"}
+                    </p>
+                  </div>
+                  <ScoreFantasyGameweekButton gameweekId={gw.id} />
+                </FadeIn>
+              );
+            })}
+          </div>
+        )}
+
+        <FadeIn delay={0.15} className="kivo-glass rounded-xl p-4 text-xs text-foreground-subtle">
+          <p className="mb-1.5 font-semibold text-foreground-muted">Published scoring rules</p>
+          <ul className="flex flex-col gap-1">
+            {SCORING_RULES_SUMMARY.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </FadeIn>
+      </div>
 
       {totalRuns > 0 && (
         <FadeIn delay={0.13} className="kivo-glass grid grid-cols-3 gap-3 rounded-2xl p-5">
