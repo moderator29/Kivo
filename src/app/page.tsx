@@ -115,13 +115,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/sign-in"
-            className="rounded-xl px-4 py-2 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="flex min-h-10 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
             Sign in
           </Link>
           <Link
             href="/sign-up"
-            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
             Sign up
           </Link>
@@ -310,12 +310,12 @@ export default function LandingPage() {
                   <span className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
                     {group.heading}
                   </span>
-                  <ul className="flex flex-col gap-2">
+                  <ul className="flex flex-col">
                     {group.links.map((link) => (
                       <li key={link.href}>
                         <Link
                           href={link.href}
-                          className="text-sm text-foreground-muted transition-colors hover:text-foreground"
+                          className="flex min-h-10 items-center text-sm text-foreground-muted transition-colors hover:text-foreground"
                         >
                           {link.label}
                         </Link>
