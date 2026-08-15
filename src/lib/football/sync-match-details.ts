@@ -316,10 +316,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
-    // No dedicated 'lineup' provider_entity_type exists (lineups aren't independently
-    // provider-mapped — see NormalizedLineups doc comments) — 'fixture_event' is the
-    // closest of the existing enum values to "this fixture's in-match detail data".
-    .insert({ provider: provider.name, entity_type: "fixture_event", status: "running" })
+    .insert({ provider: provider.name, entity_type: "lineup", status: "running" })
     .select("id")
     .single();
 
@@ -430,9 +427,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
-    // No dedicated 'standing' provider_entity_type exists either — 'season' is the
-    // closest existing enum value to "this season's standings table".
-    .insert({ provider: provider.name, entity_type: "season", status: "running" })
+    .insert({ provider: provider.name, entity_type: "standing", status: "running" })
     .select("id")
     .single();
 

@@ -1678,7 +1678,7 @@ export type Database = {
           country: string | null
           created_at: string
           id: string
-          name: string
+          name: string | null
           updated_at: string
         }
         Insert: {
@@ -1687,7 +1687,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           id?: string
-          name: string
+          name?: string | null
           updated_at?: string
         }
         Update: {
@@ -1696,7 +1696,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           id?: string
-          name?: string
+          name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1830,6 +1830,7 @@ export type Database = {
         | "postponed"
         | "cancelled"
         | "abandoned"
+        | "unknown"
       follow_target_type: "team" | "player" | "competition" | "user"
       moderation_target_type: "post" | "comment" | "profile"
       prediction_outcome: "home_win" | "draw" | "away_win"
@@ -1843,6 +1844,8 @@ export type Database = {
         | "fixture"
         | "fixture_event"
         | "transfer"
+        | "lineup"
+        | "standing"
       reaction_target_type: "post" | "comment"
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
@@ -2006,6 +2009,7 @@ export const Constants = {
         "postponed",
         "cancelled",
         "abandoned",
+        "unknown",
       ],
       follow_target_type: ["team", "player", "competition", "user"],
       moderation_target_type: ["post", "comment", "profile"],
@@ -2020,6 +2024,8 @@ export const Constants = {
         "fixture",
         "fixture_event",
         "transfer",
+        "lineup",
+        "standing",
       ],
       reaction_target_type: ["post", "comment"],
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],

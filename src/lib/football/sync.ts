@@ -15,11 +15,11 @@ export interface SyncResult {
   error?: string;
 }
 
-/** "unknown" exists only at the normalization layer (see types.ts) — the DB's
- * fixture_status enum has no matching value. "postponed" is the closest honest
- * reading of a provider status we couldn't otherwise classify (e.g. TBD/SUSP/INT). */
+/** FixtureStatus and the DB's fixture_status enum are 1:1 (see types.ts and
+ * migration 0017) — no translation needed, but keep the named function so a
+ * future divergence between the two types is a type error here, not a typo. */
 function toDbFixtureStatus(status: FixtureStatus): DbFixtureStatus {
-  return status === "unknown" ? "postponed" : status;
+  return status;
 }
 
 async function findMappedId(
@@ -55,6 +55,9 @@ async function createMapping(
   if (error && error.code !== "23505") throw error;
 }
 
+/** Updates the row on every sync (a renamed competition or a new short name
+ * should actually land), same "sync is the source of truth for what the
+ * provider reports" rule as upsertFixture below. */
 async function upsertCompetition(
   supabase: ServiceClient,
   provider: string,
@@ -62,7 +65,11 @@ async function upsertCompetition(
   name: string,
 ): Promise<string> {
   const existing = await findMappedId(supabase, provider, "competition", competitionProviderId);
-  if (existing) return existing;
+  if (existing) {
+    const { error } = await supabase.from("competitions").update({ name }).eq("id", existing);
+    if (error) throw error;
+    return existing;
+  }
 
   const { data, error } = await supabase.from("competitions").insert({ name }).select("id").single();
   if (error || !data) throw error ?? new Error("Failed to insert competition");
@@ -146,6 +153,10 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
   return seasonId;
 }
 
+/** `name` is nullable (migration 0017) rather than backfilled with a fabricated
+ * "Unknown venue" string — a provider id with no reported name stays honestly
+ * unnamed. Never overwrites a real name with a later null, same rule as
+ * upsertPlayer in sync-squads.ts. */
 async function upsertVenue(
   supabase: ServiceClient,
   provider: string,
@@ -153,22 +164,36 @@ async function upsertVenue(
   name: string | null,
 ): Promise<string> {
   const existing = await findMappedId(supabase, provider, "venue", venueProviderId);
-  if (existing) return existing;
+  if (existing) {
+    if (name !== null) {
+      const { error } = await supabase.from("venues").update({ name }).eq("id", existing);
+      if (error) throw error;
+    }
+    return existing;
+  }
 
-  const { data, error } = await supabase
-    .from("venues")
-    .insert({ name: name ?? "Unknown venue" })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.from("venues").insert({ name }).select("id").single();
   if (error || !data) throw error ?? new Error("Failed to insert venue");
 
   await createMapping(supabase, provider, "venue", venueProviderId, data.id);
   return data.id;
 }
 
+/** Updates name on every sync (always provided). short_name/crest_url only
+ * overwrite when the provider actually reported one this time — same
+ * never-clobber-with-null rule as upsertPlayer in sync-squads.ts, so a crest
+ * an admin filled in by hand never gets nulled out by a leaner provider response. */
 async function upsertTeam(supabase: ServiceClient, provider: string, team: NormalizedTeam): Promise<string> {
   const existing = await findMappedId(supabase, provider, "team", team.providerId);
-  if (existing) return existing;
+  if (existing) {
+    const update: Database["public"]["Tables"]["teams"]["Update"] = { name: team.name };
+    if (team.shortName !== null) update.short_name = team.shortName;
+    if (team.crestUrl !== null) update.crest_url = team.crestUrl;
+
+    const { error } = await supabase.from("teams").update(update).eq("id", existing);
+    if (error) throw error;
+    return existing;
+  }
 
   const { data, error } = await supabase
     .from("teams")

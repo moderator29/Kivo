@@ -1,7 +1,7 @@
-// Must line up with the `fixture_status` Postgres enum (supabase/migrations/0001) except
-// for "unknown", which exists only at this normalization layer — provider status codes
-// that don't map cleanly to a DB value land here, and the sync pipeline is responsible
-// for translating "unknown" into a safe DB-enum value before writing (see sync.ts).
+// Lines up 1:1 with the `fixture_status` Postgres enum (supabase/migrations/0001,
+// 0017) — provider status codes that don't map cleanly to a known value land on
+// "unknown" here, which is itself a real enum value rather than an app-layer-only
+// placeholder.
 export type FixtureStatus =
   | "scheduled"
   | "live"
@@ -99,9 +99,9 @@ export interface NormalizedLineups {
 }
 
 // Must line up with the `fixture_event_type` Postgres enum (supabase/migrations/0001)
-// except for "unknown", the same normalization-layer pattern as FixtureStatus above —
-// a provider type/detail combination that doesn't map cleanly lands here, and the
-// sync pipeline skips (never fabricates) rather than writing a bad enum value.
+// except for "unknown" — unlike FixtureStatus, this enum has no DB-side "unknown"
+// slot, so a provider type/detail combination that doesn't map cleanly lands here
+// and the sync pipeline skips (never fabricates) rather than writing a bad enum value.
 export type NormalizedMatchEventType =
   | "goal"
   | "own_goal"

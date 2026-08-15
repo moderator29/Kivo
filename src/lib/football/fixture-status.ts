@@ -10,6 +10,7 @@ export const STATUS_LABEL: Record<FixtureStatus, string> = {
   postponed: "Postponed",
   cancelled: "Cancelled",
   abandoned: "Abandoned",
+  unknown: "Unknown",
 };
 
 export function isLiveStatus(status: FixtureStatus): boolean {

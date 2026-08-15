@@ -1,5 +1,5 @@
 -- =============================================================================
--- KIVO core schema + RLS  —  DRAFT MIGRATION (NOT APPLIED)
+-- KIVO core schema + RLS
 -- =============================================================================
 -- Identity authority: Clerk (auth/sessions/social login happen entirely
 -- outside Supabase). Supabase holds application data only, using Supabase's
