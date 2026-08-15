@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -66,9 +68,18 @@ export default async function PredictionsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Predictions</h1>
-        <p className="text-sm text-foreground-muted">Pick an outcome before kickoff. Predictions lock the moment a match starts.</p>
+      <FadeIn className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Predictions</h1>
+          <p className="text-sm text-foreground-muted">Pick an outcome before kickoff. Predictions lock the moment a match starts.</p>
+        </div>
+        <Link
+          href="/predictions/mine"
+          className="flex shrink-0 items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+        >
+          My predictions
+          <ArrowRight className="h-3 w-3" strokeWidth={2} />
+        </Link>
       </FadeIn>
 
       <div className="flex flex-col gap-3">

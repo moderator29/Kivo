@@ -6,8 +6,7 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
-
-type Outcome = "home_win" | "draw" | "away_win";
+import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome as Outcome } from "@/lib/predictions";
 
 type Team = { id: string | null; name: string; crest_url: string | null };
 
@@ -20,8 +19,6 @@ type PredictionCardProps = {
   initialPrediction: Outcome | null;
   signedIn: boolean;
 };
-
-const OUTCOME_LABEL: Record<Outcome, string> = { home_win: "Home", draw: "Draw", away_win: "Away" };
 
 export function PredictionCard({
   fixtureId,
@@ -120,7 +117,7 @@ export function PredictionCard({
                 />
               )}
               <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
-                {OUTCOME_LABEL[outcome]}
+                {PREDICTION_OUTCOME_LABEL[outcome]}
               </span>
             </motion.button>
           );
