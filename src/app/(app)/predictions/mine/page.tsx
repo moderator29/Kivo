@@ -8,7 +8,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { staggerDelay } from "@/lib/stagger";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
-import { PREDICTION_OUTCOME_LABEL } from "@/lib/predictions";
+import { PREDICTION_OUTCOME_LABEL, computeStreaks } from "@/lib/predictions";
 
 export const metadata: Metadata = { title: "My Predictions" };
 
@@ -83,6 +83,17 @@ export default async function MyPredictionsPage() {
   const correctCount = scoredRows.filter((row) => (row.points_awarded ?? 0) > 0).length;
   const accuracyPct = scoredRows.length > 0 ? Math.round((correctCount / scoredRows.length) * 100) : null;
 
+  // RECOMMENDATIONS.md item 169: real streaks derived from this same scored
+  // history, ordered by each prediction's fixture kickoff_at (see
+  // computeStreaks' own comment for why that's the right axis, not
+  // created_at).
+  const streaks =
+    scoredRows.length > 0
+      ? computeStreaks(
+          scoredRows.map((row) => ({ pointsAwarded: row.points_awarded ?? 0, kickoffAt: row.fixture!.kickoff_at })),
+        )
+      : null;
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-1">
@@ -130,6 +141,24 @@ export default async function MyPredictionsPage() {
               <span className="text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">Accuracy</span>
             </div>
           </FadeIn>
+
+          {streaks && (
+            <FadeIn delay={0.08} className="grid grid-cols-2 gap-2 text-center">
+              <div className="kivo-glass flex flex-col gap-0.5 rounded-2xl p-4">
+                <span className="text-2xl font-semibold text-foreground">{streaks.current}</span>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">
+                  Current streak
+                </span>
+              </div>
+              <div className="kivo-glass flex flex-col gap-0.5 rounded-2xl p-4">
+                <span className="text-2xl font-semibold text-foreground">{streaks.best}</span>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-foreground-subtle">
+                  Best streak
+                </span>
+              </div>
+            </FadeIn>
+          )}
+
           {scoredRows.length < rows.length && (
             <p className="-mt-3 text-center text-xs text-foreground-subtle">
               {scoredRows.length === 0
