@@ -1,8 +1,10 @@
 import Image from "next/image";
+import Link from "next/link";
 import { SignUp } from "@clerk/nextjs";
 import { FadeIn } from "@/components/ui/fade-in";
 import { sanitizeRedirectPath } from "@/lib/clerk";
-import kivoLogo from "../../../../public/brand/kivo-logo.png";
+import { kivoClerkAppearance } from "@/lib/clerk-appearance";
+import kivoLogo from "../../../../public/brand/kivo-logo-transparent.webp";
 
 export default async function SignUpPage({
   searchParams,
@@ -28,22 +30,27 @@ export default async function SignUpPage({
 
       <div className="relative z-10 flex flex-col items-center gap-8">
         <FadeIn>
-          <Image src={kivoLogo} alt="KIVO" width={112} height={112} className="h-28 w-28" priority />
+          <Image src={kivoLogo} alt="KIVO" width={144} height={144} className="h-32 w-32" priority />
         </FadeIn>
 
         {clerkConfigured ? (
-          <FadeIn delay={0.12}>
+          <FadeIn delay={0.12} className="flex flex-col items-center gap-4">
             <SignUp
               forceRedirectUrl={redirectUrl}
               signInForceRedirectUrl={redirectUrl}
-              appearance={{
-                elements: {
-                  card: "kivo-glass-brand shadow-none",
-                  headerTitle: "text-foreground",
-                  headerSubtitle: "text-foreground-muted",
-                },
-              }}
+              appearance={kivoClerkAppearance}
             />
+            <p className="max-w-xs text-center text-xs text-foreground-subtle">
+              By signing up, you agree to KIVO&apos;s{" "}
+              <Link href="/terms" className="text-kivo-cyan transition-colors hover:text-foreground">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-kivo-cyan transition-colors hover:text-foreground">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </FadeIn>
         ) : (
           <FadeIn

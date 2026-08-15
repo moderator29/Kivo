@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { ADMIN_NAV_ITEM, NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
-import kivoLogo from "../../../public/brand/kivo-logo.png";
+import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 /** Purely a presentation grouping for the desktop sidebar — doesn't touch
  * NAV_ITEMS or routing. "home" is rendered standalone above these as the

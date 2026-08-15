@@ -18,7 +18,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AlertTriangle } from "lucide-react";
-import kivoLogo from "../../public/brand/kivo-logo.png";
+import kivoLogo from "../../public/brand/kivo-logo-transparent.webp";
 
 export default function GlobalError({
   error,

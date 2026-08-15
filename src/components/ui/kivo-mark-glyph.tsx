@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
-import kivoLogo from "../../../public/brand/kivo-logo.png";
+import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
-// The square brand lockup (public/brand/kivo-logo.png) stacks the K mark on
+// The square brand lockup (public/brand/kivo-logo-transparent.webp) stacks the K mark on
 // top of the "KIVO" wordmark + tagline + heartbeat line. This crops to just
 // the mark by rendering the source at 1/CROP its container height inside an
 // overflow-hidden box, sized in real pixels (not percentages) so it doesn't

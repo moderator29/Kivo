@@ -6,7 +6,7 @@ import { UserButton } from "@clerk/nextjs";
 import { getRecentNotifications } from "@/lib/notifications";
 import { NotificationBell } from "./notification-bell";
 import { CommandPalette } from "./command-palette";
-import kivoLogo from "../../../public/brand/kivo-logo.png";
+import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 /**
  * Static stand-in for the notification bell while its data streams in below —
