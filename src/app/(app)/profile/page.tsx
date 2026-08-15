@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, ArrowRight, Star, Flame, Award, Target } from "lucide-react";
+import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { UsernameEditor } from "@/components/profile/username-editor";
@@ -39,6 +39,7 @@ export default async function ProfilePage() {
     { count: earnedBadgeCount },
     { count: totalPredictionCount },
     { count: correctPredictionCount },
+    { count: savedCount },
   ] = await Promise.all([
     supabase
       .from("follows")
@@ -59,6 +60,9 @@ export default async function ProfilePage() {
       .select("id", { count: "exact", head: true })
       .eq("profile_id", profile.id)
       .gt("points_awarded", 0),
+    // RECOMMENDATIONS item 173: saves_select_own already scopes this to the
+    // caller's own row.
+    supabase.from("saves").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
   ]);
 
   const teamCount = (follows ?? []).filter((f) => f.followed_type === "team").length;
@@ -134,6 +138,24 @@ export default async function ProfilePage() {
             here.
           </p>
         )}
+      </FadeIn>
+
+      <FadeIn delay={0.25} className="kivo-glass rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Bookmark className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Saved
+          </h2>
+          <Link href="/saved" className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
+            View all
+            <ArrowRight className="h-3 w-3" strokeWidth={2} />
+          </Link>
+        </div>
+        <p className="mt-2 text-sm text-foreground-muted">
+          {savedCount && savedCount > 0
+            ? `${savedCount} saved ${savedCount === 1 ? "item" : "items"}.`
+            : "Nothing saved yet. Bookmark a post, team or player to find it here."}
+        </p>
       </FadeIn>
     </div>
   );
