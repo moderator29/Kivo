@@ -9,21 +9,7 @@ import kivoTrophyCrown from "../../public/brand/kivo-trophy-crown.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
-
-// Hand-placed, not tiled — a repeating grid of the mark read as a mistake.
-// Concentrated toward the left/edges per the brand direction, sized and
-// dimmed to sit well behind real content (each less than a quarter opaque).
-const SCATTERED_MARKS: { size: number; top: string; left?: string; right?: string; opacity: number; reverse?: boolean }[] = [
-  { size: 46, top: "8%", left: "4%", opacity: 0.16 },
-  { size: 28, top: "18%", left: "12%", opacity: 0.1, reverse: true },
-  { size: 60, top: "32%", left: "2%", opacity: 0.14, reverse: true },
-  { size: 34, top: "48%", left: "9%", opacity: 0.12 },
-  { size: 24, top: "58%", left: "3%", opacity: 0.09, reverse: true },
-  { size: 40, top: "72%", left: "7%", opacity: 0.13 },
-  { size: 30, top: "85%", left: "13%", opacity: 0.1, reverse: true },
-  { size: 22, top: "14%", right: "5%", opacity: 0.08 },
-  { size: 36, top: "62%", right: "8%", opacity: 0.11, reverse: true },
-];
+import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
 
 const PROOF_POINTS = [
   {
@@ -58,18 +44,7 @@ export default function LandingPage() {
         <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
       </div>
 
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
-        {SCATTERED_MARKS.map((mark, index) => (
-          <KivoMarkGlyph
-            key={index}
-            size={mark.size}
-            opacity={mark.opacity}
-            reverse={mark.reverse}
-            className="absolute"
-            style={{ top: mark.top, left: mark.left, right: mark.right }}
-          />
-        ))}
-      </div>
+      <ScatteredTrophies />
 
       <div className="relative z-10 flex min-h-screen flex-col">
       <header className="flex items-center justify-between px-6 py-5 lg:px-12">
