@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Flag, Check } from "lucide-react";
@@ -13,6 +13,89 @@ import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 
 const REPORT_REASONS = ["Spam", "Harassment or abuse", "Misinformation", "Inappropriate content", "Other"] as const;
+
+// Matches bare http(s) URLs; the capturing group means String.split() keeps the
+// matched substrings in the result, alternating with the surrounding plain text.
+const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
+// Trailing punctuation that's almost always sentence punctuation rather than
+// part of the URL itself (e.g. "check this out: https://kivo.app." -> the
+// period shouldn't be swallowed into the href).
+const TRAILING_PUNCTUATION = /[),.;:!?'"\]}]+$/;
+
+/**
+ * Splits a post body into plain-text and link segments for safe rendering.
+ * Never builds HTML strings - each URL becomes a real React <a> element, so
+ * JSX escaping (not string concatenation) is what keeps this XSS-safe.
+ */
+function linkifyBody(body: string) {
+  const parts = body.split(URL_PATTERN);
+  return parts.map((part, i) => {
+    // split() with a single capturing group alternates plain text (even
+    // indices) with matched URLs (odd indices).
+    if (i % 2 === 0 || !part) return part;
+    const trailingMatch = part.match(TRAILING_PUNCTUATION);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    const url = trailing ? part.slice(0, -trailing.length) : part;
+    if (!url) return part;
+    return (
+      <Fragment key={i}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-kivo-cyan underline underline-offset-2 hover:text-kivo-cyan/80"
+        >
+          {url}
+        </a>
+        {trailing}
+      </Fragment>
+    );
+  });
+}
+
+function PostBody({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const bodyRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    function measure() {
+      if (!el) return;
+      setIsOverflowing(el.scrollHeight - el.clientHeight > 1);
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [body]);
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <p
+        ref={bodyRef}
+        className={cn(
+          "whitespace-pre-wrap text-sm leading-relaxed text-foreground",
+          // Tailwind needs the full class name literal in source to generate it,
+          // so this can't be built from a dynamic line-count constant.
+          !expanded && "line-clamp-5",
+        )}
+      >
+        {linkifyBody(body)}
+      </p>
+      {(isOverflowing || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 interface PostCardProps {
   id: string;
@@ -121,7 +204,7 @@ export function PostCard({
           <span className="text-xs text-foreground-subtle">{timeAgo(createdAt)}</span>
         </div>
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{body}</p>
+      <PostBody body={body} />
       <div className="flex items-center justify-between gap-2">
         <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />
 
