@@ -114,6 +114,36 @@ export type NormalizedMatchEventType =
   | "var_review"
   | "unknown";
 
+export interface NormalizedFixtureTeamStatistics {
+  team: NormalizedTeam;
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  shotsOffTarget: number | null;
+  shotsBlocked: number | null;
+  shotsInsideBox: number | null;
+  shotsOutsideBox: number | null;
+  fouls: number | null;
+  corners: number | null;
+  offsides: number | null;
+  possessionPct: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  saves: number | null;
+  passesTotal: number | null;
+  passesAccurate: number | null;
+  passesPct: number | null;
+  /** Only some competitions/providers report xG — stays null rather than 0 when
+   * unknown, mirrors fixture_statistics.expected_goals in the schema. */
+  expectedGoals: number | null;
+}
+
+/** One fixture's team statistics — one entry per side (normally exactly two),
+ * same "one entry per side" shape as NormalizedLineups. */
+export interface NormalizedFixtureStatistics {
+  fixtureProviderId: string;
+  teams: NormalizedFixtureTeamStatistics[];
+}
+
 export interface NormalizedMatchEvent {
   /** Synthetic composite id — API-Football's /fixtures/events response has no
    * stable per-event id, so the provider derives a deterministic key (fixture +
@@ -173,6 +203,9 @@ export interface FootballDataProvider {
   /** Null when the provider has no lineups published yet for this fixture. */
   getLineups(fixtureProviderId: string): Promise<NormalizedLineups | null>;
   getMatchEvents(fixtureProviderId: string): Promise<NormalizedMatchEvent[]>;
+  /** Null when the provider has no statistics published yet for this fixture
+   * (common before kickoff, or on a competition tier that doesn't report them). */
+  getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null>;
   /** Full recorded transfer history for one player — real, already-happened moves only
    * (see AGENTS.md: no rumour/reported tier exists on the free tier). Newest-first is
    * not guaranteed by the provider; sync-transfers.ts does not assume an order. */

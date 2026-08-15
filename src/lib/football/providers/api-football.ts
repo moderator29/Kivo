@@ -2,6 +2,7 @@ import "server-only";
 import type {
   FootballDataProvider,
   NormalizedFixture,
+  NormalizedFixtureStatistics,
   NormalizedLineups,
   NormalizedManager,
   NormalizedMatchEvent,
@@ -9,7 +10,7 @@ import type {
   NormalizedStandingRow,
   NormalizedTransfer,
 } from "../types";
-import { mapEventType, mapStatus, mapTransferType } from "./normalizers";
+import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 
@@ -23,10 +24,12 @@ const FIXTURE_CACHE_SECONDS = 300;
 /** Squads/managers change rarely — cache a full day. */
 const SQUAD_CACHE_SECONDS = 86_400;
 const MANAGER_CACHE_SECONDS = 86_400;
-/** Lineups/events can change during a live match — short cache, but never zero, so a
- * busy admin screen re-triggering a sync repeatedly can't hammer the daily quota. */
+/** Lineups/events/statistics can change during a live match — short cache, but never
+ * zero, so a busy admin screen re-triggering a sync repeatedly can't hammer the daily
+ * quota. */
 const LINEUP_CACHE_SECONDS = 120;
 const EVENTS_CACHE_SECONDS = 120;
+const STATISTICS_CACHE_SECONDS = 120;
 /** Standings settle slowly outside of matchdays — an hour is plenty fresh. */
 const STANDINGS_CACHE_SECONDS = 3_600;
 /** Transfer history is append-only and barely changes day to day — cache well beyond
@@ -76,6 +79,13 @@ interface ApiFootballEventsResponse {
     assist: { id: number | null; name: string | null };
     type: string;
     detail: string;
+  }>;
+}
+
+interface ApiFootballStatisticsResponse {
+  response: Array<{
+    team: { id: number; name: string; logo: string | null };
+    statistics: Array<{ type: string; value: number | string | null }>;
   }>;
 }
 
@@ -370,6 +380,35 @@ export class ApiFootballProvider implements FootballDataProvider {
         detail: item.detail,
       };
     });
+  }
+
+  /**
+   * `/fixtures/statistics?fixture={id}` returns one entry per side, each with a flat
+   * `statistics` array of {type, value} pairs — see mapFixtureStatistics's doc comment
+   * in normalizers.ts for how those get matched onto fixture_statistics' fixed columns.
+   * Returns null (not an empty array) when the provider has no statistics published
+   * yet for this fixture — the same "nothing yet" convention as getLineups, common
+   * before kickoff or on a competition tier that doesn't report them.
+   */
+  async getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null> {
+    const data = await this.request<ApiFootballStatisticsResponse>(
+      `/fixtures/statistics?fixture=${fixtureProviderId}`,
+      STATISTICS_CACHE_SECONDS,
+    );
+    if (data.response.length === 0) return null;
+
+    return {
+      fixtureProviderId,
+      teams: data.response.map((side) => ({
+        team: {
+          providerId: String(side.team.id),
+          name: side.team.name,
+          shortName: null,
+          crestUrl: side.team.logo,
+        },
+        ...mapFixtureStatistics(side.statistics),
+      })),
+    };
   }
 
   /**

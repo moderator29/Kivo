@@ -29,6 +29,27 @@ type LineupEntry = {
   playerName: string;
 };
 
+type TeamStats = {
+  teamId: string;
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  shotsOffTarget: number | null;
+  shotsBlocked: number | null;
+  shotsInsideBox: number | null;
+  shotsOutsideBox: number | null;
+  fouls: number | null;
+  corners: number | null;
+  offsides: number | null;
+  possessionPct: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  saves: number | null;
+  passesTotal: number | null;
+  passesAccurate: number | null;
+  passesPct: number | null;
+  expectedGoals: number | null;
+};
+
 type StandingsRow = {
   teamId: string;
   teamName: string;
@@ -51,6 +72,7 @@ type MatchCentreTabsProps = {
   awayTeamId: string;
   events: MatchEvent[];
   lineups: LineupEntry[];
+  stats: TeamStats[];
   standings: StandingsRow[];
   roomPosts: RoomPost[];
   signedIn: boolean;
@@ -58,7 +80,7 @@ type MatchCentreTabsProps = {
   syncDetailsAction: SyncDetailsAction;
 };
 
-const TABS = ["Details", "Lineups", "Standings", "Room"] as const;
+const TABS = ["Details", "Stats", "Lineups", "Standings", "Room"] as const;
 type Tab = (typeof TABS)[number];
 
 function tabSlug(tab: Tab): string {
@@ -198,6 +220,80 @@ function LineupsTab({
   );
 }
 
+const STAT_ROWS: { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string }[] = [
+  { key: "possessionPct", label: "Possession", suffix: "%" },
+  { key: "shotsTotal", label: "Shots" },
+  { key: "shotsOnTarget", label: "Shots on target" },
+  { key: "corners", label: "Corners" },
+  { key: "fouls", label: "Fouls" },
+  { key: "offsides", label: "Offsides" },
+  { key: "yellowCards", label: "Yellow cards" },
+  { key: "redCards", label: "Red cards" },
+  { key: "passesPct", label: "Pass accuracy", suffix: "%" },
+  { key: "saves", label: "Saves" },
+  { key: "expectedGoals", label: "xG" },
+];
+
+function StatsTab({
+  stats,
+  homeTeamId,
+  awayTeamId,
+  canSyncDetails,
+  syncDetailsAction,
+}: {
+  stats: TeamStats[];
+  homeTeamId: string;
+  awayTeamId: string;
+  canSyncDetails: boolean;
+  syncDetailsAction: SyncDetailsAction;
+}) {
+  const home = stats.find((s) => s.teamId === homeTeamId);
+  const away = stats.find((s) => s.teamId === awayTeamId);
+
+  if (!home && !away) {
+    return (
+      <EmptyState
+        message="Stats haven't been synced yet for this fixture."
+        action={canSyncDetails && <InlineSyncButton label="Sync match details" action={syncDetailsAction} />}
+      />
+    );
+  }
+
+  const rows = STAT_ROWS.filter((row) => home?.[row.key] != null || away?.[row.key] != null);
+
+  return (
+    <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-4">
+      {rows.map((row) => {
+        const homeVal = home?.[row.key] ?? null;
+        const awayVal = away?.[row.key] ?? null;
+        const homeNum = homeVal ?? 0;
+        const awayNum = awayVal ?? 0;
+        const total = homeNum + awayNum;
+        const homePct = total > 0 ? (homeNum / total) * 100 : 50;
+        return (
+          <div key={row.key} className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="w-12 text-left font-semibold text-foreground">
+                {homeVal ?? "-"}
+                {homeVal !== null ? row.suffix ?? "" : ""}
+              </span>
+              <span className="text-foreground-subtle">{row.label}</span>
+              <span className="w-12 text-right font-semibold text-foreground">
+                {awayVal ?? "-"}
+                {awayVal !== null ? row.suffix ?? "" : ""}
+              </span>
+            </div>
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-white/5">
+              <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
+              <div className="h-full bg-white/15" style={{ width: `${100 - homePct}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: StandingsRow[]; homeTeamId: string; awayTeamId: string }) {
   if (standings.length === 0) {
     return <EmptyState message="Standings haven't been synced yet for this competition." />;
@@ -275,6 +371,7 @@ function MatchCentreTabsInner({
   awayTeamId,
   events,
   lineups,
+  stats,
   standings,
   roomPosts,
   signedIn,
@@ -364,6 +461,15 @@ function MatchCentreTabsInner({
         >
           {active === "Details" && (
             <DetailsTab events={events} canSyncDetails={canSyncDetails} syncDetailsAction={syncDetailsAction} />
+          )}
+          {active === "Stats" && (
+            <StatsTab
+              stats={stats}
+              homeTeamId={homeTeamId}
+              awayTeamId={awayTeamId}
+              canSyncDetails={canSyncDetails}
+              syncDetailsAction={syncDetailsAction}
+            />
           )}
           {active === "Lineups" && (
             <LineupsTab

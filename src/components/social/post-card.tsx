@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Heart, Flag, Check } from "lucide-react";
+import { Flag, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { toggleLike } from "@/app/(app)/social/actions";
 import { reportContent } from "@/app/(app)/social/report-actions";
 import { CommentThread } from "@/components/social/comment-thread";
+import { ReactionPicker } from "@/components/social/reaction-picker";
+import type { ReactionType } from "@/lib/reactions";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 
@@ -21,8 +22,8 @@ interface PostCardProps {
   /** Optional so existing call sites that haven't wired author identity through
    * yet still type-check; the name simply doesn't link without it. */
   authorUsername?: string | null;
-  likeCount: number;
-  likedByViewer: boolean;
+  reactionCount: number;
+  viewerReaction: ReactionType | null;
   commentCount: number;
   signedIn: boolean;
   index?: number;
@@ -34,17 +35,14 @@ export function PostCard({
   createdAt,
   authorName,
   authorUsername = null,
-  likeCount,
-  likedByViewer,
+  reactionCount,
+  viewerReaction,
   commentCount,
   signedIn,
   index = 0,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [optimisticLiked, setOptimisticLiked] = useState(likedByViewer);
-  const [optimisticCount, setOptimisticCount] = useState(likeCount);
-  const [pending, startTransition] = useTransition();
 
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [reported, setReported] = useState(false);
@@ -92,32 +90,6 @@ export function PostCard({
     });
   }
 
-  function handleLike() {
-    if (!signedIn) {
-      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
-      return;
-    }
-    // Guard against rapid double-clicks racing two toggles against the server —
-    // the button is also disabled while pending, this is defense in depth.
-    if (pending) return;
-
-    const previousCount = optimisticCount;
-    const nextLiked = !optimisticLiked;
-    setOptimisticLiked(nextLiked);
-    setOptimisticCount((c) => c + (nextLiked ? 1 : -1));
-    startTransition(async () => {
-      const result = await toggleLike(id, optimisticLiked);
-      if (result.error) {
-        // Revert on failure — never leave the UI claiming a reaction that didn't
-        // persist. Reverts to the pre-click optimistic count, not the original
-        // server-rendered `likeCount` prop, which can be stale after an earlier
-        // successful toggle in the same session.
-        setOptimisticLiked(optimisticLiked);
-        setOptimisticCount(previousCount);
-      }
-    });
-  }
-
   return (
     <motion.article
       // Anchor target for notification click-through (see postHref() in
@@ -151,27 +123,7 @@ export function PostCard({
       </div>
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{body}</p>
       <div className="flex items-center justify-between gap-2">
-        <motion.button
-          onClick={handleLike}
-          disabled={pending}
-          aria-pressed={optimisticLiked}
-          whileTap={{ scale: 0.88 }}
-          className={cn(
-            "flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-70",
-            optimisticLiked ? "text-critical" : "text-foreground-subtle hover:text-foreground-muted",
-          )}
-        >
-          <motion.span
-            key={optimisticLiked ? "liked" : "unliked"}
-            initial={{ scale: 0.5 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 600, damping: 12 }}
-            className="flex items-center"
-          >
-            <Heart className="h-4 w-4" strokeWidth={1.75} fill={optimisticLiked ? "currentColor" : "none"} />
-          </motion.span>
-          {optimisticCount > 0 ? optimisticCount : "Like"}
-        </motion.button>
+        <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />
 
         <div ref={reportMenuRef} className="relative">
           <motion.button

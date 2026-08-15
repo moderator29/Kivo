@@ -50,6 +50,86 @@ export function mapEventType(type: string, detail: string): NormalizedMatchEvent
   return "unknown";
 }
 
+export interface RawFixtureStatEntry {
+  type: string;
+  value: number | string | null;
+}
+
+export interface NormalizedFixtureTeamStatValues {
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  shotsOffTarget: number | null;
+  shotsBlocked: number | null;
+  shotsInsideBox: number | null;
+  shotsOutsideBox: number | null;
+  fouls: number | null;
+  corners: number | null;
+  offsides: number | null;
+  possessionPct: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  saves: number | null;
+  passesTotal: number | null;
+  passesAccurate: number | null;
+  passesPct: number | null;
+  expectedGoals: number | null;
+}
+
+/**
+ * Parses one raw API-Football stat value into a number: plain numbers pass through,
+ * percentage strings ("56%") have their "%" stripped, and anything that isn't a
+ * clean number (empty string, null, non-numeric text) becomes null. A null stat
+ * means "not reported by the provider", never a fabricated 0 — same rationale as
+ * fixture_statistics' nullable columns (see the migration's comment on expected_goals).
+ */
+function parseStatNumber(value: number | string | null): number | null {
+  if (value === null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const cleaned = value.trim().replace("%", "");
+  if (cleaned.length === 0) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Maps API-Football's /fixtures/statistics `statistics` array — a flat list of
+ * {type, value} pairs keyed by a human-readable English label, e.g.
+ * {"type": "Ball Possession", "value": "56%"} — onto the fixed set of columns
+ * fixture_statistics models. Matching is case-insensitive on `type` since
+ * API-Football's exact casing isn't a documented guarantee. A `type` this doesn't
+ * recognise is silently dropped rather than stored under an "unknown" bucket —
+ * unlike fixture_status/fixture_event_type, fixture_statistics has no such bucket
+ * because every column here is optional (see the migration's per-field comments on
+ * only modelling fields the provider actually returns).
+ */
+export function mapFixtureStatistics(entries: RawFixtureStatEntry[]): NormalizedFixtureTeamStatValues {
+  const byType = new Map<string, number | string | null>();
+  for (const entry of entries) {
+    byType.set(entry.type.trim().toLowerCase(), entry.value);
+  }
+  const get = (key: string): number | null => parseStatNumber(byType.has(key) ? byType.get(key)! : null);
+
+  return {
+    shotsTotal: get("total shots"),
+    shotsOnTarget: get("shots on goal"),
+    shotsOffTarget: get("shots off goal"),
+    shotsBlocked: get("blocked shots"),
+    shotsInsideBox: get("shots insidebox"),
+    shotsOutsideBox: get("shots outsidebox"),
+    fouls: get("fouls"),
+    corners: get("corner kicks"),
+    offsides: get("offsides"),
+    possessionPct: get("ball possession"),
+    yellowCards: get("yellow cards"),
+    redCards: get("red cards"),
+    saves: get("goalkeeper saves"),
+    passesTotal: get("total passes"),
+    passesAccurate: get("passes accurate"),
+    passesPct: get("passes %"),
+    expectedGoals: get("expected_goals"),
+  };
+}
+
 /**
  * Infers our transfer_type enum from API-Football's free-text `type` field on a
  * transfer record (e.g. "€45M", "$20M", "Free", "Loan", "N/A"). Never a guess:

@@ -5,7 +5,14 @@ import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
-import type { NormalizedLineups, NormalizedMatchEvent, NormalizedMatchEventType, NormalizedTeam, NormalizedTeamLineup } from "./types";
+import type {
+  NormalizedFixtureStatistics,
+  NormalizedLineups,
+  NormalizedMatchEvent,
+  NormalizedMatchEventType,
+  NormalizedTeam,
+  NormalizedTeamLineup,
+} from "./types";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -236,13 +243,72 @@ async function processEvents(
   return processed;
 }
 
+/** fixture_statistics rows aren't independently provider-mapped (same rationale as
+ * lineups/standings — the provider gives no per-row id, just one entry per side of
+ * one fixture) — deduped instead on the table's own (fixture_id, team_id) unique
+ * constraint. A side whose team has no KIVO mapping yet is skipped and logged rather
+ * than guessed at. */
+async function processStatistics(
+  supabase: ServiceClient,
+  providerName: string,
+  fixtureId: string,
+  statistics: NormalizedFixtureStatistics | null,
+  unresolved: string[],
+): Promise<number> {
+  if (!statistics) return 0;
+
+  let processed = 0;
+  for (const side of statistics.teams) {
+    const teamId = await findMappedId(supabase, providerName, "team", side.team.providerId);
+    if (!teamId) {
+      unresolved.push(
+        `team ${providerName}:${side.team.providerId} (${side.team.name}) has no KIVO mapping. Its statistics were skipped`,
+      );
+      continue;
+    }
+
+    const { error } = await supabase.from("fixture_statistics").upsert(
+      {
+        fixture_id: fixtureId,
+        team_id: teamId,
+        shots_total: side.shotsTotal,
+        shots_on_target: side.shotsOnTarget,
+        shots_off_target: side.shotsOffTarget,
+        shots_blocked: side.shotsBlocked,
+        shots_inside_box: side.shotsInsideBox,
+        shots_outside_box: side.shotsOutsideBox,
+        fouls: side.fouls,
+        corners: side.corners,
+        offsides: side.offsides,
+        possession_pct: side.possessionPct,
+        yellow_cards: side.yellowCards,
+        red_cards: side.redCards,
+        saves: side.saves,
+        passes_total: side.passesTotal,
+        passes_accurate: side.passesAccurate,
+        passes_pct: side.passesPct,
+        expected_goals: side.expectedGoals,
+      },
+      { onConflict: "fixture_id,team_id" },
+    );
+    if (error) {
+      console.error(`Fixture details sync: failed to upsert statistics for team ${providerName}:${side.team.providerId}`, error);
+      unresolved.push(`statistics for team ${providerName}:${side.team.providerId} (${side.team.name}): ${error.message}`);
+      continue;
+    }
+    processed += 1;
+  }
+  return processed;
+}
+
 /**
- * On-demand sync of one fixture's lineups + match events. Given a KIVO fixture id,
- * resolves its provider id, fetches both, and upserts. Players referenced by a
- * lineup/event that aren't in KIVO yet trigger an on-demand squad sync for that
- * team (see ensureTeamHasSquad); any player still unresolved after that is skipped
- * and logged rather than crashing the whole sync. Safe to call repeatedly for a
- * live match — see upsertFixtureEvent's dedupe note.
+ * On-demand sync of one fixture's lineups + match events + team statistics. Given a
+ * KIVO fixture id, resolves its provider id, fetches all three, and upserts. Players
+ * referenced by a lineup/event that aren't in KIVO yet trigger an on-demand squad
+ * sync for that team (see ensureTeamHasSquad); any player still unresolved after
+ * that is skipped and logged rather than crashing the whole sync. Safe to call
+ * repeatedly for a live match — see upsertFixtureEvent's dedupe note (statistics
+ * are upserted on the fixture_statistics table's own unique constraint, same idea).
  */
 export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
@@ -286,6 +352,7 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
 
   let lineups: NormalizedLineups | null = null;
   let events: NormalizedMatchEvent[] = [];
+  let statistics: NormalizedFixtureStatistics | null = null;
   const unresolved: string[] = [];
 
   try {
@@ -304,6 +371,14 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
     unresolved.push(`events fetch: ${message}`);
   }
 
+  try {
+    statistics = await provider.getFixtureStatistics(fixtureProviderId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Fixture details sync: getFixtureStatistics failed (continuing without statistics)", err);
+    unresolved.push(`statistics fetch: ${message}`);
+  }
+
   let processed = 0;
 
   if (lineups) {
@@ -313,9 +388,13 @@ export async function syncFixtureDetails(fixtureId: string): Promise<SyncResult>
   }
 
   processed += await processEvents(supabase, provider.name, fixtureId, events, unresolved);
+  processed += await processStatistics(supabase, provider.name, fixtureId, statistics, unresolved);
 
   const finishedAt = new Date().toISOString();
-  const hadWork = (lineups?.teams.some((t) => t.entries.length > 0) ?? false) || events.length > 0;
+  const hadWork =
+    (lineups?.teams.some((t) => t.entries.length > 0) ?? false) ||
+    events.length > 0 ||
+    (statistics?.teams.length ?? 0) > 0;
   const dbStatus: Database["public"]["Enums"]["sync_status"] =
     unresolved.length === 0 ? "success" : hadWork && processed === 0 ? "failed" : "partial";
   const errorMessage = unresolved.length > 0 ? unresolved.slice(0, 20).join("; ") : null;
