@@ -8,6 +8,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -39,7 +40,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, transfersLastSyncedAt] = await Promise.all([
+  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, isSaved, transfersLastSyncedAt] = await Promise.all([
     supabase
       .from("players")
       .select(
@@ -74,6 +75,17 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           .eq("followed_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
+    // RECOMMENDATIONS.md item 173: player watchlist — real save state,
+    // saves_select_own already scopes this to the caller's own row.
+    profile
+      ? supabase
+          .from("saves")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", profile.id)
+          .eq("target_type", "player")
+          .eq("target_id", id)
+          .then(({ count }) => (count ?? 0) > 0)
+      : Promise.resolve(false),
     // RECOMMENDATIONS.md item 60: transfer sync writes entity_type 'transfer'
     // (see syncPlayerTransfers in src/lib/football/sync-transfers.ts).
     getLastSyncedAt(["transfer"]),
@@ -104,7 +116,8 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               </span>
             )}
           </FadeIn>
-          <FadeIn delay={0.1}>
+          <FadeIn delay={0.1} className="flex items-center gap-2">
+            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={!!profile} />
             <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} signedIn={!!profile} />
           </FadeIn>
         </div>
