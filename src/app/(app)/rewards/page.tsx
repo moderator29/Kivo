@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Flame, Award, History } from "lucide-react";
+import { Flame, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { timeAgo } from "@/lib/format";
+import { buildWeekStrip, getStreakTier, mondayOfWeekUtc } from "@/lib/streak";
 
 const item = getNavItem("rewards");
 
@@ -31,18 +32,51 @@ export default async function RewardsPage() {
   }
 
   const supabase = createServerSupabaseClient();
-  const [{ data: xpTotal }, { data: earnedBadges }, { data: allBadges }, { data: xpHistory }] = await Promise.all([
-    // Single aggregate round trip instead of fetching every xp_ledger row
-    // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
-    // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
-    supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
-    supabase.from("user_badges").select("badge_id, awarded_at, badge:badges(code, name, description, icon_url)"),
-    supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
-    supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
-  ]);
+
+  // "Today" and "this week" in UTC — see get_activity_streak() in
+  // supabase/migrations/0037_activity_streak.sql for why UTC is the day
+  // boundary (profiles has no timezone column) and streak.ts's
+  // mondayOfWeekUtc for why the page and the week strip must agree on
+  // exactly the same Monday.
+  const now = new Date();
+  const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const weekStartUtc = mondayOfWeekUtc(todayUtc);
+
+  const [{ data: xpTotal }, { data: earnedBadges }, { data: allBadges }, { data: xpHistory }, { data: streak }, { data: weekXp }] =
+    await Promise.all([
+      // Single aggregate round trip instead of fetching every xp_ledger row
+      // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
+      // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
+      supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
+      supabase.from("user_badges").select("badge_id, awarded_at, badge:badges(code, name, description, icon_url)"),
+      supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
+      supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
+      // Real current/longest daily-activity streak, derived live from this
+      // profile's own xp_ledger rows — see get_activity_streak() for the
+      // full "qualifying day" definition and reasoning.
+      supabase.rpc("get_activity_streak", { p_profile_id: profile.id }).single(),
+      // Just enough of this week's xp_ledger to know which real days were
+      // active, for the Mon-Sun strip below. Same own-rows RLS as the XP
+      // history query above — never another user's activity.
+      supabase.from("xp_ledger").select("created_at").gte("created_at", weekStartUtc.toISOString()),
+    ]);
 
   const totalXp = xpTotal ?? 0;
   const earnedBadgeIds = new Set((earnedBadges ?? []).map((b) => b.badge_id));
+
+  const currentStreak = streak?.current_streak ?? 0;
+  const longestStreak = streak?.longest_streak ?? 0;
+  const tier = getStreakTier(currentStreak);
+  const activeDatesThisWeek = new Set(
+    (weekXp ?? []).map((row) => new Date(row.created_at).toISOString().slice(0, 10)),
+  );
+  const weekStrip = buildWeekStrip(todayUtc, activeDatesThisWeek);
+  const streakMessage =
+    currentStreak === 0
+      ? "Submit a prediction, make a transfer, or post to start your streak today."
+      : currentStreak === 1
+        ? "Nice start — come back tomorrow to keep it going."
+        : `${currentStreak} days strong. Keep the streak alive.`;
 
   // Discrete count-up keyframes for the XP number: each step resets the
   // `kivo-xp-count` counter to the real running value, landing exactly on
@@ -96,6 +130,90 @@ export default async function RewardsPage() {
             <span className="text-3xl font-bold tracking-tight text-foreground">0 XP</span>
           )}
           <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, posts and community activity</p>
+        </div>
+      </FadeIn>
+
+      <FadeIn delay={0.08} className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+          <Flame className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          Activity streak
+        </h2>
+
+        {/* Big pill stat: flame + current streak. Driven entirely by
+            get_activity_streak() — a profile with zero qualifying days
+            genuinely shows 0, never a placeholder number. */}
+        <div className="kivo-glass-brand flex items-center gap-3 rounded-3xl p-5">
+          <div className="kivo-gradient-victory flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+            <Flame className="h-5 w-5 text-kivo-white" strokeWidth={1.75} />
+          </div>
+          <div>
+            <span className="text-2xl font-bold tracking-tight text-foreground">{currentStreak}</span>
+            <span className="ml-1.5 text-sm font-medium text-foreground-muted">
+              {currentStreak === 1 ? "Day streak" : "Days streak"}
+            </span>
+          </div>
+        </div>
+
+        {/* Mon-Sun week strip, real dates in UTC. Future days are always
+            plain (no fake checkmark); past/today days light up only if a
+            real xp_ledger row exists for that date. */}
+        <div className="kivo-glass flex items-center justify-between rounded-2xl p-3">
+          {weekStrip.map((day) => (
+            <div key={day.isoDate} className="flex flex-1 flex-col items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                {day.label}
+              </span>
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                  day.isActive
+                    ? "kivo-gradient-victory text-kivo-white"
+                    : day.isToday
+                      ? "ring-1 ring-inset ring-kivo-cyan/50 text-foreground"
+                      : day.isFuture
+                        ? "text-foreground-subtle/50"
+                        : "bg-white/5 text-foreground-subtle"
+                }`}
+              >
+                {day.dayNumber}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tier + longest streak, side by side. */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="kivo-glass rounded-2xl p-4">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+              <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={1.75} />
+              Tier
+            </span>
+            <p className="mt-1.5 text-lg font-bold text-foreground">{tier.tierName}</p>
+          </div>
+          <div className="kivo-glass rounded-2xl p-4">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+              <Flame className="h-3.5 w-3.5 text-kivo-cyan" strokeWidth={1.75} />
+              Longest streak
+            </span>
+            <p className="mt-1.5 text-lg font-bold text-foreground">
+              {longestStreak} {longestStreak === 1 ? "day" : "days"}
+            </p>
+          </div>
+        </div>
+
+        {/* Progress toward the next tier — see STREAK_TIER_LENGTH_DAYS in
+            src/lib/streak.ts for the single source of truth on the 7-day
+            threshold this bar and copy both use. */}
+        <div className="kivo-glass rounded-2xl p-4">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+            <div
+              className="kivo-gradient-prime h-full rounded-full transition-[width]"
+              style={{ width: `${Math.round(tier.progress * 100)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-foreground-subtle">
+            {tier.daysToNextTier} more {tier.daysToNextTier === 1 ? "day" : "days"} to unlock next tier
+          </p>
+          <p className="mt-2 text-xs text-foreground-muted">{streakMessage}</p>
         </div>
       </FadeIn>
 

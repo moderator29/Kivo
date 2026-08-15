@@ -1932,6 +1932,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_activity_streak: {
+        Args: { p_profile_id: string }
+        Returns: {
+          current_streak: number
+          longest_streak: number
+        }[]
+      }
       get_fan_rating_summary: {
         Args: { p_fixture_id: string }
         Returns: {
