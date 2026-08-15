@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, ShieldCheck, UserPlus, Sparkles } from "lucide-react";
 import kivoLogo from "../../public/brand/kivo-logo-transparent.webp";
+import kivoHeroArtwork from "../../public/brand/kivo-artwork-hero.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
@@ -14,20 +15,26 @@ import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
 // hero section), same pattern as the aurora background and `KivoMarkGlyph`,
 // so this stays a Server Component. See RECOMMENDATIONS.md item 73.
 //
-// Hero visual, revised: the previous hero used `kivo-trophy-crown.webp` at
-// large, fully legible size. Re-examined at that size (not the tiny/near-
-// illegible scale ScatteredTrophies below uses it at) it bakes in real
-// competition marks — a Champions League star-ball, and the Premier League,
-// LaLiga, Serie A, Bundesliga and Ligue 1 crests — into one flattened
-// promotional composite, plus silhouetted athlete figures. That is real
-// trademark/right-of-publicity exposure for a live commercial product, the
-// same category of problem as the separate real-player-photo composite the
-// founder asked for and was declined, just a smaller version of it. The
-// hero visual below is built entirely from KIVO's own real UI language
-// instead (the actual glass-card system, the actual feature icons already
-// shipped in the product) — legally clean, and arguably more honest: it
-// previews what the product actually looks like rather than stock-style
-// imagery standing in for it.
+// Hero visual, revised twice now:
+// 1. The original hero used `kivo-trophy-crown.webp` at large, fully legible
+//    size. Re-examined at that size (not the tiny/near-illegible scale
+//    ScatteredTrophies below uses it at) it bakes in real competition marks
+//    — a Champions League star-ball, and the Premier League, LaLiga, Serie
+//    A, Bundesliga and Ligue 1 crests — into one flattened promotional
+//    composite, plus silhouetted athlete figures. That's real trademark
+//    exposure for a live commercial product, so it was pulled from the hero
+//    (kept only at ScatteredTrophies' tiny, illegible decorative scale).
+// 2. That was temporarily replaced with a hero built entirely from KIVO's
+//    own real UI language (glass cards + feature icons). Now replaced again
+//    with `kivo-artwork-hero.webp`, one of four commissioned KIVO artwork
+//    pieces (checked individually for the same trademark/right-of-publicity
+//    issue as #1 before use): a stylised K-emblem, crown, globe and stadium
+//    render with the KIVO wordmark. Verified clean — no real club/league
+//    crests, no readable third-party marks, no identifiable real athletes
+//    (every figure is an anonymous silhouette). The other three pieces
+//    (`kivo-artwork-command`, `-action`, `-social`) are saved alongside it
+//    for use elsewhere in the product (dashboard, match centre, community,
+//    empty states) rather than left unused.
 
 const PROOF_POINTS = [
   {
@@ -135,25 +142,9 @@ export default function LandingPage() {
               0%, 100% { transform: translateY(0); }
               50% { transform: translateY(-6px); }
             }
-            @keyframes kivo-hero-orb-pulse {
-              0%, 100% { opacity: 0.55; transform: scale(1); }
-              50% { opacity: 0.85; transform: scale(1.06); }
-            }
-            @keyframes kivo-hero-card-float-a {
-              0%, 100% { transform: translateY(0) rotate(-4deg); }
-              50% { transform: translateY(-14px) rotate(-4deg); }
-            }
-            @keyframes kivo-hero-card-float-b {
-              0%, 100% { transform: translateY(0) rotate(3deg); }
-              50% { transform: translateY(-10px) rotate(3deg); }
-            }
-            @keyframes kivo-hero-card-float-c {
-              0%, 100% { transform: translateY(0) rotate(-2deg); }
-              50% { transform: translateY(-12px) rotate(-2deg); }
-            }
-            @keyframes kivo-hero-card-float-d {
-              0%, 100% { transform: translateY(0) rotate(5deg); }
-              50% { transform: translateY(-8px) rotate(5deg); }
+            @keyframes kivo-hero-artwork-float {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-10px); }
             }
           `}</style>
 
@@ -214,55 +205,30 @@ export default function LandingPage() {
             </FadeIn>
           </div>
 
-          {/* Hero visual: KIVO's own real feature surfaces, not a stand-in image.
-              Hidden below lg — four absolutely-positioned floating cards around a
-              centered text column has no clean mobile layout, so this whole
-              cluster simply doesn't render there rather than being crushed into
-              something unreadable. */}
-          <div
-            className="relative z-10 hidden h-[420px] w-full flex-1 items-center justify-center lg:flex"
-            aria-hidden="true"
-          >
+          {/* Hero visual: commissioned KIVO artwork (see the import-site comment
+              above for the trademark check this went through). Shown on every
+              breakpoint, not just desktop, since a single scaling image (unlike
+              the old four-card cluster it replaced) has a clean mobile layout.
+              The image's own soft glow bleeds slightly non-black at its top/
+              bottom edges (checked in production), so it's edge-masked here to
+              dissolve into the page background instead of showing a rectangle. */}
+          <div className="relative z-10 flex w-full max-w-md flex-1 items-center justify-center lg:h-[460px] lg:max-w-none">
             <div
-              className="absolute h-[360px] w-[360px] rounded-full"
               style={{
-                background:
-                  "radial-gradient(circle, rgba(0,217,255,0.35) 0%, rgba(124,63,255,0.25) 45%, transparent 75%)",
-                filter: "blur(40px)",
-                animation: "kivo-hero-orb-pulse 6s ease-in-out infinite",
+                animation: "kivo-hero-artwork-float 7s ease-in-out infinite",
+                maskImage: "radial-gradient(closest-side, black 72%, transparent 100%)",
+                WebkitMaskImage: "radial-gradient(closest-side, black 72%, transparent 100%)",
               }}
-            />
-
-            <div
-              className="kivo-glass-brand absolute left-2 top-4 flex w-48 flex-col gap-2 rounded-2xl p-4"
-              style={{ animation: "kivo-hero-card-float-a 7s ease-in-out infinite" }}
             >
-              <Image src={PROOF_POINTS[0].icon} alt="" width={32} height={32} className="h-8 w-8" />
-              <p className="text-xs font-semibold text-foreground">{PROOF_POINTS[0].title}</p>
-            </div>
-
-            <div
-              className="kivo-glass-brand absolute right-4 top-0 flex w-52 flex-col gap-2 rounded-2xl p-4"
-              style={{ animation: "kivo-hero-card-float-b 8s ease-in-out infinite", animationDelay: "0.4s" }}
-            >
-              <Image src={PROOF_POINTS[1].icon} alt="" width={32} height={32} className="h-8 w-8" />
-              <p className="text-xs font-semibold text-foreground">{PROOF_POINTS[1].title}</p>
-            </div>
-
-            <div
-              className="kivo-glass-brand absolute bottom-6 left-8 flex w-52 flex-col gap-2 rounded-2xl p-4"
-              style={{ animation: "kivo-hero-card-float-c 7.5s ease-in-out infinite", animationDelay: "0.8s" }}
-            >
-              <Image src={PROOF_POINTS[2].icon} alt="" width={32} height={32} className="h-8 w-8" />
-              <p className="text-xs font-semibold text-foreground">{PROOF_POINTS[2].title}</p>
-            </div>
-
-            <div
-              className="kivo-glass-brand absolute bottom-0 right-2 flex w-48 flex-col gap-2 rounded-2xl p-4"
-              style={{ animation: "kivo-hero-card-float-d 6.5s ease-in-out infinite", animationDelay: "0.2s" }}
-            >
-              <Image src={PROOF_POINTS[3].icon} alt="" width={32} height={32} className="h-8 w-8" />
-              <p className="text-xs font-semibold text-foreground">{PROOF_POINTS[3].title}</p>
+              <Image
+                src={kivoHeroArtwork}
+                alt="KIVO: live scores, AI-grounded analysis, and a social layer for football fans, all in one app"
+                width={1536}
+                height={1024}
+                className="h-auto w-full object-contain lg:h-[460px] lg:w-auto"
+                sizes="(min-width: 1024px) 640px, 90vw"
+                priority
+              />
             </div>
           </div>
         </section>
