@@ -137,6 +137,7 @@ function ConversationRow({
             type="button"
             onClick={startEditing}
             disabled={pending}
+            aria-busy={pending}
             aria-label="Rename conversation"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50"
           >
@@ -147,6 +148,7 @@ function ConversationRow({
           type="button"
           onClick={handleDeleteClick}
           disabled={pending}
+          aria-busy={pending}
           aria-label={confirmingDelete ? "Confirm delete conversation" : "Delete conversation"}
           className={cn(
             "flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:opacity-50",

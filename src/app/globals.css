@@ -70,6 +70,14 @@ html {
      (WCAG 1.4.4). 106.25% of the 16px default renders the same 17px this
      replaced. RECOMMENDATIONS.md item 153. */
   font-size: 106.25%;
+  /* RECOMMENDATIONS.md item 154: without this, native controls (the season
+     <select> in the fantasy create-league card, date/number inputs, the
+     browser's own scrollbar) render with light chrome on KIVO's dark page —
+     the `className="bg-kivo-navy"` on that <select>'s <option> elements is
+     ignored by most browsers, so the dropdown itself was likely white-on-
+     white. KIVO is dark-only (no light theme to opt into), so this is a
+     static declaration, not a media-query toggle. */
+  color-scheme: dark;
 }
 
 body {

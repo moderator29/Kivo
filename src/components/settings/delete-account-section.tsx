@@ -73,6 +73,7 @@ export function DeleteAccountSection() {
               <button
                 type="button"
                 disabled={!canConfirm}
+                aria-busy={pending}
                 onClick={handleDelete}
                 className="rounded-lg bg-critical px-4 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >

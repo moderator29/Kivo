@@ -84,7 +84,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
         <span className="text-[11px] text-foreground-subtle">Fan opinion, not a provider rating</span>
       </div>
 
-      <div className="flex items-center gap-1" role="radiogroup" aria-label="Your rating">
+      <div className="flex items-center gap-1" role="radiogroup" aria-label="Your rating" aria-busy={pending}>
         {[1, 2, 3, 4, 5].map((value) => (
           <button
             key={value}

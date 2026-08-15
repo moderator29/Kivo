@@ -155,6 +155,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             type="button"
             onClick={() => handleVote(option.id)}
             disabled={pending}
+            aria-busy={pending}
             aria-pressed={isOwn}
             className={cn(
               "relative overflow-hidden rounded-lg border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",

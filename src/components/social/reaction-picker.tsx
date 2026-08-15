@@ -104,6 +104,7 @@ export function ReactionPicker({
         type="button"
         onClick={handleTriggerClick}
         disabled={pending}
+        aria-busy={pending}
         aria-haspopup="menu"
         aria-expanded={pickerOpen}
         aria-pressed={Boolean(optimisticReaction)}
