@@ -68,7 +68,11 @@ export function DeleteAccountSection() {
               disabled={pending}
               className="rounded-lg border border-white/10 bg-kivo-obsidian px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle focus:border-critical focus:outline-none disabled:opacity-50"
             />
-            {error && <p className="text-xs text-critical">{error}</p>}
+            {error && (
+              <p className="text-xs text-critical" role="status" aria-live="polite">
+                {error}
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"

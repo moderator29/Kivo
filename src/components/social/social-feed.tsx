@@ -86,7 +86,11 @@ export function SocialFeed({
         />
       ))}
 
-      {error && <p className="text-center text-xs text-critical">{error}</p>}
+      {error && (
+        <p className="text-center text-xs text-critical" role="status" aria-live="polite">
+          {error}
+        </p>
+      )}
 
       {hasMore && (
         <button

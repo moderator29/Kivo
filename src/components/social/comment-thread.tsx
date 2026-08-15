@@ -137,7 +137,11 @@ export function CommentThread({
             className="flex flex-col gap-3 overflow-hidden border-t border-white/5 pt-3"
           >
             {loadPending && !loaded && <p className="text-xs text-foreground-subtle">Loading comments…</p>}
-            {loadError && <p className="text-xs text-critical">{loadError}</p>}
+            {loadError && (
+              <p className="text-xs text-critical" role="status" aria-live="polite">
+                {loadError}
+              </p>
+            )}
 
             {loaded && (
               <div className="flex flex-col gap-3">
@@ -182,9 +186,6 @@ export function CommentThread({
                 <input
                   name="body"
                   maxLength={MAX_COMMENT_INPUT_LENGTH}
-                  onFocus={(e) => {
-                    if (!signedIn) e.currentTarget.blur();
-                  }}
                   placeholder={
                     signedIn ? (replyTo ? `Reply to ${replyTo.authorName}…` : "Write a comment…") : "Sign up to comment."
                   }
@@ -193,12 +194,17 @@ export function CommentThread({
                 <button
                   type="submit"
                   disabled={submitPending}
+                  aria-busy={submitPending}
                   className="kivo-gradient-prime shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {submitPending ? "Posting…" : signedIn ? (replyTo ? "Reply" : "Post") : "Sign up to comment"}
                 </button>
               </div>
-              {submitError && <p className="text-xs text-critical">{submitError}</p>}
+              {submitError && (
+                <p className="text-xs text-critical" role="status" aria-live="polite">
+                  {submitError}
+                </p>
+              )}
             </form>
           </motion.div>
         )}

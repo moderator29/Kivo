@@ -117,7 +117,11 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
         </select>
       </div>
 
-      {error && <span className="text-xs text-critical">{error}</span>}
+      {error && (
+        <span className="text-xs text-critical" role="status" aria-live="polite">
+          {error}
+        </span>
+      )}
 
       <div className="flex items-center gap-2">
         <button

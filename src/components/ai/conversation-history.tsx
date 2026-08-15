@@ -128,7 +128,11 @@ function ConversationRow({
           </p>
         )}
         <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(conversation.updated_at)}</p>
-        {rowError && <p className="mt-0.5 text-xs text-critical">{rowError}</p>}
+        {rowError && (
+          <p className="mt-0.5 text-xs text-critical" role="status" aria-live="polite">
+            {rowError}
+          </p>
+        )}
       </div>
 
       <div className={cn("flex shrink-0 items-center gap-1 transition-opacity", confirmingDelete ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")}>

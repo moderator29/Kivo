@@ -369,13 +369,18 @@ export function PostCard({
                     type="button"
                     role="menuitem"
                     disabled={reportPending}
+                    aria-busy={reportPending}
                     onClick={() => submitReport(reason)}
-                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-50"
+                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
                   >
                     {reason}
                   </button>
                 ))}
-                {reportError && <p className="px-2.5 py-1.5 text-[11px] text-critical">{reportError}</p>}
+                {reportError && (
+                  <p className="px-2.5 py-1.5 text-[11px] text-critical" role="status" aria-live="polite">
+                    {reportError}
+                  </p>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
