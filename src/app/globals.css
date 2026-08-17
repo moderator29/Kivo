@@ -275,6 +275,21 @@ body {
   }
 }
 
+/* Backs <KivoProfileBackground> (src/components/profile/kivo-profile-background.tsx):
+   a dark scrim over a user's chosen KIVO background image so foreground
+   .kivo-glass cards/text stay readable on top of it, reusing this file's own
+   obsidian/glass tokens rather than a new colour. Two layers: a flat wash for
+   overall contrast everywhere, plus a bottom-heavy gradient (most profile
+   content sits toward the lower/middle of the hero) for extra depth where
+   text actually lives. */
+.kivo-profile-background-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(5, 6, 10, 0.55) 0%, rgba(5, 6, 10, 0.72) 65%, rgba(5, 6, 10, 0.88) 100%),
+    rgba(5, 6, 10, 0.25);
+}
+
 /* Landing hero background aurora: slow-drifting, low-opacity brand-gradient
    glow blobs positioned behind the hero copy. Purely decorative (aria-hidden,
    pointer-events: none) and pure CSS so it costs nothing beyond a composited
@@ -427,5 +442,57 @@ body {
   .kivo-mark-glyph,
   .kivo-aurora-ambient {
     animation: none !important;
+  }
+}
+
+/* A 4th, quieter aurora blob layered into the landing page's existing
+   .kivo-aurora-page (see the three .kivo-aurora-blob--* variants above) —
+   more depth for the page now that it has real content below the hero to
+   drift behind, without upsetting the "brand colour as ~10% accent" balance:
+   lower opacity than any of the original three, and it reuses drift-b's own
+   keyframe (reversed, slower) rather than adding a new one. Automatically
+   covered by the prefers-reduced-motion clamp above, same as every other
+   .kivo-aurora-blob. */
+.kivo-aurora-blob--cyan-soft {
+  width: 34%;
+  height: 40%;
+  bottom: 4%;
+  left: -8%;
+  opacity: 0.14;
+  background: radial-gradient(circle, var(--kivo-cyan), transparent 70%);
+  animation: kivo-aurora-drift-b 32s ease-in-out infinite reverse;
+}
+
+/* Decorative marquee strip (landing page, between the hero and the proof
+   points): a slow horizontal scroll restating real platform facts that are
+   already stated, in full, elsewhere on the page (the proof points grid
+   right below it, the feature showcase, /transparency). Because it's purely
+   a restatement — never the sole source of a claim — the strip is rendered
+   aria-hidden and exists as ambient texture, not new information a screen
+   reader needs to parse twice. The edge mask fades each end to transparent
+   instead of hard-cropping mid-word. Seamless loop: the track renders its
+   item list twice back to back and animates exactly -50%, so the second
+   copy lines up perfectly as the first scrolls off. Reduced-motion is the
+   same global animation-duration clamp as every other animation in this
+   file — nothing extra to wire up here. */
+.kivo-ticker {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+.kivo-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: kivo-ticker-scroll 34s linear infinite;
+}
+
+@keyframes kivo-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }
