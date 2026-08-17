@@ -22,6 +22,14 @@ Supabase's native third-party auth integration (Clerk JWTs authorizing Postgres/
 
 Until this is done, every RLS-gated query will be rejected (the JWT won't be trusted), even with all the env vars below set correctly.
 
+## ⚠️ Changing a Clerk key? You must trigger a brand-new Vercel deployment, not just save the env var
+
+This is a real, concrete failure mode, not a theoretical one — if sign-up/sign-in silently breaks (a verification code arrives, but submitting it bounces back to the sign-in/sign-up form instead of completing) right after adding or changing a Clerk key, **this is almost certainly why**.
+
+`next.config.ts` computes the Content-Security-Policy's Clerk allowlist (`connect-src`/`script-src`/`frame-src`) by decoding `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` **at build time** (`resolveClerkFrontendApiHost()`) — this is a hard Next.js constraint: `NEXT_PUBLIC_*` variables are baked into the build output, not read fresh at runtime. Saving a new value for this variable in the Vercel dashboard does **not** retroactively change an already-built deployment's CSP header. If the key changes (a different Clerk instance, dev → production keys, a typo fixed) but the site is still serving an old build, the CSP will allow the *previous* Clerk frontend API host — meaning the *new* key's actual verification/session network calls get silently blocked by the browser's CSP, while the sign-up form itself still renders fine (that part just needs the key to be present in the client bundle, not for the CSP to match it). The user sees: code arrives by email, but submitting it does nothing/bounces back — exactly the CSP blocking the network call, with no visible error unless you open the browser's DevTools console (a CSP violation there confirms this diagnosis immediately).
+
+**The fix**: after changing any Clerk (or Supabase) env var in Vercel, trigger an actual new deployment — the dashboard's "Redeploy" action on the latest deployment works, or push a new commit. Simply saving the env var is not enough.
+
 ---
 
 ## App
