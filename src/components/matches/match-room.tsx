@@ -11,6 +11,7 @@ export type RoomPost = {
   body: string;
   createdAt: string;
   authorName: string;
+  authorAvatarSrc: string | null;
   reactionCount: number;
   viewerReaction: ReactionType | null;
   commentCount: number;
@@ -61,6 +62,7 @@ export function MatchRoomTab({
               body={post.body}
               createdAt={post.createdAt}
               authorName={post.authorName}
+              authorAvatarSrc={post.authorAvatarSrc}
               reactionCount={post.reactionCount}
               viewerReaction={post.viewerReaction}
               commentCount={post.commentCount}

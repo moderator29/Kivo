@@ -1,6 +1,3 @@
-// Generated from the live schema via the Supabase MCP server — do not hand-edit.
-// Regenerate after every migration in supabase/migrations/.
-
 export type Json =
   | string
   | number
@@ -1334,7 +1331,11 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_kivo_id: string | null
+          avatar_type: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url: string | null
           avatar_url: string | null
+          background_id: string | null
           bio: string | null
           clerk_user_id: string
           country: string | null
@@ -1348,7 +1349,11 @@ export type Database = {
           username: string
         }
         Insert: {
+          avatar_kivo_id?: string | null
+          avatar_type?: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url?: string | null
           avatar_url?: string | null
+          background_id?: string | null
           bio?: string | null
           clerk_user_id: string
           country?: string | null
@@ -1362,7 +1367,11 @@ export type Database = {
           username: string
         }
         Update: {
+          avatar_kivo_id?: string | null
+          avatar_type?: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url?: string | null
           avatar_url?: string | null
+          background_id?: string | null
           bio?: string | null
           clerk_user_id?: string
           country?: string | null
@@ -1996,7 +2005,11 @@ export type Database = {
       get_public_profile_by_username: {
         Args: { p_username: string }
         Returns: {
+          avatar_kivo_id: string
+          avatar_type: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url: string
           avatar_url: string
+          background_id: string
           display_name: string
           id: string
           username: string
@@ -2012,6 +2025,9 @@ export type Database = {
       get_public_profiles: {
         Args: { p_ids: string[] }
         Returns: {
+          avatar_kivo_id: string
+          avatar_type: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url: string
           avatar_url: string
           display_name: string
           id: string
@@ -2109,6 +2125,7 @@ export type Database = {
     }
     Enums: {
       ai_message_role: "system" | "user" | "assistant" | "tool"
+      avatar_type: "kivo" | "uploaded"
       delivery_channel: "push" | "email" | "sms" | "in_app"
       delivery_status: "pending" | "sent" | "delivered" | "failed"
       fixture_event_type:
@@ -2288,6 +2305,7 @@ export const Constants = {
   public: {
     Enums: {
       ai_message_role: ["system", "user", "assistant", "tool"],
+      avatar_type: ["kivo", "uploaded"],
       delivery_channel: ["push", "email", "sms", "in_app"],
       delivery_status: ["pending", "sent", "delivered", "failed"],
       fixture_event_type: [

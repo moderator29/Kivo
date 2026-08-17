@@ -10,6 +10,7 @@ import { getNotificationPreferences } from "@/app/(app)/settings/actions";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
+import { AvatarPicker } from "@/components/settings/avatar-picker";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -60,6 +61,18 @@ export default async function SettingsPage() {
         <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
           <span className="text-xs text-foreground-subtle">Profile details</span>
           <ProfileDetailsEditor bio={profile.bio} country={profile.country} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+          <span className="text-xs text-foreground-subtle">Avatar</span>
+          <AvatarPicker
+            profile={{
+              avatar_type: profile.avatar_type,
+              avatar_kivo_id: profile.avatar_kivo_id,
+              avatar_uploaded_url: profile.avatar_uploaded_url,
+              avatar_url: profile.avatar_url,
+            }}
+          />
         </div>
 
         <div className="flex flex-col gap-3 border-t border-white/5 py-5">

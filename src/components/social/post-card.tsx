@@ -10,6 +10,7 @@ import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
@@ -195,6 +196,10 @@ interface PostCardProps {
   /** Optional so existing call sites that haven't wired author identity through
    * yet still type-check; the name simply doesn't link without it. */
   authorUsername?: string | null;
+  /** Optional for the same reason as authorUsername above — call sites that
+   * haven't wired author identity through (Match Room) fall back to the
+   * initials badge below rather than needing an update just to type-check. */
+  authorAvatarSrc?: string | null;
   reactionCount: number;
   viewerReaction: ReactionType | null;
   commentCount: number;
@@ -217,6 +222,7 @@ export function PostCard({
   createdAt,
   authorName,
   authorUsername = null,
+  authorAvatarSrc = null,
   reactionCount,
   viewerReaction,
   commentCount,
@@ -288,9 +294,13 @@ export function PostCard({
       className="kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
     >
       <div className="flex items-center gap-2">
-        <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white ring-1 ring-white/10">
-          {authorName.charAt(0).toUpperCase()}
-        </div>
+        {authorAvatarSrc ? (
+          <KivoAvatar src={authorAvatarSrc} name={authorName} size={32} className="ring-1 ring-white/10" />
+        ) : (
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white ring-1 ring-white/10">
+            {authorName.charAt(0).toUpperCase()}
+          </div>
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
           {authorUsername ? (
             <Link

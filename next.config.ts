@@ -47,7 +47,9 @@ const supabaseOrigin = resolveSupabaseOrigin();
 //   app opted into separately.
 // - Supabase (@supabase/supabase-js): both the server- and browser-side
 //   clients (src/lib/supabase/server.ts, src/lib/supabase/client.ts) talk to
-//   NEXT_PUBLIC_SUPABASE_URL directly over REST.
+//   NEXT_PUBLIC_SUPABASE_URL directly over REST; the same origin also serves
+//   the public `avatars` Storage bucket (uploaded profile photos, see
+//   src/app/(app)/settings/avatar-actions.ts), so img-src needs it too.
 // - Anthropic (@anthropic-ai/sdk) and the football data providers
 //   (API-Football/TheSportsDB) are called only from server code
 //   (src/lib/ai/client.ts, src/lib/football/) — never fetched from the
@@ -60,7 +62,7 @@ const cspDirectives = [
   `default-src 'self'`,
   `script-src 'self' 'unsafe-inline' https://${clerkFrontendApiHost} https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
   `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' data: blob: https://img.clerk.com https://images.clerkstage.dev`,
+  `img-src 'self' data: blob: https://img.clerk.com https://images.clerkstage.dev${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
   `font-src 'self'`,
   `connect-src 'self' https://${clerkFrontendApiHost} https://clerk-telemetry.com https://*.clerk-telemetry.com https://img.clerk.com${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
   `frame-src 'self' https://${clerkFrontendApiHost} https://challenges.cloudflare.com`,

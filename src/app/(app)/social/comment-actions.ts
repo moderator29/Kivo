@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge } from "@/lib/rewards";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -17,6 +18,7 @@ export type CommentDTO = {
   createdAt: string;
   authorName: string;
   authorUsername: string | null;
+  authorAvatarSrc: string | null;
 };
 
 /**
@@ -59,6 +61,7 @@ export async function getComments(postId: string): Promise<{ comments: CommentDT
         createdAt: c.created_at,
         authorName: author?.display_name || author?.username || "KIVO fan",
         authorUsername: author?.username ?? null,
+        authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
       };
     }),
     error: null,
@@ -114,6 +117,7 @@ export async function createComment(postId: string, body: string, parentCommentI
     createdAt: inserted.created_at,
     authorName: profile.display_name || profile.username,
     authorUsername: profile.username,
+    authorAvatarSrc: resolveAvatarSrc(profile),
   };
 
   return { error: null, comment };

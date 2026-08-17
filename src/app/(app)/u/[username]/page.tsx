@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CircleUserRound, Flame, Award } from "lucide-react";
+import { Flame, Award } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoProfileBackground } from "@/components/profile/kivo-profile-background";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 
@@ -15,6 +18,10 @@ type PublicProfile = {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  avatar_type: "kivo" | "uploaded";
+  avatar_kivo_id: string | null;
+  avatar_uploaded_url: string | null;
+  background_id: string | null;
 };
 
 type PublicBadge = {
@@ -38,7 +45,19 @@ async function getPublicProfile(username: string): Promise<PublicProfile | null>
     console.error("Failed to resolve public profile", error);
     return null;
   }
-  return data?.[0] ?? null;
+  const row = data?.[0];
+  return row
+    ? {
+        id: row.id,
+        username: row.username,
+        display_name: row.display_name,
+        avatar_url: row.avatar_url,
+        avatar_type: row.avatar_type,
+        avatar_kivo_id: row.avatar_kivo_id,
+        avatar_uploaded_url: row.avatar_uploaded_url,
+        background_id: row.background_id,
+      }
+    : null;
 }
 
 export async function generateMetadata({
@@ -94,42 +113,25 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass flex items-center gap-4 rounded-2xl p-5">
-        {profile.avatar_url ? (
-          // Plain <img>, not next/image: avatar_url comes from Clerk
-          // (img.clerk.com) or wherever a user sets it, and next.config.ts's
-          // images.remotePatterns only allow-lists media.api-sports.io (team
-          // crests) — an unconfigured host throws at request time with
-          // next/image. No other place in this codebase renders avatar_url
-          // yet, so there's no existing remotePatterns entry to match.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={profile.avatar_url}
-            alt=""
-            width={64}
-            height={64}
-            className="h-16 w-16 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="kivo-gradient-prime flex h-16 w-16 shrink-0 items-center justify-center rounded-full">
-            <CircleUserRound className="h-8 w-8 text-kivo-white" strokeWidth={1.5} />
+      <KivoProfileBackground backgroundId={profile.background_id}>
+        <FadeIn className="kivo-glass flex items-center gap-4 rounded-2xl p-5">
+          <KivoAvatar src={resolveAvatarSrc(profile)} name={displayName} size={64} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h1 className="truncate text-lg font-semibold text-foreground">{displayName}</h1>
+            <span className="truncate text-sm text-foreground-subtle">@{profile.username}</span>
           </div>
-        )}
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h1 className="truncate text-lg font-semibold text-foreground">{displayName}</h1>
-          <span className="truncate text-sm text-foreground-subtle">@{profile.username}</span>
-        </div>
-        {isViewerOwnProfile ? (
-          <Link
-            href="/profile"
-            className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-white/5"
-          >
-            Edit profile
-          </Link>
-        ) : (
-          <FollowButton targetType="user" targetId={profile.id} initialFollowing={isFollowingUser} signedIn={Boolean(viewer)} size="sm" />
-        )}
-      </FadeIn>
+          {isViewerOwnProfile ? (
+            <Link
+              href="/profile"
+              className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-white/5"
+            >
+              Edit profile
+            </Link>
+          ) : (
+            <FollowButton targetType="user" targetId={profile.id} initialFollowing={isFollowingUser} signedIn={Boolean(viewer)} size="sm" />
+          )}
+        </FadeIn>
+      </KivoProfileBackground>
 
       <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
         <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">

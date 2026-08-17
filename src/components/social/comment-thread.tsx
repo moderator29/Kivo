@@ -6,36 +6,40 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageCircle, CornerDownRight } from "lucide-react";
 import { getComments, createComment, type CommentDTO } from "@/app/(app)/social/comment-actions";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { timeAgo } from "@/lib/format";
 
 const MAX_COMMENT_INPUT_LENGTH = 1000;
 
 function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () => void }) {
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-baseline gap-2">
-        {comment.authorUsername ? (
-          <Link
-            href={`/u/${comment.authorUsername}`}
-            className="text-xs font-medium text-foreground hover:text-kivo-cyan"
+    <div className="flex items-start gap-2">
+      <KivoAvatar src={comment.authorAvatarSrc} name={comment.authorName} size={20} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-baseline gap-2">
+          {comment.authorUsername ? (
+            <Link
+              href={`/u/${comment.authorUsername}`}
+              className="text-xs font-medium text-foreground hover:text-kivo-cyan"
+            >
+              {comment.authorName}
+            </Link>
+          ) : (
+            <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
+          )}
+          <span className="text-[11px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
+        </div>
+        <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>
+        {onReply && (
+          <button
+            type="button"
+            onClick={onReply}
+            className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
           >
-            {comment.authorName}
-          </Link>
-        ) : (
-          <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
+            Reply
+          </button>
         )}
-        <span className="text-[11px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
       </div>
-      <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>
-      {onReply && (
-        <button
-          type="button"
-          onClick={onReply}
-          className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
-        >
-          Reply
-        </button>
-      )}
     </div>
   );
 }

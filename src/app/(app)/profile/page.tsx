@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark } from "lucide-react";
+import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark, Pencil } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { UsernameEditor } from "@/components/profile/username-editor";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoProfileBackground } from "@/components/profile/kivo-profile-background";
+import { BackgroundPicker } from "@/components/profile/background-picker";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 
@@ -76,14 +80,25 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
-        <div className="kivo-gradient-prime flex h-16 w-16 shrink-0 items-center justify-center rounded-full">
-          <CircleUserRound className="h-8 w-8 text-kivo-white" strokeWidth={1.5} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-foreground">{profile.display_name || "Your profile"}</h1>
-          <UsernameEditor username={profile.username} />
-        </div>
+      <KivoProfileBackground backgroundId={profile.background_id}>
+        <FadeIn className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
+          <KivoAvatar src={resolveAvatarSrc(profile)} name={profile.display_name} size={64} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h1 className="truncate text-lg font-semibold text-foreground">{profile.display_name || "Your profile"}</h1>
+            <UsernameEditor username={profile.username} />
+          </div>
+          <Link
+            href="/settings"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-white/5"
+          >
+            <Pencil className="h-3 w-3" strokeWidth={2} />
+            Edit avatar
+          </Link>
+        </FadeIn>
+      </KivoProfileBackground>
+
+      <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-4 rounded-3xl p-6">
+        <BackgroundPicker backgroundId={profile.background_id} />
       </FadeIn>
 
       <div className="grid grid-cols-3 gap-3">

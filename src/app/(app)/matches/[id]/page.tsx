@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MapPin } from "lucide-react";
+import { MapPin, Share2 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -15,8 +15,10 @@ import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
+import { MatchShareCard } from "@/components/matches/match-share-card";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
+import { buildMatchShareCardData } from "@/lib/football/match-share-card";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -168,6 +170,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     body: post.body,
     createdAt: post.createdAt,
     authorName: post.authorName,
+    authorAvatarSrc: post.authorAvatarSrc,
     reactionCount: post.reactionCount,
     viewerReaction: post.viewerReaction,
     commentCount: post.commentCount,
@@ -194,6 +197,23 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   // exactly one.
   const homeManager = (managers ?? []).find((m) => m.current_team_id === fixture.home_team?.id) ?? null;
   const awayManager = (managers ?? []).find((m) => m.current_team_id === fixture.away_team?.id) ?? null;
+
+  // MatchShareCard: reuses the exact fixture + fixture_events rows already
+  // fetched above (buildMatchShareCardData internally filters to just the
+  // goal-type events it needs) rather than issuing a second round trip via
+  // getMatchShareCardData — this page already has everything that function
+  // would otherwise re-fetch.
+  const shareCardData =
+    fixture.home_team && fixture.away_team
+      ? buildMatchShareCardData(fixture, (events ?? []).map((e) => ({
+          event_type: e.event_type,
+          minute: e.minute,
+          added_time: e.added_time,
+          team_id: e.team_id,
+          player_name: e.player?.known_as ?? e.player?.full_name ?? null,
+        })))
+      : null;
+  const matchUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/matches/${fixture.id}`;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -319,6 +339,19 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             teamB={{ name: fixture.away_team.name, shortName: fixture.away_team.short_name }}
             record={headToHead}
           />
+        </FadeIn>
+      )}
+
+      {/* RECOMMENDATIONS.md's MatchShareCard feature: a real, dynamic share
+          card for this exact fixture -- never rendered for a fixture with no
+          resolved teams (shareCardData is null in that case). */}
+      {shareCardData && (
+        <FadeIn delay={0.13} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Share2 className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Share this match
+          </h2>
+          <MatchShareCard fixtureId={fixture.id} data={shareCardData} matchUrl={matchUrl} />
         </FadeIn>
       )}
 

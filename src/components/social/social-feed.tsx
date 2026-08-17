@@ -184,6 +184,7 @@ export function SocialFeed({
           createdAt={post.createdAt}
           authorName={post.authorName}
           authorUsername={post.authorUsername}
+          authorAvatarSrc={post.authorAvatarSrc}
           reactionCount={post.reactionCount}
           viewerReaction={post.viewerReaction}
           commentCount={post.commentCount}

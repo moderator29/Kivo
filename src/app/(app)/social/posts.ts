@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
 /** `/social` had a flat `.limit(50)` with no way to page further
  * (RECOMMENDATIONS item 119). 20 per page, offset-based "Load more" — same
@@ -16,6 +17,7 @@ export type PostListItem = {
   createdAt: string;
   authorName: string;
   authorUsername: string | null;
+  authorAvatarSrc: string | null;
   reactionCount: number;
   viewerReaction: ReactionType | null;
   commentCount: number;
@@ -212,6 +214,7 @@ export async function fetchPostsPage(
         createdAt: post.created_at,
         authorName: author?.display_name || author?.username || "KIVO fan",
         authorUsername: author?.username ?? null,
+        authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
         reactionCount: reactionSummary.count,
         viewerReaction: reactionSummary.viewerReaction,
         commentCount: commentCountByPost.get(post.id) ?? 0,
