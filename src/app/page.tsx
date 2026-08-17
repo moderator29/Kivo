@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, ShieldCheck, UserPlus, Sparkles } from "lucide-react";
-import kivoLogo from "../../public/brand/kivo-logo-transparent.webp";
 import kivoHeroArtwork from "../../public/brand/kivo-artwork-hero.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FeatureCard } from "@/components/marketing/feature-card";
@@ -138,31 +137,18 @@ export default function LandingPage() {
       <main className="flex flex-1 flex-col">
         <section className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-10 overflow-hidden px-6 pb-16 pt-6 text-center lg:flex-row lg:items-center lg:gap-8 lg:px-12 lg:pb-24 lg:pt-10 lg:text-left">
           <style>{`
-            @keyframes kivo-hero-logo-float {
-              0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-6px); }
-            }
             @keyframes kivo-hero-artwork-float {
               0%, 100% { transform: translateY(0); }
               50% { transform: translateY(-10px); }
             }
           `}</style>
 
-          <div className="relative z-10 flex flex-col items-center gap-6 lg:items-start lg:gap-7">
-            <FadeIn delay={0}>
-              <div style={{ animation: "kivo-hero-logo-float 5s ease-in-out infinite" }}>
-                <Image
-                  src={kivoLogo}
-                  alt="KIVO"
-                  width={280}
-                  height={280}
-                  className="h-44 w-44 lg:h-56 lg:w-56"
-                  sizes="(min-width: 1024px) 224px, 176px"
-                  priority
-                />
-              </div>
-            </FadeIn>
-
+          <div className="relative z-10 order-2 flex flex-col items-center gap-6 lg:order-1 lg:items-start lg:gap-7">
+            {/* No standalone logo mark here on purpose: the hero artwork
+                already carries a KIVO wordmark within its own composition,
+                and the header (always visible, see the top nav above) has
+                the brand glyph — a third repetition right above the tagline
+                was pure redundancy competing with the artwork for attention. */}
             <FadeIn delay={0.08}>
               <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
                 Football. Together. Live.
@@ -209,10 +195,15 @@ export default function LandingPage() {
               above for the trademark check this went through). Shown on every
               breakpoint, not just desktop, since a single scaling image (unlike
               the old four-card cluster it replaced) has a clean mobile layout.
+              Ordered *before* the text column on mobile (order-1 vs. the text
+              column's order-2) so it's the first thing a visitor sees without
+              scrolling — a striking commissioned visual buried below the fold
+              undersells itself. Desktop keeps its original side-by-side
+              placement (order-2, right of the text) via the lg: overrides.
               The image's own soft glow bleeds slightly non-black at its top/
               bottom edges (checked in production), so it's edge-masked here to
               dissolve into the page background instead of showing a rectangle. */}
-          <div className="relative z-10 flex w-full max-w-md flex-1 items-center justify-center lg:h-[460px] lg:max-w-none">
+          <div className="relative z-10 order-1 flex w-full max-w-sm flex-1 items-center justify-center lg:order-2 lg:h-[460px] lg:max-w-none">
             <div
               style={{
                 animation: "kivo-hero-artwork-float 7s ease-in-out infinite",
