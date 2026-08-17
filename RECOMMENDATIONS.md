@@ -532,6 +532,39 @@ Each of these is backed by data KIVO already has or can obtain within the existi
 
 ---
 
+## 14. KIVO avatar/background asset pack — remaster needed
+
+The founder supplied 18 avatar designs, 12 background designs, and one match-share-card template (`main@1f9983f`, six source sheets). Every avatar/background panel was inspected individually before any cropping, per the founder's explicit process: crop only where the baked-in "KIVO" watermark or corner number sits in genuinely removable space, never where doing so would cut into the character, clothing, props, lighting, or composition. Verified by actually rendering each candidate crop and looking at it, not assuming.
+
+**Result: 5 of 18 avatars and 10 of 12 backgrounds were clean-croppable and are live** at `public/assets/kivo/avatars/` and `public/assets/kivo/backgrounds/` — `kivo-avatar-06/08/11/12/17.webp`, `kivo-bg-01/02/04/05/07/08/09/10/11/12.webp`. The match-card template needed no processing (already a single clean full-canvas asset) and is live at `public/assets/kivo/match-card/kivo-match-card-background.webp`.
+
+**231. The remaining 13 avatars need a remastered source before they can be shipped** — the baked-in "KIVO" wordmark and/or the large corner number sit in pixels that overlap the character's pose in every case tried, so no rectangular crop removes them without cutting into the art:
+- **kivo-avatar-01**: cape extends through the entire bottom-right corner where the number sits.
+- **kivo-avatar-02**: ball and character fill the frame; watermark and number both overlap the pose.
+- **kivo-avatar-03**: the pointing hand/glove extends into the top-right watermark zone.
+- **kivo-avatar-04**: the kick pose extends to the bottom-right corner; trimming cuts the shoe.
+- **kivo-avatar-05**: the leg/shoe occupies the bottom-center, flanked by the watermark and number with no single rectangular crop that excludes both.
+- **kivo-avatar-07**: the KIVO wordmark overlaps the hair; the number overlaps near the ball/foot.
+- **kivo-avatar-09**: the arm extends into the top-left watermark zone; the kick pose fills the frame.
+- **kivo-avatar-10**: the ball sits directly beside the bottom-right number; the character fills nearly the whole frame.
+- **kivo-avatar-13**: a fragment of the wordmark remains next to the crown decoration even after trimming; the ball/arm prevent trimming further.
+- **kivo-avatar-14**: arms fully extended edge-to-edge, no dead space on either side.
+- **kivo-avatar-15**: the goalkeeper's head already sits close to the top edge; trimming enough to clear the watermark cuts into the face.
+- **kivo-avatar-16**: the crouched pose already reaches close to the top edge; trimming cuts the head.
+- **kivo-avatar-18**: a fragment of the wordmark remains after trimming; the ball/hand prevent trimming further.
+
+**Fix**: request a remastered version of each from whoever generates the source art, with the KIVO wordmark and player number kept clear of the character/props (e.g. in a fixed, generous margin band), OR with no baked-in wordmark/number at all — the same problem will recur on the next batch otherwise. **Medium** (art, not engineering).
+
+**232. Two backgrounds need a remastered source for a different reason** — the "KIVO" branding isn't a corner overlay here, it's rendered as diegetic content inside the scene itself:
+- **kivo-bg-03**: "KIVO" is a glowing marking on the pitch itself.
+- **kivo-bg-06**: "KIVO"/"FOOTBALL TOGETHER LIVE" is rendered as building signage within the scene.
+
+Cropping either down far enough to exclude it loses most of the artwork. **Fix**: same as above, ask for these two specifically without in-scene text, or accept them as brand-forward "KIVO stadium" background options rather than neutral ones (a legitimate product call, not an engineering one — flagging for a decision rather than making it unilaterally). **Small** (art, not engineering).
+
+Until remastered, the avatar-selection and background-selection UI should only offer the 5/10 confirmed-clean options — do not fall back to showing the flagged ones with a visible number/watermark just to hit "18" and "12"; that violates the founder's own explicit rule more directly than shipping fewer options does.
+
+---
+
 ## If you only do 10 things
 
 Ordered by leverage, weighing "unblocks a whole feature" over "polishes a working one".
