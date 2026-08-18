@@ -148,7 +148,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
                   <th scope="col" className="px-3 py-2 text-right font-semibold">Pts</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-white/5">
                 {standings.map((row) => (
                   <tr key={row.team_id} className="transition-colors hover:bg-white/5">
                     <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
