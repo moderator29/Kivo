@@ -3,16 +3,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Flame, Award, MapPin, Lock } from "lucide-react";
+import { Flame, Award, Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { logError } from "@/lib/log";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
-import { KivoAvatar } from "@/components/ui/kivo-avatar";
-import { KivoProfileBackground } from "@/components/profile/kivo-profile-background";
-import { resolveAvatarSrc } from "@/lib/kivo-assets";
-import { getCountryName } from "@/lib/countries";
+import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
+import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import { timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 
@@ -25,8 +23,11 @@ type PublicProfile = {
   avatar_kivo_id: string | null;
   avatar_uploaded_url: string | null;
   background_id: string | null;
+  background_uploaded_url: string | null;
   bio: string | null;
   country: string | null;
+  favourite_team_id: string | null;
+  created_at: string;
 };
 
 type PublicBadge = {
@@ -75,8 +76,11 @@ const getPublicProfile = cache(async function getPublicProfile(username: string)
         avatar_kivo_id: row.avatar_kivo_id,
         avatar_uploaded_url: row.avatar_uploaded_url,
         background_id: row.background_id,
+        background_uploaded_url: row.background_uploaded_url,
         bio: row.bio,
         country: row.country,
+        favourite_team_id: row.favourite_team_id,
+        created_at: row.created_at,
       }
     : null;
 });
@@ -121,7 +125,6 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   const totalXp = stats?.total_xp ?? 0;
   const badges = ((stats?.badges as PublicBadge[] | null) ?? []).slice().reverse();
   const isViewerOwnProfile = viewer?.id === profile.id;
-  const displayName = profile.display_name || profile.username;
 
   // RECOMMENDATIONS item 175: real follow state for this specific user
   // target, feeding /social's Following tab. follows_select_own already
@@ -138,39 +141,57 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     : { data: null };
   const isFollowingUser = Boolean(followRow);
 
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <KivoProfileBackground backgroundId={profile.background_id}>
-        <FadeIn className="kivo-glass flex items-center gap-4 rounded-2xl p-5">
-          <KivoAvatar src={resolveAvatarSrc(profile)} name={displayName} size={64} />
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <h1 className="truncate text-lg font-semibold text-foreground">{displayName}</h1>
-            <span className="truncate text-sm text-foreground-subtle">@{profile.username}</span>
-          </div>
-          {isViewerOwnProfile ? (
-            <Link
-              href="/profile"
-              className="shrink-0 rounded-xl border border-hairline px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-surface-2"
-            >
-              Edit profile
-            </Link>
-          ) : (
-            <FollowButton targetType="user" targetId={profile.id} initialFollowing={isFollowingUser} signedIn={Boolean(viewer)} size="sm" />
-          )}
-        </FadeIn>
-      </KivoProfileBackground>
+  // The club this profile supports, resolved from the id the RPC now returns
+  // (migration 0065). Read back from `teams` rather than trusted blind, same
+  // as /profile does, so a club deleted since it was picked renders as no club
+  // instead of a dangling crest.
+  const { data: clubRow } = profile.favourite_team_id
+    ? await supabase
+        .from("teams")
+        .select("id, name, short_name, crest_url")
+        .eq("id", profile.favourite_team_id)
+        .maybeSingle()
+    : { data: null };
+  const club: ProfileHeaderClub | null = clubRow
+    ? { id: clubRow.id, name: clubRow.name, shortName: clubRow.short_name, crestUrl: clubRow.crest_url }
+    : null;
 
-      {(profile.bio || profile.country) && (
-        <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-2 rounded-2xl p-5">
-          {profile.bio && <p className="whitespace-pre-wrap text-sm text-foreground">{profile.bio}</p>}
-          {profile.country && (
-            <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
-              <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} />
-              {getCountryName(profile.country)}
-            </span>
-          )}
-        </FadeIn>
-      )}
+  return (
+    <div className="kivo-page">
+      <FadeIn>
+        <ProfileHeader
+          displayName={profile.display_name}
+          username={profile.username}
+          avatarSrc={resolveAvatarSrc(profile)}
+          coverSrc={resolveBackgroundSrc(profile)}
+          bio={profile.bio}
+          country={profile.country}
+          joinedAt={profile.created_at}
+          club={club}
+          // `connections` is deliberately omitted for someone else's profile:
+          // `follows` has no cross-user read and get_my_followers() only ever
+          // answers for the caller, so KIVO cannot count another person's
+          // followers. Showing a zero there would be a number KIVO made up.
+          action={
+            isViewerOwnProfile ? (
+              <Link
+                href="/profile/edit"
+                className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-foreground"
+              >
+                Edit profile
+              </Link>
+            ) : (
+              <FollowButton
+                targetType="user"
+                targetId={profile.id}
+                initialFollowing={isFollowingUser}
+                signedIn={Boolean(viewer)}
+                size="sm"
+              />
+            )
+          }
+        />
+      </FadeIn>
 
       {isPublic ? (
         <>
