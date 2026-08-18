@@ -205,3 +205,57 @@ export function notificationHref(notification: Pick<NotificationRow, "type" | "p
   if (isKnownType(notification.type)) return NOTIFICATION_REGISTRY[notification.type].href(payloadOf(notification));
   return "/notifications";
 }
+
+/**
+ * Coarse groups over the type union above, used by `/notifications`' filter
+ * chips (KN-48).
+ *
+ * The taxonomy already existed — every type has a title, an icon and an href —
+ * and was used for nothing but rendering one flat reverse-chronological list.
+ * A user with match alerts on for three clubs has a bell that is overwhelmingly
+ * goals, and the social replies they actually want to answer are buried under
+ * them.
+ *
+ * Grouped rather than one chip per type on purpose: fifteen chips is a second
+ * navigation problem, and nobody thinks "show me only red cards". These are
+ * the five things a person actually comes to this page looking for. Every type
+ * in `NotificationType` must appear in exactly one group — `NOTIFICATION_GROUP_OF`
+ * below is derived from this list, so a new type that is never added here is
+ * simply unreachable by filter rather than silently mis-grouped.
+ */
+export const NOTIFICATION_GROUPS = [
+  {
+    id: "matches",
+    label: "Matches",
+    types: ["match_kickoff", "match_goal", "match_red_card", "match_result", "player_event"],
+  },
+  {
+    id: "social",
+    label: "Social",
+    types: ["post_like", "post_comment", "comment_reply", "new_follower"],
+  },
+  {
+    id: "predictions",
+    label: "Predictions",
+    types: ["prediction_result", "prediction_reminder"],
+  },
+  {
+    id: "fantasy",
+    label: "Fantasy",
+    types: ["fantasy_deadline", "fantasy_points"],
+  },
+  {
+    id: "you",
+    label: "You",
+    types: ["badge_earned", "moderation_outcome"],
+  },
+] as const satisfies readonly { id: string; label: string; types: readonly NotificationType[] }[];
+
+export type NotificationGroupId = (typeof NOTIFICATION_GROUPS)[number]["id"];
+
+/** Narrowing for a `?type=` search param, so an unknown or hand-typed value
+ * falls back to "everything" rather than filtering the list down to nothing. */
+export function notificationGroup(id: string | undefined): (typeof NOTIFICATION_GROUPS)[number] | null {
+  if (!id) return null;
+  return NOTIFICATION_GROUPS.find((group) => group.id === id) ?? null;
+}
