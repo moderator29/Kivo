@@ -94,7 +94,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
           {opponent?.id ? (
             <Link
               href={`/teams/${opponent.id}`}
-              className="block truncate text-sm text-foreground hover:text-kivo-cyan"
+              className="block truncate text-sm text-foreground hover:text-accent"
             >
               {opponent.name}
             </Link>
@@ -394,9 +394,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           {team.venue && team.venue_id ? (
             <Link
               href={`/venues/${team.venue_id}`}
-              className="mt-4 flex items-start gap-2 text-xs text-foreground-muted transition hover:text-kivo-cyan"
+              className="mt-4 flex items-start gap-2 text-xs text-foreground-muted transition hover:text-accent"
             >
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.75} />
               <span>
                 {team.venue.name}
                 {team.venue.city ? `, ${team.venue.city}` : ""}
@@ -413,7 +413,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         <FadeIn delay={0.18}>
           <Link
             href={`/teams/compare?a=${team.id}`}
-            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
           >
             <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             Compare with another team
@@ -428,7 +428,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
       <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Trophy className="h-4 w-4 text-accent" strokeWidth={1.75} />
           League position
         </h2>
         {currentStanding ? (
@@ -452,7 +452,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                 ["GA", currentStanding.goals_against],
                 ["PTS", currentStanding.points],
               ].map(([label, value]) => (
-                <div key={label as string} className="rounded-xl bg-white/5 px-2 py-2">
+                <div key={label as string} className="rounded-xl bg-surface-2 px-2 py-2">
                   <div className="text-sm font-semibold text-foreground">{value}</div>
                   <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
                 </div>
@@ -466,15 +466,15 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <UserRound className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <UserRound className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Manager
         </h2>
         {manager ? (
           <Link
             href={`/managers/${manager.id}`}
-            className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            className="kivo-glass kivo-glass-interactive flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2">
               <UserRound className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} />
             </div>
             <div>
@@ -496,7 +496,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       <FadeIn delay={0.3} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Users className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Users className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Squad
           </h2>
           <LastSyncedNote timestamp={squadLastSyncedAt} />
@@ -511,12 +511,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                     {group}
                   </span>
-                  <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+                  <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                     {players.map((player) => (
                       <Link
                         key={player.id}
                         href={`/players/${player.id}`}
-                        className="flex items-center gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-white/5"
+                        className="flex items-center gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-surface-2"
                       >
                         <PlayerAvatar photoUrl={player.photo_url} name={player.known_as ?? player.full_name} size={36} />
                         <div className="min-w-0">
@@ -548,7 +548,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
       <FadeIn delay={0.35} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <CalendarClock className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <CalendarClock className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Upcoming fixtures
         </h2>
         {upcoming && upcoming.length > 0 ? (
@@ -567,7 +567,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       <FadeIn delay={0.4} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <History className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Recent results
           </h2>
           {/* RECOMMENDATIONS.md item 160: at-a-glance form strip, derived
@@ -589,7 +589,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
       <FadeIn delay={0.45} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Clock className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Clock className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Goal timing
         </h2>
         {goalsScored > 0 ? (
@@ -611,7 +611,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
       <FadeIn delay={0.48} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <ShieldAlert className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <ShieldAlert className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Discipline
         </h2>
         {teamYellowCards + teamRedCards > 0 ? (
@@ -627,12 +627,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               </div>
             </div>
             {disciplineRows.length > 0 && (
-              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+              <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                 {disciplineRows.map((row) => (
                   <Link
                     key={row.id}
                     href={`/players/${row.id}`}
-                    className="flex items-center justify-between gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-white/5"
+                    className="flex items-center justify-between gap-3 px-4 py-3 transition-all hover:translate-x-1 hover:bg-surface-2"
                   >
                     <span className="truncate text-sm text-foreground">{row.name}</span>
                     <span className="flex shrink-0 items-center gap-3 text-xs font-semibold tabular-nums text-foreground-subtle">
@@ -657,7 +657,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       <FadeIn delay={0.5} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <ArrowLeftRight className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Transfer activity
           </h2>
           <LastSyncedNote timestamp={transfersLastSyncedAt} />
@@ -667,13 +667,13 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             {transferRows.map((transfer) => (
               <div
                 key={transfer.id}
-                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
               >
                 <div className="flex items-center justify-between gap-3">
                   {transfer.playerId && transfer.playerName ? (
                     <Link
                       href={`/players/${transfer.playerId}`}
-                      className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-kivo-cyan"
+                      className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-accent"
                     >
                       <UserRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
                       <span className="truncate">{transfer.playerName}</span>
@@ -699,7 +699,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                   {transfer.counterpartTeam ? (
                     <Link
                       href={`/teams/${transfer.counterpartTeam.id}`}
-                      className="flex min-w-0 items-center gap-2 text-foreground transition hover:text-kivo-cyan"
+                      className="flex min-w-0 items-center gap-2 text-foreground transition hover:text-accent"
                     >
                       <TeamCrest crestUrl={transfer.counterpartTeam.crest_url} name={transfer.counterpartTeam.name} size={22} />
                       <span className="truncate">{transfer.counterpartTeam.short_name ?? transfer.counterpartTeam.name}</span>
@@ -708,9 +708,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                     <span className="text-foreground-subtle">Unknown club</span>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                <div className="flex items-center justify-between gap-3 border-t border-hairline-soft pt-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transferType]}
                     </span>
                     <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transferDate, { month: "short" })}</span>

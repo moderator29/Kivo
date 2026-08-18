@@ -30,8 +30,8 @@ export function PreviewModeToggle({ active }: { active: boolean }) {
       className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
         active
           ? "border-amber-400 bg-amber-400 text-black hover:bg-amber-300"
-          : "border-white/10 text-foreground-muted hover:border-amber-400/60 hover:text-amber-400"
-      }`}
+          : "border-hairline text-foreground-muted hover:border-amber-400/60 hover:text-amber-400"
+      } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
     >
       <FlaskConical className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
       <span className="hidden sm:inline">{active ? "Preview ON" : "Preview"}</span>

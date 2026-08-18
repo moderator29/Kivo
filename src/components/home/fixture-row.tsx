@@ -39,7 +39,7 @@ export function FixtureRow({
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, delay: 0.18 + index * 0.06, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ x: 2 }}
-      className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/5"
+      className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface-2"
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {homeCrest}

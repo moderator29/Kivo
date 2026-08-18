@@ -21,12 +21,12 @@ const STATUS_STYLE: Record<SyncStatus, { icon: typeof CheckCircle2; className: s
   success: { icon: CheckCircle2, className: "border-live/30 bg-live/10 text-live", label: "Success" },
   partial: { icon: MinusCircle, className: "border-warning/30 bg-warning/10 text-warning", label: "Partial" },
   failed: { icon: XCircle, className: "border-critical/30 bg-critical/10 text-critical", label: "Failed" },
-  running: { icon: Loader2, className: "border-white/10 text-foreground-subtle", label: "Running" },
+  running: { icon: Loader2, className: "border-hairline text-foreground-subtle", label: "Running" },
   // migration 0044: the cron worker's own no-op decisions (flag off, nothing
   // live, dedup hit, quota floor) — genuinely not one of the four statuses
   // above, since no provider call was ever attempted. See
   // src/app/api/cron/sync-live/route.ts.
-  skipped: { icon: CircleSlash, className: "border-white/10 bg-white/5 text-foreground-subtle", label: "Skipped" },
+  skipped: { icon: CircleSlash, className: "border-hairline bg-surface-1 text-foreground-subtle", label: "Skipped" },
 };
 
 function formatTimestamp(value: string | null): string {
@@ -267,7 +267,7 @@ export default async function DataHealthPage() {
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              providerConfigured ? "bg-live/15" : "bg-white/5"
+              providerConfigured ? "bg-live/15" : "bg-surface-2"
             }`}
           >
             <Database className={`h-5 w-5 ${providerConfigured ? "text-live" : "text-foreground-subtle"}`} strokeWidth={1.75} />
@@ -291,7 +291,7 @@ export default async function DataHealthPage() {
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                 latestQuotaRun.provider_quota_remaining !== null && latestQuotaRun.provider_quota_remaining <= 10
                   ? "border-warning/30 bg-warning/10 text-warning"
-                  : "border-white/10 text-foreground-muted"
+                  : "border-hairline text-foreground-muted"
               }`}
               title="API-Football's own x-ratelimit-requests-remaining header from the most recent sync, not an estimate."
             >
@@ -305,7 +305,7 @@ export default async function DataHealthPage() {
 
       <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <ListChecks className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <ListChecks className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Sync order
         </h2>
         <p className="text-xs text-foreground-subtle">
@@ -314,7 +314,7 @@ export default async function DataHealthPage() {
         </p>
         <ol className="flex flex-col gap-2.5">
           {SYNC_ORDER_STEPS.map((step) => (
-            <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-white/5 px-3 py-2.5">
+            <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-surface-2 px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-foreground">{step.title}</span>
                 <span className="shrink-0 text-[11px] text-foreground-subtle">{step.where}</span>
@@ -329,7 +329,7 @@ export default async function DataHealthPage() {
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              unscoredPredictions > 0 ? "bg-warning/15" : "bg-white/5"
+              unscoredPredictions > 0 ? "bg-warning/15" : "bg-surface-2"
             }`}
           >
             <Trophy
@@ -360,7 +360,7 @@ export default async function DataHealthPage() {
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              unresolvedTransferSides > 0 ? "bg-warning/15" : "bg-white/5"
+              unresolvedTransferSides > 0 ? "bg-warning/15" : "bg-surface-2"
             }`}
           >
             <ArrowLeftRight
@@ -414,7 +414,7 @@ export default async function DataHealthPage() {
                       <span className="font-medium">GW{gw.number}</span>
                       {seasonLabel ? ` · ${seasonLabel}` : ""}
                       {gw.is_current && (
-                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[11px] font-semibold text-kivo-cyan">
+                        <span className="ml-2 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
                           Current
                         </span>
                       )}
@@ -443,9 +443,9 @@ export default async function DataHealthPage() {
       </div>
 
       {totalRuns > 0 && (
-        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5 sm:grid-cols-4 sm:divide-x sm:divide-white/5">
+        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5 sm:grid-cols-4 sm:divide-x sm:divide-hairline-soft">
           <div className="flex flex-col items-center gap-1 text-center">
-            <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
             <span className="text-lg font-semibold text-foreground">{totalRuns}</span>
             <span className="text-[11px] text-foreground-subtle">Total syncs</span>
           </div>
@@ -573,7 +573,7 @@ export default async function DataHealthPage() {
                 <FadeIn
                   key={run.id}
                   delay={0.2 + staggerDelay(index, 0.05)}
-                  className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-white/[0.03]"
+                  className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-surface-2"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>

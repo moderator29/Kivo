@@ -66,8 +66,8 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
         aria-label={saved ? "Remove from saved" : "Save"}
         title={!signedIn ? GUEST_ACTION_TITLE : undefined}
         whileTap={{ scale: 0.88 }}
-        className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed ${
-          saved ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted"
+        className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed ${
+          saved ? "text-accent" : "text-foreground-subtle hover:text-foreground-muted"
         }`}
       >
         <Bookmark className={iconSize} strokeWidth={1.75} fill={saved ? "currentColor" : "none"} />
@@ -83,7 +83,7 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.9 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
+            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-hairline bg-background px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
           >
             <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
             {flash === "saved" ? "Saved" : "Removed"}

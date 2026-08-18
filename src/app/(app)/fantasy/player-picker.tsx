@@ -85,7 +85,7 @@ export function PlayerPicker({
               `<button>` here sat in tab/reading order before the dialog's
               own content. The panel's own X button (below) is the real,
               announced close control. */}
-          <div aria-hidden="true" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <div aria-hidden="true" className="absolute inset-0 bg-overlay backdrop-blur-sm" onClick={onClose} />
           <motion.div
             ref={panelRef}
             role="dialog"
@@ -95,7 +95,7 @@ export function PlayerPicker({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 36 }}
-            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex max-h-[75vh] flex-col gap-3 rounded-2xl p-4"
+            className="kivo-popover relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex max-h-[75vh] flex-col gap-3 rounded-2xl p-4"
           >
             <div className="flex items-center justify-between gap-3">
               <h2 id="player-picker-title" className="text-sm font-semibold text-foreground">Add a player</h2>
@@ -103,7 +103,7 @@ export function PlayerPicker({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-foreground-subtle transition hover:text-foreground"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground-subtle transition hover:text-foreground"
               >
                 <X className="h-4 w-4" strokeWidth={1.75} />
               </button>
@@ -116,7 +116,7 @@ export function PlayerPicker({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search players…"
-                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+                className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
               />
             </div>
 
@@ -128,7 +128,7 @@ export function PlayerPicker({
                   onClick={() => onFilterChange(group)}
                   aria-pressed={filter === group}
                   className={`inline-flex h-10 items-center justify-center rounded-full px-3.5 text-[11px] font-semibold transition ${
-                    filter === group ? "kivo-gradient-victory text-kivo-white" : "border border-white/10 text-foreground-muted hover:bg-white/5"
+                    filter === group ? "kivo-gradient-victory text-on-accent" : "border border-hairline text-foreground-muted hover:bg-surface-2"
                   }`}
                 >
                   {group}
@@ -142,7 +142,7 @@ export function PlayerPicker({
               ) : error ? (
                 <p className="py-8 text-center text-xs text-critical">{error}</p>
               ) : searching && results.length === 0 ? (
-                <div className="flex flex-col divide-y divide-white/5" aria-label="Searching" role="status">
+                <div className="flex flex-col divide-y divide-hairline-soft" aria-label="Searching" role="status">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-3 py-2.5">
                       <Skeleton className="h-[26px] w-[26px] shrink-0 rounded-full" />
@@ -160,7 +160,7 @@ export function PlayerPicker({
                   No players synced yet. The picker fills in once KIVO&apos;s football data sync has run.
                 </p>
               ) : (
-                <div className="flex flex-col divide-y divide-white/5">
+                <div className="flex flex-col divide-y divide-hairline-soft">
                   {results.map((p) => {
                     const already = squadPlayerIds.includes(p.id);
                     const group = p.positionGroup;
@@ -182,7 +182,7 @@ export function PlayerPicker({
                           disabled={disabled}
                           onClick={() => onAdd(p)}
                           title={already ? "Already in your squad" : groupFull ? `${group} slots are full` : overBudget ? "Over budget" : undefined}
-                          className="flex shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-40"
+                          className="flex shrink-0 items-center gap-1 rounded-lg border border-hairline px-2.5 py-1.5 text-[11px] font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-40"
                         >
                           {already ? (
                             <>

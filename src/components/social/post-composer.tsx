@@ -37,13 +37,13 @@ export function PostComposer({
     return (
       <Link
         href={`/sign-up?redirect_url=${encodeURIComponent(pathname)}`}
-        className="kivo-glass flex items-center justify-between gap-3 rounded-2xl p-4 text-left transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="kivo-glass flex items-center justify-between gap-3 rounded-2xl p-4 text-left transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <span className="flex items-center gap-2.5 text-sm text-foreground-subtle">
           <PenSquare className="h-4 w-4 shrink-0" strokeWidth={1.75} />
           Sign up to share your take.
         </span>
-        <span className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white">
+        <span className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-1.5 text-sm font-semibold text-on-accent">
           Sign up to post
         </span>
       </Link>
@@ -85,7 +85,7 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
           }
         });
       }}
-      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 focus-within:shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.35)]"
+      className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 focus-within:shadow-[0_0_0_1px_var(--accent-hairline),0_8px_30px_-8px_var(--accent-hairline)]"
     >
       {fixtureId && <input type="hidden" name="fixture_id" value={fixtureId} />}
 
@@ -102,8 +102,8 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
             type="button"
             onClick={() => switchMode("post")}
             aria-pressed={mode === "post"}
-            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
-              mode === "post" ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+              mode === "post" ? "bg-surface-2 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
             }`}
           >
             Post
@@ -112,8 +112,8 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
             type="button"
             onClick={() => switchMode("poll")}
             aria-pressed={mode === "poll"}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
-              mode === "poll" ? "bg-white/10 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+              mode === "poll" ? "bg-surface-2 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
             }`}
           >
             <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -147,14 +147,14 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
                   setOptions(next);
                 }}
                 placeholder={`Option ${index + 1}`}
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="min-w-0 flex-1 rounded-lg border border-hairline bg-transparent px-3 py-1.5 text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               />
               {options.length > MIN_POLL_OPTIONS && (
                 <button
                   type="button"
                   onClick={() => setOptions(options.filter((_, i) => i !== index))}
                   aria-label={`Remove option ${index + 1}`}
-                  className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition-colors hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                  className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition-colors hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={2} />
                 </button>
@@ -165,7 +165,7 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
             <button
               type="button"
               onClick={() => setOptions([...options, ""])}
-              className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-kivo-cyan transition-colors hover:text-kivo-cyan/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2} />
               Add option
@@ -188,7 +188,7 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
           aria-busy={pending}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.96 }}
-          className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+          className="kivo-gradient-prime rounded-xl px-4 py-1.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
         >
           {pending ? "Posting…" : mode === "poll" ? "Post poll" : "Post"}
         </motion.button>

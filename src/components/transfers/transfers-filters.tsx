@@ -69,7 +69,7 @@ export function TransfersFilters({
               setType(e.target.value);
               push({ type: e.target.value, clubId, from, to });
             }}
-            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none"
+            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none kivo-focusable"
           >
             <option value="All">All types</option>
             {transferTypes.map((t) => (
@@ -91,7 +91,7 @@ export function TransfersFilters({
               setClubId(e.target.value);
               push({ type, clubId: e.target.value, from, to });
             }}
-            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none"
+            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none kivo-focusable"
           >
             <option value="All">All clubs</option>
             {clubs.map((club) => (
@@ -115,7 +115,7 @@ export function TransfersFilters({
               setFrom(e.target.value);
               push({ type, clubId, from: e.target.value, to });
             }}
-            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none"
+            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none kivo-focusable"
           />
         </div>
 
@@ -132,7 +132,7 @@ export function TransfersFilters({
               setTo(e.target.value);
               push({ type, clubId, from, to: e.target.value });
             }}
-            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none"
+            className="kivo-glass rounded-lg px-2.5 py-2 text-xs text-foreground outline-none kivo-focusable"
           />
         </div>
       </div>
@@ -141,7 +141,7 @@ export function TransfersFilters({
         <button
           type="button"
           onClick={clearFilters}
-          className="self-start text-[11px] font-medium text-foreground-subtle underline decoration-white/20 underline-offset-4 transition hover:text-foreground-muted"
+          className="self-start text-[11px] font-medium text-foreground-subtle underline decoration-hairline-strong underline-offset-4 transition hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Clear filters
         </button>

@@ -6,6 +6,7 @@ import { UserButton } from "@clerk/nextjs";
 import { getRecentNotifications } from "@/lib/notifications";
 import { NotificationBell } from "./notification-bell";
 import { CommandPalette } from "./command-palette";
+import { ThemeToggleCompact } from "@/components/theme/theme-toggle";
 import { PreviewModeToggle } from "@/components/admin/preview-mode-toggle";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
@@ -49,12 +50,12 @@ export function TopBar({
   previewMode?: boolean;
 }) {
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-kivo-obsidian/90 px-4 py-3 backdrop-blur-lg lg:px-8">
+    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-hairline-soft bg-background/80 px-4 py-3 backdrop-blur-xl lg:px-8">
       <Link
         href="/home"
-        className="flex items-center gap-2 rounded-lg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="flex items-center gap-2 rounded-lg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+        <Image src={kivoLogo} alt="" width={32} height={32} className="kivo-ink h-8 w-8 shrink-0" priority />
         <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
 
@@ -63,6 +64,11 @@ export function TopBar({
       </div>
 
       {isAdmin && <PreviewModeToggle active={previewMode} />}
+
+      {/* Appearance is reachable from anywhere, not buried in settings — it is
+          the one preference people flip by reflex when a room's lighting
+          changes. The full three-option control still lives in Settings. */}
+      <ThemeToggleCompact />
 
       {signedIn ? (
         <>
@@ -74,7 +80,7 @@ export function TopBar({
       ) : (
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+          className="kivo-gradient-prime kivo-raise shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Sign up
         </Link>

@@ -140,9 +140,9 @@ export function ReactionPicker({
         title={!signedIn ? GUEST_ACTION_TITLE : undefined}
         whileTap={{ scale: 0.88 }}
         className={cn(
-          "flex w-fit items-center gap-1.5 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-70",
+          "flex w-fit items-center gap-1.5 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-70",
           isSmall ? "px-1.5 py-1 text-[11px]" : "px-2 py-1 text-xs",
-          active ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted",
+          active ? "text-accent" : "text-foreground-subtle hover:text-foreground-muted",
         )}
       >
         <motion.span
@@ -173,7 +173,7 @@ export function ReactionPicker({
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
-              "kivo-glass-sharp absolute z-20 flex items-center gap-0.5 rounded-xl p-1",
+              "kivo-popover absolute z-20 flex items-center gap-0.5 rounded-xl p-1",
               placement.vertical === "top" ? "bottom-full mb-2" : "top-full mt-2",
               placement.horizontal === "left" ? "left-0" : "right-0",
             )}
@@ -185,7 +185,7 @@ export function ReactionPicker({
                 role="menuitem"
                 aria-label={reaction.label}
                 onClick={() => applyReaction(reaction.type)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-base leading-none transition-transform hover:scale-125 hover:bg-white/5"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-base leading-none transition-transform hover:scale-125 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 {reaction.emoji}
               </button>

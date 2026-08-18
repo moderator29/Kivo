@@ -9,7 +9,7 @@ import { Info } from "lucide-react";
 export function LegalNotice({ children }: { children: ReactNode }) {
   return (
     <div className="kivo-glass-brand flex items-start gap-3 rounded-2xl p-5 sm:p-6">
-      <Info className="mt-0.5 h-5 w-5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+      <Info className="mt-0.5 h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
       <div className="text-sm leading-relaxed text-foreground-muted sm:text-base">{children}</div>
     </div>
   );

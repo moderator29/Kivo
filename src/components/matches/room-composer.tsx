@@ -39,13 +39,13 @@ export function RoomComposer({ fixtureId, signedIn }: { fixtureId: string; signe
     return (
       <Link
         href={`/sign-up?redirect_url=${encodeURIComponent(pathname)}`}
-        className="kivo-glass flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left transition-colors duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="kivo-glass flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <span className="flex items-center gap-2 text-xs text-foreground-subtle">
           <PenSquare className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
           Sign up to join the chat.
         </span>
-        <span className="kivo-gradient-prime shrink-0 rounded-lg px-3 py-1 text-xs font-semibold text-kivo-white">Sign up</span>
+        <span className="kivo-gradient-prime shrink-0 rounded-lg px-3 py-1 text-xs font-semibold text-on-accent">Sign up</span>
       </Link>
     );
   }
@@ -94,7 +94,7 @@ function SignedInRoomComposer({ fixtureId }: { fixtureId: string }) {
           aria-label={pending ? "Sending…" : "Send"}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.92 }}
-          className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-kivo-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+          className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-on-accent transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
         >
           <Send className="h-3.5 w-3.5" strokeWidth={2} />
         </motion.button>

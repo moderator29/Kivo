@@ -153,12 +153,12 @@ export function NotificationBell({
         href={notificationHref(notification)}
         onClick={() => handleItemClick(notification.id)}
         className={cn(
-          "flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60",
-          !notification.read_at && "bg-white/[0.03]",
+          "flex w-full items-start gap-3 border-b border-hairline-soft px-4 py-3 text-left transition-colors last:border-0 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
+          !notification.read_at && "bg-surface-1",
         )}
       >
         <div className="kivo-gradient-prime mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full">
-          <Icon className="h-3.5 w-3.5 text-kivo-white" strokeWidth={2} />
+          <Icon className="h-3.5 w-3.5 text-on-accent" strokeWidth={2} />
         </div>
         <div className="flex-1">
           <p className="text-sm text-foreground">
@@ -172,7 +172,7 @@ export function NotificationBell({
           <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
         </div>
         {!notification.read_at && (
-          <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-kivo-cyan" />
+          <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
         )}
       </Link>
     );
@@ -186,13 +186,13 @@ export function NotificationBell({
         aria-label={displayUnreadCount > 0 ? `Notifications, ${displayUnreadCount} unread` : "Notifications"}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="kivo-glass-sharp relative flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="kivo-glass-sharp relative flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
         {displayUnreadCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[10px] font-semibold text-kivo-white"
+            className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[10px] font-semibold text-on-accent"
           >
             {displayUnreadCount > 9 ? "9+" : displayUnreadCount}
           </span>
@@ -209,14 +209,14 @@ export function NotificationBell({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 500, damping: 40 }}
-            className="kivo-glass-brand fixed left-4 right-4 top-16 z-30 max-h-[70vh] overflow-hidden rounded-2xl sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:max-h-none sm:w-80"
+            className="kivo-popover fixed left-4 right-4 top-16 z-30 max-h-[70vh] overflow-hidden rounded-2xl sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:max-h-none sm:w-80"
           >
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-hairline-soft px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Notifications</span>
               {displayUnreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
-                  className="rounded text-xs font-medium text-kivo-cyan hover:text-kivo-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                  className="rounded text-xs font-medium text-accent hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   Mark all read
                 </button>
@@ -251,7 +251,7 @@ export function NotificationBell({
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
-              className="block border-t border-white/5 px-4 py-2.5 text-center text-xs font-medium text-kivo-cyan hover:text-kivo-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+              className="block border-t border-hairline-soft px-4 py-2.5 text-center text-xs font-medium text-accent hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
             >
               See all notifications
             </Link>

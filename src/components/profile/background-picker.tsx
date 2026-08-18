@@ -104,7 +104,7 @@ export function BackgroundPicker({ backgroundId }: { backgroundId: string | null
               aria-label="Choose this KIVO background"
               aria-pressed={isActive}
               className={`relative aspect-video overflow-hidden rounded-xl ring-2 transition disabled:opacity-60 ${
-                isActive ? "ring-kivo-cyan" : "ring-transparent hover:ring-white/15"
+                isActive ? "ring-accent" : "ring-transparent hover:ring-hairline-strong"
               }`}
             >
               <Image
@@ -116,12 +116,12 @@ export function BackgroundPicker({ backgroundId }: { backgroundId: string | null
                 className="object-cover"
               />
               {isActive && (
-                <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-kivo-cyan">
-                  <Check className="h-2.5 w-2.5 text-kivo-obsidian" strokeWidth={3} />
+                <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent">
+                  <Check className="h-2.5 w-2.5 text-on-accent" strokeWidth={3} />
                 </span>
               )}
               {isThisPending && (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <span className="absolute inset-0 flex items-center justify-center bg-overlay">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 </span>
               )}

@@ -48,7 +48,7 @@ export default async function SocialPage({
           filter is a real navigation to a different query, not client-only
           UI state, matching how /transfers' filters work. */}
       {profile && (
-        <FadeIn delay={0.08} className="flex w-fit gap-4 border-b border-white/10">
+        <FadeIn delay={0.08} className="flex w-fit gap-4 border-b border-hairline">
           <Link
             href="/social"
             className={`relative px-1 py-2.5 text-xs font-semibold transition-colors ${

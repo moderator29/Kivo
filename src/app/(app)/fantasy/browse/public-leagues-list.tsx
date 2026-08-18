@@ -87,7 +87,7 @@ export function PublicLeaguesList({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search public leagues…"
           aria-label="Search public leagues"
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+          className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
         />
       </FadeIn>
 
@@ -110,7 +110,7 @@ export function PublicLeaguesList({
               delay={Math.min((index % 20) * 0.03, 0.3)}
               className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
                 <Trophy className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
@@ -126,7 +126,7 @@ export function PublicLeaguesList({
                 type="button"
                 onClick={() => handleJoin(league.id)}
                 disabled={league.isFull || (joining && joiningId === league.id)}
-                className="shrink-0 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5 disabled:opacity-50"
+                className="shrink-0 rounded-xl border border-hairline px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-surface-2 disabled:opacity-50"
               >
                 {league.isFull ? "Full" : joining && joiningId === league.id ? "Joining…" : "Join"}
               </button>
@@ -140,7 +140,7 @@ export function PublicLeaguesList({
           type="button"
           onClick={handleLoadMore}
           disabled={loadingMore}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-1 disabled:opacity-50"
         >
           {loadingMore ? "Loading…" : "Load more"}
         </button>

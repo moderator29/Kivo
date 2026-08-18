@@ -44,7 +44,7 @@ export function DeleteAccountSection() {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="flex w-fit items-center gap-2 rounded-xl border border-critical/30 bg-critical/10 px-5 py-2.5 text-sm font-semibold text-critical transition-colors hover:bg-critical/20"
+          className="flex w-fit items-center gap-2 rounded-xl border border-critical/30 bg-critical/10 px-5 py-2.5 text-sm font-semibold text-critical transition-colors hover:bg-critical/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           <Trash2 className="h-4 w-4" strokeWidth={2} />
           Delete account
@@ -66,7 +66,7 @@ export function DeleteAccountSection() {
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder={CONFIRM_PHRASE}
               disabled={pending}
-              className="rounded-lg border border-white/10 bg-kivo-obsidian px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle focus:border-critical focus:outline-none disabled:opacity-50"
+              className="rounded-lg border border-hairline bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle focus:border-critical focus:outline-none disabled:opacity-50"
             />
             {error && (
               <p className="text-xs text-critical" role="status" aria-live="polite">
@@ -79,7 +79,7 @@ export function DeleteAccountSection() {
                 disabled={!canConfirm}
                 aria-busy={pending}
                 onClick={handleDelete}
-                className="rounded-lg bg-critical px-4 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="rounded-lg bg-critical px-4 py-2 text-xs font-semibold text-on-accent kivo-raise disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 {pending ? "Deleting…" : "Permanently delete my account"}
               </button>
@@ -91,7 +91,7 @@ export function DeleteAccountSection() {
                   setConfirmText("");
                   setError(null);
                 }}
-                className="rounded-lg px-4 py-2 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50"
+                className="rounded-lg px-4 py-2 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Cancel
               </button>

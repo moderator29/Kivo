@@ -16,6 +16,7 @@ import { ActiveSessionsPanel } from "@/components/settings/active-sessions-panel
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
 import { DataExportSection } from "@/components/settings/data-export-section";
 import { AvatarPicker } from "@/components/settings/avatar-picker";
+import { AppearanceSection } from "@/components/theme/appearance-section";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -29,7 +30,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-foreground-muted">Sign up to manage your settings.</p>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -76,7 +77,7 @@ export default async function SettingsPage() {
           <span className="text-sm font-semibold text-foreground">{email ?? "No email on file"}</span>
         </div>
 
-        <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-1.5 border-t border-hairline-soft py-5">
           <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
             <AtSign className="h-3 w-3" strokeWidth={2} />
             Username
@@ -84,17 +85,17 @@ export default async function SettingsPage() {
           <UsernameEditor username={profile.username} />
         </div>
 
-        <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-1.5 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Profile details</span>
           <ProfileDetailsEditor bio={profile.bio} country={profile.country} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Privacy</span>
           <ActivityPrivacyToggle initialShowActivityPublicly={profile.show_activity_publicly} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Avatar</span>
           <AvatarPicker
             profile={{
@@ -106,21 +107,25 @@ export default async function SettingsPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <AppearanceSection />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Notifications</span>
           <NotificationPreferencesPanel initial={notificationPreferences} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <DataExportSection username={profile.username} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <span className="text-sm font-semibold text-foreground">Active sessions</span>
           <ActiveSessionsPanel initial={activeSessions.sessions} initialError={activeSessions.error} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 pt-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft pt-5">
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-semibold text-foreground">Session</span>
             <span className="text-xs text-foreground-subtle">Sign out of KIVO on this device.</span>

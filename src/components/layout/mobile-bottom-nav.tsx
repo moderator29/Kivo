@@ -85,7 +85,7 @@ export function MobileBottomNav({
                 tab through, and Escape (via useFocusTrap) closes it too. */}
             <div
               aria-hidden="true"
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-overlay backdrop-blur-sm"
               onClick={() => setMoreOpen(false)}
             />
             <motion.div
@@ -99,12 +99,12 @@ export function MobileBottomNav({
               transition={{ type: "spring", stiffness: 420, damping: 36 }}
               className="kivo-glass-brand relative z-10 mb-[calc(env(safe-area-inset-bottom)+76px)] mx-3 flex max-h-[75vh] flex-col overflow-hidden rounded-3xl pt-2.5"
             >
-              <div aria-hidden="true" className="mx-auto h-1 w-9 shrink-0 rounded-full bg-white/15" />
+              <div aria-hidden="true" className="mx-auto h-1 w-9 shrink-0 rounded-full bg-surface-2" />
 
               <div className="flex flex-col overflow-y-auto px-3 pb-3">
                 {viewerProfile && (
                   <div className="mt-2 flex items-center gap-3 px-1 pb-3">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06]">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-1">
                       {viewerProfile.avatarUrl ? (
                         <Image src={viewerProfile.avatarUrl} alt="" width={48} height={48} className="h-full w-full object-cover" unoptimized />
                       ) : (
@@ -136,7 +136,7 @@ export function MobileBottomNav({
                     /settings' grouped card, no per-row box. */}
                 <div className="kivo-glass flex flex-col rounded-2xl">
                   {moreGroups.map((group, index) => (
-                    <div key={group.label} className={cn("flex flex-col py-1.5", index > 0 && "border-t border-white/5")}>
+                    <div key={group.label} className={cn("flex flex-col py-1.5", index > 0 && "border-t border-hairline-soft")}>
                       <span className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
                         {group.label}
                       </span>
@@ -156,7 +156,7 @@ export function MobileBottomNav({
         className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-30 lg:hidden"
         aria-label="Primary"
       >
-        <div className="kivo-glass-brand flex items-center justify-around gap-2 rounded-full p-2 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)]">
+        <div className="kivo-glass-brand flex items-center justify-around gap-2 rounded-full p-2 shadow-float">
           {barItems.map((item) => {
             const active = isActiveRoute(pathname, item.href);
             const Icon = item.icon;
@@ -166,15 +166,15 @@ export function MobileBottomNav({
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-                  active ? "text-kivo-white" : "text-foreground-subtle hover:text-foreground-muted",
+                  "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                  active ? "text-on-accent" : "text-foreground-subtle hover:text-foreground-muted",
                 )}
               >
                 {active && (
                   <motion.span
                     aria-hidden="true"
                     layoutId="mobile-nav-active"
-                    className="kivo-gradient-prime absolute inset-0 rounded-xl shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                    className="kivo-gradient-prime absolute inset-0 rounded-xl kivo-glow-soft"
                     transition={{ type: "spring", stiffness: 500, damping: 40 }}
                   />
                 )}
@@ -187,8 +187,8 @@ export function MobileBottomNav({
             ref={toggleButtonRef}
             onClick={() => setMoreOpen((v) => !v)}
             className={cn(
-              "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-              moreOpen ? "text-kivo-white" : "text-foreground-subtle hover:text-foreground-muted",
+              "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+              moreOpen ? "text-on-accent" : "text-foreground-subtle hover:text-foreground-muted",
             )}
             aria-expanded={moreOpen}
             aria-haspopup="dialog"
@@ -197,7 +197,7 @@ export function MobileBottomNav({
               <motion.span
                 aria-hidden="true"
                 layoutId="mobile-nav-active"
-                className="kivo-gradient-prime absolute inset-0 rounded-xl shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                className="kivo-gradient-prime absolute inset-0 rounded-xl kivo-glow-soft"
                 transition={{ type: "spring", stiffness: 500, damping: 40 }}
               />
             )}
@@ -237,17 +237,17 @@ function MoreRow({
       href={item.href}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
-      className="group flex min-h-14 items-center gap-3 px-3.5 py-3 transition-colors active:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+      className="group flex min-h-14 items-center gap-3 px-3.5 py-3 transition-colors active:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
     >
       <Icon
-        className={cn("h-5 w-5 shrink-0 transition-colors", active ? "text-kivo-cyan" : "text-foreground-subtle")}
+        className={cn("h-5 w-5 shrink-0 transition-colors", active ? "text-accent" : "text-foreground-subtle")}
         strokeWidth={1.75}
       />
       <span className={cn("flex-1 truncate text-sm", active ? "font-semibold text-foreground" : "font-medium text-foreground")}>
         {item.label}
       </span>
       {isComingSoon && (
-        <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+        <span className="shrink-0 rounded-full border border-hairline px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
           Soon
         </span>
       )}

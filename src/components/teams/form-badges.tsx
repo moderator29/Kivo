@@ -12,7 +12,7 @@ export function FormBadges({ form }: { form: FormResult[] }) {
   }
   const style: Record<FormResult, string> = {
     W: "border-live/30 bg-live/10 text-live",
-    D: "border-white/10 text-foreground-muted",
+    D: "border-hairline text-foreground-muted",
     L: "border-critical/30 bg-critical/10 text-critical",
   };
   return (

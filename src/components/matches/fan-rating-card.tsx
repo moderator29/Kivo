@@ -127,7 +127,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
             aria-checked={rating === value}
             aria-label={`${value} star${value === 1 ? "" : "s"}`}
             tabIndex={(rating ?? 1) === value ? 0 : -1}
-            className="rounded p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed"
+            className="rounded p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed"
           >
             <Star
               className={cn("h-6 w-6 transition-colors", activeValue >= value ? "fill-achievement text-achievement" : "text-foreground-subtle")}

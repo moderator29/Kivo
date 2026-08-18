@@ -280,9 +280,9 @@ export default async function MatchCentrePage({
             50% { opacity: 1; transform: scale(1.04); }
           }
           @keyframes kivo-live-ring {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
-            70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kivo-live) 45%, transparent); }
+            70% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--kivo-live) 0%, transparent); }
+            100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kivo-live) 0%, transparent); }
           }
           @keyframes kivo-score-reveal {
             0% { opacity: 0; transform: scale(0.82); }
@@ -306,7 +306,7 @@ export default async function MatchCentrePage({
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
           <span>{fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}</span>
           {fixture.venue?.name && (
-            <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-kivo-cyan">
+            <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-accent">
               <MapPin className="h-3 w-3" strokeWidth={2} />
               {fixture.venue.name}
               {fixture.venue.city ? `, ${fixture.venue.city}` : ""}
@@ -323,7 +323,7 @@ export default async function MatchCentrePage({
             {homeManager && (
               <Link
                 href={`/managers/${homeManager.id}`}
-                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-accent"
               >
                 {homeManager.full_name}
               </Link>
@@ -345,7 +345,7 @@ export default async function MatchCentrePage({
             {awayManager && (
               <Link
                 href={`/managers/${awayManager.id}`}
-                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-accent"
               >
                 {awayManager.full_name}
               </Link>
@@ -486,7 +486,7 @@ export default async function MatchCentrePage({
 
       <Link
         href="/matches"
-        className="self-center text-xs text-foreground-subtle underline decoration-white/20 underline-offset-4 hover:text-foreground-muted"
+        className="self-center text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
       >
         Back to today&apos;s matches
       </Link>

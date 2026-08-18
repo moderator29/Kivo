@@ -16,26 +16,26 @@ import { FaqSection } from "@/components/marketing/faq-section";
 // hero section), same pattern as the aurora background and `KivoMarkGlyph`,
 // so this stays a Server Component. See RECOMMENDATIONS.md item 73.
 //
-// Hero visual, revised twice now:
+// Hero visual, revised three times now, and the history is worth keeping
+// because two of the three revisions were forced by a real legal constraint
+// rather than by taste:
 // 1. The original hero used `kivo-trophy-crown.webp` at large, fully legible
-//    size. Re-examined at that size (not the tiny/near-illegible scale
-//    ScatteredTrophies below uses it at) it bakes in real competition marks
-//    — a Champions League star-ball, and the Premier League, LaLiga, Serie
-//    A, Bundesliga and Ligue 1 crests — into one flattened promotional
-//    composite, plus silhouetted athlete figures. That's real trademark
-//    exposure for a live commercial product, so it was pulled from the hero
-//    (kept only at ScatteredTrophies' tiny, illegible decorative scale).
-// 2. That was temporarily replaced with a hero built entirely from KIVO's
-//    own real UI language (glass cards + feature icons). Now replaced again
-//    with `kivo-artwork-hero.webp`, one of four commissioned KIVO artwork
-//    pieces (checked individually for the same trademark/right-of-publicity
-//    issue as #1 before use): a stylised K-emblem, crown, globe and stadium
-//    render with the KIVO wordmark. Verified clean — no real club/league
-//    crests, no readable third-party marks, no identifiable real athletes
-//    (every figure is an anonymous silhouette). The other three pieces
-//    (`kivo-artwork-command`, `-action`, `-social`) are saved alongside it
-//    for use elsewhere in the product (dashboard, match centre, community,
-//    empty states) rather than left unused.
+//    size. At that size it bakes real competition marks — a Champions League
+//    star-ball, and the Premier League, LaLiga, Serie A, Bundesliga and Ligue
+//    1 crests — into one flattened promotional composite, plus silhouetted
+//    athlete figures. That is real trademark exposure for a live commercial
+//    product, so it was pulled.
+// 2. Replaced with a hero built from KIVO's own UI language, then with
+//    `kivo-artwork-hero.webp`, one of four commissioned pieces (each checked
+//    individually against the same trademark / right-of-publicity issue as
+//    #1 before use).
+// 3. Now: no hero image at all, per founder direction. The commissioned
+//    artwork and the scattered trophy texture are both gone from this page
+//    and from the in-product surfaces that reused them. The hero is a single
+//    centred column — the K mark at display size, then the headline. The
+//    artwork files stay in public/brand/ rather than being deleted, since
+//    they were commissioned and cleared and the decision here is a design
+//    one, not a licensing one.
 
 const PROOF_POINTS = [
   {
@@ -258,13 +258,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/sign-in"
-            className="flex min-h-10 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="flex min-h-10 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             Sign in
           </Link>
           <Link
             href="/sign-up"
-            className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             Sign up
           </Link>
@@ -272,7 +272,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-1 flex-col">
-        <section className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-10 overflow-hidden px-6 pb-16 pt-6 text-center lg:flex-row lg:items-center lg:gap-8 lg:px-12 lg:pb-24 lg:pt-10 lg:text-left">
+        <section className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-8 overflow-hidden px-6 pb-16 pt-8 text-center lg:gap-9 lg:px-12 lg:pb-24 lg:pt-14">
           <style>{`
             @keyframes kivo-hero-artwork-float {
               0%, 100% { transform: translateY(0); }
@@ -287,7 +287,7 @@ export default function LandingPage() {
                 the brand glyph — a third repetition right above the tagline
                 was pure redundancy competing with the artwork for attention. */}
             <FadeIn delay={0.08}>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
+              <span className="rounded-full border border-hairline px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
                 Football. Together. Live.
               </span>
             </FadeIn>
@@ -308,14 +308,14 @@ export default function LandingPage() {
             <FadeIn delay={0.32} className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/home"
-                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition duration-150 hover:scale-[1.03] hover:opacity-90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Explore KIVO
                 <ArrowRight className="h-4 w-4" strokeWidth={2} />
               </Link>
               <Link
                 href="/sign-up"
-                className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-all duration-150 hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="kivo-glass-sharp kivo-raise flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Create free account
               </Link>
@@ -366,11 +366,11 @@ export default function LandingPage() {
             where it's stated in full) — ambient texture, not a new claim, so
             it's aria-hidden and the list is duplicated once for a seamless
             CSS loop (.kivo-ticker-track in globals.css). */}
-        <div className="kivo-ticker border-y border-white/5 py-3" aria-hidden="true">
+        <div className="kivo-ticker border-y border-hairline-soft py-3" aria-hidden="true">
           <div className="kivo-ticker-track">
             {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, index) => (
               <span key={index} className="flex shrink-0 items-center gap-2 px-6 text-xs font-medium text-foreground-subtle">
-                <span className="h-1 w-1 shrink-0 rounded-full bg-kivo-cyan/70" />
+                <span className="h-1 w-1 shrink-0 rounded-full bg-accent/70" />
                 {item}
               </span>
             ))}
@@ -385,7 +385,7 @@ export default function LandingPage() {
 
         <section className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">What&apos;s inside</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">What&apos;s inside</span>
             <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Everything a matchday needs, actually built out
             </h2>
@@ -405,7 +405,7 @@ export default function LandingPage() {
                   <h3 className="text-lg font-semibold text-foreground">{feature.title}</h3>
                 </div>
                 <p className="text-sm leading-relaxed text-foreground-muted">{feature.description}</p>
-                <ul className="flex flex-1 flex-col gap-2 border-t border-white/5 pt-4">
+                <ul className="flex flex-1 flex-col gap-2 border-t border-hairline-soft pt-4">
                   {feature.bullets.map((bullet) => (
                     <li key={bullet} className="flex items-start gap-2 text-xs text-foreground-subtle">
                       <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
@@ -415,7 +415,7 @@ export default function LandingPage() {
                 </ul>
                 <Link
                   href={feature.href}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-kivo-cyan transition-colors hover:text-kivo-cyan/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   {feature.cta}
                   <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
@@ -427,7 +427,7 @@ export default function LandingPage() {
 
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Why KIVO</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Why KIVO</span>
             <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Built different, on purpose
             </h2>
@@ -439,13 +439,13 @@ export default function LandingPage() {
             {WHY_KIVO.map((pillar, index) => (
               <ScrollReveal key={pillar.title} delay={(index % 2) * 0.08} className="kivo-glass flex flex-col gap-4 rounded-3xl p-7">
                 <div className="kivo-glass-sharp flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
-                  <pillar.icon className="h-5 w-5 text-kivo-cyan" strokeWidth={1.75} />
+                  <pillar.icon className="h-5 w-5 text-accent" strokeWidth={1.75} />
                 </div>
                 <h3 className="text-base font-semibold text-foreground">{pillar.title}</h3>
                 <p className="text-sm leading-relaxed text-foreground-muted">{pillar.description}</p>
                 <Link
                   href={pillar.href}
-                  className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-kivo-cyan transition-colors hover:text-kivo-cyan/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                  className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   {pillar.cta}
                   <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
@@ -457,7 +457,7 @@ export default function LandingPage() {
 
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">How it works</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">How it works</span>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Look around free. Sign up when you&apos;re ready to play.
             </h2>
@@ -465,7 +465,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {HOW_IT_WORKS.map((step, index) => (
               <ScrollReveal key={step.title} delay={index * 0.08} className="kivo-glass-brand flex flex-col gap-3 rounded-3xl p-6">
-                <step.icon className="h-8 w-8 text-kivo-cyan" strokeWidth={1.75} />
+                <step.icon className="h-8 w-8 text-accent" strokeWidth={1.75} />
                 <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
                 <p className="text-sm leading-relaxed text-foreground-muted">{step.description}</p>
               </ScrollReveal>
@@ -475,7 +475,7 @@ export default function LandingPage() {
 
         <section className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">FAQ</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">FAQ</span>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Real questions, real answers
             </h2>
@@ -489,7 +489,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-white/5 px-6 py-12 lg:px-12">
+      <footer className="border-t border-hairline-soft px-6 py-12 lg:px-12">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
             <div className="flex max-w-xs flex-col gap-3">
@@ -523,11 +523,11 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <div className="flex flex-col gap-2 border-t border-white/5 pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 border-t border-hairline-soft pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
             <span>© {new Date().getFullYear()} KIVO</span>
             <Link
               href="/transparency"
-              className="inline-flex items-center gap-1.5 transition-colors hover:text-kivo-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Real football data, real fans, no fabricated stats. Ever. See what&apos;s synced
               <ArrowRight className="h-3 w-3" strokeWidth={2} />

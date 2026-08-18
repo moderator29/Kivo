@@ -312,11 +312,11 @@ export function CommandPalette() {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         <span className="min-w-0 flex-1 truncate text-foreground-subtle">Search teams, players, competitions…</span>
-        <kbd className="hidden rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-foreground-subtle sm:inline-block">
+        <kbd className="hidden rounded border border-hairline px-1.5 py-0.5 text-[11px] text-foreground-subtle sm:inline-block">
           {modifierLabel}K
         </kbd>
       </button>
@@ -327,7 +327,7 @@ export function CommandPalette() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-24 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-start justify-center bg-overlay px-4 pt-24 backdrop-blur-sm"
             onClick={close}
           >
             <motion.div
@@ -339,10 +339,10 @@ export function CommandPalette() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              className="kivo-glass w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
+              className="kivo-popover w-full max-w-lg overflow-hidden rounded-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+              <div className="flex items-center gap-2 border-b border-hairline-soft px-4 py-3">
                 <Search className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
                 <input
                   ref={inputRef}
@@ -378,7 +378,7 @@ export function CommandPalette() {
                           <button
                             type="button"
                             onClick={handleClearRecentSearches}
-                            className="flex items-center gap-1 rounded px-1 text-[11px] text-foreground-subtle transition hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                            className="flex items-center gap-1 rounded px-1 text-[11px] text-foreground-subtle transition hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                           >
                             <X className="h-3 w-3" strokeWidth={2} />
                             Clear
@@ -390,7 +390,7 @@ export function CommandPalette() {
                               key={term}
                               type="button"
                               onClick={() => runRecentSearch(term)}
-                              className="rounded-full border border-white/10 px-3 py-1 text-xs text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                              className="rounded-full border border-hairline px-3 py-1 text-xs text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                             >
                               {term}
                             </button>
@@ -411,7 +411,7 @@ export function CommandPalette() {
                               key={team.id}
                               type="button"
                               onClick={() => goTo(`/teams/${team.id}`)}
-                              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-sm text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+                              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-sm text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                             >
                               <TeamCrest crestUrl={team.crestUrl} name={team.name} size={20} />
                               <span className="min-w-0 flex-1 truncate">{team.name}</span>
@@ -437,7 +437,7 @@ export function CommandPalette() {
                             key={link.href}
                             type="button"
                             onClick={() => goTo(link.href)}
-                            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60"
+                            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                           >
                             <Icon className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
                             {link.label}
@@ -480,11 +480,11 @@ export function CommandPalette() {
                         aria-selected={active}
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => navigateTo(result)}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 ${
-                          active ? "bg-white/5" : ""
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 ${
+                          active ? "bg-surface-1" : ""
                         }`}
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-1">
                           <Icon className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
                         </div>
                         <div className="min-w-0 flex-1">

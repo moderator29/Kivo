@@ -38,16 +38,16 @@ export function ComingSoon({ icon, image, title, description }: ComingSoonProps)
               alt=""
               width={112}
               height={112}
-              className="relative h-28 w-28 drop-shadow-[0_8px_24px_rgba(0,217,255,0.25)]"
+              className="relative h-28 w-28"
             />
           ) : (
-            <div className="kivo-gradient-intelligence relative flex h-20 w-20 items-center justify-center rounded-2xl shadow-[0_8px_24px_rgba(37,99,255,0.35)]">
+            <div className="kivo-gradient-intelligence relative flex h-20 w-20 items-center justify-center rounded-2xl kivo-glow">
               {icon}
             </div>
           )}
         </div>
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Coming soon</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Coming soon</span>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
           <p className="max-w-sm text-sm leading-relaxed text-foreground-muted">{description}</p>
         </div>

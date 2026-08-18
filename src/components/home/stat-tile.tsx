@@ -38,11 +38,11 @@ export function StatTile({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.96 }}
       className={cn(
-        "flex flex-col items-center gap-1.5 rounded-xl px-3 py-4 text-center transition-colors hover:bg-white/[0.06]",
+        "flex flex-col items-center gap-1.5 rounded-xl px-3 py-4 text-center transition-colors hover:bg-surface-2",
         brand ? "kivo-glass-brand" : "kivo-glass-sharp",
       )}
     >
-      <span className="text-kivo-cyan">{icon}</span>
+      <span className="text-accent">{icon}</span>
       <span className="text-lg font-semibold text-foreground">{value}</span>
       <span className="text-[11px] font-medium text-foreground-subtle">{label}</span>
     </MotionLink>

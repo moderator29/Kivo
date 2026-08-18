@@ -71,7 +71,7 @@ export function PlayersBrowser({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search players…"
             aria-label="Search players"
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+            className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
           />
         </div>
 
@@ -83,9 +83,9 @@ export function PlayersBrowser({
               onClick={() => setPosition(chip)}
               className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                 position === chip
-                  ? "kivo-gradient-victory text-kivo-white"
-                  : "border border-white/10 text-foreground-muted hover:bg-white/5"
-              }`}
+                  ? "kivo-gradient-victory text-on-accent"
+                  : "border border-hairline text-foreground-muted hover:bg-surface-2"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
             >
               {chip}
             </button>
@@ -95,7 +95,7 @@ export function PlayersBrowser({
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
             aria-label="Filter by club"
-            className="ml-auto rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold text-foreground-muted outline-none transition hover:bg-white/[0.08] focus:border-kivo-cyan/50"
+            className="ml-auto rounded-full border border-hairline bg-surface-inset px-3 py-2 text-[11px] font-semibold text-foreground-muted outline-none transition hover:bg-surface-2 focus:border-accent/50"
           >
             <option value="All">All clubs</option>
             {clubs.map((club) => (
@@ -124,7 +124,7 @@ export function PlayersBrowser({
           renderItem={(player) => (
             <Link
               href={`/players/${player.id}`}
-              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-surface-2 kivo-focusable"
             >
               <PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={36} />
               <div className="flex flex-1 flex-col overflow-hidden">

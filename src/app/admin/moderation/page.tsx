@@ -230,7 +230,7 @@ export default async function ModerationPage() {
               <FadeIn
                 key={report.id}
                 delay={0.6 + staggerDelay(index, 0.03)}
-                className="flex items-center justify-between rounded-xl border border-white/5 px-4 py-3 text-xs text-foreground-subtle transition-colors hover:bg-white/[0.03]"
+                className="flex items-center justify-between rounded-xl border border-hairline-soft px-4 py-3 text-xs text-foreground-subtle transition-colors hover:bg-surface-2"
               >
                 <span>
                   {report.target_type} reported by {report.reporter?.username ?? "unknown"}

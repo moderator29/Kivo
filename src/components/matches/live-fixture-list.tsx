@@ -65,7 +65,7 @@ export function LiveFixtureList({
             {group.competitionId ? (
               <Link
                 href={`/leagues/${group.competitionId}`}
-                className="text-xs font-semibold text-foreground-muted transition hover:text-kivo-cyan"
+                className="text-xs font-semibold text-foreground-muted transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 {group.competitionName}
               </Link>
@@ -76,7 +76,7 @@ export function LiveFixtureList({
               {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
             </span>
           </div>
-          <div className="flex flex-col divide-y divide-white/5">
+          <div className="flex flex-col divide-y divide-hairline-soft">
             {group.fixtures.map((fixture) => (
               <FixtureRowCard
                 key={fixture.id}
@@ -131,7 +131,7 @@ function FixtureRowCard({
     <motion.div layout transition={{ duration: 0.35, ease: EASE }}>
       <Link
         href={`/matches/${fixture.id}`}
-        className={`flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-white/5 ${flash ? "kivo-row-flash" : ""}`}
+        className={`flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${flash ? "kivo-row-flash" : ""}`}
       >
         <div className="flex items-center justify-end">
           <FixtureStatusBadge
@@ -159,7 +159,7 @@ function FixtureRowCard({
             players", same "render nothing below a real floor" convention as
             HeadToHeadCard/MatchVerdictCard elsewhere in the app. */}
         {fantasyPlayerCount > 0 && (
-          <div className="flex items-center gap-1.5 text-[11px] text-kivo-cyan">
+          <div className="flex items-center gap-1.5 text-[11px] text-accent">
             <Shirt className="h-3 w-3 shrink-0" strokeWidth={2} />
             {fantasyPlayerCount} of your fantasy player{fantasyPlayerCount === 1 ? "" : "s"} {fantasyPlayerCount === 1 ? "is" : "are"} in this match
           </div>

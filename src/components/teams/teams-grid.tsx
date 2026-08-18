@@ -56,7 +56,7 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter loaded teams…"
           aria-label="Filter teams"
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+          className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
         />
       </div>
 
@@ -71,7 +71,7 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
           renderItem={(team) => (
             <Link
               href={`/teams/${team.id}`}
-              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-surface-2 kivo-focusable"
             >
               <TeamCrest crestUrl={team.crestUrl} name={team.name} size={36} />
               <span className="truncate text-xs font-semibold text-foreground">{team.shortName ?? team.name}</span>
@@ -92,7 +92,7 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

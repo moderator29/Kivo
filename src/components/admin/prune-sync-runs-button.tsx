@@ -35,8 +35,8 @@ export function PruneSyncRunsButton() {
           disabled={pending}
           aria-busy={pending}
           onClick={handleClick}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50 ${
-            armed ? "bg-critical/15 text-critical hover:bg-critical/25" : "bg-white/5 text-foreground-muted hover:bg-white/10"
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50 ${
+            armed ? "bg-critical/15 text-critical hover:bg-critical/25" : "bg-surface-1 text-foreground-muted hover:bg-surface-2"
           }`}
         >
           <Trash2 className={`h-4 w-4 ${pending ? "animate-pulse" : ""}`} strokeWidth={2} />
@@ -47,7 +47,7 @@ export function PruneSyncRunsButton() {
             type="button"
             onClick={() => setArmed(false)}
             aria-label="Cancel prune"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground-subtle transition hover:bg-white/5 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <X className="h-4 w-4" strokeWidth={2} />
           </button>

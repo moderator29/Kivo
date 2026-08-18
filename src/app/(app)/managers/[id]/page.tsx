@@ -68,7 +68,7 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
-          <FadeIn delay={0} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/5">
+          <FadeIn delay={0} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-2">
             <UserRound className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
           </FadeIn>
           <FadeIn delay={0.05} className="min-w-0 flex-1">
@@ -78,11 +78,11 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
 
         <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
-            <Flag className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+            <Flag className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             {manager.nationality ?? "Nationality not yet synced"}
           </div>
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
-            <Cake className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+            <Cake className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             {manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : "Date of birth not yet synced"}
           </div>
         </FadeIn>
@@ -90,13 +90,13 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
 
       <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Shield className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Shield className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Current club
         </h2>
         {manager.current_team ? (
           <Link
             href={`/teams/${manager.current_team.id}`}
-            className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            className="kivo-glass kivo-glass-interactive flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
           >
             <TeamCrest crestUrl={manager.current_team.crest_url} name={manager.current_team.name} />
             <div className="min-w-0">
@@ -116,7 +116,7 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
       {manager.current_team && (
         <FadeIn delay={0.25} className="flex flex-col gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <History className="h-4 w-4 text-accent" strokeWidth={1.75} />
             {manager.current_team.short_name ?? manager.current_team.name}&apos;s form
           </h2>
           {clubForm.length > 0 ? (

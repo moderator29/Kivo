@@ -50,7 +50,7 @@ function linkifyBody(body: string) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-kivo-cyan underline underline-offset-2 hover:text-kivo-cyan/80"
+          className="text-accent underline underline-offset-2 hover:text-accent/80"
         >
           {url}
         </a>
@@ -95,7 +95,7 @@ function PostBody({ body }: { body: string }) {
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          className="text-xs font-medium text-accent hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -163,11 +163,11 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             aria-pressed={isOwn}
             title={!signedIn ? GUEST_ACTION_TITLE : undefined}
             className={cn(
-              "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
-              isOwn ? "border-kivo-cyan/50" : "border-white/10 hover:bg-white/5",
+              "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed",
+              isOwn ? "border-accent/50" : "border-hairline hover:bg-surface-2",
             )}
           >
-            <span className="absolute inset-y-0 left-0 bg-kivo-cyan/10" style={{ width: `${pct}%` }} aria-hidden="true" />
+            <span className="absolute inset-y-0 left-0 bg-accent-soft" style={{ width: `${pct}%` }} aria-hidden="true" />
             <span className="relative flex items-center justify-between gap-2">
               <span className={cn("flex min-w-0 items-center gap-1 truncate", isOwn ? "font-semibold text-foreground" : "text-foreground-muted")}>
                 {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
@@ -345,19 +345,19 @@ export function PostCard({
       transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
       className={cn(
-        "kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]",
+        "kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-pop",
         highlighted && "kivo-row-flash",
       )}
     >
       <div className="flex items-center gap-2">
         {isSystem ? (
-          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-white/10">
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-hairline">
             <KivoMarkGlyph size={20} />
           </div>
         ) : authorAvatarSrc ? (
-          <KivoAvatar src={authorAvatarSrc} name={authorName} size={32} className="ring-1 ring-white/10" />
+          <KivoAvatar src={authorAvatarSrc} name={authorName} size={32} className="ring-1 ring-hairline" />
         ) : (
-          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white ring-1 ring-white/10">
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-on-accent ring-1 ring-hairline">
             {authorName.charAt(0).toUpperCase()}
           </div>
         )}
@@ -380,7 +380,7 @@ export function PostCard({
           ) : authorUsername ? (
             <Link
               href={`/u/${authorUsername}`}
-              className="w-fit truncate text-sm font-medium text-foreground hover:text-kivo-cyan"
+              className="w-fit truncate text-sm font-medium text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {authorName}
             </Link>
@@ -410,7 +410,7 @@ export function PostCard({
             title={!signedIn ? GUEST_ACTION_TITLE : undefined}
             whileTap={reported ? undefined : { scale: 0.88 }}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
+              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed",
               reported ? "text-foreground-subtle" : "text-foreground-subtle hover:text-critical",
             )}
           >
@@ -448,7 +448,7 @@ export function PostCard({
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                 className={cn(
-                  "kivo-glass-sharp absolute z-20 w-48 overflow-hidden rounded-xl p-1",
+                  "kivo-popover absolute z-20 w-48 overflow-hidden rounded-xl p-1",
                   reportMenuPlacement.vertical === "top" ? "bottom-full mb-2" : "top-full mt-2",
                   reportMenuPlacement.horizontal === "right" ? "right-0" : "left-0",
                 )}
@@ -464,7 +464,7 @@ export function PostCard({
                     disabled={reportPending}
                     aria-busy={reportPending}
                     onClick={() => submitReport(reason)}
-                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+                    className="kivo-menu-item text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                   >
                     {reason}
                   </button>

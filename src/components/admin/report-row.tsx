@@ -47,7 +47,7 @@ function truncate(text: string, max: number) {
 function ContentPreview({ preview }: { preview: ReportPreview }) {
   if (!preview) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-foreground-subtle">
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-hairline bg-surface-1 px-3 py-2 text-xs text-foreground-subtle">
         <FileQuestion className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
         Content no longer available.
       </div>
@@ -55,14 +55,14 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
   }
 
   const staleBadge = !preview.live && (
-    <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+    <span className="shrink-0 rounded-full border border-hairline px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
       Deleted, from report snapshot
     </span>
   );
 
   if (preview.kind === "profile") {
     return (
-      <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+      <div className="flex flex-col gap-1 rounded-lg border border-hairline bg-surface-1 px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium text-foreground-muted">
             {preview.displayName ?? preview.username ?? "unknown profile"}
@@ -80,7 +80,7 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+    <div className="flex flex-col gap-1 rounded-lg border border-hairline bg-surface-1 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-foreground-muted">
           {preview.authorDisplayName ?? preview.authorUsername ?? "unknown author"}
@@ -97,7 +97,7 @@ function urgency(createdAt: string): { label: string; className: string } {
   const ageHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
   if (ageHours >= 24) return { label: "Overdue", className: "border-critical/30 bg-critical/10 text-critical" };
   if (ageHours >= 6) return { label: "Aging", className: "border-warning/30 bg-warning/10 text-warning" };
-  return { label: "New", className: "border-white/10 text-foreground-subtle" };
+  return { label: "New", className: "border-hairline text-foreground-subtle" };
 }
 
 export function ReportRow({ id, targetType, reason, reporterUsername, createdAt, preview = null }: ReportRowProps) {
@@ -174,7 +174,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Optional note for the audit log"
                 maxLength={500}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-kivo-cyan"
+                className="w-full rounded-lg border border-hairline bg-surface-inset px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-accent"
               />
               <button
                 type="button"
@@ -182,7 +182,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
                   setShowNote(null);
                   setNote("");
                 }}
-                className="shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium text-foreground-subtle transition hover:bg-white/5 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Cancel
               </button>
@@ -201,7 +201,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
               disabled={pending}
               aria-busy={pending}
               onClick={() => (showNote === "actioned" ? handleDecision("actioned") : setShowNote("actioned"))}
-              className="flex items-center gap-1 rounded-lg bg-live/15 px-3 py-1.5 text-xs font-semibold text-live transition hover:bg-live/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-live/15 px-3 py-1.5 text-xs font-semibold text-live transition hover:bg-live/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={2} />
               {showNote === "actioned" ? "Confirm actioned" : "Mark actioned"}
@@ -211,7 +211,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
               disabled={pending}
               aria-busy={pending}
               onClick={() => (showNote === "dismissed" ? handleDecision("dismissed") : setShowNote("dismissed"))}
-              className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2} />
               {showNote === "dismissed" ? "Confirm dismiss" : "Dismiss"}

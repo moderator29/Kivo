@@ -160,7 +160,7 @@ export function SocialFeed({
         type="button"
         onClick={handleShowNewPosts}
         disabled={refreshing}
-        className="kivo-gradient-prime flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-kivo-white shadow-lg transition-opacity disabled:opacity-60"
+        className="kivo-gradient-prime flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-on-accent shadow-pop kivo-raise disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <ArrowUp className="h-3.5 w-3.5" strokeWidth={2} />
         {refreshing ? "Loading…" : "New posts"}
@@ -228,7 +228,7 @@ export function SocialFeed({
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

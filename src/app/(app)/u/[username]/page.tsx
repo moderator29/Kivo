@@ -134,7 +134,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           {isViewerOwnProfile ? (
             <Link
               href="/profile"
-              className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-white/5"
+              className="shrink-0 rounded-xl border border-hairline px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-surface-2"
             >
               Edit profile
             </Link>
@@ -160,7 +160,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         <>
           <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
             <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-              <Flame className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
+              <Flame className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
             </div>
             <div>
               <span className="text-2xl font-semibold text-foreground">{totalXp} XP</span>
@@ -170,7 +170,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
           <FadeIn delay={0.1} className="flex flex-col gap-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-              <Award className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+              <Award className="h-4 w-4 text-accent" strokeWidth={1.75} />
               Badges
             </h2>
 
@@ -182,14 +182,14 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {badges.map((badge, index) => (
                   <FadeIn key={badge.code} delay={0.12 + staggerDelay(index, 0.03)}>
-                    <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ring-1 ring-inset ring-kivo-cyan/25 transition hover:-translate-y-0.5">
+                    <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ring-1 ring-inset ring-accent/25 transition hover:-translate-y-0.5">
                       {badge.icon_url && (
                         <Image
                           src={badge.icon_url}
                           alt=""
                           width={40}
                           height={40}
-                          className="h-10 w-10 drop-shadow-[0_0_10px_rgba(0,217,255,0.35)]"
+                          className="h-10 w-10 drop-shadow-[0_0_10px_var(--accent-hairline)]"
                         />
                       )}
                       <span className="text-xs font-semibold text-foreground">{badge.name}</span>

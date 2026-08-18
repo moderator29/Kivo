@@ -54,7 +54,7 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter loaded leagues…"
           aria-label="Filter leagues"
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+          className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
         />
       </div>
 
@@ -70,7 +70,7 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
             const crest = league.logoUrl ? (
               <Image src={league.logoUrl} alt={league.name} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
             ) : (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2">
                 <Trophy className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
               </div>
             );
@@ -97,7 +97,7 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
             return (
               <Link
                 href={`/leagues/${league.id}`}
-                className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                className="kivo-glass-sharp flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2 kivo-focusable"
               >
                 {crest}
                 <div className="flex flex-col">
@@ -124,7 +124,7 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

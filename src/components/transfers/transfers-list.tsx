@@ -23,7 +23,7 @@ function TeamLink({ team }: { team: TeamRef | null }) {
   return (
     <Link
       href={`/teams/${team.id}`}
-      className="group -mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-xs text-foreground transition hover:bg-white/5 hover:text-kivo-cyan"
+      className="group -mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-xs text-foreground transition hover:bg-surface-2 hover:text-accent"
     >
       <TeamCrest crestUrl={team.crest_url} name={team.name} size={24} />
       <span className="truncate transition-transform group-hover:translate-x-0.5">{team.short_name ?? team.name}</span>
@@ -77,12 +77,12 @@ export function TransfersList({
 
         return (
           <FadeIn key={transfer.id} delay={staggerDelay(index % 50, 0.03)}>
-            <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-white/5">
+            <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition hover:bg-surface-2">
               <div className="flex items-center justify-between gap-3">
                 {transfer.player && playerName ? (
                   <Link
                     href={`/players/${transfer.player.id}`}
-                    className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-kivo-cyan"
+                    className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground transition hover:text-accent"
                   >
                     <UserRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
                     <span className="truncate">{playerName}</span>
@@ -107,8 +107,8 @@ export function TransfersList({
                 <TeamLink team={transfer.to_team} />
               </div>
 
-              <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+              <div className="flex items-center justify-between gap-3 border-t border-hairline-soft pt-3">
+                <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                   {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                 </span>
                 <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>
@@ -129,7 +129,7 @@ export function TransfersList({
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

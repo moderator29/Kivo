@@ -68,7 +68,7 @@ export function LineupPitch({
     <div className="kivo-glass relative flex flex-col gap-4 overflow-hidden rounded-2xl p-4">
       <PitchLines />
       {formation && (
-        <span className="relative self-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+        <span className="relative self-center rounded-full border border-hairline bg-surface-1 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
           {formation}
         </span>
       )}
@@ -87,8 +87,8 @@ export function LineupPitch({
                 <>
                   <span className="relative flex h-9 w-9 items-center justify-center">
                     <span
-                      className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-semibold text-foreground transition group-hover:bg-white/10 group-hover:text-kivo-cyan ${
-                        inViewerXI ? "border-kivo-cyan/60 bg-kivo-cyan/10 ring-2 ring-kivo-cyan/50" : "border-white/10 bg-white/[0.06]"
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-semibold text-foreground transition group-hover:bg-surface-2 group-hover:text-accent ${
+                        inViewerXI ? "border-accent/60 bg-accent/10 ring-2 ring-accent/50" : "border-hairline bg-surface-1"
                       }`}
                     >
                       {p.shirtNumber ?? <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />}
@@ -97,13 +97,13 @@ export function LineupPitch({
                       <span
                         title="Your captain"
                         aria-label="Your captain"
-                        className="kivo-gradient-victory absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-kivo-white ring-2 ring-kivo-obsidian"
+                        className="kivo-gradient-victory absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-on-accent ring-2 ring-background"
                       >
                         C
                       </span>
                     )}
                   </span>
-                  <span className="w-full truncate text-center text-[11px] font-medium text-foreground group-hover:text-kivo-cyan">
+                  <span className="w-full truncate text-center text-[11px] font-medium text-foreground group-hover:text-accent">
                     {p.playerName}
                   </span>
                   {inViewerXI && <span className="sr-only">In your fantasy XI{isViewerCaptain ? ", your captain" : ""}</span>}
@@ -117,7 +117,7 @@ export function LineupPitch({
                   transition={{ duration: 0.2, delay: staggerDelay(rowIndex * 4 + i, 0.03), ease: [0.22, 1, 0.36, 1] }}
                 >
                   {p.playerId ? (
-                    <Link href={`/players/${p.playerId}`} className="group flex w-[60px] flex-col items-center gap-1">
+                    <Link href={`/players/${p.playerId}`} className="group flex w-[60px] flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
                       {token}
                     </Link>
                   ) : (

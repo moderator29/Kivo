@@ -34,12 +34,12 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
           <button
             onClick={() => setEditing(true)}
             aria-label="Edit profile details"
-            className="shrink-0 text-foreground-muted transition-colors hover:text-foreground"
+            className="shrink-0 text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         </div>
-        <div className="flex flex-col gap-1 border-t border-white/5 pt-3">
+        <div className="flex flex-col gap-1 border-t border-hairline-soft pt-3">
           <span className="text-xs text-foreground-subtle">Country</span>
           <p className="text-sm text-foreground">
             {country ? countries.find((c) => c.code === country)?.name ?? country : <span className="text-foreground-subtle">Not set.</span>}
@@ -91,7 +91,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
           autoFocus
           onChange={(e) => setBioLength(e.target.value.length)}
           placeholder="Tell other fans about yourself"
-          className="resize-none rounded-lg border border-white/10 bg-kivo-obsidian px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
+          className="resize-none rounded-lg border border-hairline bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent-strong focus:outline-none"
         />
         <span className="self-end text-[11px] text-foreground-subtle">
           {bioLength}/{MAX_BIO_LENGTH}
@@ -106,7 +106,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
           id="country"
           name="country"
           defaultValue={country ?? ""}
-          className="rounded-lg border border-white/10 bg-kivo-obsidian px-3 py-2 text-sm text-foreground focus:border-kivo-blue focus:outline-none"
+          className="rounded-lg border border-hairline bg-background px-3 py-2 text-sm text-foreground focus:border-accent-strong focus:outline-none"
         >
           <option value="">Not set</option>
           {countries.map((c) => (
@@ -128,7 +128,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
           type="submit"
           disabled={pending}
           aria-busy={pending}
-          className="kivo-gradient-prime flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="kivo-gradient-prime flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-on-accent kivo-raise disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
           {pending ? "Saving…" : "Save"}
@@ -137,7 +137,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
           type="button"
           disabled={pending}
           onClick={() => setEditing(false)}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           <X className="h-3.5 w-3.5" strokeWidth={2} />
           Cancel

@@ -39,7 +39,7 @@ export default function AboutPage() {
     <MarketingPageShell>
       <section className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-4 pb-14 pt-8 text-center sm:px-6 sm:pt-12 lg:px-12 lg:pb-20 lg:pt-16">
         <FadeIn>
-          <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
+          <span className="rounded-full border border-hairline px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
             About KIVO
           </span>
         </FadeIn>
@@ -77,7 +77,7 @@ export default function AboutPage() {
 
       <section className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pb-14 sm:px-6 lg:px-12 lg:pb-20">
         <FadeIn className="flex flex-col items-center gap-3 text-center">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">What&apos;s in KIVO</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">What&apos;s in KIVO</span>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             One home for the whole matchday.
           </h2>
@@ -91,7 +91,7 @@ export default function AboutPage() {
 
       <section className="mx-auto w-full max-w-4xl px-4 pb-14 sm:px-6 lg:px-12 lg:pb-20">
         <FadeIn className="kivo-glass-brand relative flex flex-col gap-4 rounded-3xl p-6 sm:p-8">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Our one hard rule</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Our one hard rule</span>
           <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             We will never invent a stat, a rumor, or a ranking to fill space.
           </h2>
@@ -118,14 +118,14 @@ export default function AboutPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href="/home"
-              className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition duration-150 hover:scale-[1.03] hover:opacity-90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Explore KIVO
               <ArrowRight className="h-4 w-4" strokeWidth={2} />
             </Link>
             <Link
               href="/sign-up"
-              className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-all duration-150 hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              className="kivo-glass-sharp kivo-raise flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Create free account
             </Link>
