@@ -164,6 +164,7 @@ export default async function SavedPage() {
                     poll={post.poll}
                     viewerSaved={post.viewerSaved}
                     isSystem={post.isSystem}
+                    fixture={post.fixture}
                   />
                 ))}
               </div>

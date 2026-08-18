@@ -66,7 +66,7 @@ export default async function LivePage() {
   const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
-       competition:competitions(id, name, short_name)`;
+       competition:competitions(id, name, short_name, logo_url)`;
 
   // KIVO_NEXT_GEN KN-5: one list, not two mutually-exclusive ones. Both queries
   // still exist because they answer different questions — "what is in play

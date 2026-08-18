@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { reportContent } from "@/app/(app)/social/report-actions";
 import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
+import { PostEntityCard } from "@/components/social/post-entity-card";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
@@ -17,7 +18,7 @@ import { useIsClamped } from "@/hooks/use-clamped";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { RetryableError } from "@/components/ui/retryable-error";
 import type { ReactionType } from "@/lib/reactions";
-import type { PollSummary } from "@/app/(app)/social/posts";
+import type { PollSummary, PostFixture } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/components/ui/relative-time";
 
@@ -244,6 +245,19 @@ interface PostCardProps {
    * insert/update — see the migration). Defaults false for every ordinary
    * post, general-feed or Room alike. */
   isSystem?: boolean;
+  /** The match this post is attached to (`posts.fixture_id`, hydrated by
+   * fetchPostsPage). Optional so Match Room's own call site — which is already
+   * inside the fixture this would name — keeps type-checking without passing
+   * it, and so it renders nothing at all when the post is not about a match. */
+  fixture?: PostFixture | null;
+  /** True for the second and later posts in a run by the same author.
+   *
+   * A run of updates from one person is one thought, and repeating their
+   * avatar and name above every line of it is what makes a feed read as
+   * shouting. A continuation keeps the timestamp — the thing that actually
+   * differs between them — and drops the identity, which `PostThread` re-draws
+   * once, above the run, as a connector line. */
+  continuation?: boolean;
 }
 
 export function PostCard({
@@ -262,6 +276,8 @@ export function PostCard({
   viewerSaved = false,
   highlighted = false,
   isSystem = false,
+  fixture = null,
+  continuation = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -354,6 +370,9 @@ export function PostCard({
         highlighted && "kivo-row-flash",
       )}
     >
+      {continuation ? (
+        <RelativeTime iso={createdAt} className="text-xs text-foreground-subtle" />
+      ) : (
       <div className="flex items-center gap-2">
         {isSystem ? (
           <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-hairline">
@@ -395,7 +414,9 @@ export function PostCard({
           <RelativeTime iso={createdAt} className="text-xs text-foreground-subtle" />
         </div>
       </div>
+      )}
       <PostBody body={body} />
+      {fixture && <PostEntityCard fixture={fixture} />}
       {poll && <PollBlock postId={id} poll={poll} signedIn={signedIn} />}
       <div className="flex items-center justify-between gap-2">
         <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />

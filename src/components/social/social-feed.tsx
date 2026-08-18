@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { ArrowUp } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { PostCard } from "@/components/social/post-card";
+import { PostThread } from "@/components/social/post-thread";
+import { groupPostsIntoThreads } from "@/lib/social-threads";
 import { NewPostsWatcher } from "@/components/social/new-posts-watcher";
 import { SoftErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { loadMorePosts } from "@/app/(app)/social/actions";
@@ -195,6 +197,12 @@ export function SocialFeed({
     </FadeIn>
   );
 
+  const threads = groupPostsIntoThreads(posts);
+  // The entrance stagger is a property of a post's position in the whole feed,
+  // not of its position inside a thread, so the index every card animates on
+  // is looked up from the flat list rather than recomputed per run.
+  const indexById = new Map(posts.map((post, index) => [post.id, index]));
+
   if (posts.length === 0) {
     return (
       <div className="flex flex-col gap-3">
@@ -214,26 +222,35 @@ export function SocialFeed({
     <div className="flex flex-col gap-3">
       {realtimeWatcher}
       {newPostsPill}
-      {posts.map((post, index) => (
-        <PostCard
-          key={post.id}
-          id={post.id}
-          body={post.body}
-          createdAt={post.createdAt}
-          authorName={post.authorName}
-          authorUsername={post.authorUsername}
-          authorAvatarSrc={post.authorAvatarSrc}
-          reactionCount={post.reactionCount}
-          viewerReaction={post.viewerReaction}
-          commentCount={post.commentCount}
-          signedIn={signedIn}
-          index={index}
-          poll={post.poll}
-          viewerSaved={post.viewerSaved}
-          highlighted={post.id === highlightPostId}
-          isSystem={post.isSystem}
-        />
-      ))}
+      {/* One person's run of updates is drawn as one connected thread rather
+          than as N identical cards — see src/lib/social-threads.ts for the two
+          conditions that make a run a run. Grouping happens here, on the list
+          the feed already holds, so paging and the realtime refresh both flow
+          through it without either needing to know about threads. */}
+      {threads.map((thread) => {
+        const startIndex = indexById.get(thread[0].id) ?? 0;
+        if (thread.length === 1) {
+          const post = thread[0];
+          return (
+            <PostCard
+              key={post.id}
+              {...post}
+              signedIn={signedIn}
+              index={startIndex}
+              highlighted={post.id === highlightPostId}
+            />
+          );
+        }
+        return (
+          <PostThread
+            key={thread[0].id}
+            posts={thread}
+            signedIn={signedIn}
+            startIndex={startIndex}
+            highlightPostId={highlightPostId}
+          />
+        );
+      })}
 
       {error && (
         <p className="text-center text-xs text-critical" role="status" aria-live="polite">

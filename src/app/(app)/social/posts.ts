@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { FixtureStatus } from "@/lib/football/fixture-status";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { logError } from "@/lib/log";
@@ -26,6 +27,32 @@ export type PollSummary = {
   resultsUnavailable: boolean;
 };
 
+/**
+ * The fixture a post is attached to, for the entity card `PostCard` renders
+ * above the body.
+ *
+ * `posts.fixture_id` has existed since migration 0001 and has always meant
+ * "this is a Match Room post" — it was simply never *read* outside the Room
+ * itself, so a Room post surfacing in the general feed (which it always
+ * could: the feed query never filtered `fixture_id` out) arrived with no way
+ * to tell what match it was about. This is that missing context, and it is
+ * entirely rows KIVO already stores.
+ */
+export type PostFixture = {
+  id: string;
+  kickoffAt: string;
+  status: FixtureStatus;
+  homeScore: number | null;
+  awayScore: number | null;
+  homeName: string;
+  homeShortName: string | null;
+  homeCrestUrl: string | null;
+  awayName: string;
+  awayShortName: string | null;
+  awayCrestUrl: string | null;
+  competitionName: string | null;
+};
+
 export type PostListItem = {
   id: string;
   body: string;
@@ -51,6 +78,11 @@ export type PostListItem = {
    * PostCard/MatchRoomTab; never settable by a client write (see the
    * migration's RLS comment). */
   isSystem: boolean;
+  /** The match this post is about (`posts.fixture_id`), or null for a post
+   * that is not attached to one. Null too when the fixture row itself could
+   * not be read — the card is simply not drawn, rather than drawn with the
+   * parts that did load. */
+  fixture: PostFixture | null;
 };
 
 /**
@@ -104,7 +136,43 @@ export async function fetchPostsPage(
   const limit = options?.limit ?? SOCIAL_PAGE_SIZE;
   const supabase = createServerSupabaseClient();
 
-  type PostRow = { id: string; body: string; created_at: string; author_profile_id: string; is_system: boolean };
+  /**
+   * The fixture is an embed rather than a second query keyed on `fixture_id`:
+   * `fixtures_select_public` makes it readable to the same viewer the post is,
+   * so PostgREST can join it in the round trip that is already happening. The
+   * embed is null for an ordinary post and for a post whose fixture has since
+   * been deleted, which is exactly the two cases that must render no card.
+   */
+  type PostRow = {
+    id: string;
+    body: string;
+    created_at: string;
+    author_profile_id: string;
+    is_system: boolean;
+    fixture: {
+      id: string;
+      kickoff_at: string;
+      status: FixtureStatus;
+      home_score: number | null;
+      away_score: number | null;
+      // Non-null because the FKs are: `fixtures.home_team_id`,
+      // `away_team_id` and `competition_id` are all NOT NULL in migration
+      // 0001, and PostgREST types the embed accordingly. `toPostFixture`
+      // still guards at runtime — a generated type is a claim about the
+      // schema, not about the row that came back.
+      home_team: { name: string; short_name: string | null; crest_url: string | null };
+      away_team: { name: string; short_name: string | null; crest_url: string | null };
+      competition: { name: string; short_name: string | null };
+    } | null;
+  };
+
+  const POST_SELECT = `id, body, created_at, author_profile_id, is_system,
+     fixture:fixtures(
+       id, kickoff_at, status, home_score, away_score,
+       home_team:teams!fixtures_home_team_id_fkey(name, short_name, crest_url),
+       away_team:teams!fixtures_away_team_id_fkey(name, short_name, crest_url),
+       competition:competitions(name, short_name)
+     )`;
   let pageRows: PostRow[];
   let hasMore = false;
 
@@ -120,7 +188,7 @@ export async function fetchPostsPage(
     if (options.postIds.length === 0) return { error: null, posts: [], hasMore: false, nextCursor: null };
     const { data, error } = await supabase
       .from("posts")
-      .select("id, body, created_at, author_profile_id, is_system")
+      .select(POST_SELECT)
       .in("id", options.postIds);
     if (error) {
       logError("social.posts.load", error);
@@ -159,7 +227,7 @@ export async function fetchPostsPage(
 
     const { data, error } = await supabase
       .from("posts")
-      .select("id, body, created_at, author_profile_id, is_system")
+      .select(POST_SELECT)
       .in("id", pageIds);
     if (error) {
       logError("social.posts.teamFeedHydrate", error);
@@ -191,7 +259,7 @@ export async function fetchPostsPage(
 
     let query = supabase
       .from("posts")
-      .select("id, body, created_at, author_profile_id, is_system")
+      .select(POST_SELECT)
       // `id` desc is part of the sort, not a flourish: it is what makes the
       // keyset comparison below a total order, so no post can hide behind
       // another with an identical timestamp.
@@ -249,7 +317,13 @@ export async function fetchPostsPage(
   // fabricated placeholder.
   const authorIds = [...new Set(pageRows.map((p) => p.author_profile_id))];
 
-  const [{ data: viewerReactions }, { data: authors }, { data: engagement }, { data: pollOptionRows }, { data: saveRows }] = await Promise.all([
+  const [
+    { data: viewerReactions },
+    { data: authors },
+    { data: engagement },
+    { data: pollOptionRows },
+    { data: saveRows },
+  ] = await Promise.all([
     // KIVO_NEXT_GEN KN-13: only the *viewer's own* reaction rows now. The
     // totals come from get_post_engagement below — this query used to fetch
     // every reaction row on the page purely so both could be derived from it,
@@ -395,7 +469,45 @@ export async function fetchPostsPage(
         poll,
         viewerSaved: savedPostIds.has(post.id),
         isSystem: post.is_system,
+        fixture: toPostFixture(post.fixture),
       };
     }),
   };
 }
+
+/**
+ * The embedded fixture row, narrowed to what a post's entity card renders.
+ *
+ * Both teams are required: a fixture with one side missing is not a match, it
+ * is half a row, and half a card claiming to be a fixture is worse than no
+ * card. Returns null in that case, which is the same thing an ordinary post
+ * returns.
+ */
+function toPostFixture(row: PostRowFixture): PostFixture | null {
+  if (!row?.home_team || !row.away_team) return null;
+  return {
+    id: row.id,
+    kickoffAt: row.kickoff_at,
+    status: row.status,
+    homeScore: row.home_score,
+    awayScore: row.away_score,
+    homeName: row.home_team.name,
+    homeShortName: row.home_team.short_name,
+    homeCrestUrl: row.home_team.crest_url,
+    awayName: row.away_team.name,
+    awayShortName: row.away_team.short_name,
+    awayCrestUrl: row.away_team.crest_url,
+    competitionName: row.competition?.short_name ?? row.competition?.name ?? null,
+  };
+}
+
+type PostRowFixture = {
+  id: string;
+  kickoff_at: string;
+  status: FixtureStatus;
+  home_score: number | null;
+  away_score: number | null;
+  home_team: { name: string; short_name: string | null; crest_url: string | null };
+  away_team: { name: string; short_name: string | null; crest_url: string | null };
+  competition: { name: string; short_name: string | null };
+} | null;

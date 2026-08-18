@@ -30,6 +30,7 @@ import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { FormBadges } from "@/components/teams/form-badges";
+import { PositionHistoryCard, type PositionSnapshot } from "@/components/teams/position-history-card";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { summarizeGoalTiming } from "@/lib/football/goal-timing";
 import { resultFor, type FormResult } from "@/lib/football/results";
@@ -144,6 +145,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     twitter: { title: team.name, description },
   };
 }
+
+/** How many recorded table changes the position chart reaches back over. A
+ * season of snapshots is one row per genuine change, so 60 comfortably covers
+ * a whole season for one team while bounding a query that a busy sync could
+ * otherwise make unbounded. */
+const POSITION_HISTORY_LIMIT = 60;
 
 export default async function TeamProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;
@@ -298,6 +305,34 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const viewerConnection = profile ? await getViewerTeamConnection(supabase, profile.id, team.id) : null;
 
   const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
+
+  // The league-position chart. `standings_snapshots` (migration 0072) has been
+  // filling up since the sync started recording it and nothing had ever read
+  // it — `get_team_position_history` is the RPC that migration shipped for
+  // exactly this. Fetched only when there is a current season to fetch for,
+  // and rendered only when two or more snapshots carry a real position, so a
+  // team KIVO has watched once shows the standing it already showed and no
+  // chart, rather than a line drawn between a point and nothing.
+  const seasonId = currentStanding?.season?.id ?? null;
+  const { data: positionHistoryRows } = seasonId
+    ? await supabase.rpc("get_team_position_history", {
+        p_season_id: seasonId,
+        p_team_id: team.id,
+        p_limit: POSITION_HISTORY_LIMIT,
+      })
+    : { data: null };
+  // The RPC returns newest first (it is a `limit` on a descending order, so
+  // that is the only way to get the *latest* N); a chart reads left to right
+  // in time.
+  const positionHistory: PositionSnapshot[] = [...(positionHistoryRows ?? [])]
+    .filter((row): row is typeof row & { position: number } => row.position !== null)
+    .map((row) => ({
+      capturedAt: row.captured_at,
+      position: row.position,
+      points: row.points,
+      played: row.played,
+    }))
+    .reverse();
   const manager = managers?.[0] ?? null;
 
   const squadByGroup = new Map<PositionGroup, NonNullable<typeof squad>>();
@@ -460,6 +495,18 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                 {currentStanding.season?.name}
               </span>
             </div>
+            {positionHistory.length >= 2 && (
+              <PositionHistoryCard
+                snapshots={positionHistory}
+                teamName={team.name}
+                competitionLabel={[
+                  currentStanding.season?.competition?.short_name ?? currentStanding.season?.competition?.name,
+                  currentStanding.season?.name,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              />
+            )}
             <div className="grid grid-cols-4 gap-2 text-center sm:grid-cols-7">
               {[
                 ["P", currentStanding.played],

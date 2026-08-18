@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
 import { ProfileStatRail } from "@/components/profile/profile-stat-rail";
+import { XpMomentum } from "@/components/profile/xp-momentum";
 import { ProfileTabs, isProfileTab, type ProfileTab } from "@/components/profile/profile-tabs";
 import { PostCard } from "@/components/social/post-card";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
@@ -15,6 +16,7 @@ import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import { PREDICTION_OUTCOME_LABEL, predictionResultInfo } from "@/lib/predictions";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
+import { summariseXpWindows, xpWindowFloorIso } from "@/lib/xp-windows";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -23,6 +25,12 @@ export const metadata: Metadata = { title: "Profile" };
  * person, not a second copy of `/social`, `/predictions/mine` or `/rewards`. */
 const PROFILE_POST_LIMIT = 10;
 const PROFILE_PREDICTION_LIMIT = 6;
+
+/** A ceiling on the XP rows read for the momentum block. Two months of awards
+ * for one person is a handful of rows; this exists so the query can never grow
+ * unbounded, and the block is *dropped entirely* if it is ever hit, because a
+ * truncated read would produce a sum that looks like a fact and is not. */
+const XP_WINDOW_ROW_LIMIT = 1000;
 
 export default async function ProfilePage({
   searchParams,
@@ -62,6 +70,7 @@ export default async function ProfilePage({
     { count: earnedBadgeCount },
     { count: savedCount },
     { data: club },
+    { data: xpEntries },
   ] = await Promise.all([
     supabase.from("follows").select("followed_type").eq("follower_profile_id", profile.id),
     // `follows` has no cross-user SELECT policy — the reverse direction goes
@@ -85,7 +94,26 @@ export default async function ProfilePage({
           .eq("id", profile.favourite_team_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // The awards behind the lifetime total above, for the last two 30-day
+    // windows. `xp_ledger_select_own` is the scope — a profile can only ever
+    // read its own ledger, which is why this block exists on `/profile` and
+    // could not exist on `/u/[username]`.
+    supabase
+      .from("xp_ledger")
+      .select("amount, created_at")
+      .eq("profile_id", profile.id)
+      .gte("created_at", xpWindowFloorIso())
+      .limit(XP_WINDOW_ROW_LIMIT + 1),
   ]);
+
+  const xpRows = xpEntries ?? [];
+  const xpWindows =
+    xpRows.length > XP_WINDOW_ROW_LIMIT
+      ? []
+      : summariseXpWindows(
+          xpRows.map((row) => ({ amount: row.amount, createdAt: row.created_at })),
+          profile.created_at,
+        );
 
   const followingCount = (follows ?? []).length;
   const followerCount = (followerRows ?? []).length;
@@ -122,6 +150,16 @@ export default async function ProfilePage({
           }
         />
       </FadeIn>
+
+      {/* Only for someone who has actually earned something. A momentum card
+          reading "+0 XP" above a lifetime total of 0 is a scoreboard for a
+          game the reader has not started — the tabs below already say what to
+          do about that, in words. */}
+      {(xpTotal ?? 0) > 0 && xpWindows.length > 0 && (
+        <FadeIn delay={0.03}>
+          <XpMomentum windows={xpWindows} total={xpTotal ?? 0} />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.04}>
         <ProfileStatRail

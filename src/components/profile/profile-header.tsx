@@ -4,6 +4,7 @@ import { CalendarDays, Camera, MapPin, ShieldPlus } from "lucide-react";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { ProfileCover } from "@/components/profile/profile-cover";
+import { CopyHandle } from "@/components/profile/copy-handle";
 import { getCountryName } from "@/lib/countries";
 import { formatMonthYear, formatNumber } from "@/lib/format";
 
@@ -126,7 +127,7 @@ export function ProfileHeader({
               fix that instead; a visitor gets nothing extra, because "this
               person has not set a name" is not information about them. */}
           {displayName ? (
-            <p className="truncate text-sm text-foreground-subtle">@{username}</p>
+            <CopyHandle username={username} />
           ) : owner ? (
             <Link
               href="/profile/edit/name"
