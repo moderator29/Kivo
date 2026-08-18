@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
+import { Shirt } from "lucide-react";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { isLiveStatus } from "@/lib/football/fixture-status";
@@ -38,6 +39,7 @@ export type LiveListFixture = {
 export function LiveFixtureList({
   fixtures,
   showLiveDot = true,
+  fantasyMatchCounts,
 }: {
   fixtures: LiveListFixture[];
   /** Whether a row that's actually live also gets the pulsing status dot
@@ -45,6 +47,12 @@ export function LiveFixtureList({
    * from a "Live now" section that already carries its own live indicator
    * (e.g. a header Radio icon) — the dot would be redundant there. */
   showLiveDot?: boolean;
+  /** RECOMMENDATIONS.md item 297: fixture id -> real count of the viewer's
+   * own fantasy players named in that fixture's lineups (see live/page.tsx's
+   * own doc comment for the full join). Omitted entirely for a guest — a
+   * row with no entry (or a count of 0, filtered out by the caller) renders
+   * exactly as it does today. */
+  fantasyMatchCounts?: Record<string, number>;
 }) {
   const liveFixtures = useRealtimeFixtures(fixtures);
   const groups = groupFixturesByCompetition(liveFixtures);
@@ -70,7 +78,12 @@ export function LiveFixtureList({
           </div>
           <div className="flex flex-col divide-y divide-white/5">
             {group.fixtures.map((fixture) => (
-              <FixtureRowCard key={fixture.id} fixture={fixture} showLiveDot={showLiveDot} />
+              <FixtureRowCard
+                key={fixture.id}
+                fixture={fixture}
+                showLiveDot={showLiveDot}
+                fantasyPlayerCount={fantasyMatchCounts?.[fixture.id] ?? 0}
+              />
             ))}
           </div>
         </div>
@@ -79,7 +92,15 @@ export function LiveFixtureList({
   );
 }
 
-function FixtureRowCard({ fixture, showLiveDot }: { fixture: LiveListFixture; showLiveDot: boolean }) {
+function FixtureRowCard({
+  fixture,
+  showLiveDot,
+  fantasyPlayerCount,
+}: {
+  fixture: LiveListFixture;
+  showLiveDot: boolean;
+  fantasyPlayerCount: number;
+}) {
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
   const live = isLiveStatus(fixture.status);
 
@@ -133,6 +154,16 @@ function FixtureRowCard({ fixture, showLiveDot }: { fixture: LiveListFixture; sh
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
           </div>
         </div>
+        {/* RECOMMENDATIONS.md item 297: a real, signed-in-only personalization
+            signal — omitted entirely rather than shown as "0 of your fantasy
+            players", same "render nothing below a real floor" convention as
+            HeadToHeadCard/MatchVerdictCard elsewhere in the app. */}
+        {fantasyPlayerCount > 0 && (
+          <div className="flex items-center gap-1.5 text-[11px] text-kivo-cyan">
+            <Shirt className="h-3 w-3 shrink-0" strokeWidth={2} />
+            {fantasyPlayerCount} of your fantasy player{fantasyPlayerCount === 1 ? "" : "s"} {fantasyPlayerCount === 1 ? "is" : "are"} in this match
+          </div>
+        )}
       </Link>
     </motion.div>
   );

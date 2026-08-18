@@ -8,6 +8,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LiveFixtureList } from "@/components/matches/live-fixture-list";
+import { getViewerFantasyRosterBySeasons } from "@/lib/football/fantasy-lineup-crossref";
 import { getNavItem } from "@/lib/navigation";
 
 const item = getNavItem("live");
@@ -24,7 +25,7 @@ export default async function LivePage() {
   const endOfDay = new Date(startOfDay);
   endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
 
-  const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed,
+  const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
        competition:competitions(id, name, short_name)`;
@@ -52,6 +53,45 @@ export default async function LivePage() {
     return (
       <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
+  }
+
+  // RECOMMENDATIONS.md item 297: real per-fixture "N of your fantasy players
+  // are in this match" count for a signed-in user with a fantasy team —
+  // reuses the exact fantasy_rosters -> lineups join chain item 294
+  // establishes for Match Centre (getViewerFantasyRosterBySeasons),
+  // aggregated to a count per fixture instead of a per-player badge. Stays
+  // empty for a guest, or a viewer with no fantasy team in any of these
+  // fixtures' seasons — LiveFixtureList's row then renders exactly as it
+  // does today.
+  const displayedFixtures = hasLiveFixtures ? liveFixtures ?? [] : todayFixtures ?? [];
+  const fantasyMatchCounts: Record<string, number> = {};
+  if (profile) {
+    const seasonIds = [...new Set(displayedFixtures.map((f) => f.season_id))];
+    const rosterBySeasonId = await getViewerFantasyRosterBySeasons(supabase, profile.id, seasonIds);
+    if (rosterBySeasonId.size > 0) {
+      const { data: lineupRows } = await supabase
+        .from("lineups")
+        .select("fixture_id, player_id")
+        .in(
+          "fixture_id",
+          displayedFixtures.map((f) => f.id),
+        );
+
+      const lineupPlayerIdsByFixture = new Map<string, string[]>();
+      for (const row of lineupRows ?? []) {
+        const list = lineupPlayerIdsByFixture.get(row.fixture_id);
+        if (list) list.push(row.player_id);
+        else lineupPlayerIdsByFixture.set(row.fixture_id, [row.player_id]);
+      }
+
+      for (const fixture of displayedFixtures) {
+        const roster = rosterBySeasonId.get(fixture.season_id);
+        const playerIds = roster ? lineupPlayerIdsByFixture.get(fixture.id) : undefined;
+        if (!roster || !playerIds) continue;
+        const count = playerIds.filter((playerId) => roster.has(playerId)).length;
+        if (count > 0) fantasyMatchCounts[fixture.id] = count;
+      }
+    }
   }
 
   return (
@@ -83,14 +123,14 @@ export default async function LivePage() {
               header, unlike "Today's fixtures" below where a fixture could
               flip to live mid-session via Realtime with no other cue on the
               page. */}
-          <LiveFixtureList fixtures={liveFixtures} showLiveDot={false} />
+          <LiveFixtureList fixtures={liveFixtures} showLiveDot={false} fantasyMatchCounts={fantasyMatchCounts} />
         </FadeIn>
       )}
 
       {!hasLiveFixtures && hasTodayFixtures && todayFixtures && (
         <FadeIn delay={0.05} className="kivo-glass rounded-2xl p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today&apos;s fixtures</h2>
-          <LiveFixtureList fixtures={todayFixtures} />
+          <LiveFixtureList fixtures={todayFixtures} fantasyMatchCounts={fantasyMatchCounts} />
         </FadeIn>
       )}
     </div>
