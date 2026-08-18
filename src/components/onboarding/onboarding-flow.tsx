@@ -239,11 +239,22 @@ export function StepDots({ count, activeIndex }: { count: number; activeIndex: n
   );
 }
 
+// Edge-to-edge within the onboarding card (the `max-w-md` column in
+// OnboardingFlow), not a small inset illustration — `-mx-2 self-stretch`
+// cancels that column's own `px-2` and overrides its `items-center` on just
+// this one flex child, so the image reaches the card's true left/right
+// edges on every viewport instead of floating centered with visible gutters
+// on both sides. `object-cover` (not `-contain`) fills that full-width band
+// instead of letterboxing, matching the full-bleed, editorial-photography
+// treatment the travel-app reference uses — `kivo-artwork-mask-bleed`
+// (globals.css) softens only the top/bottom crop into the page rather than
+// vignetting all four sides, which would undo the edge-to-edge width.
+// RECOMMENDATIONS.md item 18 (this session's design/UX pass).
 function HeroArt({ src }: { src: StaticImageData }) {
   return (
-    <div className="relative mx-auto flex h-[26vh] min-h-[180px] w-full max-w-[380px] items-center justify-center sm:h-[320px]">
-      <div className="kivo-artwork-float kivo-artwork-mask relative h-full w-full">
-        <Image src={src} alt="" fill className="object-contain" sizes="(min-width: 640px) 380px, 90vw" />
+    <div className="relative -mx-2 flex h-[26vh] min-h-[180px] items-center justify-center self-stretch sm:h-[320px]">
+      <div className="kivo-artwork-float kivo-artwork-mask-bleed relative h-full w-full">
+        <Image src={src} alt="" fill className="object-cover" sizes="100vw" />
       </div>
     </div>
   );

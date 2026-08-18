@@ -91,6 +91,49 @@ body {
   color: var(--kivo-white);
 }
 
+/* Typography tokens (RECOMMENDATIONS.md item 18, 2026-08-18 typography pass).
+   Two safe, cascading base-level fixes rather than per-component edits —
+   same pattern already established below by `.transition-transform` inside
+   the reduced-motion block, which also layers a plain rule onto one of
+   Tailwind's own utility class names instead of overriding it. */
+
+/* `--font-geist-mono` is loaded (next/font, src/app/layout.tsx) and wired to
+   Tailwind's `font-mono` token (`--font-mono` above) but, confirmed by grep,
+   was never actually applied anywhere in the app — every one of the ~17
+   score/price/date/stat call sites that already opt into Tailwind's
+   `tabular-nums` (transfers, fixtures, fantasy prices/points, standings,
+   the date strip, player comparisons — real numeric data, deliberately
+   marked as such by whoever wrote each of those call sites) render in the
+   same proportional Plus Jakarta Sans as body text, so KIVO has been paying
+   the download cost of an entire second font family for zero visual effect.
+   Piggybacking on `tabular-nums` rather than editing each call site turns
+   every one of them into the distinct, data-precise numeral treatment
+   `tabular-nums` already implies (mono digits are the standard scoreboard/
+   stock-ticker convention, and read as more deliberate than same-face
+   numerals) — cascades to every existing and future use of the utility, and
+   spends a font that was already a zero-cost download instead of adding
+   one. Only `font-variant-numeric` comes from Tailwind's own `.tabular-nums`
+   utility; this adds `font-family` alongside it, nothing removed or
+   overridden. */
+.tabular-nums {
+  font-family: var(--font-mono);
+}
+
+/* Headings wrap on their own line breaks today (see the many `max-w-*`
+   caps on `h1`/`h2` across the landing page, About, and elsewhere,
+   deliberately sized to force 2 lines) with no control over *where* that
+   break lands, which can strand a single short word alone on the last
+   line. `text-wrap: balance` asks the browser to choose break points that
+   even out line lengths instead — a real, if small, craft difference on
+   exactly the highest-visibility text in the product. Pure progressive
+   enhancement (Baseline widely-available as of 2024; browsers that don't
+   support it just keep today's default wrapping), so this is zero-risk. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
 .kivo-glass {
   background: var(--kivo-glass);
   border: 1px solid var(--kivo-glass-border);
@@ -261,6 +304,23 @@ body {
 .kivo-artwork-mask {
   mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
   -webkit-mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+}
+
+/* Full-bleed variant of the mask above, for the one context where the
+   artwork should run edge-to-edge (the onboarding carousel's HeroArt,
+   src/components/onboarding/onboarding-flow.tsx) instead of floating as a
+   small inset illustration. `.kivo-artwork-mask`'s radial oval fades all
+   four sides, which is right for a small boxed illustration but wrong here
+   — with the image spanning the full width of the onboarding card, a
+   left/right fade would just reintroduce empty gutters we deliberately
+   removed. This fades top and bottom only (matching the actual, documented
+   defect: the source art's own soft glow bleeding non-black specifically
+   at its top/bottom edges — see the comment above kivoHeroArtwork's import
+   in src/app/page.tsx), the same directional-fade technique `.kivo-ticker`
+   already uses horizontally, just rotated 90 degrees. */
+.kivo-artwork-mask-bleed {
+  mask-image: linear-gradient(to bottom, transparent, black 16%, black 84%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 16%, black 84%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
