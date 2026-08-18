@@ -15,14 +15,61 @@ export type LeaderboardEntry = {
   hasScores: boolean;
 };
 
+export type PointsByGameweekEntry = { gameweekNumber: number; points: number };
+
+/**
+ * RECOMMENDATIONS.md item 295: a real gameweek-by-gameweek arc for the
+ * viewer's own team — every entry is a real fantasy_points row (written by
+ * scoreFantasyGameweek), never a projection. Renders nothing when the viewer
+ * has no scored gameweek yet (e.g. just joined a league other teams already
+ * have history in) — same "nothing below a real floor" convention as this
+ * file's own no-scores empty state below.
+ */
+function PointsByGameweekStrip({ pointsHistory }: { pointsHistory: PointsByGameweekEntry[] }) {
+  if (pointsHistory.length === 0) return null;
+
+  const maxPoints = Math.max(1, ...pointsHistory.map((gw) => Math.abs(gw.points)));
+
+  return (
+    <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
+      <h2 className="px-1 text-sm font-semibold text-foreground">Your points by gameweek</h2>
+      <div className="kivo-scroll-fade-x flex items-end gap-2.5 overflow-x-auto px-1 pb-1">
+        {pointsHistory.map((gw, index) => {
+          const barHeightPct = Math.max(8, Math.round((Math.abs(gw.points) / maxPoints) * 100));
+          return (
+            <motion.div
+              key={gw.gameweekNumber}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: index * 0.02, ease: EASE }}
+              className="flex w-8 shrink-0 flex-col items-center gap-1"
+            >
+              <span className="text-[11px] font-semibold tabular-nums text-foreground">{gw.points}</span>
+              <div className="flex h-16 w-full items-end overflow-hidden rounded-md bg-white/[0.05]">
+                <div
+                  className={`w-full rounded-md ${gw.points < 0 ? "bg-critical/60" : "kivo-gradient-prime"}`}
+                  style={{ height: `${barHeightPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-foreground-subtle">GW{gw.gameweekNumber}</span>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function FantasyLeaderboard({
   entries,
   hasAnyScores,
   activeTeamId,
+  pointsHistory,
 }: {
   entries: LeaderboardEntry[];
   hasAnyScores: boolean;
   activeTeamId: string;
+  pointsHistory: PointsByGameweekEntry[];
 }) {
   if (!hasAnyScores) {
     return (
@@ -56,6 +103,7 @@ export function FantasyLeaderboard({
 
   return (
     <div className="flex flex-col gap-3">
+      <PointsByGameweekStrip pointsHistory={pointsHistory} />
       <div className="kivo-glass-brand flex flex-col gap-1 rounded-2xl p-4">
         <h2 className="px-1 pb-2 text-sm font-semibold text-foreground">League standings</h2>
         <div className="flex flex-col divide-y divide-white/5">

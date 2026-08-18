@@ -58,6 +58,10 @@ type FantasyBuilderProps = {
   points: number | null;
   pointsAvailable: boolean;
   leaderboard: { entries: LeaderboardEntry[]; hasAnyScores: boolean };
+  /** RECOMMENDATIONS.md item 295: the viewer's own real fantasy_points row
+   * per scored gameweek for activeTeamId, ascending by gameweek number —
+   * see PointsByGameweekStrip in fantasy-leaderboard.tsx. */
+  pointsHistory: { gameweekNumber: number; points: number }[];
   /** Set only on the page load where a previous gameweek's squad was just
    * copied forward into this one — see carryForwardFantasyRoster. Deliberately
    * transient (not re-derived on every later load) so it reads as "here's why
@@ -131,6 +135,7 @@ export function FantasyBuilder({
   points,
   pointsAvailable,
   leaderboard,
+  pointsHistory,
   carriedForwardFromGameweek,
 }: FantasyBuilderProps) {
   const [view, setView] = useState<ViewTab>("Squad");
@@ -373,6 +378,7 @@ export function FantasyBuilder({
             entries={leaderboard.entries}
             hasAnyScores={leaderboard.hasAnyScores}
             activeTeamId={activeTeamId}
+            pointsHistory={pointsHistory}
           />
         </FadeIn>
       )}

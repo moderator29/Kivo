@@ -77,10 +77,19 @@ export default async function FantasyPage({
   // fantasy_teams/fantasy_points/profiles are all owner-only RLS, so a plain
   // client select can never see a teammate's row — this goes through the same
   // ownership-checked RPC shape as get_fantasy_team_league above (see the
-  // get_fantasy_league_leaderboard migration comment).
-  const { data: leaderboardRows } = await supabase.rpc("get_fantasy_league_leaderboard", {
-    p_team_id: activeTeam.id,
-  });
+  // get_fantasy_league_leaderboard migration comment). Batched alongside the
+  // real points-history read below (RECOMMENDATIONS.md item 295) since
+  // neither depends on the other, both only need activeTeam.id.
+  const [{ data: leaderboardRows }, { data: pointsHistoryRows }] = await Promise.all([
+    supabase.rpc("get_fantasy_league_leaderboard", { p_team_id: activeTeam.id }),
+    // fantasy_points_select_own already scopes this to the caller's own
+    // team's rows — no RPC needed, unlike the leaderboard above (which has
+    // to read every team in the league, not just the viewer's own).
+    supabase
+      .from("fantasy_points")
+      .select("points, gameweek:fantasy_gameweeks(number)")
+      .eq("fantasy_team_id", activeTeam.id),
+  ]);
   const leaderboard = {
     entries: (leaderboardRows ?? []).map((row) => ({
       teamId: row.team_id,
@@ -91,6 +100,17 @@ export default async function FantasyPage({
     })),
     hasAnyScores: (leaderboardRows ?? []).some((row) => row.has_scores),
   };
+
+  // RECOMMENDATIONS.md item 295: a real gameweek-by-gameweek arc, not just
+  // the single current-gameweek number or the leaderboard's cumulative
+  // total — every scored gameweek already has a real fantasy_points row
+  // (written by scoreFantasyGameweek), this is purely a new read of it.
+  // Sorted client-side by the joined gameweek number rather than relying on
+  // the query builder's cross-table ordering support.
+  const pointsHistory = (pointsHistoryRows ?? [])
+    .filter((row): row is typeof row & { gameweek: { number: number } } => row.gameweek !== null)
+    .map((row) => ({ gameweekNumber: row.gameweek.number, points: row.points }))
+    .sort((a, b) => a.gameweekNumber - b.gameweekNumber);
 
   const { data: gameweek } = await supabase
     .from("fantasy_gameweeks")
@@ -215,6 +235,7 @@ export default async function FantasyPage({
         points={points}
         pointsAvailable={pointsAvailable}
         leaderboard={leaderboard}
+        pointsHistory={pointsHistory}
         carriedForwardFromGameweek={carriedForwardFromGameweek}
       />
     </FadeIn>
