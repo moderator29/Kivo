@@ -132,6 +132,7 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          criteria: Json | null
           description: string | null
           icon_url: string | null
           id: string
@@ -141,6 +142,7 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
+          criteria?: Json | null
           description?: string | null
           icon_url?: string | null
           id?: string
@@ -150,6 +152,7 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
+          criteria?: Json | null
           description?: string | null
           icon_url?: string | null
           id?: string
@@ -2287,6 +2290,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      evaluate_badge_criteria: {
+        Args: { p_profile_id: string }
+        Returns: number
+      }
       flag_absent_fixtures: {
         Args: {
           p_kickoff_from: string
@@ -2490,6 +2497,21 @@ export type Database = {
           played: number
           points: number
           position: number
+        }[]
+      }
+      get_user_head_to_head: {
+        Args: { p_other_profile_id: string }
+        Returns: {
+          badge_count: number
+          fantasy_points: number
+          is_public: boolean
+          predictions_correct: number
+          predictions_made: number
+          predictions_settled: number
+          profile_id: string
+          shared_follows: number
+          side: string
+          total_xp: number
         }[]
       }
       get_xp_total: { Args: { p_profile_id: string }; Returns: number }

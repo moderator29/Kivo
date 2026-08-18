@@ -141,3 +141,38 @@ export async function hasBadge(profileId: string, badgeCode: string): Promise<bo
     return false;
   }
 }
+
+/**
+ * Awards every criteria-driven badge this profile now qualifies for (KN-92).
+ *
+ * Before this, a badge's condition lived in application code — so every one of
+ * the concrete new badges RECOMMENDATIONS item 260 lists meant editing three
+ * files and shipping. `badges.criteria` (migration 0073) makes a badge whose
+ * condition is "count a known kind of row and compare to a threshold" pure
+ * content: adding one is an INSERT.
+ *
+ * The ceiling is deliberate and worth knowing: `criteria` names a *fact key*
+ * from a fixed whitelist inside the database, not a table and a filter. A
+ * genuinely new kind of fact still needs a line of SQL. That trade is the
+ * whole reason this is safe — `criteria` is admin-writable content, and a
+ * jsonb field that could name any table would be a SQL-injection surface with
+ * an admin-shaped key.
+ *
+ * Best-effort, like every other reward path here: this runs after the user's
+ * real work has already committed, so a failure degrades to a logged warning
+ * rather than turning a successful post into a failed Server Action.
+ */
+export async function evaluateBadgeCriteria(profileId: string): Promise<number> {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data, error } = await supabase.rpc("evaluate_badge_criteria", { p_profile_id: profileId });
+    if (error) {
+      logError("rewards.evaluateBadgeCriteria", error, { profileId });
+      return 0;
+    }
+    return data ?? 0;
+  } catch (error) {
+    logError("rewards.evaluateBadgeCriteria", error, { profileId });
+    return 0;
+  }
+}

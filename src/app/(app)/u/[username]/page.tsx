@@ -13,6 +13,7 @@ import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/prof
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import { timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
+import { HeadToHeadPanel } from "@/components/profile/head-to-head-panel";
 
 type PublicProfile = {
   id: string;
@@ -249,6 +250,14 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           <Lock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">This user keeps their activity private.</p>
         </FadeIn>
+      )}
+
+      {/* KIVO_NEXT_GEN KN-105. Only for a signed-in viewer looking at somebody
+          else: comparing an account with itself is meaningless, and a signed-out
+          visitor has no side of their own to compare. The RPC enforces both
+          independently — this is the cheap check, not the guarantee. */}
+      {viewer && !isViewerOwnProfile && (
+        <HeadToHeadPanel otherProfileId={profile.id} otherName={profile.display_name ?? `@${profile.username}`} />
       )}
     </div>
   );

@@ -1,13 +1,13 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { awardXp, awardBadge } from "@/lib/rewards";
+import { awardBadge, awardXp, evaluateBadgeCriteria } from "@/lib/rewards";
 import { logAudit } from "@/lib/audit";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP, computeStreaks } from "@/lib/predictions";
+import { logError } from "@/lib/log";
 
 type PredictionOutcome = "home_win" | "draw" | "away_win";
 
@@ -101,6 +101,11 @@ export async function scorePredictions(): Promise<{ error: string | null; record
       // cannot credit the same correct prediction twice.
       await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction", `prediction:${row.id}`);
       await awardBadge(row.profile_id, "first_prediction_correct");
+      // KN-92: the criteria-driven half of the catalogue, evaluated off the
+      // same real scoring event. The hardcoded awards above stay for now —
+      // this is additive, and removing them is a separate, riskier change than
+      // making the catalogue extensible was.
+      await evaluateBadgeCriteria(row.profile_id);
 
       // Real running total, not a guessed streak — counts this user's
       // actually-scored correct predictions straight from the predictions

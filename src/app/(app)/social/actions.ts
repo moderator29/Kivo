@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { awardBadge, awardXp, hasBadge } from "@/lib/rewards";
+import { awardBadge, awardXp, evaluateBadgeCriteria, hasBadge } from "@/lib/rewards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify } from "@/lib/notification-preferences";
@@ -114,6 +114,11 @@ export async function createPost(formData: FormData) {
   ]);
 
   await maybeAwardTenPostsBadge(supabase, profile.id);
+  // KIVO_NEXT_GEN KN-92: every badge whose condition is a countable fact is now
+  // described in `badges.criteria` rather than in code, so this one call covers
+  // the whole data-driven half of the catalogue — and a badge added tomorrow
+  // over an existing fact needs no deploy at all.
+  await evaluateBadgeCriteria(profile.id);
 
   revalidatePath("/social");
   if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
@@ -196,6 +201,11 @@ export async function createPoll(formData: FormData) {
   ]);
 
   await maybeAwardTenPostsBadge(supabase, profile.id);
+  // KIVO_NEXT_GEN KN-92: every badge whose condition is a countable fact is now
+  // described in `badges.criteria` rather than in code, so this one call covers
+  // the whole data-driven half of the catalogue — and a badge added tomorrow
+  // over an existing fact needs no deploy at all.
+  await evaluateBadgeCriteria(profile.id);
 
   revalidatePath("/social");
   // KN-29: a Room-scoped poll has to invalidate the Room it was posted into,
