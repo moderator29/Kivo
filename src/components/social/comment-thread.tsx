@@ -8,6 +8,7 @@ import { MessageCircle, CornerDownRight } from "lucide-react";
 import { getComments, createComment, type CommentDTO } from "@/app/(app)/social/comment-actions";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { ReactionPicker } from "@/components/social/reaction-picker";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { timeAgo } from "@/lib/format";
 
 const MAX_COMMENT_INPUT_LENGTH = 1000;
@@ -221,8 +222,14 @@ export function CommentThread({
                   type="submit"
                   disabled={submitPending}
                   aria-busy={submitPending}
-                  className="kivo-gradient-prime shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  title={!signedIn ? GUEST_ACTION_TITLE : undefined}
+                  className="kivo-gradient-prime flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
+                  {/* RECOMMENDATIONS item 235 — this button's guest-state
+                      label already spelled out "Sign up to comment" before
+                      this pass; the glyph just matches the same cue every
+                      other gated control in the app now shows. */}
+                  <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0" />
                   {submitPending ? "Posting…" : signedIn ? (replyTo ? "Reply" : "Post") : "Sign up to comment"}
                 </button>
               </div>

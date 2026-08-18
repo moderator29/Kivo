@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { PostComposer } from "@/components/social/post-composer";
 import { PostCard } from "@/components/social/post-card";
@@ -29,11 +30,31 @@ export function MatchRoomTab({
   fixtureId,
   signedIn,
   posts,
+  scrollToPostId = null,
 }: {
   fixtureId: string;
   signedIn: boolean;
   posts: RoomPost[];
+  /** RECOMMENDATIONS item 237: a post id to scroll to and briefly highlight
+   * on mount — MatchCentrePage has already guaranteed this id is present in
+   * `posts` before this component ever renders. */
+  scrollToPostId?: string | null;
 }) {
+  // Same one-shot scroll + fade-highlight as SocialFeed's own
+  // scrollToPostId handling (src/components/social/social-feed.tsx) — kept
+  // as a separate small effect here rather than factored into a shared hook,
+  // since the two host different DOM shapes (posts vs. Room posts) and each
+  // is only a few lines.
+  const [highlightPostId, setHighlightPostId] = useState(scrollToPostId);
+  useEffect(() => {
+    if (!scrollToPostId) return;
+    const el = document.getElementById(`post-${scrollToPostId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const timeout = setTimeout(() => setHighlightPostId(null), 1600);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="flex flex-col gap-3">
       <PostComposer signedIn={signedIn} fixtureId={fixtureId} placeholder="What's happening in this match?" />
@@ -68,6 +89,7 @@ export function MatchRoomTab({
               commentCount={post.commentCount}
               signedIn={signedIn}
               index={index}
+              highlighted={post.id === highlightPostId}
             />
           ))}
         </div>

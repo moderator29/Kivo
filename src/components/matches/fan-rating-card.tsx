@@ -4,6 +4,7 @@ import { useRef, useState, useTransition, type KeyboardEvent } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Star } from "lucide-react";
 import { submitFanRating } from "@/app/(app)/matches/fan-rating-actions";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { cn } from "@/lib/utils";
 
 // RECOMMENDATIONS.md item 170: "suppress the aggregate display below a real
@@ -108,6 +109,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
         role="radiogroup"
         aria-label="Your rating"
         aria-busy={pending}
+        title={!signedIn ? GUEST_ACTION_TITLE : undefined}
         onKeyDown={handleRadioKeyDown}
       >
         {[1, 2, 3, 4, 5].map((value) => (
@@ -133,6 +135,10 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
             />
           </button>
         ))}
+        {/* RECOMMENDATIONS item 235: one glyph for the whole 5-star control
+            rather than repeating it on every star — five lock icons back to
+            back would read as noise, not a cue. */}
+        <GuestLockHint show={!signedIn} className="ml-1 h-3.5 w-3.5 shrink-0 text-foreground-subtle" />
       </div>
 
       {error && (

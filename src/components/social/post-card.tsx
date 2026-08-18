@@ -11,6 +11,8 @@ import { CommentThread } from "@/components/social/comment-thread";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { usePopoverPlacement } from "@/hooks/use-popover-placement";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
@@ -158,6 +160,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             disabled={pending}
             aria-busy={pending}
             aria-pressed={isOwn}
+            title={!signedIn ? GUEST_ACTION_TITLE : undefined}
             className={cn(
               "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
               isOwn ? "border-kivo-cyan/50" : "border-white/10 hover:bg-white/5",
@@ -169,7 +172,11 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
                 {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
                 <span className="truncate">{option.label}</span>
               </span>
-              <span className="shrink-0 text-xs text-foreground-subtle">{pct}%</span>
+              <span className="flex shrink-0 items-center gap-1 text-xs text-foreground-subtle">
+                {/* RECOMMENDATIONS item 235 */}
+                <GuestLockHint show={!signedIn} className="h-2.5 w-2.5 shrink-0" />
+                {pct}%
+              </span>
             </span>
           </button>
         );
@@ -214,6 +221,12 @@ interface PostCardProps {
    * (which doesn't fetch save state) still type-checks as "not saved"
    * rather than requiring a change there. */
   viewerSaved?: boolean;
+  /** RECOMMENDATIONS item 237: true for one post right after a notification
+   * deep-link lands the viewer on it — a brief `.kivo-row-flash` (same cue
+   * LiveFixtureList uses for "this row just changed") instead of a bare
+   * scroll with zero visual confirmation it found the right post. Defaults
+   * false for every ordinary render. */
+  highlighted?: boolean;
 }
 
 export function PostCard({
@@ -230,6 +243,7 @@ export function PostCard({
   index = 0,
   poll = null,
   viewerSaved = false,
+  highlighted = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -241,6 +255,18 @@ export function PostCard({
   const [reportPending, startReportTransition] = useTransition();
   const reportMenuRef = useRef<HTMLDivElement>(null);
   const reportTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // RECOMMENDATIONS item 238: real viewport-edge collision detection for the
+  // report-reason popover, which used to always render `right-0 bottom-full`
+  // regardless of how close the trigger sat to the top of the viewport.
+  // Estimated size covers the header row plus REPORT_REASONS.length rows in
+  // the w-48 panel below.
+  const reportMenuPlacement = usePopoverPlacement(reportMenuOpen, reportMenuRef, {
+    estimatedHeight: 40 + REPORT_REASONS.length * 32,
+    estimatedWidth: 192,
+    defaultVertical: "top",
+    defaultHorizontal: "right",
+  });
 
   useEffect(() => {
     if (!justReported) return;
@@ -297,15 +323,18 @@ export function PostCard({
   return (
     <motion.article
       // Anchor target for notification click-through (see postHref() in
-      // lib/notification-registry.ts, `/social#post-<id>`). scroll-mt clears
-      // the sticky TopBar (and, on Match Centre, the sticky score card) so
-      // the post the link lands on isn't hidden underneath it.
+      // lib/notification-registry.ts, now `/social?post=<id>` — item 237).
+      // scroll-mt clears the sticky TopBar (and, on Match Centre, the sticky
+      // score card) so the post the link lands on isn't hidden underneath it.
       id={`post-${id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
-      className="kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
+      className={cn(
+        "kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]",
+        highlighted && "kivo-row-flash",
+      )}
     >
       <div className="flex items-center gap-2">
         {authorAvatarSrc ? (
@@ -346,6 +375,7 @@ export function PostCard({
             aria-haspopup={signedIn ? "menu" : undefined}
             aria-expanded={reportMenuOpen}
             aria-label={reported ? "Reported" : "Report post"}
+            title={!signedIn ? GUEST_ACTION_TITLE : undefined}
             whileTap={reported ? undefined : { scale: 0.88 }}
             className={cn(
               "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
@@ -369,6 +399,8 @@ export function PostCard({
                 <motion.span key="flag" className="flex items-center gap-1.5">
                   <Flag className="h-3.5 w-3.5" strokeWidth={1.75} fill={reported ? "currentColor" : "none"} />
                   {reported ? "Reported" : "Report"}
+                  {/* RECOMMENDATIONS item 235 */}
+                  <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0 text-foreground-subtle" />
                 </motion.span>
               )}
             </AnimatePresence>
@@ -383,7 +415,11 @@ export function PostCard({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-                className="kivo-glass-sharp absolute right-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl p-1"
+                className={cn(
+                  "kivo-glass-sharp absolute z-20 w-48 overflow-hidden rounded-xl p-1",
+                  reportMenuPlacement.vertical === "top" ? "bottom-full mb-2" : "top-full mt-2",
+                  reportMenuPlacement.horizontal === "right" ? "right-0" : "left-0",
+                )}
               >
                 <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Report this post

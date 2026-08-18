@@ -20,6 +20,7 @@ export function SocialFeed({
   initialHasMore,
   signedIn,
   followingOnly = false,
+  scrollToPostId = null,
 }: {
   initialPosts: PostListItem[];
   initialHasMore: boolean;
@@ -28,12 +29,31 @@ export function SocialFeed({
    * more" keeps respecting the All/Following tab the page was rendered
    * with. */
   followingOnly?: boolean;
+  /** RECOMMENDATIONS item 237: a post id to scroll to and briefly highlight
+   * on mount — the page.tsx server component has already guaranteed this id
+   * is present in `initialPosts` (prepending it if it wasn't on the normal
+   * first page), so this only ever needs to scroll, never search pagination
+   * for it. */
+  scrollToPostId?: string | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const supabase = useSupabaseClient();
+
+  // Runs once on mount only — scrollToPostId is a one-shot "where the viewer
+  // arrived from" hint from the URL the page loaded with, not something a
+  // later prop change should re-trigger a scroll for.
+  const [highlightPostId, setHighlightPostId] = useState(scrollToPostId);
+  useEffect(() => {
+    if (!scrollToPostId) return;
+    const el = document.getElementById(`post-${scrollToPostId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const timeout = setTimeout(() => setHighlightPostId(null), 1600);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // RECOMMENDATIONS.md item 119: real "new posts arrived" signal via
   // Supabase Realtime on `posts` (migration 0042_realtime_posts — the exact
@@ -192,6 +212,7 @@ export function SocialFeed({
           index={index}
           poll={post.poll}
           viewerSaved={post.viewerSaved}
+          highlighted={post.id === highlightPostId}
         />
       ))}
 

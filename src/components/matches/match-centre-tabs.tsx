@@ -97,6 +97,11 @@ type MatchCentreTabsProps = {
   stats: TeamStats[];
   standings: StandingsRow[];
   roomPosts: RoomPost[];
+  /** RECOMMENDATIONS item 237: a post id to scroll to and briefly highlight
+   * once the Room tab renders — see MatchCentrePage, which already
+   * guarantees this id is present in `roomPosts` (prepending it if it
+   * wasn't on the normally-loaded page) before it ever reaches here. */
+  scrollToPostId?: string | null;
   signedIn: boolean;
   canSyncDetails: boolean;
   syncDetailsAction: SyncDetailsAction;
@@ -461,6 +466,7 @@ function MatchCentreTabsInner({
   stats,
   standings,
   roomPosts,
+  scrollToPostId = null,
   signedIn,
   canSyncDetails,
   syncDetailsAction,
@@ -568,7 +574,9 @@ function MatchCentreTabsInner({
           {active === "Lineups" && <LineupsTab homeTeamId={homeTeamId} awayTeamId={awayTeamId} lineups={lineups} />}
           {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
           {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
-          {active === "Room" && <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} />}
+          {active === "Room" && (
+            <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} scrollToPostId={scrollToPostId} />
+          )}
         </motion.div>
       </AnimatePresence>
     </div>

@@ -45,8 +45,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function MatchCentrePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MatchCentrePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ post?: string }>;
+}) {
   const { id } = await params;
+  const { post: targetPostId } = await searchParams;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
@@ -75,7 +82,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     { data: lineups },
     { data: stats },
     { data: standings },
-    { posts: roomPosts },
+    { posts: roomPostsPage },
     fixturesLastSyncedAt,
     detailsLastSyncedAt,
     headToHead,
@@ -143,6 +150,17 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           .order("updated_at", { ascending: false })
       : Promise.resolve({ data: null }),
   ]);
+
+  // RECOMMENDATIONS item 237: same fix as /social's — a notification's
+  // `?post=<id>` link (postHref() in lib/notification-registry.ts) can name
+  // a Room post older than the 50 most recently loaded here. Fetch it
+  // explicitly and prepend it rather than leaving the client to scroll to an
+  // anchor that was never fetched at all.
+  let roomPosts = roomPostsPage;
+  if (targetPostId && !roomPostsPage.some((p) => p.id === targetPostId)) {
+    const { posts: targetPosts } = await fetchPostsPage(0, profile?.id ?? null, { fixtureId: id, postIds: [targetPostId] });
+    if (targetPosts.length > 0) roomPosts = [...targetPosts, ...roomPostsPage];
+  }
 
   const statsForTab = (stats ?? []).map((s) => ({
     teamId: s.team_id,
@@ -363,6 +381,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           homeTeamName={fixture.home_team?.name ?? "Home team"}
           awayTeamName={fixture.away_team?.name ?? "Away team"}
           roomPosts={roomPostsForTab}
+          scrollToPostId={targetPostId ?? null}
           stats={statsForTab}
           signedIn={Boolean(profile)}
           canSyncDetails={canManageFootballData(profile?.role)}

@@ -15,6 +15,29 @@ const item = getNavItem("rewards");
 export const metadata: Metadata = { title: item.label };
 
 type XpHistoryEntry = { amount: number; reason: string; created_at: string };
+type XpHistoryLine = { key: string; amount: number; reason: string; created_at: string; count: number };
+
+/** Collapses consecutive rows within a day that share the same amount and
+ * reason into one line with a count (item 236: a dozen "+2 XP — Posted in
+ * the community" rows in one day used to render as a dozen separate lines).
+ * Only *consecutive* runs collapse — entries are already newest-first, so
+ * this never merges e.g. two "Posted in the community" rows that happen to
+ * sandwich a different reason, which would misrepresent the real order of
+ * events. `created_at` on the collapsed line is the run's most recent
+ * timestamp (the first one seen, since the input is newest-first), so the
+ * displayed "time ago" still reflects the latest occurrence. */
+function collapseConsecutiveXpEntries(entries: XpHistoryEntry[]): XpHistoryLine[] {
+  const lines: XpHistoryLine[] = [];
+  for (const entry of entries) {
+    const last = lines[lines.length - 1];
+    if (last && last.amount === entry.amount && last.reason === entry.reason) {
+      last.count += 1;
+    } else {
+      lines.push({ key: entry.created_at, amount: entry.amount, reason: entry.reason, created_at: entry.created_at, count: 1 });
+    }
+  }
+  return lines;
+}
 
 /** Groups XP history rows (already newest-first from the query) into
  * same-day buckets labeled "Today"/"Yesterday"/a short date, using the same
@@ -318,15 +341,16 @@ export default async function RewardsPage() {
                   {group.label}
                 </p>
                 <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-3xl">
-                  {group.entries.map((entry, index) => (
-                    <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
+                  {collapseConsecutiveXpEntries(group.entries).map((line) => (
+                    <div key={line.key} className="flex items-center justify-between gap-3 px-4 py-3">
                       <div>
-                        <p className="text-xs font-medium text-foreground">{entry.reason}</p>
-                        <p className="text-[11px] text-foreground-subtle">{timeAgo(entry.created_at)}</p>
+                        <p className="text-xs font-medium text-foreground">{line.reason}</p>
+                        <p className="text-[11px] text-foreground-subtle">{timeAgo(line.created_at)}</p>
                       </div>
                       <span className="shrink-0 text-xs font-semibold text-live">
-                        {entry.amount > 0 ? "+" : ""}
-                        {entry.amount} XP
+                        {line.amount > 0 ? "+" : ""}
+                        {line.amount} XP
+                        {line.count > 1 && <span className="text-foreground-subtle"> &times; {line.count}</span>}
                       </span>
                     </div>
                   ))}

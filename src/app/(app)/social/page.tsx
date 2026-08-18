@@ -8,12 +8,29 @@ import { fetchPostsPage } from "./posts";
 
 export const metadata: Metadata = { title: "Social" };
 
-export default async function SocialPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
-  const { filter } = await searchParams;
+export default async function SocialPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string; post?: string }>;
+}) {
+  const { filter, post: targetPostId } = await searchParams;
   const followingOnly = filter === "following";
 
   const profile = await getOrCreateProfile();
-  const { posts, hasMore } = await fetchPostsPage(0, profile?.id ?? null, { followingOnly });
+  const { posts: pageOne, hasMore } = await fetchPostsPage(0, profile?.id ?? null, { followingOnly });
+
+  // RECOMMENDATIONS item 237: a notification's `?post=<id>` link (see
+  // postHref() in lib/notification-registry.ts) names a specific post that
+  // might sit past whatever this first page would normally load — fetch it
+  // explicitly and prepend it rather than relying on it already being in the
+  // DOM. `fetchPostsPage`'s own `postIds` option (already built for /saved)
+  // does the same joins as every other post on this page, so it renders
+  // identically once merged in.
+  let posts = pageOne;
+  if (targetPostId && !pageOne.some((p) => p.id === targetPostId)) {
+    const { posts: targetPosts } = await fetchPostsPage(0, profile?.id ?? null, { postIds: [targetPostId] });
+    if (targetPosts.length > 0) posts = [...targetPosts, ...pageOne];
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 lg:px-8">
@@ -64,6 +81,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
         initialHasMore={hasMore}
         signedIn={Boolean(profile)}
         followingOnly={followingOnly}
+        scrollToPostId={targetPostId ?? null}
       />
     </div>
   );

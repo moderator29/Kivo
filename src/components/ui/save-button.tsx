@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Bookmark, Check } from "lucide-react";
 import { toggleSave, type SaveTargetType } from "@/app/(app)/save-actions";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 
 type SaveButtonProps = {
   targetType: SaveTargetType;
@@ -63,6 +64,7 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
         aria-busy={pending}
         aria-pressed={saved}
         aria-label={saved ? "Remove from saved" : "Save"}
+        title={!signedIn ? GUEST_ACTION_TITLE : undefined}
         whileTap={{ scale: 0.88 }}
         className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed ${
           saved ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted"
@@ -70,6 +72,8 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
       >
         <Bookmark className={iconSize} strokeWidth={1.75} fill={saved ? "currentColor" : "none"} />
         {saved ? "Saved" : "Save"}
+        {/* RECOMMENDATIONS item 235 */}
+        <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0 text-foreground-subtle" />
       </motion.button>
       <AnimatePresence>
         {flash && (

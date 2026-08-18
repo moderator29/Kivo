@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -162,6 +163,17 @@ export async function createComment(postId: string, body: string, parentCommentI
   if (!profile) {
     return { error: "You must be signed in to comment.", comment: null };
   }
+
+  // Item 239: comment-actions.ts had no checkRateLimit call at all, unlike
+  // createPost/toggleLike/toggleFollow/submitPrediction/searchPlatform.
+  // Same 5-per-60s window as createPost's own "create_post" limit
+  // (social/actions.ts) — comments are the same "short free-text write"
+  // shape as a post, just scoped to a thread instead of the feed, so there's
+  // no reason for a looser or tighter cap here. This one function backs both
+  // top-level comments and replies (parentCommentId), so a single action key
+  // covers both.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "create_comment", 5, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error, comment: null };
 
   const supabase = createServerSupabaseClient();
   const { data: inserted, error } = await supabase

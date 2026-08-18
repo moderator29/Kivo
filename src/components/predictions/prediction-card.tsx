@@ -9,6 +9,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
 import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome as Outcome } from "@/lib/predictions";
 import { formatDeadlineCountdown } from "@/app/(app)/fantasy/fantasy-rules";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { cn } from "@/lib/utils";
 
 const NEAR_LOCK_MS = 60 * 60_000;
@@ -240,6 +241,7 @@ export function PredictionCard({
                 aria-busy={pending}
                 aria-pressed={active}
                 onClick={() => handlePick(outcome)}
+                title={!signedIn ? GUEST_ACTION_TITLE : undefined}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -254,7 +256,12 @@ export function PredictionCard({
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}
-                <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
+                <span className={`relative flex items-center justify-center gap-1 ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
+                  {/* RECOMMENDATIONS item 235 — same Lock glyph the locked
+                      (post-deadline) branch above already uses for "you can't
+                      act on this right now", reused here for "not signed in
+                      yet" rather than a different glyph. */}
+                  <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0" />
                   {PREDICTION_OUTCOME_LABEL[outcome]}
                 </span>
               </motion.button>

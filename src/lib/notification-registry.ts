@@ -60,15 +60,27 @@ function actorName(payload: Payload, prefix: string): string {
 /**
  * Where a post actually lives: the general `/social` feed, or a fixture's
  * Room tab in Match Centre when the post carries `posts.fixture_id` (see
- * src/components/matches/match-room.tsx). `#post-<id>` anchors to the id set
- * on PostCard's root element (src/components/social/post-card.tsx); `tab=room`
- * is read by MatchCentreTabs to open straight on the Room tab.
+ * src/components/matches/match-room.tsx). `tab=room` is read by
+ * MatchCentreTabs to open straight on the Room tab.
+ *
+ * RECOMMENDATIONS item 237: this used to append `#post-<id>`, a plain DOM
+ * fragment that only ever worked if the post already happened to be on the
+ * first page of whatever pagination the target list had loaded — a post
+ * further back than that simply had no matching element to scroll to, and
+ * the jump silently did nothing. `?post=<id>` instead is a real query param
+ * both `/social` (posts.ts's `fetchPostsPage`) and this fixture's Room tab
+ * read server-side to explicitly fetch and prepend that exact post if it
+ * isn't already in the page they'd normally load — see SocialPage and
+ * MatchCentrePage. The client then only has to scroll to an id that's
+ * guaranteed to already be in the DOM, never search pagination for it.
  */
 function postHref(payload: Payload): string {
   const postId = str(payload, "post_id");
   const fixtureId = str(payload, "fixture_id");
-  const anchor = postId ? `#post-${postId}` : "";
-  return fixtureId ? `/matches/${fixtureId}?tab=room${anchor}` : `/social${anchor}`;
+  const query = postId ? `?post=${encodeURIComponent(postId)}` : "";
+  return fixtureId
+    ? `/matches/${fixtureId}?tab=room${postId ? `&post=${encodeURIComponent(postId)}` : ""}`
+    : `/social${query}`;
 }
 
 function fixtureHref(payload: Payload): string {
