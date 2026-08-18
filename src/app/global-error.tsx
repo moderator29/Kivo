@@ -7,7 +7,7 @@
 // error.md, "Global Error"). It REPLACES the root layout when active, so
 // unlike src/app/error.tsx and src/app/(app)/error.tsx it must define its
 // own <html>/<body> tags and pull in whatever global styles/fonts it needs
-// itself — nothing from src/app/layout.tsx (ClerkProvider, next/font
+// itself — nothing from src/app/layout.tsx (the theme provider, next/font
 // loaders, etc.) is available here. Importing globals.css is enough to get
 // KIVO's design tokens (--background, --foreground, .kivo-glass-brand,
 // .kivo-gradient-*) since those are plain CSS custom properties, not

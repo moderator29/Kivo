@@ -17,14 +17,19 @@ export type ViewerProfileSummary = { username: string; displayName: string | nul
 
 export function AppShell({
   children,
-  signedIn,
   isAdmin,
   previewMode,
   viewerProfile,
   moderationBanner,
 }: {
   children: ReactNode;
-  signedIn: boolean;
+  /** Still accepted so (app)/layout.tsx's existing call site keeps compiling,
+   * but deliberately not read any more: `viewerProfile` below is the single
+   * source of "is someone signed in" now that the top bar renders KIVO's own
+   * account menu off a real profile rather than Clerk's self-fetching
+   * `<UserButton>`. Two independent signals for one fact could disagree; one
+   * cannot. */
+  signedIn?: boolean;
   /** Item 134: gates the /admin link in both nav surfaces. Computed
    * server-side in (app)/layout.tsx via hasAdminAccess(profile.role) —
    * always false for a guest, since there's no profile/role to check. */
@@ -34,9 +39,10 @@ export function AppShell({
    * isAdmin is true and the admin explicitly opted in. Drives the fixed
    * PreviewModeBanner plus the top padding that keeps it clear of content. */
   previewMode: boolean;
-  /** Real profile summary for the mobile "More" sheet's header (avatar +
-   * username) — null for a guest, in which case that header simply doesn't
-   * render (see MobileBottomNav). Never fabricated placeholder identity. */
+  /** Real profile summary for the mobile "More" sheet's header and the top
+   * bar's account menu (avatar + username) — null for a guest, in which case
+   * neither renders (see MobileBottomNav, TopBar). Never fabricated
+   * placeholder identity. */
   viewerProfile: ViewerProfileSummary | null;
   /** RECOMMENDATIONS.md item 234: real, current suspended/banned state for
    * the signed-in viewer, computed server-side in (app)/layout.tsx from
@@ -64,7 +70,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {moderationBanner && <ModerationBanner info={moderationBanner} />}
         <OfflineBanner />
-        <TopBar signedIn={signedIn} isAdmin={isAdmin} previewMode={previewMode} />
+        <TopBar viewer={viewerProfile} isAdmin={isAdmin} previewMode={previewMode} />
         <main className="flex flex-1 flex-col pb-24 lg:pb-0">
           <PageTransition>{children}</PageTransition>
         </main>

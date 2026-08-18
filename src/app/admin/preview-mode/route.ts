@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
-import { isClerkConfigured, sanitizeRedirectPath } from "@/lib/clerk";
+import { getAuthUser, sanitizeRedirectPath } from "@/lib/auth";
 import { PREVIEW_MODE_COOKIE } from "@/lib/preview-mode";
 
 /**
@@ -21,15 +20,13 @@ import { PREVIEW_MODE_COOKIE } from "@/lib/preview-mode";
  * any shared/persisted data, so it's low-risk as a GET.
  */
 export async function GET(request: NextRequest) {
-  // Same resource-level boundary as src/app/admin/layout.tsx: unconfigured
-  // Clerk has no session to check, an unauthenticated caller gets bounced to
+  // Same resource-level boundary as src/app/admin/layout.tsx: an
+  // unauthenticated caller (which includes an environment with no auth
+  // configured, since getAuthUser() returns null there too) gets bounced to
   // sign-in, and a signed-in non-admin gets bounced home. Preview mode can
   // never be reached by anyone this check would reject.
-  if (!isClerkConfigured()) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
-  }
-  const { userId } = await auth();
-  if (!userId) {
+  const user = await getAuthUser();
+  if (!user) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 

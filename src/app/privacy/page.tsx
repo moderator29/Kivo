@@ -44,8 +44,8 @@ export default function PrivacyPage() {
           <div className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">1. The short version</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
-              KIVO collects what it needs to run your account and the features you use: your email (via Clerk, our
-              authentication provider), the profile details you choose to add, and the activity you generate inside
+              KIVO collects what it needs to run your account and the features you use: your email address (held by
+              Supabase, which handles sign-in), the profile details you choose to add, and the activity you generate inside
               the app (predictions, fantasy teams, posts, follows, XP). Football data (scores, fixtures, players) is
               sourced from a third-party sports data provider and is about matches, not about you. If you use the AI
               Copilot, your question and some of your KIVO data are sent to Anthropic to generate a reply. We do not
@@ -57,12 +57,13 @@ export default function PrivacyPage() {
           <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">2. Information collected at signup</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
-              KIVO uses Clerk to handle authentication, we never see or store your password ourselves. When you
-              create an account with email, Clerk collects and verifies your email address. If you continue with X
-              instead, Clerk receives the basic profile information X shares as part of that sign-in (your name,
-              handle and avatar). During onboarding, you choose a KIVO username, which is required, and can
-              optionally add a display name, a short bio, your country and a favourite team. All of this is stored
-              in KIVO&apos;s own database, tied to your account.
+              KIVO uses Supabase Auth to handle sign-in. There is no password: you enter your email address, Supabase
+              emails you a one-time code, and entering that code signs you in. So there is no KIVO password to store,
+              reuse, forget or have stolen — from us or from anyone else. Your email address is held by Supabase Auth
+              and is the only personal detail collected at signup; KIVO&apos;s own profile table deliberately does not
+              keep a copy of it. During onboarding, you choose a KIVO username, which is required, and can optionally
+              add a display name, a short bio, your country and a favourite team. All of that is stored in KIVO&apos;s
+              own database, tied to your account.
             </p>
           </div>
 
@@ -125,8 +126,7 @@ export default function PrivacyPage() {
               needed for their part:
             </p>
             <ul className="flex flex-col gap-2 pl-1 text-sm leading-relaxed text-foreground-muted sm:text-base">
-              <li>• <span className="text-foreground">Clerk</span>: authentication and identity (your email, sign-in method, account credentials).</li>
-              <li>• <span className="text-foreground">Supabase</span>: hosts KIVO&apos;s application database (your profile, posts, predictions, fantasy data and everything else described above), access-controlled per account.</li>
+              <li>• <span className="text-foreground">Supabase</span>: handles sign-in and holds your email address, and hosts KIVO&apos;s application database (your profile, posts, predictions, fantasy data and everything else described above), access-controlled per account.</li>
               <li>• <span className="text-foreground">API-Football</span>: supplies football data (fixtures, teams, players, scores); does not receive data about you.</li>
               <li>• <span className="text-foreground">Anthropic</span>: receives your message and grounding context only when you use the AI Copilot, to generate a reply.</li>
             </ul>
@@ -139,10 +139,12 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">8. Your account, your control</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               You can view and edit your profile details from Settings at any time. Deleting your account (also
-              from Settings, with a typed confirmation) permanently deletes your Clerk identity, which in turn
-              removes your KIVO profile and the data tied to it: posts, comments, predictions, fantasy teams and XP.
-              This action cannot be undone. If you&apos;d like a copy of your data before deleting your account, or
-              have another access or export request, you can reach out through the contact channel below.
+              from Settings, with a typed confirmation) permanently deletes your sign-in identity and your email
+              address from Supabase Auth, which in turn removes your KIVO profile and the data tied to it: posts,
+              comments, predictions, fantasy teams and XP, plus any avatar image you uploaded. This action cannot be
+              undone. You can download a copy of your data from Settings first — see the &ldquo;Export your
+              data&rdquo; section there — or reach out through the contact channel below for any other access
+              request.
             </p>
           </div>
 
@@ -158,7 +160,8 @@ export default function PrivacyPage() {
           <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">10. Security</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
-              Authentication is handled entirely by Clerk, KIVO never stores your password. Application data in
+              Sign-in is passwordless: a one-time code sent to your email, handled by Supabase Auth. KIVO stores no
+              password, because there isn&apos;t one. Application data in
               Supabase is access-controlled with row-level security tied to your authenticated identity, so your
               private data (like your own draft content or account settings) is only readable by you and, where a
               feature is explicitly public (like a public post), by other users through that feature.
