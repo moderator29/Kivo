@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Target, CheckCircle2, XCircle, Clock, MinusCircle } from "lucide-react";
+import { ArrowLeft, Target } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -8,33 +8,17 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
 import { staggerDelay } from "@/lib/stagger";
-import type { FixtureStatus } from "@/lib/football/fixture-status";
-import { PREDICTION_OUTCOME_LABEL, computeStreaks } from "@/lib/predictions";
+import { PREDICTION_OUTCOME_LABEL, computeStreaks, predictionResultInfo } from "@/lib/predictions";
 
 export const metadata: Metadata = { title: "My Predictions" };
 
-/**
- * A prediction's result, purely from real columns — `points_awarded` is null
- * until the admin scoring pass (predictions-actions.ts's scorePredictions)
- * resolves it, so "not scored yet" is shown honestly rather than as a 0 or a
- * guessed outcome. Never derives correctness from the fixture score directly:
- * `points_awarded` is the single source of truth for what was actually
- * graded, same as the leaderboard.
- */
-function resultInfo(status: FixtureStatus, pointsAwarded: number | null) {
-  if (pointsAwarded !== null) {
-    return pointsAwarded > 0
-      ? { label: `Correct · +${pointsAwarded} pts`, className: "text-live", icon: CheckCircle2 }
-      : { label: "Incorrect", className: "text-critical", icon: XCircle };
-  }
-  if (status === "finished") {
-    return { label: "Not scored yet", className: "text-foreground-subtle", icon: Clock };
-  }
-  if (status === "postponed" || status === "cancelled" || status === "abandoned") {
-    return { label: "No result", className: "text-foreground-subtle", icon: MinusCircle };
-  }
-  return { label: "Pending", className: "text-foreground-subtle", icon: Clock };
-}
+// RECOMMENDATIONS.md items 168/250: the same minimum-sample suppression
+// convention already established for PredictionCard's consensus bar and
+// FanRatingCard's aggregate — a competition with one or two scored picks
+// should never render a rate that reads as more meaningful than it is.
+const MIN_MEANINGFUL_SAMPLE = 3;
+
+type CompetitionAccuracy = { name: string; total: number; correct: number; accuracyPct: number };
 
 export default async function MyPredictionsPage() {
   const profile = await getOrCreateProfile();
@@ -106,6 +90,27 @@ export default async function MyPredictionsPage() {
         )
       : null;
 
+  // RECOMMENDATIONS.md item 292: a per-competition cut of the same scored
+  // rows already fetched above (the query already joins
+  // fixture.competition:competitions(name, short_name)) — a reduce over rows
+  // already in memory, not a new query.
+  const competitionAccuracy: CompetitionAccuracy[] = Array.from(
+    scoredRows
+      .reduce((byCompetition, row) => {
+        const competitionName =
+          row.fixture!.competition?.short_name ?? row.fixture!.competition?.name ?? "Unknown competition";
+        const existing = byCompetition.get(competitionName) ?? { total: 0, correct: 0 };
+        existing.total += 1;
+        if ((row.points_awarded ?? 0) > 0) existing.correct += 1;
+        byCompetition.set(competitionName, existing);
+        return byCompetition;
+      }, new Map<string, { total: number; correct: number }>())
+      .entries(),
+  )
+    .map(([name, { total, correct }]) => ({ name, total, correct, accuracyPct: Math.round((correct / total) * 100) }))
+    .filter((entry) => entry.total >= MIN_MEANINGFUL_SAMPLE)
+    .sort((a, b) => b.total - a.total);
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-1">
@@ -171,6 +176,24 @@ export default async function MyPredictionsPage() {
             </FadeIn>
           )}
 
+          {competitionAccuracy.length > 0 && (
+            <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-1 rounded-2xl p-5">
+              <h2 className="pb-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+                By competition
+              </h2>
+              <div className="flex flex-col divide-y divide-white/5">
+                {competitionAccuracy.map((entry) => (
+                  <div key={entry.name} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="truncate text-sm text-foreground">{entry.name}</span>
+                    <span className="shrink-0 text-sm text-foreground-muted">
+                      {entry.correct}/{entry.total} · <span className="font-semibold text-foreground">{entry.accuracyPct}%</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </FadeIn>
+          )}
+
           {(isTruncatedHistory || scoredRows.length < rows.length) && (
             <div className="-mt-3 flex flex-col items-center gap-0.5 text-center text-xs text-foreground-subtle">
               {isTruncatedHistory && (
@@ -194,7 +217,7 @@ export default async function MyPredictionsPage() {
               const fixture = row.fixture!;
               const competitionName = fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition";
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-              const result = resultInfo(fixture.status, row.points_awarded);
+              const result = predictionResultInfo(fixture.status, row.points_awarded);
               const ResultIcon = result.icon;
 
               return (
