@@ -53,7 +53,18 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
         </FadeIn>
       )}
 
-      <SocialFeed initialPosts={posts} initialHasMore={hasMore} signedIn={Boolean(profile)} followingOnly={followingOnly} />
+      {/* key remounts SocialFeed when the All/Following tab changes: its
+          `posts` state is seeded once via useState(initialPosts), so without
+          a key tied to the filter, clicking the tab link above re-renders
+          this server component with correctly-filtered `posts` but the
+          already-mounted client SocialFeed keeps showing its stale list. */}
+      <SocialFeed
+        key={followingOnly ? "following" : "all"}
+        initialPosts={posts}
+        initialHasMore={hasMore}
+        signedIn={Boolean(profile)}
+        followingOnly={followingOnly}
+      />
     </div>
   );
 }

@@ -42,14 +42,28 @@ export function ReactionPicker({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!pickerOpen) return;
     function onClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setPickerOpen(false);
     }
+    // Audit item 4: Escape closes the popover and returns focus to the
+    // trigger — previously a keyboard-only user had no way to dismiss this
+    // role="menu" short of activating a reaction or tabbing past it.
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setPickerOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [pickerOpen]);
 
   // Auto-dismiss the error after a few seconds rather than leaving it stuck
@@ -101,6 +115,7 @@ export function ReactionPicker({
   return (
     <div ref={containerRef} className="relative">
       <motion.button
+        ref={triggerRef}
         type="button"
         onClick={handleTriggerClick}
         disabled={pending}

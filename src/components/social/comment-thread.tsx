@@ -7,11 +7,20 @@ import { motion, AnimatePresence } from "motion/react";
 import { MessageCircle, CornerDownRight } from "lucide-react";
 import { getComments, createComment, type CommentDTO } from "@/app/(app)/social/comment-actions";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { ReactionPicker } from "@/components/social/reaction-picker";
 import { timeAgo } from "@/lib/format";
 
 const MAX_COMMENT_INPUT_LENGTH = 1000;
 
-function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () => void }) {
+function CommentItem({
+  comment,
+  signedIn,
+  onReply,
+}: {
+  comment: CommentDTO;
+  signedIn: boolean;
+  onReply?: () => void;
+}) {
   return (
     <div className="flex items-start gap-2">
       <KivoAvatar src={comment.authorAvatarSrc} name={comment.authorName} size={20} />
@@ -30,15 +39,27 @@ function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () =
           <span className="text-[11px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
         </div>
         <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>
-        {onReply && (
-          <button
-            type="button"
-            onClick={onReply}
-            className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
-          >
-            Reply
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {/* Audit item 6: ReactionPicker was already built with a size="sm"
+              variant for exactly this row, but no comment ever rendered one. */}
+          <ReactionPicker
+            targetType="comment"
+            targetId={comment.id}
+            count={comment.reactionCount}
+            viewerReaction={comment.viewerReaction}
+            signedIn={signedIn}
+            size="sm"
+          />
+          {onReply && (
+            <button
+              type="button"
+              onClick={onReply}
+              className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
+            >
+              Reply
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -158,12 +179,13 @@ export function CommentThread({
                       <div key={comment.id} className="flex flex-col gap-2">
                         <CommentItem
                           comment={comment}
+                          signedIn={signedIn}
                           onReply={() => setReplyTo({ id: comment.id, authorName: comment.authorName })}
                         />
                         {replies.length > 0 && (
                           <div className="ml-4 flex flex-col gap-2 border-l border-white/5 pl-3">
                             {replies.map((reply) => (
-                              <CommentItem key={reply.id} comment={reply} />
+                              <CommentItem key={reply.id} comment={reply} signedIn={signedIn} />
                             ))}
                           </div>
                         )}
@@ -193,7 +215,7 @@ export function CommentThread({
                   placeholder={
                     signedIn ? (replyTo ? `Reply to ${replyTo.authorName}…` : "Write a comment…") : "Sign up to comment."
                   }
-                  className="w-full rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
                 />
                 <button
                   type="submit"

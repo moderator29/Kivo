@@ -135,7 +135,7 @@ export function SocialFeed({
   }
 
   const newPostsPill = hasNewPosts && (
-    <FadeIn className="sticky top-2 z-10 flex justify-center">
+    <FadeIn className="sticky top-16 z-30 flex justify-center">
       <button
         type="button"
         onClick={handleShowNewPosts}

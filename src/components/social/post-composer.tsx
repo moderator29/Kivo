@@ -147,7 +147,7 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
                   setOptions(next);
                 }}
                 placeholder={`Option ${index + 1}`}
-                className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-sm text-foreground placeholder:text-foreground-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
               />
               {options.length > MIN_POLL_OPTIONS && (
                 <button

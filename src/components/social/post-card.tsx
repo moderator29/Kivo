@@ -240,6 +240,7 @@ export function PostCard({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportPending, startReportTransition] = useTransition();
   const reportMenuRef = useRef<HTMLDivElement>(null);
+  const reportTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!justReported) return;
@@ -252,8 +253,21 @@ export function PostCard({
     function onClickOutside(e: MouseEvent) {
       if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) setReportMenuOpen(false);
     }
+    // Audit item 4: role="menu" popovers previously had no keyboard way to
+    // close short of activating an item or tabbing past them. Escape closes
+    // and returns focus to the trigger, matching the reaction picker below.
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setReportMenuOpen(false);
+        reportTriggerRef.current?.focus();
+      }
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [reportMenuOpen]);
 
   function handleReportClick() {
@@ -325,6 +339,7 @@ export function PostCard({
 
           <div ref={reportMenuRef} className="relative">
           <motion.button
+            ref={reportTriggerRef}
             type="button"
             onClick={handleReportClick}
             disabled={reported || reportPending}
