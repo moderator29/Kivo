@@ -2,6 +2,43 @@
 
 Every variable KIVO reads, why it exists, and where to get it. Never commit real values — `.env.local` is gitignored; `.env.example` holds names only.
 
+---
+
+## ⚠️ Waiting on you right now (2026-08-18)
+
+Football data now arrives three different ways. **One of them needs nothing and is already live; two are built, deployed and waiting on a single action each.** They are listed here at the top rather than buried below because the same failure has happened twice on this project: something is built, documented and deployed, and then quietly never runs.
+
+**You do not have to take anything on trust.** Admin → Data Health now has an "Is data actually arriving?" panel that reads real sync rows and says, per layer, whether it has *ever actually run* and what the one remaining step is. If a layer says "Never run", it has never run — regardless of what any environment variable says.
+
+| | Needs from you | Effect |
+|---|---|---|
+| **On-demand freshness** | Nothing — live on the next deploy of the current code | A page load on stale data triggers a sync after the response. Not live scores |
+| **Daily baseline** | Paste the `crons` block below into `vercel.json` | Fixtures, clubs, competitions and five league tables, once a day |
+| **Once-a-minute worker** | Two Supabase Vault secrets + `FOOTBALL_LIVE_POLLING_ENABLED=true` | Real live scores |
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/sync-daily",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}
+```
+
+```sql
+-- Supabase dashboard → SQL editor. Arms the once-a-minute worker's scheduler,
+-- which is already running and deliberately doing nothing until these exist.
+select vault.create_secret('https://<your-kivo-domain>', 'kivo_app_base_url');
+select vault.create_secret('<the same value as CRON_SECRET in Vercel>', 'kivo_cron_secret');
+```
+
+`0 5 * * *` is **once a day**, which is what the Hobby plan permits — the entry that previously blocked every deployment was `* * * * *`. Full detail in "How football data arrives" below, and in `docs/LIVE_DATA.md`.
+
+---
+
 ## Bringing real data online — what each key actually does the moment it's added
 
 This is the plain-language version, audited 2026-08-15 by tracing every code path each variable gates end to end (see `src/lib/football/index.ts`, `src/lib/football/sync*.ts`, `src/app/admin/data-health/actions.ts`, `src/lib/ai/client.ts`, `src/app/api/ai/chat/route.ts`). No further code changes are needed for the first two — they're genuinely plug-and-play.

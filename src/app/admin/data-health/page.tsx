@@ -13,6 +13,7 @@ import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
 import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers-button";
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
 import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
+import { AutomationStatusPanel } from "@/components/admin/automation-status-panel";
 import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
@@ -617,6 +618,8 @@ export default async function DataHealthPage() {
           </div>
         )}
       </div>
+
+      <AutomationStatusPanel />
 
       <SyncReliabilityPanel />
 
