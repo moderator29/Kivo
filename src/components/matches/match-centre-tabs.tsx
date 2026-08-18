@@ -3,10 +3,9 @@
 import { Suspense, useRef, type KeyboardEvent } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Shield } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { EVENT_LABEL } from "@/lib/football/event-labels";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
 import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-sync-control";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
@@ -452,11 +451,16 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
                 <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
                 <td className="max-w-0 py-2 text-foreground">
                   <span className="flex items-center gap-2 truncate">
-                    {row.crestUrl ? (
-                      <Image src={row.crestUrl} alt={row.teamName} width={16} height={16} className="shrink-0 object-contain" />
-                    ) : (
-                      <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-                    )}
+                    {/* TeamCrest, not a bare <Image> (KIVO_NEXT_GEN KN-2): this
+                        was the one crest render in the app still going through
+                        next/image's optimizer, which throws in dev and answers
+                        400 in production for any host not in
+                        `images.remotePatterns` — so switching
+                        FOOTBALL_DATA_PROVIDER to a provider serving crests from
+                        a different CDN broke this table specifically. Every
+                        other crest call site already renders `unoptimized`
+                        through this component. */}
+                    <TeamCrest crestUrl={row.crestUrl} name={row.teamName} size={16} />
                     <span className="truncate">{row.teamName}</span>
                   </span>
                 </td>

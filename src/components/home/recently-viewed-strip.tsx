@@ -57,7 +57,14 @@ export function RecentlyViewedStrip() {
               className="kivo-glass-sharp flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-colors hover:bg-surface-2"
             >
               {entry.imageUrl ? (
-                <Image src={entry.imageUrl} alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
+                // `unoptimized` for the same reason TeamCrest/PlayerAvatar/
+                // CompetitionLogo use it (KIVO_NEXT_GEN KN-2): `entry.imageUrl`
+                // is a provider CDN URL for a team, player or competition, and
+                // at 32px the optimizer round trip buys nothing while coupling
+                // this strip to `images.remotePatterns` — so a provider switch
+                // would break it. Fetched directly, it is governed by the CSP's
+                // `img-src`, derived from the same constant (image-hosts.ts).
+                <Image src={entry.imageUrl} alt="" width={32} height={32} unoptimized className="h-8 w-8 shrink-0 object-contain" />
               ) : (
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2">
                   <Icon className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />

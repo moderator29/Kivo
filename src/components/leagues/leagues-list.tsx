@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import { Search, Trophy } from "lucide-react";
+import { Search } from "lucide-react";
+import { CompetitionLogo } from "@/components/ui/competition-logo";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { staggerDelay } from "@/lib/stagger";
 import { loadMoreLeagues, type LeagueListItem } from "@/app/(app)/leagues/actions";
@@ -48,7 +48,7 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
   return (
     <div className="flex flex-col gap-4">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={2} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -67,13 +67,7 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
           delay={(index) => staggerDelay(index % 60, 0.03)}
           className="flex flex-col gap-2"
           renderItem={(league) => {
-            const crest = league.logoUrl ? (
-              <Image src={league.logoUrl} alt={league.name} width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
-            ) : (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2">
-                <Trophy className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-              </div>
-            );
+            const crest = <CompetitionLogo logoUrl={league.logoUrl} name={league.name} size={32} />;
 
             // A competition with no season synced has nowhere to link to
             // yet — `leagues/[id]` has nothing to render for it. Render a
