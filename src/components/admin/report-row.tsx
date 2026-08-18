@@ -167,14 +167,26 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
           <ContentPreview preview={preview} />
 
           {showNote && (
-            <input
-              autoFocus
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional note for the audit log"
-              maxLength={500}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-kivo-cyan"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional note for the audit log"
+                maxLength={500}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-kivo-cyan"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNote(null);
+                  setNote("");
+                }}
+                className="shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium text-foreground-subtle transition hover:bg-white/5 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              >
+                Cancel
+              </button>
+            </div>
           )}
 
           {error && (

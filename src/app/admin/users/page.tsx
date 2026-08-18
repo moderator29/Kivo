@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { Lock, Info } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewUserData } from "@/lib/admin";
@@ -23,17 +23,35 @@ export default async function AdminUsersPage() {
   }
 
   const supabase = createServerSupabaseClient();
-  const { data: users } = await supabase
-    .from("profiles")
-    .select("id, username, display_name, role, onboarding_completed, created_at")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const USER_ROW_LIMIT = 100;
+  const [{ data: users }, { count: totalCount }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, username, display_name, role, created_at")
+      .order("created_at", { ascending: false })
+      .limit(USER_ROW_LIMIT),
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+  ]);
+  const shownCount = users?.length ?? 0;
+  const total = totalCount ?? shownCount;
 
   return (
     <div className="flex flex-col gap-6">
       <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Users</h1>
-        <p className="text-sm text-foreground-muted">Most recently joined, newest first.</p>
+        <p className="text-sm text-foreground-muted">
+          {total > shownCount
+            ? `Showing ${shownCount} of ${total}, most recently joined first.`
+            : "Most recently joined, newest first."}
+        </p>
+      </FadeIn>
+
+      {/* Read-only by design, not by omission: there's no ban/suspend/role-change
+          column or RLS policy backing a mutation here yet, so this is a deliberate
+          "not yet implemented" note rather than a silent gap. */}
+      <FadeIn delay={0.05} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-xs text-foreground-subtle">
+        <Info className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+        This table is read-only. Ban, suspend and role-change actions aren&apos;t built yet.
       </FadeIn>
 
       <FadeIn delay={0.08} className="kivo-glass-brand overflow-x-auto rounded-2xl">

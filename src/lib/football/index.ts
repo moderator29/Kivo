@@ -54,6 +54,27 @@ function resolveProviderChoice(): "api-football" | "thesportsdb" {
   return process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" ? "thesportsdb" : "api-football";
 }
 
+export type ActiveProviderName = "api-football" | "thesportsdb" | null;
+
+/**
+ * Synchronous, side-effect-free mirror of getFootballDataProvider()'s own
+ * selection order below — env vars only, never constructs a provider client
+ * or spends any quota. Exists so admin pages (Overview's stat card, Data
+ * Health's status banner) can show "which provider is actually configured"
+ * without duplicating this logic in two places and risking them drifting
+ * apart. The mock provider is dev-only and never counts as "connected" here,
+ * matching the platform's zero-fake-data rule.
+ */
+export function getActiveProviderStatus(): { name: ActiveProviderName; label: string | null } {
+  const name: ActiveProviderName =
+    process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" && process.env.THE_SPORTS_DB_API_KEY
+      ? "thesportsdb"
+      : process.env.API_FOOTBALL_KEY
+        ? "api-football"
+        : null;
+  return { name, label: name === "thesportsdb" ? "TheSportsDB" : name === "api-football" ? "API-Football" : null };
+}
+
 export async function getFootballDataProvider(): Promise<FootballDataProvider> {
   if (cachedProvider) return cachedProvider;
 

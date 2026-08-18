@@ -2,6 +2,7 @@ import { Users, MessageSquare, ShieldAlert, Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewModerationData, canViewUserData } from "@/lib/admin";
+import { getActiveProviderStatus } from "@/lib/football";
 import { FadeIn } from "@/components/ui/fade-in";
 
 function StatCard({
@@ -27,6 +28,11 @@ export default async function AdminOverviewPage() {
   const supabase = createServerSupabaseClient();
   const canSeeUsers = canViewUserData(profile?.role);
   const canSeeReports = canViewModerationData(profile?.role);
+  // Same env-var selection order as Data Health's own provider banner — see
+  // getActiveProviderStatus() in src/lib/football/index.ts. Kept as a shared
+  // helper specifically so this card can't drift out of sync with what Data
+  // Health actually reports.
+  const providerStatus = getActiveProviderStatus();
 
   // Posts are publicly readable, so that count is real for every admin role.
   // Users/reports are RLS-gated to specific roles — querying them for a role
@@ -50,7 +56,7 @@ export default async function AdminOverviewPage() {
     { icon: Users, label: "Total users", value: canSeeUsers ? (userCount ?? 0) : "-" },
     { icon: MessageSquare, label: "Total posts", value: postCount ?? 0 },
     { icon: ShieldAlert, label: "Pending reports", value: canSeeReports ? (pendingReportCount ?? 0) : "-" },
-    { icon: Radio, label: "Football data providers live", value: 0 },
+    { icon: Radio, label: "Football data provider", value: providerStatus.name ? "Live" : "Off" },
   ];
 
   return (
@@ -71,8 +77,11 @@ export default async function AdminOverviewPage() {
       <FadeIn delay={0.32} className="kivo-glass-brand rounded-2xl p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">System status</h2>
         <p className="mt-2 text-sm text-foreground-muted">
-          No football data provider is connected yet (API-Football free tier is architected but not enabled; see
-          Data health). AI Copilot, notifications and fantasy scoring are not yet live. Social is fully operational.
+          {providerStatus.name
+            ? `${providerStatus.label} is connected — sync jobs on Data health pull real fixtures.`
+            : "No football data provider is connected yet (see Data health to configure one)."}{" "}
+          Social, fantasy (including live scoring), predictions and notifications are all live. AI Copilot is still
+          in development.
         </p>
       </FadeIn>
     </div>

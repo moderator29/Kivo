@@ -95,9 +95,13 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
                 <span className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
                   Admin
                 </span>
-                <div className="flex flex-col divide-y divide-white/[0.06] rounded-2xl bg-white/[0.02]">
+                <nav aria-label="Admin" className="flex flex-col divide-y divide-white/[0.06] rounded-2xl bg-white/[0.02]">
                   {items.map((item) => {
-                    const active = isActiveRoute(pathname, item.href);
+                    // Same fix as admin-sidebar.tsx: the root "/admin" item is a
+                    // prefix of every other admin route, so isActiveRoute()'s
+                    // startsWith check would double-highlight it. Root needs an
+                    // exact match instead.
+                    const active = item.href === "/admin" ? pathname === item.href : isActiveRoute(pathname, item.href);
                     return (
                       <Link
                         key={item.href}
@@ -114,7 +118,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
                       </Link>
                     );
                   })}
-                </div>
+                </nav>
               </div>
 
               <div className="mt-auto flex flex-col divide-y divide-white/[0.06] rounded-2xl bg-white/[0.02]">

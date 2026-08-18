@@ -25,7 +25,12 @@ export function AdminSidebar({ items }: { items: { href: string; label: string; 
         </div>
         <nav className="flex flex-col gap-1">
           {items.map((item) => {
-            const active = isActiveRoute(pathname, item.href);
+            // The root "/admin" item is a prefix of every other admin route
+            // (/admin/moderation, /admin/users, /admin/data-health), so the
+            // shared isActiveRoute()'s startsWith check would double-highlight
+            // it alongside whichever subpage is actually active. Root gets an
+            // exact match instead; every other item keeps prefix matching.
+            const active = item.href === "/admin" ? pathname === item.href : isActiveRoute(pathname, item.href);
             return (
               <Link
                 key={item.href}

@@ -156,7 +156,8 @@ export default async function ModerationPage() {
   }
 
   const supabase = createServerSupabaseClient();
-  const [{ data: openReports }, { data: resolvedReports }] = await Promise.all([
+  const OPEN_REPORT_LIMIT = 50;
+  const [{ data: openReports }, { count: openReportTotal }, { data: resolvedReports }] = await Promise.all([
     supabase
       .from("reports")
       .select(
@@ -166,7 +167,8 @@ export default async function ModerationPage() {
       // Oldest first — the report that's waited longest is the highest-priority
       // triage item (SLA-aware ordering), not just newest-first noise.
       .order("created_at", { ascending: true })
-      .limit(50),
+      .limit(OPEN_REPORT_LIMIT),
+    supabase.from("reports").select("id", { count: "exact", head: true }).in("status", ["pending", "reviewing"]),
     supabase
       .from("reports")
       .select("id, target_type, status, resolved_at, reporter:profiles!reports_reporter_profile_id_fkey(username)")
@@ -174,6 +176,8 @@ export default async function ModerationPage() {
       .order("resolved_at", { ascending: false })
       .limit(10),
   ]);
+  const shownOpenCount = openReports?.length ?? 0;
+  const totalOpenCount = openReportTotal ?? shownOpenCount;
 
   // Item 46: resolve every open report's actual reported content up front so
   // ReportRow can render a real preview instead of asking moderators to
@@ -185,7 +189,9 @@ export default async function ModerationPage() {
       <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Moderation queue</h1>
         <p className="text-sm text-foreground-muted">
-          {openReports?.length ?? 0} open report{openReports?.length === 1 ? "" : "s"}, oldest first.
+          {totalOpenCount > shownOpenCount
+            ? `Showing ${shownOpenCount} of ${totalOpenCount} open reports, oldest first.`
+            : `${totalOpenCount} open report${totalOpenCount === 1 ? "" : "s"}, oldest first.`}
         </p>
       </FadeIn>
 

@@ -2,6 +2,7 @@ import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Ac
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
+import { getActiveProviderStatus } from "@/lib/football";
 import { FadeIn } from "@/components/ui/fade-in";
 import { staggerDelay } from "@/lib/stagger";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
@@ -103,19 +104,16 @@ export default async function DataHealthPage() {
 
   // Honest per this platform's zero-fake-data rule: the mock provider never counts as
   // "connected" here, even in dev — it exists only so UI can be built without spending
-  // real provider quota. Mirrors getFootballDataProvider()'s own selection order
-  // (src/lib/football/index.ts) so this banner never claims a provider is connected
-  // that the app wouldn't actually construct — e.g. FOOTBALL_DATA_PROVIDER=thesportsdb
-  // with only API_FOOTBALL_KEY set correctly still reads as API-Football here, since
-  // that's genuinely what getFootballDataProvider() would fall back to.
-  const activeProviderName: "api-football" | "thesportsdb" | null =
-    process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" && process.env.THE_SPORTS_DB_API_KEY
-      ? "thesportsdb"
-      : process.env.API_FOOTBALL_KEY
-        ? "api-football"
-        : null;
+  // real provider quota. getActiveProviderStatus() mirrors getFootballDataProvider()'s
+  // own selection order (src/lib/football/index.ts) so this banner never claims a
+  // provider is connected that the app wouldn't actually construct — e.g.
+  // FOOTBALL_DATA_PROVIDER=thesportsdb with only API_FOOTBALL_KEY set correctly still
+  // reads as API-Football here, since that's genuinely what getFootballDataProvider()
+  // would fall back to. Also reused by the Admin Overview stat card so the two pages
+  // can never disagree about whether a provider is connected.
+  const { name: activeProviderName, label: activeProviderLabelOrNull } = getActiveProviderStatus();
   const providerConfigured = activeProviderName !== null;
-  const activeProviderLabel = activeProviderName === "thesportsdb" ? "TheSportsDB" : "API-Football";
+  const activeProviderLabel = activeProviderLabelOrNull ?? "API-Football";
 
   const supabase = createServerSupabaseClient();
   const { data: syncRuns } = await supabase
@@ -412,7 +410,7 @@ export default async function DataHealthPage() {
       </div>
 
       {totalRuns > 0 && (
-        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-4 divide-x divide-white/5 gap-3 rounded-2xl p-5">
+        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5 sm:grid-cols-4 sm:divide-x sm:divide-white/5">
           <div className="flex flex-col items-center gap-1 text-center">
             <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
             <span className="text-lg font-semibold text-foreground">{totalRuns}</span>
