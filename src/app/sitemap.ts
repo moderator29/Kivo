@@ -1,95 +1,52 @@
 import type { MetadataRoute } from "next";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/types";
-
-// `||`, not `??` — see the root layout's metadataBase (src/app/layout.tsx)
-// for why: an unset-but-declared env var can be "" rather than undefined.
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-type ChangeFrequency = MetadataRoute.Sitemap[number]["changeFrequency"];
-
-// Static, guest-viewable routes only — the same allow list as robots.ts.
-// No lastModified here: none of these correspond to a single real record
-// with an updated_at, so a timestamp would just be invented.
-const STATIC_ROUTES: { path: string; changeFrequency: ChangeFrequency; priority: number }[] = [
-  { path: "/", changeFrequency: "daily", priority: 1 },
-  { path: "/home", changeFrequency: "daily", priority: 0.9 },
-  { path: "/matches", changeFrequency: "hourly", priority: 0.9 },
-  { path: "/live", changeFrequency: "always", priority: 0.8 },
-  { path: "/teams", changeFrequency: "weekly", priority: 0.7 },
-  { path: "/players", changeFrequency: "weekly", priority: 0.7 },
-  { path: "/leagues", changeFrequency: "weekly", priority: 0.7 },
-  { path: "/discover", changeFrequency: "weekly", priority: 0.6 },
-  { path: "/transfers", changeFrequency: "daily", priority: 0.6 },
-];
-
-// Reasonable upper bounds so a growing football dataset can never turn this
-// into an unbounded query. Competitions are naturally far fewer than teams
-// or players (leagues, not individual entities), hence the smaller cap.
-const TEAM_LIMIT = 5000;
-const PLAYER_LIMIT = 5000;
-const COMPETITION_LIMIT = 1000;
+import { siteUrl } from "@/lib/site-url";
 
 /**
- * A plain anon-key client rather than createServerSupabaseClient(), for two
- * reasons that both still hold under Supabase Auth. sitemap.xml is statically
- * generated at build time, where there is no request and therefore no cookie
- * store for the cookie-backed server client to read; and it is excluded from
- * src/proxy.ts's matcher anyway (the negative lookahead skips any dotted
- * path), so even at runtime nothing would have refreshed a session for it.
- * teams/players/competitions carry no RLS regardless — public football data,
- * the same tables every guest-viewable list page already reads
- * unauthenticated — so an anon client is both correct here and simpler.
+ * KN-119. This file used to publish roughly 11,000 URLs: nine app routes plus
+ * up to 5,000 teams, 5,000 players and 1,000 leagues, read live from the
+ * database with an anon key.
+ *
+ * Every single one of them now returns a sign-in wall. The 2026-08-18 move to
+ * Supabase Auth gated the whole `(app)` group with no guest preview
+ * (`src/app/(app)/layout.tsx`), which means a crawler following any of those
+ * URLs gets `/sign-in`, and so does the friend somebody sent a match link to.
+ * Continuing to advertise them is the same class of untruth as a fabricated
+ * statistic: KIVO would be telling search engines it has 11,000 pages of
+ * football content and handing them a login form 11,000 times. Google treats
+ * that as low-quality/soft-404 signal against the whole domain.
+ *
+ * So the sitemap now lists exactly what an unauthenticated visitor can really
+ * read. That is the honest answer under the current product decision, not the
+ * ambitious one — the ambitious one (a genuine read-only public preview of
+ * `/matches/[id]` and the entity pages, which is what a fan-sharing growth loop
+ * actually needs) is a product decision only the founder can make, and it is
+ * written up as an open recommendation in DECISIONS.md rather than assumed
+ * here. When that call is made, this file and robots.ts are where it lands.
+ *
+ * No `lastModified` on any entry: none of these corresponds to a single real
+ * record with an `updated_at`, and a timestamp we made up would be a fabricated
+ * freshness claim.
  */
-// Returns null instead of throwing when the env vars aren't set yet — this
-// runs at build time (sitemap.xml is statically generated), so a missing var
-// must degrade to "skip the DB-derived entries," never fail the whole build.
-function createAnonSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient<Database>(url, key);
-}
+const PUBLIC_ROUTES: {
+  path: string;
+  changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
+  priority: number;
+}[] = [
+  { path: "/", changeFrequency: "weekly", priority: 1 },
+  { path: "/about", changeFrequency: "monthly", priority: 0.6 },
+  // Genuinely worth indexing, not filler: a user locked out of KIVO cannot
+  // reach anything inside the product to find help, so the route they are
+  // most likely to arrive by is a search engine (KN-118).
+  { path: "/support", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/terms", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.2 },
+];
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
-    url: `${siteUrl}${route.path}`,
+export default function sitemap(): MetadataRoute.Sitemap {
+  const site = siteUrl();
+  return PUBLIC_ROUTES.map((route) => ({
+    url: `${site}${route.path}`,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
-
-  const supabase = createAnonSupabaseClient();
-  if (!supabase) return staticEntries;
-
-  const [{ data: teams }, { data: players }, { data: competitions }] = await Promise.all([
-    supabase.from("teams").select("id, updated_at").limit(TEAM_LIMIT),
-    supabase.from("players").select("id, updated_at").limit(PLAYER_LIMIT),
-    supabase.from("competitions").select("id, updated_at").limit(COMPETITION_LIMIT),
-  ]);
-
-  const teamEntries: MetadataRoute.Sitemap = (teams ?? []).map((team) => ({
-    url: `${siteUrl}/teams/${team.id}`,
-    lastModified: new Date(team.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.5,
-  }));
-
-  const playerEntries: MetadataRoute.Sitemap = (players ?? []).map((player) => ({
-    url: `${siteUrl}/players/${player.id}`,
-    lastModified: new Date(player.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.5,
-  }));
-
-  const leagueEntries: MetadataRoute.Sitemap = (competitions ?? []).map((competition) => ({
-    url: `${siteUrl}/leagues/${competition.id}`,
-    lastModified: new Date(competition.updated_at),
-    changeFrequency: "weekly",
-    priority: 0.5,
-  }));
-
-  // If teams/players/competitions are empty (e.g. a freshly provisioned
-  // project with no data synced yet), these arrays are just empty — fewer
-  // entries is the honest result, not a bug to work around.
-  return [...staticEntries, ...teamEntries, ...playerEntries, ...leagueEntries];
 }
