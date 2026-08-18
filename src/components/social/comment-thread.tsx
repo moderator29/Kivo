@@ -111,7 +111,13 @@ export function CommentThread({
       return;
     }
     const body = String(formData.get("body") ?? "").trim();
-    if (!body) return;
+    if (!body) {
+      // docs/BUG_AUDIT_2026-08-18.md S1: this used to `return` silently, so
+      // pressing "Post" on an empty (or whitespace-only) box did nothing at
+      // all, with no message and no `required` on the input to explain it.
+      setSubmitError("Write something first.");
+      return;
+    }
 
     setSubmitError(null);
     const parentId = replyTo?.id ?? null;

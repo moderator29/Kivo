@@ -30,6 +30,16 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
   const [following, setFollowing] = useState(initialFollowing);
   const [pending, startTransition] = useTransition();
   const [flash, setFlash] = useState<"followed" | "unfollowed" | null>(null);
+  // docs/BUG_AUDIT_2026-08-18.md S1: same silently-discarded error as
+  // SaveButton had — a rate limit or a moderation block on `follows_insert_own`
+  // reverted the star with nothing said. See save-button.tsx.
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!error) return;
+    const timeout = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(timeout);
+  }, [error]);
 
   // Ephemeral on-brand confirmation, same flash-then-fade shape as
   // UsernameEditor's "Saved" pill — no app-wide toast system exists yet, and
@@ -47,11 +57,13 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
     }
     if (pending) return;
     const previous = following;
+    setError(null);
     setFollowing(!previous);
     startTransition(async () => {
       const result = await toggleFollow(targetType, targetId, previous);
       if (result.error) {
         setFollowing(previous);
+        setError(result.error);
       } else {
         setFollowing(result.following);
         setFlash(result.following ? "followed" : "unfollowed");
@@ -103,6 +115,20 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
             <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
             {flash === "followed" ? "Following" : "Unfollowed"}
           </motion.span>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            role="alert"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full right-0 z-20 mt-1 w-max max-w-[14rem] text-right text-[11px] text-critical"
+          >
+            {error}
+          </motion.p>
         )}
       </AnimatePresence>
     </span>
