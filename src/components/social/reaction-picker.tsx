@@ -7,6 +7,7 @@ import { SmilePlus } from "lucide-react";
 import { setReaction } from "@/app/(app)/social/actions";
 import { REACTIONS, type ReactionType } from "@/lib/reactions";
 import { usePopoverPlacement } from "@/hooks/use-popover-placement";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { cn } from "@/lib/utils";
 
@@ -158,7 +159,10 @@ export function ReactionPicker({
             <SmilePlus className={isSmall ? "h-3.5 w-3.5" : "h-4 w-4"} strokeWidth={1.75} />
           )}
         </motion.span>
-        {optimisticCount > 0 ? optimisticCount : "React"}
+        {/* KN-75: a reaction count is the app's most frequently-changing real
+            number, and it changes because the reader just did something — the
+            one case where a transition genuinely carries information. */}
+        {optimisticCount > 0 ? <AnimatedNumber value={optimisticCount} durationMs={320} /> : "React"}
         {/* RECOMMENDATIONS item 235 */}
         <GuestLockHint show={!signedIn} className={cn("shrink-0 text-foreground-subtle", isSmall ? "h-2.5 w-2.5" : "h-3 w-3")} />
       </motion.button>

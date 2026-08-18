@@ -7,6 +7,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
@@ -22,6 +23,7 @@ import { getHeadToHead } from "@/lib/football/head-to-head";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
 import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
+import { absoluteUrl } from "@/lib/site-url";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -259,7 +261,7 @@ export default async function MatchCentrePage({
           player_name: e.player?.known_as ?? e.player?.full_name ?? null,
         })))
       : null;
-  const matchUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/matches/${fixture.id}`;
+  const matchUrl = absoluteUrl(`/matches/${fixture.id}`);
 
   return (
     // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
@@ -433,55 +435,57 @@ export default async function MatchCentrePage({
       )}
 
       <FadeIn delay={0.14}>
-        <MatchCentreTabs
-          fixtureId={fixture.id}
-          homeTeamId={fixture.home_team?.id ?? ""}
-          awayTeamId={fixture.away_team?.id ?? ""}
-          homeTeamName={fixture.home_team?.name ?? "Home team"}
-          awayTeamName={fixture.away_team?.name ?? "Away team"}
-          roomPosts={roomPostsForTab}
-          scrollToPostId={targetPostId ?? null}
-          stats={statsForTab}
-          signedIn={Boolean(profile)}
-          canSyncDetails={canManageFootballData(profile?.role)}
-          syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
-          detailsLastSyncedAt={detailsLastSyncedAt}
-          viewerFantasyRoster={viewerFantasyRosterForTab}
-          events={(events ?? []).map((e) => ({
-            id: e.id,
-            eventType: e.event_type,
-            minute: e.minute,
-            addedTime: e.added_time,
-            detail: e.detail,
-            teamId: e.team_id,
-            playerId: e.player?.id ?? null,
-            playerName: e.player?.known_as ?? e.player?.full_name ?? null,
-            relatedPlayerId: e.related_player?.id ?? null,
-            relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
-          }))}
-          lineups={(lineups ?? []).map((l) => ({
-            teamId: l.team_id,
-            isStarting: l.is_starting,
-            shirtNumber: l.shirt_number,
-            position: l.position,
-            formation: l.formation,
-            playerId: l.player?.id ?? "",
-            playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
-          }))}
-          standings={(standings ?? []).map((s) => ({
-            teamId: s.team_id,
-            teamName: s.team?.name ?? "Unknown team",
-            crestUrl: s.team?.crest_url ?? null,
-            played: s.played,
-            won: s.won,
-            drawn: s.drawn,
-            lost: s.lost,
-            goalsFor: s.goals_for,
-            goalsAgainst: s.goals_against,
-            points: s.points,
-            position: s.position,
-          }))}
-        />
+        <WidgetErrorBoundary context="matchCentreTabs" label="Match detail">
+          <MatchCentreTabs
+            fixtureId={fixture.id}
+            homeTeamId={fixture.home_team?.id ?? ""}
+            awayTeamId={fixture.away_team?.id ?? ""}
+            homeTeamName={fixture.home_team?.name ?? "Home team"}
+            awayTeamName={fixture.away_team?.name ?? "Away team"}
+            roomPosts={roomPostsForTab}
+            scrollToPostId={targetPostId ?? null}
+            stats={statsForTab}
+            signedIn={Boolean(profile)}
+            canSyncDetails={canManageFootballData(profile?.role)}
+            syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
+            detailsLastSyncedAt={detailsLastSyncedAt}
+            viewerFantasyRoster={viewerFantasyRosterForTab}
+            events={(events ?? []).map((e) => ({
+              id: e.id,
+              eventType: e.event_type,
+              minute: e.minute,
+              addedTime: e.added_time,
+              detail: e.detail,
+              teamId: e.team_id,
+              playerId: e.player?.id ?? null,
+              playerName: e.player?.known_as ?? e.player?.full_name ?? null,
+              relatedPlayerId: e.related_player?.id ?? null,
+              relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
+            }))}
+            lineups={(lineups ?? []).map((l) => ({
+              teamId: l.team_id,
+              isStarting: l.is_starting,
+              shirtNumber: l.shirt_number,
+              position: l.position,
+              formation: l.formation,
+              playerId: l.player?.id ?? "",
+              playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
+            }))}
+            standings={(standings ?? []).map((s) => ({
+              teamId: s.team_id,
+              teamName: s.team?.name ?? "Unknown team",
+              crestUrl: s.team?.crest_url ?? null,
+              played: s.played,
+              won: s.won,
+              drawn: s.drawn,
+              lost: s.lost,
+              goalsFor: s.goals_for,
+              goalsAgainst: s.goals_against,
+              points: s.points,
+              position: s.position,
+            }))}
+          />
+        </WidgetErrorBoundary>
       </FadeIn>
 
       <Link

@@ -13,6 +13,7 @@ import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { usePopoverPlacement } from "@/hooks/use-popover-placement";
+import { useIsClamped } from "@/hooks/use-clamped";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
@@ -62,21 +63,10 @@ function linkifyBody(body: string) {
 
 function PostBody({ body }: { body: string }) {
   const [expanded, setExpanded] = useState(false);
-  const [isOverflowing, setIsOverflowing] = useState(false);
   const bodyRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    function measure() {
-      if (!el) return;
-      setIsOverflowing(el.scrollHeight - el.clientHeight > 1);
-    }
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [body]);
+  // KN-70: one ResizeObserver for every clamped body in the app, not one per
+  // post. See src/hooks/use-clamped.ts.
+  const isOverflowing = useIsClamped(bodyRef, body);
 
   return (
     <div className="flex flex-col items-start gap-1">

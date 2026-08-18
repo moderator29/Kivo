@@ -5,6 +5,7 @@ import { ArrowUpRight, Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
+import { CountUp } from "@/components/ui/count-up";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { DISPLAY_LOCALE, timeAgo } from "@/lib/format";
@@ -139,23 +140,6 @@ export default async function RewardsPage() {
         ? "Nice start — come back tomorrow to keep it going."
         : `${currentStreak} days strong. Keep the streak alive.`;
 
-  // Discrete count-up keyframes for the XP number: each step resets the
-  // `kivo-xp-count` counter to the real running value, landing exactly on
-  // totalXp at 100% every time. Capped step count keeps the generated CSS
-  // small for large totals without changing the true final value. Pure CSS
-  // (no client component needed) so this page can stay a Server Component
-  // and fetch its own data directly, same reasoning as the transfers page's
-  // inline keyframes and the landing page's kivo-aurora.
-  const xpCountSteps = totalXp > 0 ? Math.min(totalXp, 40) : 0;
-  const xpCountKeyframes =
-    xpCountSteps > 0
-      ? Array.from({ length: xpCountSteps + 1 }, (_, i) => {
-          const percent = ((i / xpCountSteps) * 100).toFixed(2);
-          const value = Math.round((totalXp * i) / xpCountSteps);
-          return `${percent}% { counter-reset: kivo-xp-count ${value}; }`;
-        }).join("\n")
-      : "";
-
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
@@ -168,28 +152,11 @@ export default async function RewardsPage() {
           <Zap className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
         </div>
         <div>
-          {totalXp > 0 ? (
-            <span className="text-3xl font-bold tracking-tight text-foreground">
-              {/* Real value, always in the DOM and correct even if the
-                  counter animation below doesn't render for some reason
-                  (no CSS support, reduced motion, etc). */}
-              <style>{`
-                @keyframes kivo-xp-count-up {
-                  ${xpCountKeyframes}
-                }
-                .kivo-xp-count-up::before {
-                  content: counter(kivo-xp-count);
-                }
-              `}</style>
-              <span
-                aria-hidden="true"
-                className="kivo-xp-count-up inline-block animate-[kivo-xp-count-up_1.2s_cubic-bezier(0.22,1,0.36,1)_0.25s_forwards]"
-              />
-              <span className="sr-only">{totalXp}</span> XP
-            </span>
-          ) : (
-            <span className="text-3xl font-bold tracking-tight text-foreground">0 XP</span>
-          )}
+          {/* KN-75: the count-up used to be generated inline here and, near
+              identically, in onboarding-flow.tsx. One <CountUp> now. */}
+          <span className="text-3xl font-bold tracking-tight text-foreground">
+            <CountUp value={totalXp} id="rewards-xp" /> XP
+          </span>
           <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, community posts and correct predictions</p>
         </div>
       </FadeIn>

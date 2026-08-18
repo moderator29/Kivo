@@ -15,6 +15,7 @@ import type { AwardedBadge } from "@/lib/rewards";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
+import { CountUp } from "@/components/ui/count-up";
 import { useDeviceTimeZone } from "@/lib/use-device-timezone";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
@@ -657,24 +658,6 @@ function BadgeIcon({ badge, size }: { badge: AwardedBadge; size: number }) {
   );
 }
 
-// Discrete count-up keyframes for the XP badge, identical technique to
-// /rewards/page.tsx's own xpCountKeyframes (kept here rather than shared,
-// since that one is a Server Component computing it inline and this is a
-// Client Component — same output, different rendering context): each step
-// resets the `kivo-xp-count` counter to the real running value, landing
-// exactly on `xp` at 100% every time. RECOMMENDATIONS.md item 18 (item 317):
-// this was the one screen already built to celebrate a reward whose XP
-// number still just appeared fully-formed with no count.
-function xpCountUpKeyframes(xp: number): string {
-  const steps = xp > 0 ? Math.min(xp, 40) : 0;
-  if (steps === 0) return "";
-  return Array.from({ length: steps + 1 }, (_, i) => {
-    const percent = ((i / steps) * 100).toFixed(2);
-    const value = Math.round((xp * i) / steps);
-    return `${percent}% { counter-reset: kivo-xp-count ${value}; }`;
-  }).join("\n");
-}
-
 /**
  * The hero of the completion screen: the real badge this user just earned,
  * lit and floating, with the real XP counting up beside it. The badge art is
@@ -706,21 +689,9 @@ function BadgeReveal({ xp, badge }: { xp: number; badge: AwardedBadge | null }) 
 
           {xp > 0 && (
             <span className="absolute -bottom-2 right-0 whitespace-nowrap rounded-full border border-hairline bg-surface-3 px-3 py-1 text-xs font-bold text-live shadow-lg">
-              {/* Real value always in the DOM, correct even if the counter
-                  animation doesn't render (no CSS support, reduced motion). */}
-              <style>{`
-                @keyframes kivo-xp-count-up {
-                  ${xpCountUpKeyframes(xp)}
-                }
-                .kivo-xp-count-up::before {
-                  content: "+" counter(kivo-xp-count);
-                }
-              `}</style>
-              <span
-                aria-hidden="true"
-                className="kivo-xp-count-up inline-block animate-[kivo-xp-count-up_1.2s_cubic-bezier(0.22,1,0.36,1)_0.3s_forwards]"
-              />
-              <span className="sr-only">+{xp}</span> XP
+              {/* KN-75: was a second, near-identical copy of /rewards's own
+                  hand-rolled count-up. Both are <CountUp> now. */}
+              <CountUp value={xp} id="onboarding-xp" prefix="+" delaySeconds={0.3} /> XP
             </span>
           )}
         </div>

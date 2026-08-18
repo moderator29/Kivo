@@ -7,6 +7,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { FadeIn } from "@/components/ui/fade-in";
+import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -218,26 +219,28 @@ export default async function FantasyPage({
           <InlineSyncButton label="Generate gameweeks" action={generateFantasyGameweeks.bind(null, league.season_id)} />
         </div>
       )}
-      <FantasyBuilder
-        teams={teams.map((t) => ({ id: t.id, name: t.name }))}
-        activeTeamId={activeTeam.id}
-        league={{
-          id: league.league_id,
-          name: league.league_name,
-          isPrivate: league.is_private,
-          inviteCode: league.invite_code,
-          maxTeams: league.max_teams,
-          teamCount: league.team_count,
-          seasonId: league.season_id,
-        }}
-        gameweek={gameweek ? { id: gameweek.id, number: gameweek.number, deadlineAt: gameweek.deadline_at } : null}
-        initialRoster={initialRoster}
-        points={points}
-        pointsAvailable={pointsAvailable}
-        leaderboard={leaderboard}
-        pointsHistory={pointsHistory}
-        carriedForwardFromGameweek={carriedForwardFromGameweek}
-      />
+      <WidgetErrorBoundary context="fantasyBuilder" label="The squad builder">
+        <FantasyBuilder
+          teams={teams.map((t) => ({ id: t.id, name: t.name }))}
+          activeTeamId={activeTeam.id}
+          league={{
+            id: league.league_id,
+            name: league.league_name,
+            isPrivate: league.is_private,
+            inviteCode: league.invite_code,
+            maxTeams: league.max_teams,
+            teamCount: league.team_count,
+            seasonId: league.season_id,
+          }}
+          gameweek={gameweek ? { id: gameweek.id, number: gameweek.number, deadlineAt: gameweek.deadline_at } : null}
+          initialRoster={initialRoster}
+          points={points}
+          pointsAvailable={pointsAvailable}
+          leaderboard={leaderboard}
+          pointsHistory={pointsHistory}
+          carriedForwardFromGameweek={carriedForwardFromGameweek}
+        />
+      </WidgetErrorBoundary>
     </FadeIn>
   );
 }

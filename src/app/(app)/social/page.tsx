@@ -4,6 +4,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { PostComposer } from "@/components/social/post-composer";
 import { SocialFeed } from "@/components/social/social-feed";
 import { FadeIn } from "@/components/ui/fade-in";
+import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { fetchPostsPage } from "./posts";
 
 export const metadata: Metadata = { title: "Social" };
@@ -75,15 +76,17 @@ export default async function SocialPage({
           a key tied to the filter, clicking the tab link above re-renders
           this server component with correctly-filtered `posts` but the
           already-mounted client SocialFeed keeps showing its stale list. */}
-      <SocialFeed
-        key={followingOnly ? "following" : "all"}
-        initialPosts={posts}
-        initialHasMore={hasMore}
-        signedIn={Boolean(profile)}
-        followingOnly={followingOnly}
-        scrollToPostId={targetPostId ?? null}
-        initialOffset={pageOne.length}
-      />
+      <WidgetErrorBoundary context="socialFeed" label="The feed">
+        <SocialFeed
+          key={followingOnly ? "following" : "all"}
+          initialPosts={posts}
+          initialHasMore={hasMore}
+          signedIn={Boolean(profile)}
+          followingOnly={followingOnly}
+          scrollToPostId={targetPostId ?? null}
+          initialOffset={pageOne.length}
+        />
+      </WidgetErrorBoundary>
     </div>
   );
 }
