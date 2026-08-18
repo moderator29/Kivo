@@ -1,7 +1,10 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { DEFAULT_FANTASY_PRICE } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
+
+type ServiceClient = SupabaseClient<Database>;
 
 export type FantasyLeague = Database["public"]["Tables"]["fantasy_leagues"]["Row"];
 export type FantasyTeam = Database["public"]["Tables"]["fantasy_teams"]["Row"];
@@ -192,6 +195,132 @@ export async function carryForwardFantasyRoster(
   }
 
   return { carriedFromGameweekNumber: null };
+}
+
+/**
+ * Bulk counterpart to carryForwardFantasyRoster, for the one other place a
+ * gameweek's rosters get read besides the squad-builder page: admin-triggered
+ * scoring (scoreFantasyGameweek in src/app/admin/data-health/fantasy-actions.ts).
+ * carryForwardFantasyRoster above is lazy and per-viewer — it only ever runs
+ * for the one team whose owner happens to load /fantasy for this gameweek
+ * before scoring does. A team whose owner hasn't opened the app since the
+ * gameweek turned current would otherwise have zero fantasy_rosters rows at
+ * scoring time and score nothing, even though every real fantasy game treats
+ * an untouched gameweek as "kept the same squad," not "fielded no one." This
+ * closes that gap by carrying forward every team in the gameweek's season
+ * that still has no roster rows, immediately before scoring reads them.
+ *
+ * Runs under the service-role client (same as the rest of scoreFantasyGameweek)
+ * because it has to write rows for every team in the season's leagues, not
+ * just one caller's own team — fantasy_rosters_all_own would only allow a
+ * team's own owner to write its rows. Batched across all teams needing a
+ * carry rather than one query per team: teams sharing this codebase's fantasy
+ * feature are not expected to number in the thousands, but there's no reason
+ * to pay a per-team round trip when the whole set can be resolved in four
+ * queries total, matching the batching approach sync.ts's batchFindMappedId
+ * already uses for the same reason (RECOMMENDATIONS.md item 27).
+ *
+ * Idempotent the same way carryForwardFantasyRoster is: an upsert against
+ * fantasy_rosters_unique_slot with ignoreDuplicates, so calling this again
+ * once a team already has rows (whether from this function, from the lazy
+ * per-viewer path, or from the team's own edits) is a safe no-op for that
+ * team. Same player-eligibility reasoning as carryForwardFantasyRoster: this
+ * schema has no injury/availability/transfer-lock concept to check.
+ */
+export async function carryForwardMissingFantasyRosters(
+  service: ServiceClient,
+  seasonId: string,
+  currentGameweekId: string,
+  currentGameweekNumber: number,
+): Promise<{ teamsCarried: number }> {
+  if (currentGameweekNumber <= 1) return { teamsCarried: 0 };
+
+  const { data: leagues } = await service.from("fantasy_leagues").select("id").eq("season_id", seasonId);
+  const leagueIds = (leagues ?? []).map((l) => l.id);
+  if (leagueIds.length === 0) return { teamsCarried: 0 };
+
+  const { data: teams } = await service.from("fantasy_teams").select("id").in("league_id", leagueIds);
+  const allTeamIds = (teams ?? []).map((t) => t.id);
+  if (allTeamIds.length === 0) return { teamsCarried: 0 };
+
+  const { data: existingRosterTeams } = await service
+    .from("fantasy_rosters")
+    .select("fantasy_team_id")
+    .eq("gameweek_id", currentGameweekId)
+    .in("fantasy_team_id", allTeamIds);
+  const haveRoster = new Set((existingRosterTeams ?? []).map((r) => r.fantasy_team_id));
+  const missingTeamIds = allTeamIds.filter((id) => !haveRoster.has(id));
+  if (missingTeamIds.length === 0) return { teamsCarried: 0 };
+
+  const { data: priorGameweeks } = await service
+    .from("fantasy_gameweeks")
+    .select("id, number")
+    .eq("season_id", seasonId)
+    .lt("number", currentGameweekNumber)
+    .order("number", { ascending: false });
+  if (!priorGameweeks || priorGameweeks.length === 0) return { teamsCarried: 0 };
+
+  const priorGameweekIds = priorGameweeks.map((g) => g.id);
+  const gwNumberById = new Map(priorGameweeks.map((g) => [g.id, g.number]));
+
+  const { data: priorRosterRows } = await service
+    .from("fantasy_rosters")
+    .select("fantasy_team_id, gameweek_id, player_id, is_starting, is_captain, is_vice_captain")
+    .in("fantasy_team_id", missingTeamIds)
+    .in("gameweek_id", priorGameweekIds);
+  if (!priorRosterRows || priorRosterRows.length === 0) return { teamsCarried: 0 };
+
+  const rowsByTeam = new Map<string, typeof priorRosterRows>();
+  for (const row of priorRosterRows) {
+    const list = rowsByTeam.get(row.fantasy_team_id);
+    if (list) list.push(row);
+    else rowsByTeam.set(row.fantasy_team_id, [row]);
+  }
+
+  // For each team, keep only the rows from its single most recent prior
+  // gameweek that has any rows — a team could have skipped a gameweek
+  // entirely, so "immediately previous" isn't always the right source
+  // (same reasoning carryForwardFantasyRoster's own walk-back uses).
+  const toInsert: {
+    fantasy_team_id: string;
+    gameweek_id: string;
+    player_id: string;
+    is_starting: boolean;
+    is_captain: boolean;
+    is_vice_captain: boolean;
+  }[] = [];
+  let teamsCarried = 0;
+  for (const [teamId, rows] of rowsByTeam) {
+    let bestNumber = -1;
+    for (const r of rows) {
+      const num = gwNumberById.get(r.gameweek_id) ?? -1;
+      if (num > bestNumber) bestNumber = num;
+    }
+    const bestRows = rows.filter((r) => gwNumberById.get(r.gameweek_id) === bestNumber);
+    if (bestRows.length === 0) continue;
+    teamsCarried++;
+    for (const r of bestRows) {
+      toInsert.push({
+        fantasy_team_id: teamId,
+        gameweek_id: currentGameweekId,
+        player_id: r.player_id,
+        is_starting: r.is_starting,
+        is_captain: r.is_captain,
+        is_vice_captain: r.is_vice_captain,
+      });
+    }
+  }
+  if (toInsert.length === 0) return { teamsCarried: 0 };
+
+  const { error } = await service
+    .from("fantasy_rosters")
+    .upsert(toInsert, { onConflict: "fantasy_team_id,gameweek_id,player_id", ignoreDuplicates: true });
+  if (error) {
+    console.error("Failed to bulk carry forward fantasy rosters before scoring", error);
+    return { teamsCarried: 0 };
+  }
+
+  return { teamsCarried };
 }
 
 const GAMEWEEK_WEEK_MS = 7 * 24 * 60 * 60 * 1000;

@@ -163,9 +163,10 @@ export default async function FantasyPage({
       isViceCaptain: r.is_vice_captain,
     }));
 
-    // fantasy_points is populated by a trusted server-side scoring job that
-    // doesn't exist yet (needs real finished-fixture data to compute
-    // against) — an absent row means "not scored yet", not zero.
+    // fantasy_points is populated by an admin-triggered scoring pass
+    // (scoreFantasyGameweek, src/app/admin/data-health/fantasy-actions.ts)
+    // that only writes a row once this gameweek has at least one finished
+    // fixture — an absent row means "not scored yet", not zero.
     const { data: pointsRow } = await supabase
       .from("fantasy_points")
       .select("points")

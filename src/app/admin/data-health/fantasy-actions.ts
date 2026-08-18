@@ -6,7 +6,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { awardBadge } from "@/lib/rewards";
-import { groupFixturesByGameweek } from "@/lib/fantasy";
+import { groupFixturesByGameweek, carryForwardMissingFantasyRosters } from "@/lib/fantasy";
 import {
   computePlayerMatchFacts,
   emptyPlayerMatchFacts,
@@ -196,6 +196,15 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   }));
 
   const service = createServiceRoleSupabaseClient();
+
+  // A team whose owner hasn't opened /fantasy since this gameweek turned
+  // current still has zero fantasy_rosters rows here — carryForwardFantasyRoster
+  // (src/lib/fantasy.ts) only runs lazily per-viewer on page load. Carry every
+  // still-empty team in this season forward before reading rosters below, so
+  // scoring treats "never touched this gameweek" the same way every real
+  // fantasy game does: kept the same squad, not fielded no one. See
+  // RECOMMENDATIONS.md item 17.
+  await carryForwardMissingFantasyRosters(service, gameweek.season_id, gameweekId, gameweek.number);
 
   const { data: events, error: eventsError } = await service
     .from("fixture_events")
