@@ -55,6 +55,7 @@ export type Database = {
           input_tokens: number | null
           output_tokens: number | null
           role: Database["public"]["Enums"]["ai_message_role"]
+          stop_reason: string | null
         }
         Insert: {
           content: string
@@ -64,6 +65,7 @@ export type Database = {
           input_tokens?: number | null
           output_tokens?: number | null
           role: Database["public"]["Enums"]["ai_message_role"]
+          stop_reason?: string | null
         }
         Update: {
           content?: string
@@ -73,6 +75,7 @@ export type Database = {
           input_tokens?: number | null
           output_tokens?: number | null
           role?: Database["public"]["Enums"]["ai_message_role"]
+          stop_reason?: string | null
         }
         Relationships: [
           {
@@ -1415,6 +1418,7 @@ export type Database = {
           avatar_uploaded_url: string | null
           avatar_url: string | null
           background_id: string | null
+          background_uploaded_url: string | null
           bio: string | null
           clerk_user_id: string | null
           country: string | null
@@ -1428,6 +1432,7 @@ export type Database = {
           moderation_set_by: string | null
           moderation_status: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed: boolean
+          rival_team_id: string | null
           role: Database["public"]["Enums"]["user_role"]
           show_activity_publicly: boolean
           timezone: string | null
@@ -1441,6 +1446,7 @@ export type Database = {
           avatar_uploaded_url?: string | null
           avatar_url?: string | null
           background_id?: string | null
+          background_uploaded_url?: string | null
           bio?: string | null
           clerk_user_id?: string | null
           country?: string | null
@@ -1454,6 +1460,7 @@ export type Database = {
           moderation_set_by?: string | null
           moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
+          rival_team_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           show_activity_publicly?: boolean
           timezone?: string | null
@@ -1467,6 +1474,7 @@ export type Database = {
           avatar_uploaded_url?: string | null
           avatar_url?: string | null
           background_id?: string | null
+          background_uploaded_url?: string | null
           bio?: string | null
           clerk_user_id?: string | null
           country?: string | null
@@ -1480,6 +1488,7 @@ export type Database = {
           moderation_set_by?: string | null
           moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
+          rival_team_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           show_activity_publicly?: boolean
           timezone?: string | null
@@ -1499,6 +1508,13 @@ export type Database = {
             columns: ["moderation_set_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_rival_team_id_fkey"
+            columns: ["rival_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2202,6 +2218,15 @@ export type Database = {
         }
         Returns: string
       }
+      consume_rate_limit: {
+        Args: {
+          p_action: string
+          p_key: string
+          p_max_requests: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       flag_absent_fixtures: {
         Args: {
           p_kickoff_from: string
@@ -2335,9 +2360,12 @@ export type Database = {
           avatar_uploaded_url: string
           avatar_url: string
           background_id: string
+          background_uploaded_url: string
           bio: string
           country: string
+          created_at: string
           display_name: string
+          favourite_team_id: string
           id: string
           username: string
         }[]
@@ -2377,6 +2405,12 @@ export type Database = {
           runs: number
           skipped: number
           succeeded: number
+        }[]
+      }
+      get_team_feed_post_ids: {
+        Args: { p_limit?: number; p_offset?: number; p_team_id: string }
+        Returns: {
+          post_id: string
         }[]
       }
       get_xp_total: { Args: { p_profile_id: string }; Returns: number }
@@ -2461,6 +2495,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      resolve_football_entities: {
+        Args: {
+          p_limit?: number
+          p_min_similarity?: number
+          p_phrases: string[]
+        }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          label: string
+          score: number
+          sublabel: string
+        }[]
+      }
       resolve_sync_run_failures: {
         Args: {
           p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
@@ -2468,6 +2516,14 @@ export type Database = {
           p_provider_entity_ids: string[]
         }
         Returns: number
+      }
+      set_reaction: {
+        Args: {
+          p_reaction_type: Database["public"]["Enums"]["reaction_type"]
+          p_target_id: string
+          p_target_type: Database["public"]["Enums"]["reaction_target_type"]
+        }
+        Returns: undefined
       }
       upsert_competition_with_mapping: {
         Args: {
@@ -2513,6 +2569,10 @@ export type Database = {
           p_provider_entity_id: string
         }
         Returns: string
+      }
+      vote_on_poll: {
+        Args: { p_option_id: string; p_post_id: string }
+        Returns: undefined
       }
     }
     Enums: {

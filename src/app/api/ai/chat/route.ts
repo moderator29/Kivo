@@ -189,7 +189,12 @@ export async function POST(req: Request) {
     }
   }
 
-  const grounding = await buildGroundingContext(profile, focus);
+  // KIVO_NEXT_GEN KN-108: the message itself is part of the retrieval now. The
+  // football entities the user named are resolved deterministically against
+  // KIVO's own tables before the model runs, so asking about a real club the
+  // viewer happens not to follow no longer produces a confident "KIVO doesn't
+  // have that" about a row KIVO is holding.
+  const grounding = await buildGroundingContext(profile, focus, message);
   const anthropic = getAnthropicClient();
   const finalConversationId = conversationId;
 

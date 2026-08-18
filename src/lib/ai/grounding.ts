@@ -4,6 +4,7 @@ import type { Profile } from "@/lib/profile";
 import { computeTeamForm, computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { buildMatchInsights, type MatchInsights } from "@/lib/football/match-intelligence";
 import { createTtlCache } from "@/lib/ttl-cache";
+import { buildMentionFacts } from "./entity-resolution";
 
 // RECOMMENDATIONS.md item 227: this pass's original enrichment scoped form to
 // the favourite team only "to keep this one extra query bounded" — these two
@@ -76,7 +77,29 @@ function emptyFacts(): FactLines {
 const GROUNDING_CACHE_TTL_MS = 60_000;
 const GROUNDING_CACHE_MAX_ENTRIES = 500;
 
-const groundingCache = createTtlCache<string, GroundingContext>({
+/**
+ * What the cache actually holds: the *fact lines*, not the assembled prompt
+ * block. That distinction is what lets KN-108's per-message entity resolution
+ * exist without throwing this cache away — the per-user retrieval below is the
+ * expensive, slow-moving part and is shared across a conversation's turns,
+ * while the per-message part is small, changes every turn, and is merged in
+ * afterwards at the cost of one string join.
+ */
+interface BaseGrounding {
+  identityLines: string[];
+  verified: string[];
+  calculated: string[];
+  limited: string[];
+  hasFollowedEntities: boolean;
+  hasSyncedFixtures: boolean;
+  disclosureLabel: string | null;
+  /** Teams the base context already describes, so KN-108 does not spend
+   * queries re-describing them and does not put the same club into the prompt
+   * twice under two slightly different sentences. */
+  describedTeamIds: string[];
+}
+
+const groundingCache = createTtlCache<string, BaseGrounding>({
   ttlMs: GROUNDING_CACHE_TTL_MS,
   maxEntries: GROUNDING_CACHE_MAX_ENTRIES,
 });
@@ -85,44 +108,93 @@ function groundingCacheKey(profileId: string, focus: GroundingFocus | null): str
   return focus ? `${profileId}:${focus.type}:${focus.id}` : `${profileId}:-`;
 }
 
+function assembleSummary(base: {
+  identityLines: string[];
+  verified: string[];
+  calculated: string[];
+  limited: string[];
+}): string {
+  // RECOMMENDATIONS.md items 188/300: the three labelled sections below are
+  // what let the model tag its own claims — see SYSTEM_PROMPT in
+  // /api/ai/chat/route.ts for the exact tagging instruction, and
+  // src/components/ai/chat.tsx for how the tags render as chips. A line
+  // landing in the wrong bucket would just mislabel a chip, never fabricate
+  // data — the underlying facts are identical to what this file always
+  // computed. KIVO-LIMITED (item 300) makes the existing isSufficientSample
+  // uncertainty sentences a structural third bucket instead of prose folded
+  // into KIVO-CALCULATED that the model may or may not have visibly surfaced.
+  return [
+    base.identityLines.join("\n"),
+    "",
+    "=== VERIFIED KIVO DATA (raw facts synced from the football data provider — cite these with the literal tag [[KIVO-VERIFIED]]) ===",
+    base.verified.join("\n"),
+    "",
+    "=== KIVO-CALCULATED (derived by KIVO's own Form Engine / Match Intelligence from the verified data above — real, not fabricated, but computed rather than a raw provider fact — cite these with the literal tag [[KIVO-CALCULATED]]) ===",
+    base.calculated.length > 0 ? base.calculated.join("\n") : "Nothing calculated yet for this conversation.",
+    "",
+    "=== KIVO-LIMITED (explicitly insufficient real data to compute something reliably — a genuine gap, not a fabricated stat — cite these with the literal tag [[KIVO-LIMITED]]) ===",
+    base.limited.length > 0 ? base.limited.join("\n") : "No known data-insufficiency gaps for this conversation.",
+  ].join("\n");
+}
+
+const NO_USER_CONTEXT: GroundingContext = {
+  summary: "No signed-in user context available.",
+  hasFollowedEntities: false,
+  hasSyncedFixtures: false,
+  disclosureLabel: null,
+};
+
 /**
  * Deterministic retrieval BEFORE the model ever runs, per the grounding
  * architecture: we tell the model exactly what KIVO actually knows right
  * now, and the system prompt (see chat route) forbids it from answering
  * specific/current football questions with anything outside this context.
  *
- * Cached for a short window per (profile, focus) — see GROUNDING_CACHE_TTL_MS
- * above for why that is safe and why it matters.
+ * The per-user half is cached for a short window per (profile, focus) — see
+ * GROUNDING_CACHE_TTL_MS above for why that is safe and why it matters.
+ *
+ * `userMessage` (KIVO_NEXT_GEN KN-108) adds one deterministic step on top: the
+ * football entities the user actually named, resolved against KIVO's own
+ * tables, whether or not they follow them. Without it, asking about a club KIVO
+ * has synced but the viewer doesn't follow produces a confident "KIVO doesn't
+ * have that" — a false claim about KIVO's own database. Never cached, because
+ * it is different every turn by definition, and cheap enough not to need to be.
  */
 export async function buildGroundingContext(
   profile: Profile | null,
   focus: GroundingFocus | null = null,
+  userMessage?: string,
 ): Promise<GroundingContext> {
-  if (!profile) {
-    return {
-      summary: "No signed-in user context available.",
-      hasFollowedEntities: false,
-      hasSyncedFixtures: false,
-      disclosureLabel: null,
-    };
-  }
-  return groundingCache.getOrCreate(groundingCacheKey(profile.id, focus), () =>
-    buildGroundingContextUncached(profile, focus),
+  if (!profile) return NO_USER_CONTEXT;
+
+  const base = await groundingCache.getOrCreate(groundingCacheKey(profile.id, focus), () =>
+    buildBaseGrounding(profile, focus),
   );
+
+  const verified = [...base.verified];
+  const calculated = [...base.calculated];
+  const limited = [...base.limited];
+
+  if (userMessage) {
+    const mentions = await buildMentionFacts(
+      createServerSupabaseClient(),
+      userMessage,
+      new Set(base.describedTeamIds),
+    );
+    verified.push(...mentions.verified);
+    calculated.push(...mentions.calculated);
+    limited.push(...mentions.limited);
+  }
+
+  return {
+    summary: assembleSummary({ identityLines: base.identityLines, verified, calculated, limited }),
+    hasFollowedEntities: base.hasFollowedEntities,
+    hasSyncedFixtures: base.hasSyncedFixtures,
+    disclosureLabel: base.disclosureLabel,
+  };
 }
 
-async function buildGroundingContextUncached(
-  profile: Profile | null,
-  focus: GroundingFocus | null = null,
-): Promise<GroundingContext> {
-  if (!profile) {
-    return {
-      summary: "No signed-in user context available.",
-      hasFollowedEntities: false,
-      hasSyncedFixtures: false,
-      disclosureLabel: null,
-    };
-  }
+async function buildBaseGrounding(profile: Profile, focus: GroundingFocus | null): Promise<BaseGrounding> {
 
   const supabase = createServerSupabaseClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -390,24 +462,20 @@ async function buildGroundingContextUncached(
   // computed. KIVO-LIMITED (item 300) makes the existing isSufficientSample
   // uncertainty sentences a structural third bucket instead of prose folded
   // into KIVO-CALCULATED that the model may or may not have visibly surfaced.
-  const summary = [
-    identityLines.join("\n"),
-    "",
-    "=== VERIFIED KIVO DATA (raw facts synced from the football data provider — cite these with the literal tag [[KIVO-VERIFIED]]) ===",
-    verified.join("\n"),
-    "",
-    "=== KIVO-CALCULATED (derived by KIVO's own Form Engine / Match Intelligence from the verified data above — real, not fabricated, but computed rather than a raw provider fact — cite these with the literal tag [[KIVO-CALCULATED]]) ===",
-    calculated.length > 0 ? calculated.join("\n") : "Nothing calculated yet for this conversation.",
-    "",
-    "=== KIVO-LIMITED (explicitly insufficient real data to compute something reliably — a genuine gap, not a fabricated stat — cite these with the literal tag [[KIVO-LIMITED]]) ===",
-    limited.length > 0 ? limited.join("\n") : "No known data-insufficiency gaps for this conversation.",
-  ].join("\n");
-
   return {
-    summary,
+    identityLines,
+    verified,
+    calculated,
+    limited,
     hasFollowedEntities: followedNames.length > 0,
     hasSyncedFixtures: !!todaysFixtures && todaysFixtures.length > 0,
     disclosureLabel: focusResult?.label ?? null,
+    // Every team this context already talks about by name: the favourite, and
+    // every followed team whose form was computed above.
+    describedTeamIds: [
+      ...(profile.favourite_team_id ? [profile.favourite_team_id] : []),
+      ...(followedTeams ?? []).map((t) => t.id),
+    ],
   };
 }
 
