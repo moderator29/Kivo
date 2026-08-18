@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // Pure-function unit tests only for now (no React component tests yet), so a
@@ -8,6 +9,15 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
+    alias: {
+      // KN-130: server actions and most of src/lib open with `import
+      // "server-only"`, whose entire job is to fail a *bundle* that pulls
+      // server code into the client. Vitest is neither a bundle nor a client,
+      // so the guard can only ever throw here — which is what kept every
+      // "use server" file untestable. Stubbed, not removed: the guard stays
+      // real everywhere it means something.
+      "server-only": fileURLToPath(new URL("./test/server-only-stub.ts", import.meta.url)),
+    },
   },
   test: {
     environment: "node",
