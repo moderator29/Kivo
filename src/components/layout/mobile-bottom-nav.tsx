@@ -156,7 +156,7 @@ export function MobileBottomNav({
         className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-30 lg:hidden"
         aria-label="Primary"
       >
-        <div className="kivo-glass-brand flex items-center justify-around gap-1 rounded-full p-1.5 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)]">
+        <div className="kivo-glass-brand flex items-center justify-around gap-2 rounded-full p-2 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)]">
           {barItems.map((item) => {
             const active = isActiveRoute(pathname, item.href);
             const Icon = item.icon;
@@ -166,7 +166,7 @@ export function MobileBottomNav({
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+                  "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
                   active ? "text-kivo-white" : "text-foreground-subtle hover:text-foreground-muted",
                 )}
               >
@@ -174,7 +174,7 @@ export function MobileBottomNav({
                   <motion.span
                     aria-hidden="true"
                     layoutId="mobile-nav-active"
-                    className="kivo-gradient-prime absolute inset-0 rounded-full shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                    className="kivo-gradient-prime absolute inset-0 rounded-xl shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
                     transition={{ type: "spring", stiffness: 500, damping: 40 }}
                   />
                 )}
@@ -187,7 +187,7 @@ export function MobileBottomNav({
             ref={toggleButtonRef}
             onClick={() => setMoreOpen((v) => !v)}
             className={cn(
-              "relative flex flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+              "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
               moreOpen ? "text-kivo-white" : "text-foreground-subtle hover:text-foreground-muted",
             )}
             aria-expanded={moreOpen}
@@ -197,7 +197,7 @@ export function MobileBottomNav({
               <motion.span
                 aria-hidden="true"
                 layoutId="mobile-nav-active"
-                className="kivo-gradient-prime absolute inset-0 rounded-full shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
+                className="kivo-gradient-prime absolute inset-0 rounded-xl shadow-[0_0_16px_-2px_rgba(0,217,255,0.55)]"
                 transition={{ type: "spring", stiffness: 500, damping: 40 }}
               />
             )}
