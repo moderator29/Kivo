@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/profile";
 import { computeTeamForm, computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { buildMatchInsights, type MatchInsights } from "@/lib/football/match-intelligence";
+import { createTtlCache } from "@/lib/ttl-cache";
 
 // RECOMMENDATIONS.md item 227: this pass's original enrichment scoped form to
 // the favourite team only "to keep this one extra query bounded" — these two
@@ -53,12 +54,64 @@ function emptyFacts(): FactLines {
 }
 
 /**
+ * KIVO_NEXT_GEN KN-18: `buildGroundingContext` fires one `follows` query, three
+ * entity-resolution queries, one fixtures query, `computeTeamForm` for up to
+ * four followed teams, `computePlayerForm` for up to four followed players, and
+ * `buildMatchInsights` when focused — 15 to 25 queries. It ran in full on
+ * **every single chat turn**, on an endpoint that is rate-limited precisely
+ * because it is expensive, and essentially nothing it reads can change between
+ * two messages a user sends thirty seconds apart.
+ *
+ * 60 seconds is chosen against what the underlying data actually does, not
+ * picked for feel. Every input here changes only when a sync writes — and a
+ * sync is either an admin pressing a button or the live worker's minute tick
+ * (`docs/LIVE_DATA.md`), so a minute is the finest granularity the data itself
+ * has. A live score that is up to a minute behind inside a *conversation* is
+ * also not the app's live-score surface: /live and Match Centre both push real
+ * Realtime updates and are unaffected by this.
+ *
+ * Keyed by profile **and** focus, so one user's context can never be served to
+ * another and "ask about this match" never reuses the unfocused summary.
+ */
+const GROUNDING_CACHE_TTL_MS = 60_000;
+const GROUNDING_CACHE_MAX_ENTRIES = 500;
+
+const groundingCache = createTtlCache<string, GroundingContext>({
+  ttlMs: GROUNDING_CACHE_TTL_MS,
+  maxEntries: GROUNDING_CACHE_MAX_ENTRIES,
+});
+
+function groundingCacheKey(profileId: string, focus: GroundingFocus | null): string {
+  return focus ? `${profileId}:${focus.type}:${focus.id}` : `${profileId}:-`;
+}
+
+/**
  * Deterministic retrieval BEFORE the model ever runs, per the grounding
  * architecture: we tell the model exactly what KIVO actually knows right
  * now, and the system prompt (see chat route) forbids it from answering
  * specific/current football questions with anything outside this context.
+ *
+ * Cached for a short window per (profile, focus) — see GROUNDING_CACHE_TTL_MS
+ * above for why that is safe and why it matters.
  */
 export async function buildGroundingContext(
+  profile: Profile | null,
+  focus: GroundingFocus | null = null,
+): Promise<GroundingContext> {
+  if (!profile) {
+    return {
+      summary: "No signed-in user context available.",
+      hasFollowedEntities: false,
+      hasSyncedFixtures: false,
+      disclosureLabel: null,
+    };
+  }
+  return groundingCache.getOrCreate(groundingCacheKey(profile.id, focus), () =>
+    buildGroundingContextUncached(profile, focus),
+  );
+}
+
+async function buildGroundingContextUncached(
   profile: Profile | null,
   focus: GroundingFocus | null = null,
 ): Promise<GroundingContext> {

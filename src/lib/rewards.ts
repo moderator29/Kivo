@@ -72,3 +72,44 @@ export async function awardBadge(profileId: string, badgeCode: string): Promise<
     return null;
   }
 }
+
+/**
+ * Whether this profile already holds a badge.
+ *
+ * Exists for KIVO_NEXT_GEN KN-19, which is worth explaining because the code
+ * it replaces looked entirely reasonable. `createPost`/`createPoll` decided
+ * whether to award the `ten_posts` badge by running a full
+ * `count: "exact"` over the author's entire `posts` history on **every single
+ * submission** — an O(total posts) aggregate to answer a question whose answer
+ * can never change again once it is yes, for a badge write that is already
+ * idempotent. A prolific user pays more for it every time they post, forever.
+ *
+ * Two indexed lookups now: this, and (only while the badge is still unheld) a
+ * `.limit(10)` fetch of post ids. Note the count could not simply be capped —
+ * PostgREST's `count=exact` runs its own aggregate over the whole filtered set
+ * and ignores `limit`, so `.limit(10)` would have bounded the rows returned
+ * and not the work done. Fetching ten ids and checking the length is what
+ * actually bounds it.
+ *
+ * Best-effort like every other function in this file: a failure returns false,
+ * which at worst means the caller does the work it would have done anyway.
+ */
+export async function hasBadge(profileId: string, badgeCode: string): Promise<boolean> {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data, error } = await supabase
+      .from("user_badges")
+      .select("badge_id, badges!inner(code)")
+      .eq("profile_id", profileId)
+      .eq("badges.code", badgeCode)
+      .maybeSingle();
+    if (error) {
+      logError("rewards.hasBadge", error, { profileId, badgeCode });
+      return false;
+    }
+    return data !== null;
+  } catch (error) {
+    logError("rewards.hasBadge", error, { profileId, badgeCode });
+    return false;
+  }
+}

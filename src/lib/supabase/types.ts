@@ -2159,6 +2159,7 @@ export type Database = {
           id: string
           profile_id: string
           reason: string
+          source_key: string | null
         }
         Insert: {
           amount: number
@@ -2166,6 +2167,7 @@ export type Database = {
           id?: string
           profile_id: string
           reason: string
+          source_key?: string | null
         }
         Update: {
           amount?: number
@@ -2173,6 +2175,7 @@ export type Database = {
           id?: string
           profile_id?: string
           reason?: string
+          source_key?: string | null
         }
         Relationships: [
           {
@@ -2291,6 +2294,22 @@ export type Database = {
           vote_count: number
         }[]
       }
+      get_poll_results_for_posts: {
+        Args: { p_post_ids: string[] }
+        Returns: {
+          option_id: string
+          post_id: string
+          vote_count: number
+        }[]
+      }
+      get_post_engagement: {
+        Args: { p_post_ids: string[] }
+        Returns: {
+          comment_count: number
+          post_id: string
+          reaction_count: number
+        }[]
+      }
       get_prediction_consensus: {
         Args: { p_fixture_ids: string[] }
         Returns: {
@@ -2391,6 +2410,14 @@ export type Database = {
       mark_notifications_read: {
         Args: { p_notification_ids: string[] }
         Returns: undefined
+      }
+      notification_payload_is_valid: {
+        Args: { p_payload: Json; p_type: string }
+        Returns: boolean
+      }
+      prune_rate_limit_events: {
+        Args: { p_max_rows?: number; p_older_than_seconds?: number }
+        Returns: number
       }
       prune_sync_runs: { Args: { p_older_than_days?: number }; Returns: number }
       record_data_anomaly: {

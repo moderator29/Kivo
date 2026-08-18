@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { awardBadge, awardXp } from "@/lib/rewards";
+import { awardBadge, awardXp, hasBadge } from "@/lib/rewards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify } from "@/lib/notification-preferences";
@@ -27,6 +27,42 @@ const MAX_XP_POSTS_PER_DAY = 10;
 const MIN_POLL_OPTIONS = 2;
 const MAX_POLL_OPTIONS = 4;
 const MAX_POLL_OPTION_LENGTH = 80;
+
+const TEN_POSTS_THRESHOLD = 10;
+
+/**
+ * KIVO_NEXT_GEN KN-19: awarding the `ten_posts` badge used to run a full
+ * `count: "exact"` over the author's entire `posts` history on every single
+ * submission — an O(total posts) aggregate answering a question that can never
+ * change again once the answer is yes, feeding a badge write that is already
+ * idempotent. The most prolific users paid the most for it, every time, forever.
+ *
+ * Two bounded lookups instead. The badge check short-circuits the common case
+ * (anyone past ten posts, which is everyone the old count was most expensive
+ * for). Below that, ten post ids are fetched rather than counted: PostgREST's
+ * `count=exact` runs its own aggregate over the whole filtered set and ignores
+ * `limit`, so capping the count was not actually available — capping the rows
+ * is.
+ *
+ * `awardBadge` stays idempotent and is still called unconditionally when the
+ * threshold is met; this only decides whether to bother asking.
+ */
+async function maybeAwardTenPostsBadge(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  profileId: string,
+): Promise<void> {
+  if (await hasBadge(profileId, "ten_posts")) return;
+
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("author_profile_id", profileId)
+    .limit(TEN_POSTS_THRESHOLD);
+
+  if ((posts?.length ?? 0) >= TEN_POSTS_THRESHOLD) {
+    await awardBadge(profileId, "ten_posts");
+  }
+}
 
 export async function createPost(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
@@ -66,15 +102,7 @@ export async function createPost(formData: FormData) {
     awardBadge(profile.id, "first_post"),
   ]);
 
-  // Real running total, not a separate counter — counts this user's actual
-  // posts rows straight from the table that was just inserted into.
-  const { count: postCount } = await supabase
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("author_profile_id", profile.id);
-  if ((postCount ?? 0) >= 10) {
-    await awardBadge(profile.id, "ten_posts");
-  }
+  await maybeAwardTenPostsBadge(supabase, profile.id);
 
   revalidatePath("/social");
   if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
@@ -145,13 +173,7 @@ export async function createPoll(formData: FormData) {
     awardBadge(profile.id, "first_post"),
   ]);
 
-  const { count: postCount } = await supabase
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("author_profile_id", profile.id);
-  if ((postCount ?? 0) >= 10) {
-    await awardBadge(profile.id, "ten_posts");
-  }
+  await maybeAwardTenPostsBadge(supabase, profile.id);
 
   revalidatePath("/social");
   return { error: null };
