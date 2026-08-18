@@ -1,15 +1,10 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Suspense } from "react";
 import { Bell } from "lucide-react";
-import { AccountMenu } from "./account-menu";
 import type { ViewerProfileSummary } from "./app-shell";
 import { getRecentNotifications } from "@/lib/notifications";
 import { NotificationBell } from "./notification-bell";
-import { CommandPalette } from "./command-palette";
-import { ThemeToggleCompact } from "@/components/theme/theme-toggle";
-import { PreviewModeToggle } from "@/components/admin/preview-mode-toggle";
-import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
+import { NavDrawer } from "./nav-drawer";
 
 /**
  * Static stand-in for the notification bell while its data streams in below —
@@ -39,59 +34,57 @@ async function NotificationBellData() {
   return <NotificationBell initialNotifications={notifications} initialUnreadCount={unreadCount} />;
 }
 
+/**
+ * The top bar, stripped back to what the founder actually asked for: a menu
+ * button on the left and the notification bell on the right, and nothing in
+ * between.
+ *
+ * What used to live here and where it went:
+ *  - the search field  → /search, a real page (plus ⌘K, unchanged)
+ *  - the account avatar → the bottom bar's Profile tab on mobile, the sidebar
+ *    footer on desktop
+ *  - the appearance toggle → the nav drawer's footer / the sidebar footer
+ *  - the KIVO logo → the drawer header on mobile; the sidebar already carries
+ *    it on desktop
+ *
+ * Each of those was a control competing for the same 44 pixels of the most
+ * valuable strip on a phone. A top bar with two things in it reads as a
+ * product; a top bar with six reads as a toolbar.
+ */
 export function TopBar({
   viewer,
   isAdmin = false,
-  previewMode = false,
+  aiConfigured = false,
 }: {
   /** The real signed-in profile, resolved server-side in (app)/layout.tsx —
-   * null for a guest. This replaced a bare `signedIn: boolean` when Clerk's
-   * `<UserButton>` (which fetched its own identity from Clerk's client-side
-   * session) gave way to KIVO's own `<AccountMenu>`, which has to be handed
-   * the profile it renders. Guest vs signed-in is now "is this null", so the
-   * two can never disagree. */
+   * null for a guest. Threaded down to the drawer for its account row; guest
+   * vs signed-in is "is this null", so nothing can disagree about it. */
   viewer: ViewerProfileSummary | null;
-  /** Gates the preview-mode toggle — see src/lib/preview-mode.ts. A guest or
-   * non-admin never sees this control at all, not even in its "off" state. */
+  /** Gates the /admin entry inside the drawer's nav list. */
   isAdmin?: boolean;
-  previewMode?: boolean;
+  aiConfigured?: boolean;
 }) {
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-hairline-soft bg-background/80 px-4 py-3 backdrop-blur-xl lg:px-8">
-      <Link
-        href="/home"
-        className="flex items-center gap-2 rounded-lg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-      >
-        <Image src={kivoLogo} alt="" width={32} height={32} className="kivo-ink h-8 w-8 shrink-0" priority />
-        <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
-      </Link>
+    <header className="sticky top-0 z-20 flex items-center border-b border-hairline-soft bg-background/80 px-4 py-2.5 backdrop-blur-xl lg:px-8">
+      {/* Founder's placement: top-left, where the logo used to sit. Hidden on
+          desktop, where the sidebar is permanently open and a menu button
+          would open a menu that is already on screen. */}
+      <NavDrawer aiConfigured={aiConfigured} isAdmin={isAdmin} viewerProfile={viewer} />
 
-      <div className="ml-auto flex min-w-0 flex-1 items-center gap-3 lg:ml-0">
-        <CommandPalette />
-      </div>
-
-      {isAdmin && <PreviewModeToggle active={previewMode} />}
-
-      {/* Appearance is reachable from anywhere, not buried in settings — it is
-          the one preference people flip by reflex when a room's lighting
-          changes. The full three-option control still lives in Settings. */}
-      <ThemeToggleCompact />
-
-      {viewer ? (
-        <>
+      <div className="ml-auto flex items-center gap-1">
+        {viewer ? (
           <Suspense fallback={<NotificationBellFallback />}>
             <NotificationBellData />
           </Suspense>
-          <AccountMenu viewer={viewer} />
-        </>
-      ) : (
-        <Link
-          href="/sign-up"
-          className="kivo-gradient-prime kivo-raise shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-        >
-          Sign up
-        </Link>
-      )}
+        ) : (
+          <Link
+            href="/sign-up"
+            className="kivo-gradient-prime kivo-raise shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          >
+            Sign up
+          </Link>
+        )}
+      </div>
     </header>
   );
 }

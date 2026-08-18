@@ -62,7 +62,11 @@ export function SkipToContent() {
   return (
     <a
       href={`#${MAIN_CONTENT_ID}`}
-      className="kivo-popover kivo-focus sr-only rounded-xl px-4 py-2 text-sm font-semibold text-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+      // Centred rather than pinned to the top-left corner: the menu button now
+      // lives there (nav-drawer.tsx), and a focused skip link sitting on top of
+      // it covered the one control a keyboard user reaches next — verified in
+      // Playwright, where the link genuinely intercepted clicks on the menu.
+      className="kivo-popover kivo-focus sr-only rounded-xl px-4 py-2 text-sm font-semibold text-foreground focus:not-sr-only focus:absolute focus:left-1/2 focus:top-3 focus:z-50 focus:-translate-x-1/2"
     >
       Skip to content
     </a>

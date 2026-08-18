@@ -11,15 +11,13 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft, Clock, Flame, X } from "lucide-react";
+import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft, Clock, Flame, X, ArrowRight } from "lucide-react";
 import { searchPlatform, getPopularTeams, type SearchResult, type PopularTeam } from "@/app/(app)/search-actions";
+import { SEARCH_TYPE_META, searchResultHref } from "@/components/search/search-result-meta";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
-
-const TYPE_ICON = { team: Shield, player: UserRound, competition: Trophy } as const;
-const TYPE_LABEL = { team: "Teams", player: "Players", competition: "Competitions" } as const;
-const TYPE_HREF = { team: "/teams", player: "/players", competition: "/leagues" } as const;
+import { clearRecentSearches, loadRecentSearches, saveRecentSearch } from "@/lib/recent-searches";
 
 const LISTBOX_ID = "command-palette-listbox";
 
@@ -36,54 +34,9 @@ const QUICK_LINKS = [
   { label: "Matches", href: "/matches", icon: CalendarDays },
 ] as const;
 
-// Item 128: recent searches. Real queries this browser actually searched
-// for, not user data — localStorage is the right home (no new schema, and
-// nothing here needs to sync across devices or survive a cleared browser,
-// same standing this codebase already applies to e.g. onboarding dismissal
-// flags). Capped small and deduped case-insensitively so retyping the same
-// team name doesn't pad the list with near-duplicates.
-const RECENT_SEARCHES_KEY = "kivo:recent-searches";
-const MAX_RECENT_SEARCHES = 5;
-
-function loadRecentSearches(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(RECENT_SEARCHES_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((q): q is string => typeof q === "string" && q.length > 0).slice(0, MAX_RECENT_SEARCHES);
-  } catch {
-    return [];
-  }
-}
-
-/** Records a real, completed search — called when the user actually
- * navigates to a result, not on every debounced keystroke, so the list holds
- * genuine finished searches rather than every half-typed prefix. */
-function saveRecentSearch(query: string): string[] {
-  const trimmed = query.trim();
-  if (typeof window === "undefined" || trimmed.length < 2) return loadRecentSearches();
-  try {
-    const deduped = loadRecentSearches().filter((q) => q.toLowerCase() !== trimmed.toLowerCase());
-    const next = [trimmed, ...deduped].slice(0, MAX_RECENT_SEARCHES);
-    window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
-    return next;
-  } catch {
-    // Private browsing / storage quota — recent searches is a UX nicety,
-    // never worth failing the actual navigation over.
-    return loadRecentSearches();
-  }
-}
-
-function clearRecentSearches(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(RECENT_SEARCHES_KEY);
-  } catch {
-    // Same non-critical storage failure as above.
-  }
-}
+// Item 128's recent-search store now lives in src/lib/recent-searches.ts —
+// /search renders the same list, and two private copies of "what did this
+// browser look for" would have been two different answers.
 
 /**
  * Item 127: the palette's own Ctrl/Cmd keydown handler already accepts either
@@ -112,7 +65,16 @@ function optionId(result: SearchResult): string {
   return `command-palette-option-${result.type}-${result.id}`;
 }
 
-export function CommandPalette() {
+/**
+ * `showTrigger` renders the palette's own search-bar button. The app shell
+ * passes `false`: search has a real page and a real nav row now, so a third
+ * visible entry point in the chrome would be exactly the clutter this pass
+ * removed — inside the app the palette is the ⌘K accelerator over that page,
+ * and the sidebar's Search row advertises the shortcut. `/not-found` still
+ * passes nothing (defaulting to `true`), because there the palette is the only
+ * thing a lost visitor has to type into.
+ */
+export function CommandPalette({ showTrigger = true }: { showTrigger?: boolean }) {
   const router = useRouter();
   const modifierLabel = useSyncExternalStore(subscribeToNothing, getModifierLabelSnapshot, getModifierLabelServerSnapshot);
   const [open, setOpen] = useState(false);
@@ -256,7 +218,7 @@ export function CommandPalette() {
     // Item 128: record the query that led here as a real, completed search
     // — only on an actual result selection, not every debounced keystroke.
     setRecentSearches(saveRecentSearch(query));
-    router.push(`${TYPE_HREF[result.type]}/${result.id}`);
+    router.push(searchResultHref(result.type, result.id));
     close();
   }
 
@@ -306,20 +268,22 @@ export function CommandPalette() {
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-      >
-        <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-        <span className="min-w-0 flex-1 truncate text-foreground-subtle">Search teams, players, competitions…</span>
-        <kbd className="hidden rounded border border-hairline px-1.5 py-0.5 text-[11px] text-foreground-subtle sm:inline-block">
-          {modifierLabel}K
-        </kbd>
-      </button>
+      {showTrigger && (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className="kivo-glass flex w-full max-w-md items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+          <span className="min-w-0 flex-1 truncate text-foreground-subtle">Search teams, players, competitions…</span>
+          <kbd className="hidden rounded border border-hairline px-1.5 py-0.5 text-[11px] text-foreground-subtle sm:inline-block">
+            {modifierLabel}K
+          </kbd>
+        </button>
+      )}
 
       <AnimatePresence>
         {open && (
@@ -429,6 +393,17 @@ export function CommandPalette() {
                     <p className="px-2 text-center text-xs text-foreground-subtle">
                       Type at least 2 characters to search, or jump straight to a section.
                     </p>
+                    {/* The palette is the fast path over /search, not a
+                        different search — this is the way back to the full
+                        page, with recent searches and grouped results. */}
+                    <button
+                      type="button"
+                      onClick={() => goTo("/search")}
+                      className="mx-1 flex items-center justify-center gap-1.5 rounded-xl border border-hairline px-3 py-2 text-xs font-medium text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    >
+                      Open the search page
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
                     <div className="grid grid-cols-2 gap-1.5 px-1">
                       {QUICK_LINKS.map((link) => {
                         const Icon = link.icon;
@@ -468,7 +443,7 @@ export function CommandPalette() {
                   </p>
                 ) : (
                   results.map((result, index) => {
-                    const Icon = TYPE_ICON[result.type];
+                    const Icon = SEARCH_TYPE_META[result.type].icon;
                     const active = index === activeIndex;
                     return (
                       <button
@@ -490,7 +465,7 @@ export function CommandPalette() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm text-foreground">{result.label}</p>
                           <p className="truncate text-[11px] text-foreground-subtle">
-                            {TYPE_LABEL[result.type]}
+                            {SEARCH_TYPE_META[result.type].group}
                             {result.sublabel ? ` · ${result.sublabel}` : ""}
                           </p>
                         </div>
