@@ -13,6 +13,7 @@ import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
 import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers-button";
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
 import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
+import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
@@ -620,6 +621,10 @@ export default async function DataHealthPage() {
       <SyncReliabilityPanel />
 
       <DataQualityPanel />
+
+      {/* KIVO_NEXT_GEN KN-107: the only forward-looking section on this page —
+          everything above it reports what the pipeline already did. */}
+      <SyncPlannerPanel />
     </div>
   );
 }
