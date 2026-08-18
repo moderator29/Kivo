@@ -58,8 +58,16 @@ export default async function MyPredictionsPage() {
 
   const supabase = createServerSupabaseClient();
   // predictions_select_own already restricts this to the caller's own rows,
-  // so a plain query (no RPC) is enough for a full, honest history.
-  const { data: predictionRows } = await supabase
+  // so a plain query (no RPC) is enough for a full, honest history. The page
+  // still caps what it fetches/renders at 100 rows (real pagination is a
+  // larger change than this view needs today) — { count: "exact" } gets the
+  // real total alongside that page so the stats block can honestly disclose
+  // when it's only covering a slice, instead of silently under-reporting a
+  // user's lifetime record.
+  const {
+    data: predictionRows,
+    count: totalPredictionCount,
+  } = await supabase
     .from("predictions")
     .select(
       `id, predicted_outcome, points_awarded, created_at,
@@ -69,6 +77,7 @@ export default async function MyPredictionsPage() {
          away_team:teams!fixtures_away_team_id_fkey(id, name, crest_url),
          competition:competitions(name, short_name)
        )`,
+      { count: "exact" },
     )
     .eq("profile_id", profile.id)
     .order("created_at", { ascending: false })
@@ -78,6 +87,8 @@ export default async function MyPredictionsPage() {
   // should never actually be null in practice — filtered defensively anyway
   // rather than rendering a broken row.
   const rows = (predictionRows ?? []).filter((row) => row.fixture !== null);
+  const totalPredictions = totalPredictionCount ?? rows.length;
+  const isTruncatedHistory = totalPredictions > rows.length;
 
   const scoredRows = rows.filter((row) => row.points_awarded !== null);
   const correctCount = scoredRows.filter((row) => (row.points_awarded ?? 0) > 0).length;
@@ -159,12 +170,22 @@ export default async function MyPredictionsPage() {
             </FadeIn>
           )}
 
-          {scoredRows.length < rows.length && (
-            <p className="-mt-3 text-center text-xs text-foreground-subtle">
-              {scoredRows.length === 0
-                ? "None of your predictions have been scored yet."
-                : `${scoredRows.length} of ${rows.length} scored so far.`}
-            </p>
+          {(isTruncatedHistory || scoredRows.length < rows.length) && (
+            <div className="-mt-3 flex flex-col items-center gap-0.5 text-center text-xs text-foreground-subtle">
+              {isTruncatedHistory && (
+                <p>
+                  Showing your most recent {rows.length} of {totalPredictions} predictions — the stats above reflect
+                  these {rows.length} only.
+                </p>
+              )}
+              {scoredRows.length < rows.length && (
+                <p>
+                  {scoredRows.length === 0
+                    ? "None of your predictions have been scored yet."
+                    : `${scoredRows.length} of ${rows.length} scored so far.`}
+                </p>
+              )}
+            </div>
           )}
 
           <div className="flex flex-col gap-3">
@@ -180,7 +201,7 @@ export default async function MyPredictionsPage() {
                   <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-foreground-subtle">{competitionName}</span>
-                      <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} />
+                      <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} includeWeekday />
                     </div>
 
                     <div className="flex items-center justify-between gap-3">

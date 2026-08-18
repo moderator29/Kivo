@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
@@ -54,14 +54,13 @@ function ConsensusBar({ consensus }: { consensus: PredictionConsensus }) {
 }
 
 /**
- * Ticking "locks in Xh Ym" readout, ownership pattern matches fantasy's
- * DeadlineCountdown (RECOMMENDATIONS item 83): a leaf with its own 30s
- * interval so only this string re-renders, not the whole card. Reuses
- * fantasy-rules' formatDeadlineCountdown directly rather than duplicating
- * the day/hour/minute math (item 115: predictions had no countdown and no
- * near-lock warning at all before this).
+ * Ticking lock state for a fixture's kickoff. Owned by PredictionCard (not
+ * the countdown text alone) so the "locked" boolean that disables the pick
+ * buttons and the "Predictions locked" text the countdown displays can never
+ * disagree — they're computed from the same tick, once, rather than two
+ * independent 30s intervals that could each flip a few seconds apart.
  */
-function PredictionLockCountdown({ kickoffAt }: { kickoffAt: string }) {
+function useLockState(kickoffAt: string) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -72,6 +71,27 @@ function PredictionLockCountdown({ kickoffAt }: { kickoffAt: string }) {
   const locked = diffMs <= 0;
   const nearLock = !locked && diffMs <= NEAR_LOCK_MS;
 
+  return { now, locked, nearLock };
+}
+
+/**
+ * "locks in Xh Ym" readout. Reuses fantasy-rules' formatDeadlineCountdown
+ * directly rather than duplicating the day/hour/minute math (item 115:
+ * predictions had no countdown and no near-lock warning at all before this).
+ * Purely presentational — `now`/`locked`/`nearLock` come from the parent's
+ * useLockState so this text can never contradict the pick buttons below it.
+ */
+function PredictionLockCountdown({
+  kickoffAt,
+  now,
+  locked,
+  nearLock,
+}: {
+  kickoffAt: string;
+  now: Date;
+  locked: boolean;
+  nearLock: boolean;
+}) {
   return (
     <span className={cn("text-[11px] font-medium", nearLock ? "text-critical" : "text-foreground-subtle")}>
       {locked ? "Predictions locked" : `Locks in ${formatDeadlineCountdown(kickoffAt, now)}`}
@@ -111,6 +131,7 @@ export function PredictionCard({
   const [error, setError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  const { now, locked, nearLock } = useLockState(kickoffAt);
 
   // Transient confirmation moment (RECOMMENDATIONS item 114), same
   // auto-dismiss pattern as UsernameEditor's "Saved" check: picking a pill
@@ -127,7 +148,7 @@ export function PredictionCard({
       router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
       return;
     }
-    if (pending || outcome === prediction) return;
+    if (pending || locked || outcome === prediction) return;
     setError(null);
     setJustSaved(false);
     const previous = prediction;
@@ -145,9 +166,9 @@ export function PredictionCard({
 
   return (
     <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-foreground-subtle">{competitionName}</span>
-        <div className="flex flex-col items-end gap-0.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 flex-1 truncate text-xs text-foreground-subtle">{competitionName}</span>
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
           <span className="text-xs text-foreground-subtle">
             {new Date(kickoffAt).toLocaleString(undefined, {
               weekday: "short",
@@ -155,7 +176,7 @@ export function PredictionCard({
               minute: "2-digit",
             })}
           </span>
-          <PredictionLockCountdown kickoffAt={kickoffAt} />
+          <PredictionLockCountdown kickoffAt={kickoffAt} now={now} locked={locked} nearLock={nearLock} />
         </div>
       </div>
 
@@ -186,37 +207,61 @@ export function PredictionCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        {(["home_win", "draw", "away_win"] as const).map((outcome) => {
-          const active = prediction === outcome;
-          return (
-            <motion.button
-              key={outcome}
-              type="button"
-              disabled={pending}
-              aria-busy={pending}
-              onClick={() => handlePick(outcome)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className={`relative overflow-hidden rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-60 ${
-                active ? "border-transparent" : "border-white/10 hover:bg-white/5"
-              }`}
-            >
-              {active && (
-                <motion.span
-                  layoutId={`prediction-active-${fixtureId}`}
-                  className="kivo-gradient-victory absolute inset-0"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
-              )}
-              <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
-                {PREDICTION_OUTCOME_LABEL[outcome]}
-              </span>
-            </motion.button>
-          );
-        })}
-      </div>
+      {locked ? (
+        <div className="grid grid-cols-3 gap-2">
+          {(["home_win", "draw", "away_win"] as const).map((outcome) => {
+            const active = prediction === outcome;
+            return (
+              <div
+                key={outcome}
+                aria-label={active ? `You predicted ${PREDICTION_OUTCOME_LABEL[outcome]} — locked` : undefined}
+                className={`relative flex items-center justify-center gap-1 overflow-hidden rounded-lg border py-3 text-xs font-semibold ${
+                  active ? "border-transparent opacity-90" : "border-white/10 opacity-40"
+                }`}
+              >
+                {active && <span className="kivo-gradient-victory absolute inset-0" />}
+                {active && <Lock className="relative h-3 w-3 shrink-0 text-kivo-white" strokeWidth={2.5} />}
+                <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
+                  {PREDICTION_OUTCOME_LABEL[outcome]}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {(["home_win", "draw", "away_win"] as const).map((outcome) => {
+            const active = prediction === outcome;
+            return (
+              <motion.button
+                key={outcome}
+                type="button"
+                disabled={pending}
+                aria-busy={pending}
+                aria-pressed={active}
+                onClick={() => handlePick(outcome)}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                className={`relative overflow-hidden rounded-lg border py-3 text-xs font-semibold transition-colors disabled:opacity-60 ${
+                  active ? "border-transparent" : "border-white/10 hover:bg-white/5"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId={`prediction-active-${fixtureId}`}
+                    className="kivo-gradient-victory absolute inset-0"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
+                  {PREDICTION_OUTCOME_LABEL[outcome]}
+                </span>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
 
       <AnimatePresence>
         {error ? (
