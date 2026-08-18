@@ -18,6 +18,8 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { YourTeamConnection } from "@/components/football/your-connection-card";
+import { getViewerTeamConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
@@ -285,6 +287,14 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const isFollowing = followRow !== null;
   const isMuted = followRow?.muted ?? false;
 
+  // KN-46: this page rendered identically for somebody who follows this club
+  // and somebody who has never heard of it — the only difference anywhere on
+  // it was whether a star was filled. Now that every render knows who is
+  // reading, it can say what the two of them actually have between them, from
+  // the reader's own rows only. Renders nothing at all when there is nothing
+  // real to report.
+  const viewerConnection = profile ? await getViewerTeamConnection(supabase, profile.id, team.id) : null;
+
   const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
   const manager = managers?.[0] ?? null;
 
@@ -425,6 +435,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <AskAiLink ctx="team" id={team.id} label={`Ask AI about ${team.name}`} />
         </FadeIn>
       </div>
+
+      {viewerConnection && (
+        <FadeIn delay={0.22}>
+          <YourTeamConnection connection={viewerConnection} />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">

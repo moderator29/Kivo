@@ -7,6 +7,8 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { YourPlayerConnection } from "@/components/football/your-connection-card";
+import { getViewerPlayerConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
@@ -155,6 +157,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const isFollowing = followRow !== null;
   const isMuted = followRow?.muted ?? false;
 
+  // KN-46: the same page for a stranger and for the manager who has this
+  // player as their captain this gameweek. One targeted, owner-scoped read
+  // fixes that; it renders nothing when the player isn't in the viewer's squad.
+  const viewerConnection = profile ? await getViewerPlayerConnection(supabase, profile.id, player.id) : null;
+
   const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
   const hasMatchData = stats.appearances > 0;
 
@@ -245,6 +252,12 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           <AskAiLink ctx="player" id={player.id} label={`Ask AI about ${displayName}`} />
         </FadeIn>
       </div>
+
+      {viewerConnection && (
+        <FadeIn delay={0.18}>
+          <YourPlayerConnection connection={viewerConnection} />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
