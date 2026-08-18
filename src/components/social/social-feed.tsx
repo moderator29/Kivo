@@ -19,6 +19,7 @@ export function SocialFeed({
   signedIn,
   followingOnly = false,
   scrollToPostId = null,
+  initialOffset,
 }: {
   initialPosts: PostListItem[];
   initialHasMore: boolean;
@@ -33,8 +34,22 @@ export function SocialFeed({
    * first page), so this only ever needs to scroll, never search pagination
    * for it. */
   scrollToPostId?: string | null;
+  /** How many rows the server's feed query actually served for page one.
+   *
+   * docs/BUG_AUDIT_2026-08-18.md S3: "Load more" used `posts.length` as the
+   * next server offset. That is only the same number while the array holds
+   * exactly what the feed query returned — and page.tsx *prepends* a
+   * deep-linked post that wasn't on page one (a notification's ?post=<id>).
+   * With 21 items in the array but offsets 0-19 served, the next request
+   * asked for offset 21 and the post at offset 20 became unreachable by any
+   * amount of paging. Tracking the real offset separately is the fix.
+   *
+   * Defaults to the array length for the callers that don't prepend
+   * anything, where the two numbers are identical. */
+  initialOffset?: number;
 }) {
   const [posts, setPosts] = useState(initialPosts);
+  const [serverOffset, setServerOffset] = useState(initialOffset ?? initialPosts.length);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
@@ -82,12 +97,22 @@ export function SocialFeed({
   function handleLoadMore() {
     setError(null);
     startLoading(async () => {
-      const result = await loadMorePosts(posts.length, { followingOnly });
+      const result = await loadMorePosts(serverOffset, { followingOnly });
       if (result.error) {
         setError(result.error);
         return;
       }
-      setPosts((prev) => [...prev, ...result.posts]);
+      // Offset pagination over a feed that is still being written to can hand
+      // back a post that is already on screen: one new post shifts every
+      // older post one place down the window. Appending it blind produced a
+      // duplicate card *and* a duplicate React key (this list keys on
+      // post.id). Advance the offset by what the server served, and drop the
+      // overlap from what gets rendered.
+      setServerOffset((offset) => offset + result.posts.length);
+      setPosts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...result.posts.filter((p) => !seen.has(p.id))];
+      });
       setHasMore(result.hasMore);
     });
   }
@@ -105,6 +130,7 @@ export function SocialFeed({
         return;
       }
       setPosts(result.posts);
+      setServerOffset(result.posts.length);
       setHasMore(result.hasMore);
       setHasNewPosts(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
