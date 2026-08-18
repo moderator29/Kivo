@@ -155,8 +155,11 @@ export async function triggerPlayerTransfersSync(playerId: string): Promise<{ er
  * without bound and each row's error_message can hold up to twenty
  * concatenated failures (see syncTodayFixtures/syncTeamSquad/etc in
  * src/lib/football/sync*.ts), so an admin triggers this to prune history
- * older than 90 days rather than a cron (this codebase has zero scheduled
- * jobs by design). Deletion happens inside prune_sync_runs(), a SECURITY
+ * older than 90 days rather than a cron — this stays a deliberate manual
+ * action; the one real scheduled job this codebase has (the live-sync worker
+ * at src/app/api/cron/sync-live/route.ts, added 2026-08-18) writes new
+ * sync_runs rows, it doesn't clean them up, so pruning has no schedule of
+ * its own to piggyback on. Deletion happens inside prune_sync_runs(), a SECURITY
  * DEFINER SQL function granted only to service_role (see
  * supabase/migrations/0023_xp_total_and_sync_run_pruning.sql /
  * 0025_lock_down_xp_total_and_prune_sync_runs_grants.sql) — run through the

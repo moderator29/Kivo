@@ -342,12 +342,23 @@ function todayIsoDate(): string {
 }
 
 /**
- * On-demand, admin-triggered sync of today's fixtures — see FOOTBALL_LIVE_POLLING_ENABLED
- * in ./index.ts for why this is never called on a timer/loop of any kind. Single call to
- * getFixturesByDate() per run (quota-conscious), writes go through the service-role client
- * per the schema's RLS design (see supabase/migrations/0001, "a future sync job should use
- * the service_role key"). A bad fixture never aborts the whole batch; every fixture-level
- * failure is caught, logged and rolled into the run's error_message instead.
+ * Sync of today's fixtures — admin-triggered (Data Health's "Sync now",
+ * `triggerLiveScoresRefresh`) or, since the Vercel Cron worker
+ * (`src/app/api/cron/sync-live/route.ts`), cron-triggered when that route
+ * decides something live/imminent is actually worth a provider call. Never a
+ * blind timer/loop regardless of state — see FOOTBALL_LIVE_POLLING_ENABLED in
+ * ./index.ts and the cron route's own doc comment for the adaptive logic that
+ * decides *whether* to call this at all. Single call to getFixturesByDate()
+ * per run (quota-conscious), writes go through the service-role client per
+ * the schema's RLS design (see supabase/migrations/0001, "a future sync job
+ * should use the service_role key"). A bad fixture never aborts the whole
+ * batch; every fixture-level failure is caught, logged and rolled into the
+ * run's error_message instead.
+ *
+ * `triggerSource` (migration 0044) is carried straight onto the sync_runs
+ * row so Data Health can show the automated worker's run history distinct
+ * from admin-triggered ones — defaults to "manual" so every existing caller
+ * (none of which pass it) keeps writing exactly what it always has.
  *
  * Competition/team/venue provider_mappings lookups are batched once up front across the
  * whole fixtures array (RECOMMENDATIONS.md item 27) rather than re-queried per fixture —
@@ -356,13 +367,13 @@ function todayIsoDate(): string {
  * per-fixture work that's now limited to season/fixture resolution and inserts for
  * whatever competitions/teams/venues actually turned out to be new.
  */
-export async function syncTodayFixtures(): Promise<SyncResult> {
+export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manual"): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
-    .insert({ provider: provider.name, entity_type: "fixture", status: "running" })
+    .insert({ provider: provider.name, entity_type: "fixture", status: "running", trigger_source: triggerSource })
     .select("id")
     .single();
 

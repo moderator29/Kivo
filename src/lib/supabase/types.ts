@@ -1693,6 +1693,7 @@ export type Database = {
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
+          trigger_source: string
         }
         Insert: {
           created_at?: string
@@ -1707,6 +1708,7 @@ export type Database = {
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
+          trigger_source?: string
         }
         Update: {
           created_at?: string
@@ -1721,6 +1723,7 @@ export type Database = {
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
+          trigger_source?: string
         }
         Relationships: []
       }
@@ -2166,7 +2169,7 @@ export type Database = {
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
       save_target_type: "post" | "team" | "player"
-      sync_status: "running" | "success" | "partial" | "failed"
+      sync_status: "running" | "success" | "partial" | "failed" | "skipped"
       transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
         | "user"
@@ -2349,7 +2352,7 @@ export const Constants = {
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
       report_status: ["pending", "reviewing", "actioned", "dismissed"],
       save_target_type: ["post", "team", "player"],
-      sync_status: ["running", "success", "partial", "failed"],
+      sync_status: ["running", "success", "partial", "failed", "skipped"],
       transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [
         "user",
