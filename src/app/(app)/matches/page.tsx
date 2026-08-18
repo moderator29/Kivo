@@ -6,6 +6,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { MatchesDateStrip, dateKey, todayIn } from "@/components/matches/date-strip";
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
+import { getOrCreateProfile } from "@/lib/profile";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
@@ -60,6 +61,7 @@ export default async function MatchesPage({
 
   const { date: dateParam } = await searchParams;
   const supabase = createServerSupabaseClient();
+  const profile = await getOrCreateProfile();
 
   const { timeZone: viewerTimeZone } = resolveTimeZone(profile?.timezone);
   const startOfDay = resolveSelectedDate(dateParam, viewerTimeZone);
@@ -117,7 +119,7 @@ export default async function MatchesPage({
       </FadeIn>
 
       <FadeIn delay={0.04}>
-        <MatchesDateStrip selected={startOfDay} />
+        <MatchesDateStrip selected={startOfDay} timeZone={viewerTimeZone} />
       </FadeIn>
 
       {!fixtures || fixtures.length === 0 ? (
