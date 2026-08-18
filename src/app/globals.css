@@ -575,3 +575,18 @@ h3 {
     transform: translateX(-50%);
   }
 }
+
+/* Same edge-fade technique as `.kivo-ticker` above, factored out for a real
+   `overflow-x: auto` scroll container instead of a fixed decorative marquee
+   (RECOMMENDATIONS.md item 277) — first consumer is the Match Centre
+   Standings tab (`StandingsTab` in match-centre-tabs.tsx), whose
+   `min-w-[26rem]` table can require a horizontal scroll on a narrow phone
+   with nothing today signalling there's more to see. Deliberately just the
+   mask, no `position`/`overflow` of its own: unlike the ticker, a scroll
+   container already owns those (`overflow-x-auto` is already Tailwind on
+   the wrapper) and forcing `overflow: hidden` here would hide the very
+   scrolling this exists to hint at. */
+.kivo-scroll-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+}

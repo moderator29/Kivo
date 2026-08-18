@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { Trophy } from "lucide-react";
+import { motion } from "motion/react";
 import { CORRECT_PREDICTION_POINTS } from "@/lib/predictions";
+
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 export interface LeaderboardEntry {
   profileId: string;
@@ -37,8 +42,10 @@ export function PredictionsLeaderboard({
             const rank = index + 1;
             const isViewer = viewerProfileId !== null && entry.profileId === viewerProfileId;
             return (
-              <li
+              <motion.li
                 key={entry.profileId}
+                layout
+                transition={{ duration: 0.35, ease: EASE }}
                 className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
                   isViewer ? "bg-white/[0.08]" : ""
                 }`}
@@ -61,7 +68,7 @@ export function PredictionsLeaderboard({
                   )}
                 </div>
                 <span className="shrink-0 text-sm font-semibold text-foreground">{entry.points} pts</span>
-              </li>
+              </motion.li>
             );
           })}
         </ol>

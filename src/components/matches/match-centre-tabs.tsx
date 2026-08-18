@@ -382,7 +382,10 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
   // this used to be a grid of `<span>`s, which carries no row/column
   // relationships for assistive tech, unlike the admin users table.
   return (
-    <div className="kivo-glass overflow-x-auto rounded-2xl">
+    // kivo-scroll-fade-x (RECOMMENDATIONS.md item 277): signals there's more
+    // to scroll to on a narrow viewport, reusing .kivo-ticker's own
+    // edge-mask technique (globals.css) rather than a new one.
+    <div className="kivo-glass kivo-scroll-fade-x overflow-x-auto rounded-2xl">
       <table className="w-full min-w-[26rem] border-collapse text-xs">
         <thead>
           <tr className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
@@ -399,6 +402,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
             return (
               <motion.tr
                 key={row.teamId}
+                layout
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}

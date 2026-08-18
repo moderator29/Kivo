@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { Trophy } from "lucide-react";
+import { motion } from "motion/react";
 import { HowScoringWorks } from "./how-scoring-works";
+
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 export type LeaderboardEntry = {
   teamId: string;
@@ -58,8 +63,10 @@ export function FantasyLeaderboard({
             const isViewer = entry.teamId === activeTeamId;
             const rank = ranks[index];
             return (
-              <div
+              <motion.div
                 key={entry.teamId}
+                layout
+                transition={{ duration: 0.35, ease: EASE }}
                 className={`flex items-center gap-3 px-2 py-2.5 ${
                   isViewer ? "rounded-xl bg-kivo-cyan/10 ring-1 ring-kivo-cyan/30" : ""
                 }`}
@@ -92,7 +99,7 @@ export function FantasyLeaderboard({
                 <span className="shrink-0 text-base font-bold tabular-nums text-foreground">
                   {entry.hasScores ? entry.totalPoints : "-"}
                 </span>
-              </div>
+              </motion.div>
             );
           })}
         </div>
