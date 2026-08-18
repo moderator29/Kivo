@@ -192,6 +192,7 @@ export default async function MatchCentrePage({
     reactionCount: post.reactionCount,
     viewerReaction: post.viewerReaction,
     commentCount: post.commentCount,
+    isSystem: post.isSystem,
   }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;

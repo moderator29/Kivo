@@ -11,6 +11,7 @@ import { CommentThread } from "@/components/social/comment-thread";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { usePopoverPlacement } from "@/hooks/use-popover-placement";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import type { ReactionType } from "@/lib/reactions";
@@ -227,6 +228,17 @@ interface PostCardProps {
    * scroll with zero visual confirmation it found the right post. Defaults
    * false for every ordinary render. */
   highlighted?: boolean;
+  /** RECOMMENDATIONS item 254: true only for a KIVO-authored automatic
+   * goal/red-card announcement (posts.is_system — see
+   * supabase/migrations/0047_match_room_system_posts.sql). When true, the
+   * author row below ignores authorName/authorAvatarSrc entirely and always
+   * renders the same hardcoded "KIVO" + system badge — so what a post
+   * displays as can never be spoofed by whatever happens to be stored in
+   * those two fields, only by this boolean, which itself can only ever be
+   * true for a real service-role write (RLS rejects it from any client
+   * insert/update — see the migration). Defaults false for every ordinary
+   * post, general-feed or Room alike. */
+  isSystem?: boolean;
 }
 
 export function PostCard({
@@ -244,6 +256,7 @@ export function PostCard({
   poll = null,
   viewerSaved = false,
   highlighted = false,
+  isSystem = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -337,7 +350,11 @@ export function PostCard({
       )}
     >
       <div className="flex items-center gap-2">
-        {authorAvatarSrc ? (
+        {isSystem ? (
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-white/10">
+            <KivoMarkGlyph size={20} />
+          </div>
+        ) : authorAvatarSrc ? (
           <KivoAvatar src={authorAvatarSrc} name={authorName} size={32} className="ring-1 ring-white/10" />
         ) : (
           <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white ring-1 ring-white/10">
@@ -345,7 +362,22 @@ export function PostCard({
           </div>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-          {authorUsername ? (
+          {isSystem ? (
+            <span className="flex w-fit items-center gap-1.5">
+              <span className="text-sm font-medium text-foreground">KIVO</span>
+              {/* Same pill shape/colour as admin's role badges
+                  (ROLE_BADGE_STYLE in src/app/admin/users/page.tsx) — reused
+                  here so "official KIVO content" reads as visually distinct
+                  from any real fan's name using an already-established
+                  design-system cue, not a one-off new badge style. */}
+              <span
+                title="Automated KIVO match update — not posted by a fan"
+                className="inline-flex items-center rounded-full border border-kivo-cyan/30 bg-kivo-cyan/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-kivo-cyan"
+              >
+                System
+              </span>
+            </span>
+          ) : authorUsername ? (
             <Link
               href={`/u/${authorUsername}`}
               className="w-fit truncate text-sm font-medium text-foreground hover:text-kivo-cyan"

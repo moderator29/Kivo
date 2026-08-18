@@ -156,6 +156,7 @@ export default async function SavedPage() {
                     index={index}
                     poll={post.poll}
                     viewerSaved={post.viewerSaved}
+                    isSystem={post.isSystem}
                   />
                 ))}
               </div>

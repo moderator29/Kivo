@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
-import { EVENT_LABEL } from "./event-labels";
+import { EVENT_LABEL, isGoalEventType, isRedCardEventType } from "./event-labels";
 
 /**
  * Real in-app notification producers, wired directly into the sync code
@@ -144,8 +144,8 @@ export async function notifyFixtureEvent(
   supabase: ServiceClient,
   input: FixtureEventNotificationInput,
 ): Promise<void> {
-  const isGoal = input.eventType === "goal" || input.eventType === "penalty_goal";
-  const isRedCard = input.eventType === "red_card" || input.eventType === "second_yellow_card";
+  const isGoal = isGoalEventType(input.eventType);
+  const isRedCard = isRedCardEventType(input.eventType);
   const notified = new Set<string>();
 
   if (isGoal || isRedCard) {

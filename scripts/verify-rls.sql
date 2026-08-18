@@ -56,9 +56,13 @@
 -- unambiguously test data. Section 1 also seeds five more profiles for
 -- section 6i's moderation_status checks (item 234): an admin, plus one
 -- profile per non-default state (suspended, banned, shadow_muted, and a
--- suspended-with-already-elapsed-expiry to exercise lazy revert). Section 0
--- deletes any leftovers from a prior interrupted run before seeding; Section
--- 7 deletes everything this script created. The script is safe to re-run.
+-- suspended-with-already-elapsed-expiry to exercise lazy revert). Section 6j
+-- (this task's own build: items 1/2/4, migration
+-- 0047_match_room_system_posts) reuses carol/erin/bob/admin from that same
+-- seed against the real `kivo_system` profile, rather than seeding its own.
+-- Section 0 deletes any leftovers from a prior interrupted run before
+-- seeding; Section 7 deletes everything this script created. The script is
+-- safe to re-run.
 --
 -- READING THE OUTPUT
 -- -------------------
@@ -79,11 +83,11 @@
 -- each independent (own BEGIN block, own transaction-local id lookups —
 -- nothing carries over between sections or depends on call/section order),
 -- so run: (a) sections 0-1 together as one call to seed, (b) each of
--- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h/6i as its own call — 6a/6b, several of the
--- individual statements inside 6e/6f/6g, and several inside 6i (each clearly
--- marked "PASS = 42501" or "PASS = 23514") are EXPECTED to come back as a
--- tool error, that error is the pass signal — then (c) section 7 as its own
--- final call regardless of how section 6 went,
+-- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h/6i/6j as its own call — 6a/6b, several of
+-- the individual statements inside 6e/6f/6g, and several inside 6i/6j (each
+-- clearly marked "PASS = 42501" or "PASS = 23514") are EXPECTED to come back
+-- as a tool error, that error is the pass signal — then (c) section 7 as its
+-- own final call regardless of how section 6 went,
 -- so cleanup always happens.
 -- =============================================================================
 
@@ -1007,6 +1011,124 @@ rollback;
 begin;
 update profiles set moderation_status = 'banned', moderation_reason = 'zzrlstest test', moderation_expires_at = now() + interval '1 day'
 where username = 'zzrlstest_bob';
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6j. Match Room posts + is_system lockdown (this task's own build:
+-- RECOMMENDATIONS.md items 1/2/4, migration
+-- 0047_match_room_system_posts). Room posts are ordinary `posts` rows with
+-- fixture_id set — this proves the exact same moderation_status enforcement
+-- 6i already proved for a general post also genuinely applies once
+-- fixture_id is set (checked directly, not assumed to "just transfer"
+-- because it's the same table), and that `is_system` can never be forged by
+-- a real authenticated user's own insert or update, only by a service-role
+-- write (match-room-system-posts.ts's insertSystemEventPost). Live-verified
+-- by hand against project gkyjfihxxdynfwqhhpyn while authoring this
+-- section, same as every check in 6i.
+-- -----------------------------------------------------------------------------
+
+-- PASS = 42501 (carol is suspended; her Room post insert — fixture_id set —
+-- is rejected exactly like her general post insert in 6i).
+begin;
+select set_config('rls_test.fixture_id',
+  (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+insert into posts (author_profile_id, fixture_id, body)
+select id, current_setting('rls_test.fixture_id')::uuid, 'zzrlstest carol trying to post in room while suspended' from profiles where username = 'zzrlstest_carol';
+rollback;
+
+-- shadow_muted in a Room post: erin can post into the room with zero
+-- friction to herself...
+begin;
+select set_config('rls_test.fixture_id',
+  (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+insert into posts (author_profile_id, fixture_id, body)
+select id, current_setting('rls_test.fixture_id')::uuid, 'zzrlstest erin shadow muted room post' from profiles where username = 'zzrlstest_erin';
+select 'moderation: erin (shadow_muted) can post in the Room with zero friction' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
+commit;
+
+-- ...but bob (an ordinary other user) genuinely cannot see it in the Room
+-- either...
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+select 'moderation: bob cannot see erin (shadow_muted)''s Room post' as check_name,
+  not exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
+rollback;
+
+-- ...nor can a logged-out visitor...
+begin;
+set local role anon;
+select 'moderation: anon cannot see erin (shadow_muted)''s Room post' as check_name,
+  not exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
+rollback;
+
+-- ...while erin herself and an admin both still can.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+select 'moderation: erin can see her own shadow_muted Room post' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
+rollback;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_admin","role":"authenticated"}';
+select 'moderation: admin can see erin''s shadow_muted Room post' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
+rollback;
+
+-- Cleanup for erin's committed Room post above (the one `commit`, not
+-- `rollback`, in this section) — same reasoning as 6i's own erin commit: it
+-- has to actually persist for bob/admin's visibility checks above to have
+-- anything real to read.
+delete from posts where body = 'zzrlstest erin shadow muted room post';
+
+-- is_system anti-impersonation. PASS = 42501: bob (an ordinary, unrestricted
+-- user) cannot insert a post claiming is_system = true — i.e. cannot dress
+-- his own post up as an official KIVO update.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+insert into posts (author_profile_id, body, is_system)
+select id, 'zzrlstest bob forging a system post', true from profiles where username = 'zzrlstest_bob';
+rollback;
+
+-- PASS = 42501: bob also cannot UPDATE his own real, already-existing post
+-- to retroactively flip is_system to true.
+begin;
+select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest public post by bob'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+update posts set is_system = true where id = current_setting('rls_test.post_id')::uuid;
+rollback;
+
+-- Belt and suspenders on the two checks above (same reasoning as 6i's own
+-- post-rollback re-checks): confirm from a neutral, RLS-bypassing
+-- connection that bob's real post genuinely still has is_system = false.
+select 'is_system: bob''s real post is still is_system = false after his rejected forge attempts' as check_name,
+  (select is_system from posts where body = 'zzrlstest public post by bob') = false as passed;
+
+-- Positive path: the real KIVO system profile (seeded by migration
+-- 0047_match_room_system_posts, the same trust boundary a service-role
+-- write from match-room-system-posts.ts operates under) can genuinely
+-- author an is_system post, and posts_select_public has no hidden extra
+-- gate on is_system specifically — an ordinary user reads it exactly like
+-- any other public post.
+begin;
+select set_config('rls_test.fixture_id',
+  (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+insert into posts (author_profile_id, fixture_id, body, is_system)
+select id, current_setting('rls_test.fixture_id')::uuid, 'zzrlstest system goal post', true from profiles where username = 'kivo_system';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+select 'is_system: bob (ordinary user) can read the real KIVO system post' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest system goal post' and is_system = true) as passed;
 rollback;
 
 

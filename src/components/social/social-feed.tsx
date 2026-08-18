@@ -213,6 +213,7 @@ export function SocialFeed({
           poll={post.poll}
           viewerSaved={post.viewerSaved}
           highlighted={post.id === highlightPostId}
+          isSystem={post.isSystem}
         />
       ))}
 

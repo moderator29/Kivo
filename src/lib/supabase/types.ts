@@ -1244,6 +1244,7 @@ export type Database = {
           fixture_id: string | null
           id: string
           is_edited: boolean
+          is_system: boolean
           updated_at: string
         }
         Insert: {
@@ -1253,6 +1254,7 @@ export type Database = {
           fixture_id?: string | null
           id?: string
           is_edited?: boolean
+          is_system?: boolean
           updated_at?: string
         }
         Update: {
@@ -1262,6 +1264,7 @@ export type Database = {
           fixture_id?: string | null
           id?: string
           is_edited?: boolean
+          is_system?: boolean
           updated_at?: string
         }
         Relationships: [
