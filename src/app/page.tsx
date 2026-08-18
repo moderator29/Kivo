@@ -3,9 +3,11 @@ import Image from "next/image";
 import { ArrowRight, Check, Eye, MessagesSquare, ShieldCheck, UserPlus, Sparkles } from "lucide-react";
 import kivoHeroArtwork from "../../public/brand/kivo-artwork-hero.webp";
 import { FadeIn } from "@/components/ui/fade-in";
+import { ScrollReveal } from "@/components/ui/scroll-reveal";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
+import { FaqSection } from "@/components/marketing/faq-section";
 
 // This page used to be `"use client"` in full just so two elements could
 // float via `motion.div` — that shipped React, `motion` and the whole page
@@ -382,7 +384,7 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16 lg:px-12">
-          <FadeIn className="flex flex-col items-center gap-3 text-center">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">What&apos;s inside</span>
             <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Everything a matchday needs, actually built out
@@ -390,12 +392,12 @@ export default function LandingPage() {
             <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
               Not a roadmap. Five features, each already live, each grounded in real data.
             </p>
-          </FadeIn>
+          </ScrollReveal>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURE_SHOWCASE.map((feature, index) => (
-              <FadeIn
+              <ScrollReveal
                 key={feature.title}
-                delay={index * 0.07}
+                delay={(index % 3) * 0.08}
                 className="kivo-glass-brand flex flex-col gap-5 rounded-3xl p-7"
               >
                 <div className="flex items-center gap-4">
@@ -418,13 +420,13 @@ export default function LandingPage() {
                   {feature.cta}
                   <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
                 </Link>
-              </FadeIn>
+              </ScrollReveal>
             ))}
           </div>
         </section>
 
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
-          <FadeIn className="flex flex-col items-center gap-3 text-center">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Why KIVO</span>
             <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Built different, on purpose
@@ -432,10 +434,10 @@ export default function LandingPage() {
             <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
               Four things that are actually true about KIVO, not just claimed. Check any of them yourself.
             </p>
-          </FadeIn>
+          </ScrollReveal>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {WHY_KIVO.map((pillar, index) => (
-              <FadeIn key={pillar.title} delay={index * 0.07} className="kivo-glass flex flex-col gap-4 rounded-3xl p-7">
+              <ScrollReveal key={pillar.title} delay={(index % 2) * 0.08} className="kivo-glass flex flex-col gap-4 rounded-3xl p-7">
                 <div className="kivo-glass-sharp flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
                   <pillar.icon className="h-5 w-5 text-kivo-cyan" strokeWidth={1.75} />
                 </div>
@@ -448,27 +450,42 @@ export default function LandingPage() {
                   {pillar.cta}
                   <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
                 </Link>
-              </FadeIn>
+              </ScrollReveal>
             ))}
           </div>
         </section>
 
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
-          <FadeIn className="flex flex-col items-center gap-3 text-center">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">How it works</span>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Look around free. Sign up when you&apos;re ready to play.
             </h2>
-          </FadeIn>
+          </ScrollReveal>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {HOW_IT_WORKS.map((step, index) => (
-              <FadeIn key={step.title} delay={index * 0.08} className="kivo-glass-brand flex flex-col gap-3 rounded-3xl p-6">
+              <ScrollReveal key={step.title} delay={index * 0.08} className="kivo-glass-brand flex flex-col gap-3 rounded-3xl p-6">
                 <step.icon className="h-8 w-8 text-kivo-cyan" strokeWidth={1.75} />
                 <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
                 <p className="text-sm leading-relaxed text-foreground-muted">{step.description}</p>
-              </FadeIn>
+              </ScrollReveal>
             ))}
           </div>
+        </section>
+
+        <section className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-16 lg:px-12">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">FAQ</span>
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Real questions, real answers
+            </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              No hype, just what KIVO actually is and how it actually works.
+            </p>
+          </ScrollReveal>
+          <ScrollReveal delay={0.08}>
+            <FaqSection />
+          </ScrollReveal>
         </section>
       </main>
 
