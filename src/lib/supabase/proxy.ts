@@ -2,6 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
+ * Request header carrying the path Proxy saw, for Server Components that need
+ * to know where the user was heading. Set on every matched request by
+ * `updateSupabaseSession` below, so an incoming value can never survive.
+ */
+export const REQUEST_PATH_HEADER = "x-kivo-path";
+
+/**
  * Supabase Auth session refresh for src/proxy.ts.
  *
  * Server Components cannot write cookies, so nothing downstream of this can
@@ -24,6 +31,17 @@ import { NextResponse, type NextRequest } from "next/server";
  * another.
  */
 export async function updateSupabaseSession(request: NextRequest): Promise<NextResponse> {
+  // KN-123. A Server Component cannot see the URL it is rendering for, and
+  // `(app)/layout.tsx` needs it: when it turns an unauthenticated visitor away
+  // it has to know what they were trying to open so sign-in can send them back
+  // there. Proxy is the only place in the request that still has it.
+  //
+  // `set`, never `append` — a client can put this header on its own request,
+  // and overwriting unconditionally on every matched path is what makes the
+  // spoofed value unreachable. It is re-validated by `sanitizeRedirectPath`
+  // before it is ever used as a destination regardless.
+  request.headers.set(REQUEST_PATH_HEADER, request.nextUrl.pathname + request.nextUrl.search);
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
