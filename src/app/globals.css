@@ -1201,24 +1201,28 @@ body {
      faint pearl wash from the reference rather than visible colour.
   --------------------------------------------------------------------------- */
   [data-theme="light"] .kivo-aurora-blob {
-    filter: blur(110px) saturate(0.55);
-    opacity: 0.16;
-  }
+  /* A saturated blob at 0.35 over near-white turns into a bruise, so light
+     mode desaturates hard and drops opacity. More blur than dark as well:
+     a heavily-blurred radial gradient at low alpha bands visibly against a
+     light backdrop — the 8-bit steps that are invisible over obsidian
+     become faint concentric rings over #f6f7f9 — and widening the falloff
+     spreads each step far enough apart to stop reading as a ring. */
+  filter: blur(140px) saturate(0.5);
+  opacity: 0.13;
+}
 
-  [data-theme="light"] .kivo-aurora-blob--magenta {
-    opacity: 0.1;
-  }
+[data-theme="light"] .kivo-aurora-blob--magenta {
+  opacity: 0.08;
+}
 
-  [data-theme="light"] .kivo-aurora-ambient {
-    /* App pages in light mode are already busy with white cards on grey; the
-       ambient wash behind them needs to be near-subliminal or every card edge
-       starts fighting a colour shift behind it. */
-    opacity: 0.5;
-  }
-
-  [data-theme="light"] .kivo-aurora-ambient .kivo-aurora-blob {
-    opacity: 0.09;
-  }
+/* App pages get none of it. The marketing page can afford ambient colour
+   behind a short hero; a fixture list cannot — there the same rings sit
+   behind dense white cards and read as a rendering fault rather than as
+   atmosphere. The body's own top-down wash already keeps those pages from
+   looking like a flat grey slab, which is all the ambient layer was for. */
+[data-theme="light"] .kivo-aurora-ambient {
+  display: none;
+}
 
   /* -------------------------------------------------------------------------
      DARK-AUTHORED IMAGERY ON A LIGHT PAGE
