@@ -1,0 +1,18 @@
+KIVO — Confirm your new email address
+
+A request was made to move this KIVO account from {{ .Email }}
+to {{ .NewEmail }}. Confirm the new address here:
+
+{{ .ConfirmationURL }}
+
+Can't use the link? Enter this code in KIVO instead:
+
+  {{ .Token }}
+
+Both expire in 1 hour and can only be used once.
+
+Didn't request this change? Ignore this email — the address on the account
+stays as it is.
+
+--
+This is an automated security message from KIVO. Please do not reply to it.

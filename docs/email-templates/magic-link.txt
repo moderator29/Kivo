@@ -1,0 +1,16 @@
+KIVO — Your sign-in code
+
+Someone asked to sign in to KIVO as {{ .Email }}. Enter this code to continue:
+
+  {{ .Token }}
+
+It expires in 1 hour and can only be used once.
+
+Opening this on the same device? This link signs you in directly:
+{{ .ConfirmationURL }}
+
+Didn't ask for this code? Ignore this email — nothing happens until the code
+is entered. KIVO staff will never ask you for it.
+
+--
+This is an automated security message from KIVO. Please do not reply to it.
