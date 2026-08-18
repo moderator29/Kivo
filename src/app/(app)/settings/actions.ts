@@ -1,6 +1,5 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -13,6 +12,7 @@ import {
   type NotificationPreferenceColumn,
 } from "@/lib/notification-preferences";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 // Matches the `profiles_bio_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length(bio) <= 500).
@@ -213,8 +213,9 @@ export async function updateTimezone(timezone: string | null) {
  * The storage sweep is not optional bookkeeping. Supabase refuses to delete an
  * auth user who still owns objects in Storage
  * (https://supabase.com/docs/guides/auth/managing-user-data), and any user who
- * has ever uploaded their own avatar owns objects in the `avatars` bucket at
- * `<auth_user_id>/<timestamp>.<ext>` (see avatar-actions.ts). Without this,
+ * has ever uploaded their own avatar or cover owns objects in the `avatars` /
+ * `backgrounds` buckets at `<auth_user_id>/<timestamp>.<ext>` (see
+ * avatar-actions.ts and profile/background-actions.ts). Without this,
  * deleteUser() would fail for exactly those users — the ones most likely to
  * have real data worth deleting — and the error would look like an unrelated
  * server fault. Objects are removed with the service-role client because the
@@ -235,14 +236,20 @@ export async function deleteAccount() {
   const admin = createServiceRoleSupabaseClient();
 
   try {
-    const { data: objects } = await admin.storage.from("avatars").list(user.id);
-    if (objects && objects.length > 0) {
-      const { error: removeError } = await admin.storage
-        .from("avatars")
-        .remove(objects.map((object) => `${user.id}/${object.name}`));
-      if (removeError) {
-        logError("settings.removeAvatarObjectsAccount", removeError);
-        return { error: "Something went wrong. Try again." };
+    // Every bucket this product writes user-owned objects into, at the same
+    // `<auth_user_id>/<filename>` layout. `backgrounds` joined `avatars` in
+    // migration 0065; missing it here would make the users who had customised
+    // their profile the most the ones who could not delete their account.
+    for (const bucket of ["avatars", "backgrounds"] as const) {
+      const { data: objects } = await admin.storage.from(bucket).list(user.id);
+      if (objects && objects.length > 0) {
+        const { error: removeError } = await admin.storage
+          .from(bucket)
+          .remove(objects.map((object) => `${user.id}/${object.name}`));
+        if (removeError) {
+          logError("settings.removeBucketObjectsAccount", removeError);
+          return { error: "Something went wrong. Try again." };
+        }
       }
     }
 

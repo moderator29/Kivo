@@ -177,3 +177,15 @@ export function formatDurationUntil(iso: string, now: Date | number = Date.now()
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
+
+/** "August 2026" — a month and year with no day, for a join date. Same
+ * locale + UTC discipline as `formatDate` above: the account was created at a
+ * real instant, but the only thing shown is which month it fell in, and that
+ * must not shift by a day depending on where the server or the reader is. */
+export function formatMonthYear(value: string): string {
+  return new Date(value).toLocaleDateString(DISPLAY_LOCALE, {
+    year: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+}
