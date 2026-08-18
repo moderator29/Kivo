@@ -20,7 +20,7 @@ export function AdminSidebar({ items }: { items: { href: string; label: string; 
     <aside className="hidden w-64 shrink-0 flex-col p-3 lg:flex">
       <div className="kivo-glass-brand flex h-full flex-col gap-6 rounded-3xl p-4">
         <div className="flex items-center gap-2 px-2 pt-1">
-          <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+          <Image src={kivoLogo} alt="" width={32} height={32} className="kivo-ink h-8 w-8 shrink-0" priority />
           <span className="text-base font-semibold tracking-tight text-foreground">KIVO Admin</span>
         </div>
         <nav className="flex flex-col gap-1">

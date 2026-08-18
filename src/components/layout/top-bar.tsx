@@ -55,7 +55,7 @@ export function TopBar({
         href="/home"
         className="flex items-center gap-2 rounded-lg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+        <Image src={kivoLogo} alt="" width={32} height={32} className="kivo-ink h-8 w-8 shrink-0" priority />
         <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
 

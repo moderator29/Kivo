@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Image from "next/image";
 import { ArrowUp } from "lucide-react";
-import kivoSocialArtwork from "../../../public/brand/kivo-artwork-social.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { PostCard } from "@/components/social/post-card";
 import { loadMorePosts } from "@/app/(app)/social/actions";
@@ -153,16 +151,6 @@ export function SocialFeed({
       <div className="flex flex-col gap-3">
         {newPostsPill}
         <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          {/* Last of the three commissioned KIVO artwork pieces placed off the
-              landing page this session (see the hero's placement comment in
-              src/app/page.tsx for the trademark check they went through) — its
-              running players and social UI cards fit a community empty state
-              better than the generic Users icon alone. Same edge-masked,
-              floating treatment as the hero; only shown when there's genuinely
-              nothing else on screen, so it never crowds a real feed. */}
-          <div className="kivo-artwork-float kivo-artwork-mask relative h-36 w-56 sm:h-44 sm:w-72">
-            <Image src={kivoSocialArtwork} alt="" fill className="object-contain" sizes="288px" />
-          </div>
           <p className="text-sm text-foreground-muted">
             {followingOnly
               ? "Nobody you follow has posted yet. Follow a user from their profile to see their posts here."

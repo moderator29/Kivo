@@ -4,6 +4,7 @@ import { MotionConfig } from "motion/react";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
+import { KivoInkFilter } from "@/components/theme/ink-filter";
 import { ThemedClerkProvider } from "@/components/theme/themed-clerk-provider";
 import { DEFAULT_THEME, THEME_COLOR } from "@/lib/theme";
 import "./globals.css";
@@ -96,6 +97,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             the browser parses and paints any real content, or every load
             flashes the default theme before settling on the chosen one. */}
         <ThemeScript />
+        <KivoInkFilter />
         <ThemeProvider>
           {/* Clerk is themed from React state rather than CSS variables (see
               ThemedClerkProvider), so it has to sit INSIDE ThemeProvider. It

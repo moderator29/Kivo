@@ -52,7 +52,7 @@ export default async function OnboardingPage() {
 
       <div className="relative z-10 flex flex-col items-center gap-8">
         <FadeIn>
-          <Image src={kivoLogo} alt="KIVO" width={96} height={96} className="h-24 w-24" priority />
+          <Image src={kivoLogo} alt="KIVO" width={96} height={96} className="kivo-ink h-24 w-24" priority />
         </FadeIn>
 
         <FadeIn delay={0.16} className="w-full max-w-sm">

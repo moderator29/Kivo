@@ -1,12 +1,9 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight, ShieldCheck, UserPlus, Sparkles } from "lucide-react";
-import kivoLogo from "../../public/brand/kivo-logo-transparent.webp";
-import kivoHeroArtwork from "../../public/brand/kivo-artwork-hero.webp";
 import { FadeIn } from "@/components/ui/fade-in";
+import { KivoMark } from "@/components/ui/kivo-mark";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
-import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
 
 // This page used to be `"use client"` in full just so two elements could
 // float via `motion.div` — that shipped React, `motion` and the whole page
@@ -15,26 +12,26 @@ import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
 // hero section), same pattern as the aurora background and `KivoMarkGlyph`,
 // so this stays a Server Component. See RECOMMENDATIONS.md item 73.
 //
-// Hero visual, revised twice now:
+// Hero visual, revised three times now, and the history is worth keeping
+// because two of the three revisions were forced by a real legal constraint
+// rather than by taste:
 // 1. The original hero used `kivo-trophy-crown.webp` at large, fully legible
-//    size. Re-examined at that size (not the tiny/near-illegible scale
-//    ScatteredTrophies below uses it at) it bakes in real competition marks
-//    — a Champions League star-ball, and the Premier League, LaLiga, Serie
-//    A, Bundesliga and Ligue 1 crests — into one flattened promotional
-//    composite, plus silhouetted athlete figures. That's real trademark
-//    exposure for a live commercial product, so it was pulled from the hero
-//    (kept only at ScatteredTrophies' tiny, illegible decorative scale).
-// 2. That was temporarily replaced with a hero built entirely from KIVO's
-//    own real UI language (glass cards + feature icons). Now replaced again
-//    with `kivo-artwork-hero.webp`, one of four commissioned KIVO artwork
-//    pieces (checked individually for the same trademark/right-of-publicity
-//    issue as #1 before use): a stylised K-emblem, crown, globe and stadium
-//    render with the KIVO wordmark. Verified clean — no real club/league
-//    crests, no readable third-party marks, no identifiable real athletes
-//    (every figure is an anonymous silhouette). The other three pieces
-//    (`kivo-artwork-command`, `-action`, `-social`) are saved alongside it
-//    for use elsewhere in the product (dashboard, match centre, community,
-//    empty states) rather than left unused.
+//    size. At that size it bakes real competition marks — a Champions League
+//    star-ball, and the Premier League, LaLiga, Serie A, Bundesliga and Ligue
+//    1 crests — into one flattened promotional composite, plus silhouetted
+//    athlete figures. That is real trademark exposure for a live commercial
+//    product, so it was pulled.
+// 2. Replaced with a hero built from KIVO's own UI language, then with
+//    `kivo-artwork-hero.webp`, one of four commissioned pieces (each checked
+//    individually against the same trademark / right-of-publicity issue as
+//    #1 before use).
+// 3. Now: no hero image at all, per founder direction. The commissioned
+//    artwork and the scattered trophy texture are both gone from this page
+//    and from the in-product surfaces that reused them. The hero is a single
+//    centred column — the K mark at display size, then the headline. The
+//    artwork files stay in public/brand/ rather than being deleted, since
+//    they were commissioned and cleared and the decision here is a design
+//    one, not a licensing one.
 
 const PROOF_POINTS = [
   {
@@ -111,8 +108,6 @@ export default function LandingPage() {
         <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
       </div>
 
-      <ScatteredTrophies />
-
       <div className="relative z-10 flex min-h-screen flex-col">
       <header className="flex items-center justify-between px-6 py-5 lg:px-12">
         <div className="flex items-center gap-2">
@@ -136,29 +131,27 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-1 flex-col">
-        <section className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-10 overflow-hidden px-6 pb-16 pt-6 text-center lg:flex-row lg:items-center lg:gap-8 lg:px-12 lg:pb-24 lg:pt-10 lg:text-left">
+        <section className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-8 overflow-hidden px-6 pb-16 pt-8 text-center lg:gap-9 lg:px-12 lg:pb-24 lg:pt-14">
           <style>{`
             @keyframes kivo-hero-logo-float {
               0%, 100% { transform: translateY(0); }
               50% { transform: translateY(-6px); }
             }
-            @keyframes kivo-hero-artwork-float {
-              0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-10px); }
-            }
           `}</style>
 
-          <div className="relative z-10 flex flex-col items-center gap-6 lg:items-start lg:gap-7">
+          <div className="relative z-10 flex flex-col items-center gap-6 lg:gap-7">
             <FadeIn delay={0}>
+              {/* Mark only — no wordmark, no tagline. The lockup's stacked text
+                  repeats the wordmark already in the header and the headline
+                  right below it, and it forced the K itself down to roughly
+                  half the box. Cropping to the mark lets it run much larger at
+                  the same footprint. Scales with the viewport rather than
+                  jumping at one breakpoint. */}
               <div style={{ animation: "kivo-hero-logo-float 5s ease-in-out infinite" }}>
-                <Image
-                  src={kivoLogo}
+                <KivoMark
                   alt="KIVO"
-                  width={280}
-                  height={280}
-                  className="h-44 w-44 lg:h-56 lg:w-56"
-                  sizes="(min-width: 1024px) 224px, 176px"
                   priority
+                  className="kivo-ink w-[13.5rem] sm:w-[17rem] lg:w-[21rem]"
                 />
               </div>
             </FadeIn>
@@ -205,32 +198,6 @@ export default function LandingPage() {
             </FadeIn>
           </div>
 
-          {/* Hero visual: commissioned KIVO artwork (see the import-site comment
-              above for the trademark check this went through). Shown on every
-              breakpoint, not just desktop, since a single scaling image (unlike
-              the old four-card cluster it replaced) has a clean mobile layout.
-              The image's own soft glow bleeds slightly non-black at its top/
-              bottom edges (checked in production), so it's edge-masked here to
-              dissolve into the page background instead of showing a rectangle. */}
-          <div className="relative z-10 flex w-full max-w-md flex-1 items-center justify-center lg:h-[460px] lg:max-w-none">
-            <div
-              style={{
-                animation: "kivo-hero-artwork-float 7s ease-in-out infinite",
-                maskImage: "radial-gradient(closest-side, black 72%, transparent 100%)",
-                WebkitMaskImage: "radial-gradient(closest-side, black 72%, transparent 100%)",
-              }}
-            >
-              <Image
-                src={kivoHeroArtwork}
-                alt="KIVO: live scores, AI-grounded analysis, and a social layer for football fans, all in one app"
-                width={1536}
-                height={1024}
-                className="h-auto w-full object-contain lg:h-[460px] lg:w-auto"
-                sizes="(min-width: 1024px) 640px, 90vw"
-                priority
-              />
-            </div>
-          </div>
         </section>
 
         <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 pb-16 sm:grid-cols-2 lg:px-12">

@@ -1220,13 +1220,41 @@ body {
     opacity: 0.09;
   }
 
-  /* The commissioned artwork is authored for obsidian — its own glow is
-     additive, so on a light page it renders as a grey rectangle with a bright
-     core. Blending it into the page recovers the intended "dissolves into the
-     background" effect without needing a second set of light-mode assets. */
+  /* -------------------------------------------------------------------------
+     DARK-AUTHORED IMAGERY ON A LIGHT PAGE
+
+     Every brand raster is painted to glow against obsidian, which makes them
+     misbehave on a near-white page in ways blend modes cannot fix. Worth
+     stating, because "just multiply it" is the obvious wrong answer: over a
+     white backdrop every separable blend mode collapses to plain source-over
+     (multiply returns Cs when Cb is 1), so a blend mode buys nothing at all
+     here. Only masking and opacity do real work.
+     ------------------------------------------------------------------------- */
+
+  /* The commissioned artwork is fully opaque over a black field, so on light
+     it lands as a heavy dark slab beside the copy it is meant to sit behind.
+     Its radial mask already dissolves the edges; this pulls it back so it
+     reads as backdrop rather than as the subject. */
   [data-theme="light"] .kivo-artwork-mask {
-    mix-blend-mode: multiply;
-    opacity: 0.5;
+    opacity: 0.72;
+  }
+
+  /* The logo lockup is not a clean cutout: the whole 1254² square carries a
+     faint blue bloom at roughly 4% alpha (measured off the asset, not
+     guessed). Over #f6f7f9 that composites to about #f1f1ff, so the asset
+     reads as a tinted rectangle with hard edges around the mark.
+
+     Applied in BOTH themes, not just light. On obsidian the bloom is nearly
+     invisible as colour, but it still has a hard rectangular boundary — and
+     now that the hero crops tight to the glyph's own bounding box rather
+     than showing the padded square, that boundary lands right against the
+     mark and reads as a box in dark too. What is being removed is an edge,
+     not a glow.
+
+     Done by remapping the alpha channel rather than by masking — see
+     src/components/theme/ink-filter.tsx for why a mask cannot work here. */
+  .kivo-ink {
+    filter: url(#kivo-ink-alpha);
   }
 
   /* ---------------------------------------------------------------------------

@@ -36,7 +36,7 @@ export default function GlobalError({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6 text-center">
       <div className="kivo-glass-brand flex w-full max-w-md flex-col items-center gap-7 rounded-3xl px-8 py-12">
-        <Image src={kivoLogo} alt="" width={48} height={48} className="h-12 w-12 shrink-0" priority />
+        <Image src={kivoLogo} alt="" width={48} height={48} className="kivo-ink h-12 w-12 shrink-0" priority />
 
         <div className="kivo-gradient-intelligence flex h-16 w-16 items-center justify-center rounded-2xl">
           <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.75} />

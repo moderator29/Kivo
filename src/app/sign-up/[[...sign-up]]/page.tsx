@@ -29,7 +29,7 @@ export default async function SignUpPage({
 
       <div className="relative z-10 flex flex-col items-center gap-8">
         <FadeIn>
-          <Image src={kivoLogo} alt="KIVO" width={144} height={144} className="h-32 w-32" priority />
+          <Image src={kivoLogo} alt="KIVO" width={144} height={144} className="kivo-ink h-32 w-32" priority />
         </FadeIn>
 
         {clerkConfigured ? (

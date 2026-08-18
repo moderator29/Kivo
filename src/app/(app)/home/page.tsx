@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { Trophy, Target, Flame, Users, Star, ArrowRight } from "lucide-react";
-import kivoActionArtwork from "../../../../public/brand/kivo-artwork-action.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
@@ -121,22 +119,6 @@ export default async function HomePage() {
         <div>
           <p className="text-sm font-medium text-foreground-subtle">{greeting()}</p>
           <h1 className="text-2xl font-semibold text-foreground">{firstName}, here&apos;s your football.</h1>
-        </div>
-        {/* Second of the three commissioned KIVO artwork pieces placed off the
-            landing page this session (see the hero's placement comment in
-            src/app/page.tsx for the trademark check they went through). A
-            small decorative accent next to the greeting, not a replacement
-            for any real data below it — same edge-masked, floating treatment
-            as the hero, scaled down to fit a dashboard header instead of a
-            hero section. */}
-        <div className="kivo-artwork-float kivo-artwork-mask relative -mt-2 h-28 w-44 shrink-0 sm:h-32 sm:w-52 lg:mt-0 lg:h-28 lg:w-44">
-          <Image
-            src={kivoActionArtwork}
-            alt=""
-            fill
-            className="object-contain"
-            sizes="(min-width: 1024px) 176px, 208px"
-          />
         </div>
       </FadeIn>
 

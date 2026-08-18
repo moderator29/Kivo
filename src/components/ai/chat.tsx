@@ -2,10 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info } from "lucide-react";
-import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
 import { cn } from "@/lib/utils";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { ThinkingLine } from "@/components/ui/thinking-orb";
@@ -550,9 +548,6 @@ export function AiChat({
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className="flex justify-center"
             >
-              <div className="kivo-artwork-float kivo-artwork-mask relative h-40 w-64 sm:h-48 sm:w-80">
-                <Image src={kivoCommandArtwork} alt="" fill className="object-contain" sizes="320px" />
-              </div>
             </motion.div>
 
             <motion.div

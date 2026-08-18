@@ -36,7 +36,7 @@ export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolea
         href="/home"
         className="flex items-center gap-2 rounded-lg px-3 pb-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <Image src={kivoLogo} alt="" width={36} height={36} className="h-9 w-9 shrink-0" priority />
+        <Image src={kivoLogo} alt="" width={36} height={36} className="kivo-ink h-9 w-9 shrink-0" priority />
         <span className="text-lg font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
 

@@ -37,7 +37,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
     <>
       <div className="kivo-glass-brand sticky top-0 z-30 flex items-center justify-between gap-3 rounded-none px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
-          <Image src={kivoLogo} alt="" width={28} height={28} className="h-7 w-7 shrink-0" priority />
+          <Image src={kivoLogo} alt="" width={28} height={28} className="kivo-ink h-7 w-7 shrink-0" priority />
           <span className="text-sm font-semibold tracking-tight text-foreground">KIVO Admin</span>
         </div>
         <button
@@ -79,7 +79,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Image src={kivoLogo} alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+                  <Image src={kivoLogo} alt="" width={32} height={32} className="kivo-ink h-8 w-8 shrink-0" priority />
                   <span className="text-base font-semibold tracking-tight text-foreground">KIVO Admin</span>
                 </div>
                 <button
