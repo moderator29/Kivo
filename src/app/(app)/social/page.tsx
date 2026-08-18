@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ShieldHalf, Users } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
-import { PostComposer } from "@/components/social/post-composer";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { ComposeEntry } from "@/components/social/compose-entry";
+import { FeedFilterTabs } from "@/components/social/feed-filter-tabs";
 import { SocialFeed } from "@/components/social/social-feed";
+import { PageHeader } from "@/components/layout/page-header";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
+import { parseSocialFilter, resolveFeedScope, SOCIAL_FILTER_LABELS } from "@/lib/social-filters";
 import { fetchPostsPage } from "./posts";
 
 export const metadata: Metadata = { title: "Social" };
@@ -14,19 +19,28 @@ export default async function SocialPage({
 }: {
   searchParams: Promise<{ filter?: string; post?: string }>;
 }) {
-  const { filter, post: targetPostId } = await searchParams;
-  const followingOnly = filter === "following";
+  const { filter: filterParam, post: targetPostId } = await searchParams;
+  const filter = parseSocialFilter(filterParam);
 
   const profile = await getOrCreateProfile();
-  const { posts: pageOne, hasMore } = await fetchPostsPage(0, profile?.id ?? null, { followingOnly });
+  const scope = resolveFeedScope(filter, profile);
 
-  // RECOMMENDATIONS item 237: a notification's `?post=<id>` link (see
-  // postHref() in lib/notification-registry.ts) names a specific post that
-  // might sit past whatever this first page would normally load — fetch it
-  // explicitly and prepend it rather than relying on it already being in the
-  // DOM. `fetchPostsPage`'s own `postIds` option (already built for /saved)
-  // does the same joins as every other post on this page, so it renders
-  // identically once merged in.
+  // "Unavailable" is not an empty feed: Club mates with no club chosen, or
+  // Rivals with no rival named, cannot be built at all. Nothing is queried,
+  // and the page says which of the two it is and where to fix it — rather
+  // than rendering an empty list that reads as "nobody has posted".
+  const { posts: pageOne, hasMore } =
+    scope.kind === "unavailable"
+      ? { posts: [], hasMore: false }
+      : await fetchPostsPage(0, profile?.id ?? null, {
+          followingOnly: scope.kind === "following",
+          teamId: scope.kind === "team" ? scope.teamId : undefined,
+        });
+
+  // RECOMMENDATIONS item 237: a notification's `?post=<id>` link names a
+  // specific post that might sit past whatever this first page would normally
+  // load — fetch it explicitly and prepend it rather than relying on it
+  // already being in the DOM.
   let posts = pageOne;
   if (targetPostId && !pageOne.some((p) => p.id === targetPostId)) {
     const { posts: targetPosts } = await fetchPostsPage(0, profile?.id ?? null, { postIds: [targetPostId] });
@@ -34,59 +48,63 @@ export default async function SocialPage({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 lg:px-8">
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Community</h1>
+    <div className="kivo-page">
+      <PageHeader title="Community" description="Takes, polls and match talk from KIVO fans." />
+
+      <FadeIn delay={0.04}>
+        <ComposeEntry signedIn={Boolean(profile)} avatarUrl={profile ? resolveAvatarSrc(profile) : null} />
       </FadeIn>
 
-      <FadeIn delay={0.06}>
-        <PostComposer signedIn={Boolean(profile)} />
-      </FadeIn>
-
-      {/* RECOMMENDATIONS item 175: only shown signed in — follows are
-          owner-scoped, so a guest's "Following" tab could only ever be
-          empty. Plain server-rendered links (not a client tab switch): the
-          filter is a real navigation to a different query, not client-only
-          UI state, matching how /transfers' filters work. */}
+      {/* Only shown signed in — every filter but "All" is scoped to the
+          viewer's own follows or their own club, so a guest's tabs could only
+          ever be empty. */}
       {profile && (
-        <FadeIn delay={0.08} className="flex w-fit gap-4 border-b border-hairline">
-          <Link
-            href="/social"
-            className={`relative px-1 py-2.5 text-xs font-semibold transition-colors ${
-              followingOnly ? "text-foreground-subtle hover:text-foreground-muted" : "text-foreground"
-            }`}
-          >
-            All
-            {!followingOnly && <span className="kivo-gradient-prime absolute inset-x-0 -bottom-px h-0.5 rounded-full" />}
-          </Link>
-          <Link
-            href="/social?filter=following"
-            className={`relative px-1 py-2.5 text-xs font-semibold transition-colors ${
-              followingOnly ? "text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
-            }`}
-          >
-            Following
-            {followingOnly && <span className="kivo-gradient-prime absolute inset-x-0 -bottom-px h-0.5 rounded-full" />}
-          </Link>
+        <FadeIn delay={0.06}>
+          <FeedFilterTabs active={filter} />
         </FadeIn>
       )}
 
-      {/* key remounts SocialFeed when the All/Following tab changes: its
-          `posts` state is seeded once via useState(initialPosts), so without
-          a key tied to the filter, clicking the tab link above re-renders
-          this server component with correctly-filtered `posts` but the
-          already-mounted client SocialFeed keeps showing its stale list. */}
-      <WidgetErrorBoundary context="socialFeed" label="The feed">
-        <SocialFeed
-          key={followingOnly ? "following" : "all"}
-          initialPosts={posts}
-          initialHasMore={hasMore}
-          signedIn={Boolean(profile)}
-          followingOnly={followingOnly}
-          scrollToPostId={targetPostId ?? null}
-          initialOffset={pageOne.length}
-        />
-      </WidgetErrorBoundary>
+      {scope.kind === "unavailable" ? (
+        <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
+          {scope.missing === "rival" ? (
+            <ShieldHalf className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
+          ) : (
+            <Users className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
+          )}
+          <p className="text-sm font-semibold text-foreground">
+            {scope.missing === "rival" ? "You haven't named a rival yet." : "You haven't picked a club yet."}
+          </p>
+          <p className="max-w-sm text-xs text-foreground-subtle">
+            {scope.missing === "rival"
+              ? "KIVO holds no list of which clubs are rivals — this feed shows posts from fans of the one club you name, and nothing until you name it."
+              : "Club mates shows posts from other fans of the club you support. Tell KIVO which one that is and this feed fills up on its own."}
+          </p>
+          <Link
+            href={scope.missing === "rival" ? "/settings/clubs" : "/profile/club"}
+            className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
+          >
+            {scope.missing === "rival" ? "Name your rival" : "Pick your club"}
+          </Link>
+        </FadeIn>
+      ) : (
+        // key remounts SocialFeed when the filter changes: its `posts` state is
+        // seeded once via useState(initialPosts), so without a key tied to the
+        // filter, clicking a tab re-renders this server component with
+        // correctly-filtered `posts` while the mounted client feed keeps
+        // showing its stale list.
+        <WidgetErrorBoundary context="socialFeed" label="The feed">
+          <SocialFeed
+            key={filter}
+            initialPosts={posts}
+            initialHasMore={hasMore}
+            signedIn={Boolean(profile)}
+            filter={filter}
+            emptyLabel={SOCIAL_FILTER_LABELS[filter]}
+            scrollToPostId={targetPostId ?? null}
+            initialOffset={pageOne.length}
+          />
+        </WidgetErrorBoundary>
+      )}
     </div>
   );
 }

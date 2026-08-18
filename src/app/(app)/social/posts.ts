@@ -66,7 +66,16 @@ export type PostListItem = {
 export async function fetchPostsPage(
   offset: number,
   viewerProfileId: string | null,
-  options?: { fixtureId?: string; limit?: number; followingOnly?: boolean; postIds?: string[] },
+  options?: {
+    fixtureId?: string;
+    limit?: number;
+    followingOnly?: boolean;
+    /** Club mates / Rivals: posts by profiles whose favourite_team_id is this
+     * club. Both filters are the same question about a different team id, so
+     * they share one code path — see src/lib/social-filters.ts. */
+    teamId?: string;
+    postIds?: string[];
+  },
 ): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
   const limit = options?.limit ?? SOCIAL_PAGE_SIZE;
   const supabase = createServerSupabaseClient();
@@ -97,6 +106,45 @@ export async function fetchPostsPage(
     // .in() doesn't guarantee the result order matches the input array, so
     // the caller's real ordering (by save recency) is restored here.
     pageRows = options.postIds.map((id) => rowById.get(id)).filter((p): p is PostRow => !!p);
+  } else if (options?.teamId) {
+    // Club mates / Rivals. The join this needs — posts to profiles, filtered
+    // on someone else's favourite_team_id — crosses an RLS boundary:
+    // profiles_select_own_or_admin restricts a plain select on `profiles` to
+    // the caller's own row, so doing this client-side would silently return
+    // zero rows forever rather than error. get_team_feed_post_ids (migration
+    // 0068) is the narrow SECURITY DEFINER read for it, and restates
+    // posts_select_public's shadow-mute predicate by hand, since a definer
+    // function bypasses the policy that would otherwise apply it.
+    //
+    // It returns ids only, hydrated below by exactly the same joins every
+    // other post on this page gets — so a Club mates card and an All card are
+    // the same card.
+    const { data: idRows, error: idError } = await supabase.rpc("get_team_feed_post_ids", {
+      p_team_id: options.teamId,
+      p_offset: offset,
+      p_limit: limit + 1,
+    });
+    if (idError) {
+      logError("social.posts.teamFeed", idError);
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+    }
+    const orderedIds = (idRows ?? []).map((row) => row.post_id);
+    hasMore = orderedIds.length > limit;
+    const pageIds = orderedIds.slice(0, limit);
+    if (pageIds.length === 0) return { error: null, posts: [], hasMore: false };
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("id, body, created_at, author_profile_id, is_system")
+      .in("id", pageIds);
+    if (error) {
+      logError("social.posts.teamFeedHydrate", error);
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+    }
+    // .in() does not preserve the input order, and the RPC's ordering (newest
+    // first) is the whole point of asking it.
+    const rowById = new Map((data ?? []).map((row) => [row.id, row]));
+    pageRows = pageIds.map((id) => rowById.get(id)).filter((row): row is PostRow => Boolean(row));
   } else {
     // RECOMMENDATIONS item 175: `followed_type = 'user'` (the
     // follow_target_type enum already supports it — see 0001) filtered to

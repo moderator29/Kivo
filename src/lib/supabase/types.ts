@@ -1804,6 +1804,66 @@ export type Database = {
           },
         ]
       }
+      standings_snapshots: {
+        Row: {
+          captured_at: string
+          drawn: number
+          goals_against: number
+          goals_for: number
+          id: string
+          lost: number
+          played: number
+          points: number
+          position: number | null
+          season_id: string
+          team_id: string
+          won: number
+        }
+        Insert: {
+          captured_at?: string
+          drawn: number
+          goals_against: number
+          goals_for: number
+          id?: string
+          lost: number
+          played: number
+          points: number
+          position?: number | null
+          season_id: string
+          team_id: string
+          won: number
+        }
+        Update: {
+          captured_at?: string
+          drawn?: number
+          goals_against?: number
+          goals_for?: number
+          id?: string
+          lost?: number
+          played?: number
+          points?: number
+          position?: number | null
+          season_id?: string
+          team_id?: string
+          won?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standings_snapshots_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "standings_snapshots_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_requests: {
         Row: {
           created_at: string
@@ -2390,6 +2450,16 @@ export type Database = {
           username: string
         }[]
       }
+      get_standings_movement: {
+        Args: { p_season_id: string; p_since?: string }
+        Returns: {
+          current_points: number
+          current_position: number
+          previous_points: number
+          previous_position: number
+          team_id: string
+        }[]
+      }
       get_sync_health_summary: {
         Args: { p_days?: number }
         Returns: {
@@ -2411,6 +2481,15 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_team_id: string }
         Returns: {
           post_id: string
+        }[]
+      }
+      get_team_position_history: {
+        Args: { p_limit?: number; p_season_id: string; p_team_id: string }
+        Returns: {
+          captured_at: string
+          played: number
+          points: number
+          position: number
         }[]
       }
       get_xp_total: { Args: { p_profile_id: string }; Returns: number }
@@ -2467,6 +2546,21 @@ export type Database = {
           p_sync_run_id?: string
         }
         Returns: string
+      }
+      record_standings_snapshot: {
+        Args: {
+          p_drawn: number
+          p_goals_against: number
+          p_goals_for: number
+          p_lost: number
+          p_played: number
+          p_points: number
+          p_position: number
+          p_season_id: string
+          p_team_id: string
+          p_won: number
+        }
+        Returns: boolean
       }
       redeem_invite_code: {
         Args: { p_invite_code: string }
@@ -2543,6 +2637,7 @@ export type Database = {
           p_home_score_ht?: number
           p_home_team_id: string
           p_kickoff_at: string
+          p_matchday?: number
           p_minute_elapsed?: number
           p_provider: string
           p_provider_entity_id: string
