@@ -323,3 +323,123 @@ export const ICON_SIZES = {
 } as const;
 
 export type IconSize = keyof typeof ICON_SIZES;
+
+/* ---------------------------------------------------------------------------
+   CONTAINERS, DENSITY AND TYPE
+
+   Added after production feedback that the product reads as "basic", "jam
+   packed", and that container styling "is not really slick". Those are three
+   descriptions of one thing: KIVO has good tokens and no *rhythm*. Measured
+   across the codebase before writing any of this down, because a spacing rule
+   invented from taste is just one more opinion:
+
+     container radius   rounded-2xl x200, rounded-3xl x40, rounded-xl x39
+     container padding  p-5 x70, p-4 x67, p-6 x52, p-8 x18, p-3 x15
+     gaps               gap-3 x361, gap-2 x350, gap-1.5 x171, gap-1 x118
+     UI type            text-sm x465, text-xs x422, text-[11px] x212,
+                        plus text-[10px] x14 and text-[9px] x3
+
+   Two things stand out. Container padding has four popular values and no rule
+   for choosing between them — that is what "not slick" looks like from the
+   outside. And 289 uses of gap-1/gap-1.5 against 52 uses of p-6/p-8 means the
+   space *between* elements is routinely competing with the space *around*
+   them, which is precisely what "jam packed" describes: nothing groups,
+   because everything is equally close to everything else.
+--------------------------------------------------------------------------- */
+
+export type ContainerRole = {
+  id: string;
+  title: string;
+  /** The Tailwind classes that define this role's box. */
+  spec: string;
+  rule: string;
+};
+
+/**
+ * The container ladder. Radius, padding and internal gap move together — a
+ * container is not a radius you pick and a padding you pick, it is one of these
+ * five things. Values follow the measured majority at each size, so adopting
+ * the ladder is mostly a matter of naming what is already there.
+ */
+export const CONTAINER_ROLES: ContainerRole[] = [
+  {
+    id: "control",
+    title: "Control",
+    spec: "rounded-xl · px-3.5 py-2.5 · gap-2",
+    rule: "Anything pressable: button, chip, field, tab. Small radius, tight gap — a control is one object, not a group.",
+  },
+  {
+    id: "row",
+    title: "Row",
+    spec: "px-4 py-3 · gap-3 · no radius of its own",
+    rule: "One item among many inside a grouped card. It inherits the card's corners and is separated by a hairline, never by its own box — stacked boxes are what makes a list look cluttered.",
+  },
+  {
+    id: "card",
+    title: "Card",
+    spec: "rounded-2xl · p-5 · gap-3",
+    rule: "The default. One unit of content. If you are unsure what a container is, it is this.",
+  },
+  {
+    id: "panel",
+    title: "Panel",
+    spec: "rounded-2xl · p-6 · gap-4",
+    rule: "A section that contains cards or rows and has its own heading. More padding than a card because it is holding other containers, not text.",
+  },
+  {
+    id: "feature",
+    title: "Feature",
+    spec: "rounded-3xl · p-6 sm:p-8 · gap-4",
+    rule: "Rare, and earns it: a hero, a live match header, a moment the user earned. Pairs with the brand-ring glass tier. More than one on a screen means none of them is a feature.",
+  },
+];
+
+export type DensityRule = { title: string; rule: string; why: string };
+
+/**
+ * The four rules that decide whether a screen breathes. Everything here is a
+ * relationship between two numbers, not a number — which is why none of them
+ * can be expressed as a token, and why they need saying out loud.
+ */
+export const DENSITY_RULES: DensityRule[] = [
+  {
+    title: "Padding beats gap",
+    rule: "The padding around a group must be visibly larger than the gap between the things inside it. A p-5 card holds gap-3 children; it never holds gap-5 children.",
+    why: "Grouping is carried entirely by this ratio. When they are equal, the eye cannot tell what belongs to what, and the screen reads as jammed no matter how much total space is on it.",
+  },
+  {
+    title: "Corners nest inward",
+    rule: "A container inside a container drops one radius step: rounded-2xl outside, rounded-xl inside. Never the same radius twice, never larger inside than out.",
+    why: "Concentric corners are the difference between two boxes that were placed and two boxes that happened to overlap. It is a small detail that reads instantly as considered.",
+  },
+  {
+    title: "One divider weight per boundary",
+    rule: "Inside a container, separate rows with border-hairline-soft. The container's own edge is border-hairline. Do not stack a card inside a card to separate two rows.",
+    why: "Nested boxes multiply edges. A grouped list with one outer edge and hairline dividers holds the same content in visibly less visual noise.",
+  },
+  {
+    title: "Vertical rhythm is coarse, not fine",
+    rule: "Between top-level sections of a page: gap-6. Inside a section: gap-3. Nothing in between.",
+    why: "Two clearly different spacings read as structure. Five slightly different spacings read as an accident, which is the single most common reason a competent screen still feels amateur.",
+  },
+];
+
+export type TypeStep = { className: string; title: string; rule: string };
+
+/**
+ * Four steps for UI text and three for headings. The measured tail below the
+ * scale — `text-[10px]` and `text-[9px]` — is not a style, it is text nobody
+ * over forty can read on a phone, and it should be treated as a defect.
+ */
+export const TYPE_STEPS: TypeStep[] = [
+  { className: "text-2xl font-semibold tracking-tight", title: "Page title", rule: "One per page. Names the screen." },
+  { className: "text-lg font-semibold tracking-tight", title: "Section title", rule: "The heading of a panel." },
+  { className: "text-sm text-foreground", title: "Body", rule: "Content. Names, copy, values. The default." },
+  { className: "text-sm text-foreground-muted", title: "Supporting", rule: "Secondary copy that is still meant to be read." },
+  { className: "text-xs text-foreground-subtle", title: "Meta", rule: "Timestamps, counts, captions." },
+  {
+    className: "text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle",
+    title: "Label",
+    rule: "The ONLY sanctioned use of 11px, and only uppercase — caps height buys back the legibility the size costs. Never for sentence-case copy, and never smaller than this.",
+  },
+];

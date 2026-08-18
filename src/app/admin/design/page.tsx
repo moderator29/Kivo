@@ -1,8 +1,17 @@
 import type { Metadata } from "next";
 import { Palette } from "lucide-react";
-import { GRADIENTS, SURFACE_TIERS, TOKEN_GROUPS, ICON_STROKE } from "@/lib/design-system";
+import {
+  CONTAINER_ROLES,
+  DENSITY_RULES,
+  GRADIENTS,
+  SURFACE_TIERS,
+  TOKEN_GROUPS,
+  TYPE_STEPS,
+  ICON_STROKE,
+} from "@/lib/design-system";
 import { DesignTokenTable } from "@/components/admin/design-token-table";
 import { DesignMotionDemo } from "@/components/admin/design-motion-demo";
+import { DesignDensityDemo } from "@/components/admin/design-density-demo";
 import { FadeIn } from "@/components/ui/fade-in";
 
 export const metadata: Metadata = {
@@ -36,11 +45,80 @@ export default function AdminDesignPage() {
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Design system</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-foreground-muted">
-          Every token, surface tier and motion vocabulary KIVO actually ships, each next to the rule for
-          choosing it. Values are read from the live stylesheet in the theme you are currently in — switch
-          the theme from the top bar to audit the other palette against the same rules.
+          Every rule, token, surface tier and motion vocabulary KIVO actually ships. Values are read from
+          the live stylesheet in the theme you are currently in — switch the theme from the top bar to
+          audit the other palette against the same rules.
+        </p>
+        <p className="max-w-2xl text-[13px] leading-relaxed text-foreground-subtle">
+          Read top to bottom before building a screen. The first three sections are the ones that decide
+          whether a page feels considered or merely correct; the token tables below them are reference.
         </p>
       </FadeIn>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="flex flex-col gap-4">
+        <SectionHeading
+          title="Density"
+          blurb="The rules that decide whether a screen breathes. Each one is a relationship between two measurements rather than a value, which is why none of them can be a token and all of them have to be said out loud."
+        />
+        <DesignDensityDemo />
+        <div className="kivo-glass flex flex-col overflow-hidden rounded-2xl">
+          {DENSITY_RULES.map((rule, index) => (
+            <div
+              key={rule.title}
+              className={`flex flex-col gap-1.5 p-5 ${index > 0 ? "border-t border-hairline-soft" : ""}`}
+            >
+              <h3 className="text-sm font-semibold text-foreground">{rule.title}</h3>
+              <p className="text-[13px] leading-relaxed text-foreground-muted">{rule.rule}</p>
+              <p className="text-[13px] leading-relaxed text-foreground-subtle">{rule.why}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="flex flex-col gap-4">
+        <SectionHeading
+          title="Containers"
+          blurb="A container is not a radius you pick and a padding you pick — it is one of these five things. Radius, padding and internal gap move together, and the values follow what the codebase already reached for most often at each size."
+        />
+        <div className="kivo-glass flex flex-col overflow-hidden rounded-2xl">
+          {CONTAINER_ROLES.map((role, index) => (
+            <div
+              key={role.id}
+              className={`flex flex-col gap-1.5 p-5 ${index > 0 ? "border-t border-hairline-soft" : ""}`}
+            >
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h3 className="text-sm font-semibold text-foreground">{role.title}</h3>
+                <code className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-accent">{role.spec}</code>
+              </div>
+              <p className="text-[13px] leading-relaxed text-foreground-muted">{role.rule}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="flex flex-col gap-4">
+        <SectionHeading
+          title="Type"
+          blurb="Six steps, and the list is closed. Anything below the label step — the app still contains 14 uses of 10px and 3 of 9px — is a defect to fix rather than a size to choose."
+        />
+        <div className="kivo-glass flex flex-col overflow-hidden rounded-2xl">
+          {TYPE_STEPS.map((step, index) => (
+            <div
+              key={step.title}
+              className={`flex flex-col gap-2 p-5 ${index > 0 ? "border-t border-hairline-soft" : ""}`}
+            >
+              <span className={step.className}>{step.title}</span>
+              <code className="w-fit rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-foreground-subtle">
+                {step.className}
+              </code>
+              <p className="text-[13px] leading-relaxed text-foreground-muted">{step.rule}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ---------------------------------------------------------------- */}
       <section className="flex flex-col gap-4">
