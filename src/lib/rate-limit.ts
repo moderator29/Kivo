@@ -2,8 +2,21 @@ import "server-only";
 import { headers } from "next/headers";
 import { createServiceRoleSupabaseClient } from "./supabase/server";
 import { logError } from "./log";
+import { formatRetryAfter } from "./rate-limit-format";
 
-export type RateLimitResult = { ok: true } | { ok: false; error: string };
+export { formatRetryAfter };
+
+export type RateLimitResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: string;
+      /** Whole seconds until the oldest event in the window falls out of it —
+       * i.e. the first moment this action can succeed again. Null only when the
+       * lookup that computes it failed, in which case `error` says "in a
+       * moment" rather than naming a duration it doesn't know. */
+      retryAfterSeconds: number | null;
+    };
 
 /**
  * KIVO_NEXT_GEN KN-93. This used to be a 1-in-200 chance of an **unbounded**
@@ -31,7 +44,8 @@ const CLEANUP_BACKSTOP_MAX_ROWS = 200;
  * Sliding-window rate limiter backed by rate_limit_events (see
  * supabase/migrations/0013_rate_limiting.sql). Counts how many events the
  * given key/action pair has logged in the last `windowSeconds`, and refuses
- * once `maxRequests` is reached.
+ * once `maxRequests` is reached — atomically, in a single round trip, since
+ * migration 0066 (KN-25).
  *
  * Uses the service-role client deliberately: rate_limit_events has no
  * client-facing RLS policy (nothing for anon/authenticated to read or write),
@@ -68,43 +82,87 @@ export async function checkRateLimit(
 
   const windowStart = new Date(Date.now() - windowSeconds * 1000).toISOString();
 
-  let count: number | null = null;
+  // KN-25. This used to be a count query followed, further down, by a separate
+  // insert — two round trips with no transaction between them. Two concurrent
+  // requests both read a count under the limit and both proceeded, so the
+  // effective ceiling under concurrency was higher than the configured one.
+  // Tolerable for post spam; not tolerable for the OTP request/verify endpoints
+  // (KN-116), where the entire value of the limit is that it cannot be outrun
+  // by parallelism.
+  //
+  // `consume_rate_limit` (migration 0066) decides and records in one call,
+  // serialized per (action, key) by a transaction-scoped advisory lock. Read
+  // that migration for why wrapping the two statements in one transaction is
+  // necessary but NOT sufficient on its own: the thing that needs locking is an
+  // absence of rows, and no row lock can cover that. Different keys never
+  // contend, so one abusive address cannot slow anybody else's writes down.
+  let allowed: boolean;
   try {
-    const { count: windowCount, error: countError } = await supabase
-      .from("rate_limit_events")
-      .select("id", { count: "exact", head: true })
-      .eq("profile_id_or_ip", key)
-      .eq("action", action)
-      .gte("created_at", windowStart);
+    const { data, error } = await supabase.rpc("consume_rate_limit", {
+      p_key: key,
+      p_action: action,
+      p_max_requests: maxRequests,
+      p_window_seconds: windowSeconds,
+    });
 
-    if (countError) {
-      logError("rateLimit.countFailed", countError, { action });
+    if (error) {
+      // Unchanged stance: fail OPEN on an infrastructure error (a Supabase
+      // hiccup must not lock users out of the whole product), closed only on a
+      // real over-limit answer.
+      logError("rateLimit.consumeFailed", error, { action });
       return { ok: true };
     }
-    count = windowCount;
+    allowed = data !== false;
   } catch (error) {
-    // A rejected fetch (DNS, TLS, timeout) never reaches `countError` —
-    // supabase-js only surfaces PostgREST-level failures there.
-    logError("rateLimit.countThrew", error, { action });
+    // A rejected fetch (DNS, TLS, timeout) never reaches `error` — supabase-js
+    // only surfaces PostgREST-level failures there.
+    logError("rateLimit.consumeThrew", error, { action });
     return { ok: true };
   }
 
-  if ((count ?? 0) >= maxRequests) {
+  if (!allowed) {
+    // KN-60: every rejection used to read "You're doing that a bit too fast.
+    // Please wait a moment and try again." — for a 60-second posting window and
+    // for a 24-hour one alike. The window knows exactly when it reopens, and a
+    // user who is told "a moment" for something that is actually hours away has
+    // been misled by a message that was trying to be gentle.
+    //
+    // The reopening time is the oldest event still inside the window plus the
+    // window length. One extra indexed read, and only on the rejection path —
+    // the allowed path (the overwhelming majority) is untouched.
+    let retryAfterSeconds: number | null = null;
+    try {
+      const { data: oldest } = await supabase
+        .from("rate_limit_events")
+        .select("created_at")
+        .eq("profile_id_or_ip", key)
+        .eq("action", action)
+        .gte("created_at", windowStart)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (oldest) {
+        const reopensAt = new Date(oldest.created_at).getTime() + windowSeconds * 1000;
+        retryAfterSeconds = Math.max(1, Math.ceil((reopensAt - Date.now()) / 1000));
+      }
+    } catch (error) {
+      // Never let the *explanation* of a refusal turn into a different failure.
+      logError("rateLimit.retryAfterFailed", error, { action });
+    }
+
     return {
       ok: false,
-      error: "You're doing that a bit too fast. Please wait a moment and try again.",
+      error: retryAfterSeconds
+        ? `You're doing that too quickly. Try again in ${formatRetryAfter(retryAfterSeconds)}.`
+        : "You're doing that too quickly. Try again in a moment.",
+      retryAfterSeconds,
     };
   }
 
-  // Past this point the caller is already allowed through, so nothing below
-  // may change that answer — recording the event and sweeping stale rows are
-  // both best-effort bookkeeping.
+  // The event row was already written by consume_rate_limit, inside the same
+  // statement that allowed this caller through. Nothing below may change that
+  // answer — the stale-row sweep is best-effort bookkeeping.
   try {
-    const { error: insertError } = await supabase
-      .from("rate_limit_events")
-      .insert({ profile_id_or_ip: key, action });
-    if (insertError) logError("rateLimit.recordFailed", insertError, { action });
-
     if (Math.random() < CLEANUP_PROBABILITY) {
       const { error: cleanupError } = await supabase.rpc("prune_rate_limit_events", {
         p_older_than_seconds: CLEANUP_MAX_AGE_SECONDS,
@@ -113,7 +171,7 @@ export async function checkRateLimit(
       if (cleanupError) logError("rateLimit.cleanupFailed", cleanupError, { action });
     }
   } catch (error) {
-    logError("rateLimit.recordThrew", error, { action });
+    logError("rateLimit.cleanupThrew", error, { action });
   }
 
   return { ok: true };

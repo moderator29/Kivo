@@ -11,6 +11,7 @@ import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome as Outcome } from "@/l
 import { formatDeadlineCountdown } from "@/app/(app)/fantasy/fantasy-rules";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+import { RetryableError } from "@/components/ui/retryable-error";
 import { cn } from "@/lib/utils";
 
 const NEAR_LOCK_MS = 60 * 60_000;
@@ -131,6 +132,9 @@ export function PredictionCard({
   const pathname = usePathname();
   const [prediction, setPrediction] = useState<Outcome | null>(initialPrediction);
   const [error, setError] = useState<string | null>(null);
+  // KN-56: which pick failed, so the retry repeats the user's actual choice
+  // rather than asking them to remember it after the rollback.
+  const [failedOutcome, setFailedOutcome] = useState<Outcome | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const [pending, startTransition] = useTransition();
   const { now, locked, nearLock } = useLockState(kickoffAt);
@@ -152,6 +156,7 @@ export function PredictionCard({
     }
     if (pending || locked || outcome === prediction) return;
     setError(null);
+    setFailedOutcome(null);
     setJustSaved(false);
     const previous = prediction;
     setPrediction(outcome);
@@ -160,6 +165,7 @@ export function PredictionCard({
       if (result.error) {
         setPrediction(previous);
         setError(result.error);
+        setFailedOutcome(outcome);
       } else {
         setJustSaved(true);
       }
@@ -269,18 +275,19 @@ export function PredictionCard({
 
       <AnimatePresence>
         {error ? (
-          <motion.p
+          <motion.div
             key="error"
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
-            className="text-xs text-critical"
-            role="status"
-            aria-live="polite"
           >
-            {error}
-          </motion.p>
+            <RetryableError
+              message={error}
+              retrying={pending}
+              onRetry={failedOutcome ? () => handlePick(failedOutcome) : undefined}
+            />
+          </motion.div>
         ) : justSaved ? (
           <motion.p
             key="saved"

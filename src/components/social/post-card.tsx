@@ -15,6 +15,7 @@ import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { usePopoverPlacement } from "@/hooks/use-popover-placement";
 import { useIsClamped } from "@/hooks/use-clamped";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+import { RetryableError } from "@/components/ui/retryable-error";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,11 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // KN-56: remembering which option failed is what makes "Try again" possible
+  // at all — the rollback puts the poll back the way it was, so without this
+  // there is nothing left on screen saying what the user had picked.
+  const [failedOptionId, setFailedOptionId] = useState<string | null>(null);
+
   function handleVote(optionId: string) {
     if (!signedIn) {
       router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
@@ -116,6 +122,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
     }
     if (pending || optionId === localPoll.viewerOptionId) return;
     setError(null);
+    setFailedOptionId(null);
     const previous = localPoll;
     const previousOptionId = localPoll.viewerOptionId;
     setLocalPoll((current) => ({
@@ -133,6 +140,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
       if (result.error) {
         setLocalPoll(previous);
         setError(result.error);
+        setFailedOptionId(optionId);
       }
     });
   }
@@ -181,9 +189,12 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
           {localPoll.resultsUnavailable ? "Couldn't load results" : `${total} vote${total === 1 ? "" : "s"}`}
         </p>
         {error && (
-          <p className="text-[11px] text-critical" role="status" aria-live="polite">
-            {error}
-          </p>
+          <RetryableError
+            size="xs"
+            message={error}
+            retrying={pending}
+            onRetry={failedOptionId ? () => handleVote(failedOptionId) : undefined}
+          />
         )}
       </div>
     </div>

@@ -9,6 +9,7 @@ import { REACTIONS, type ReactionType } from "@/lib/reactions";
 import { usePopoverPlacement } from "@/hooks/use-popover-placement";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+import { RetryableError } from "@/components/ui/retryable-error";
 import { cn } from "@/lib/utils";
 
 /**
@@ -85,9 +86,16 @@ export function ReactionPicker({
   // the optimistic state on failure with no explanation at all).
   useEffect(() => {
     if (!error) return;
-    const timeout = setTimeout(() => setError(null), 4000);
+    // KN-56: eight seconds, not four — the message now carries a "Try again"
+    // control, and a retry affordance that vanishes before it can be read is
+    // worse than no affordance.
+    const timeout = setTimeout(() => setError(null), 8000);
     return () => clearTimeout(timeout);
   }, [error]);
+
+  // KN-56: the reaction the user was trying to set, kept so "Try again" can
+  // repeat the exact gesture. Cleared on success and on any new attempt.
+  const [failedReaction, setFailedReaction] = useState<ReactionType | null | undefined>(undefined);
 
   function applyReaction(next: ReactionType | null) {
     if (pending) return;
@@ -95,6 +103,7 @@ export function ReactionPicker({
     const previousCount = optimisticCount;
     const delta = (next !== null ? 1 : 0) - (previousReaction !== null ? 1 : 0);
     setError(null);
+    setFailedReaction(undefined);
     setOptimisticReaction(next);
     setOptimisticCount((c) => c + delta);
     setPickerOpen(false);
@@ -107,6 +116,7 @@ export function ReactionPicker({
         setOptimisticReaction(previousReaction);
         setOptimisticCount(previousCount);
         setError(result.error);
+        setFailedReaction(next);
       }
     });
   }
@@ -200,16 +210,20 @@ export function ReactionPicker({
 
       <AnimatePresence>
         {error && (
-          <motion.p
-            role="alert"
+          <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 z-20 mt-1 w-max max-w-[14rem] text-[11px] text-critical"
+            className="absolute top-full left-0 z-20 mt-1 w-max max-w-[16rem]"
           >
-            {error}
-          </motion.p>
+            <RetryableError
+              size="xs"
+              message={error}
+              retrying={pending}
+              onRetry={failedReaction !== undefined ? () => applyReaction(failedReaction) : undefined}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
