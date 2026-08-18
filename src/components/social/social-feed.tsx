@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { ArrowUp } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { PostCard } from "@/components/social/post-card";
+import { NewPostsWatcher } from "@/components/social/new-posts-watcher";
+import { SoftErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { loadMorePosts } from "@/app/(app)/social/actions";
 import type { PostListItem } from "@/app/(app)/social/posts";
-import { useSupabaseClient } from "@/lib/supabase/client";
-import type { Database } from "@/lib/supabase/types";
 
 /** `/social`'s post list plus a "Load more" button that appends the next page
  * via `loadMorePosts` — same offset-based shape as `LeaguesList`/`TeamsGrid`
@@ -38,7 +38,6 @@ export function SocialFeed({
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
-  const supabase = useSupabaseClient();
 
   // Runs once on mount only — scrollToPostId is a one-shot "where the viewer
   // arrived from" hint from the URL the page loaded with, not something a
@@ -61,64 +60,24 @@ export function SocialFeed({
   // it only flips a dismissible pill the user clicks to reload.
   const [hasNewPosts, setHasNewPosts] = useState(false);
   const [refreshing, startRefresh] = useTransition();
+  const handleNewPosts = useCallback(() => setHasNewPosts(true), []);
 
-  // Synced after every commit (not read/written during render) so the
-  // realtime subscription below — which only ever mounts once — always sees
-  // the current newest-loaded timestamp without needing to resubscribe every
-  // time `posts` changes.
-  const latestCreatedAtRef = useRef(posts[0]?.createdAt ?? null);
-  useEffect(() => {
-    latestCreatedAtRef.current = posts[0]?.createdAt ?? null;
-  }, [posts]);
-
-  // Only populated for the "Following" tab — the viewer's own followed
-  // author ids, read once via the browser client so RLS (`follows_select_own`)
-  // scopes it to the signed-in viewer automatically. Used to decide whether
-  // an INSERT the realtime channel sees is actually relevant to this tab,
-  // the same filter fetchPostsPage already applies server-side for the
-  // initial page.
-  const followedAuthorIdsRef = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    if (!followingOnly) {
-      followedAuthorIdsRef.current = null;
-      return;
-    }
-    let cancelled = false;
-    supabase
-      .from("follows")
-      .select("followed_id")
-      .eq("followed_type", "user")
-      .then(({ data }) => {
-        if (!cancelled) followedAuthorIdsRef.current = new Set((data ?? []).map((f) => f.followed_id));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, followingOnly]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("posts-feed")
-      .on<Database["public"]["Tables"]["posts"]["Row"]>(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "posts" },
-        (payload) => {
-          const inserted = payload.new;
-          const newest = latestCreatedAtRef.current;
-          if (newest && new Date(inserted.created_at).getTime() <= new Date(newest).getTime()) return;
-          if (followingOnly) {
-            const followed = followedAuthorIdsRef.current;
-            if (!followed || !followed.has(inserted.author_profile_id)) return;
-          }
-          setHasNewPosts(true);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, followingOnly]);
+  // The subscription itself lives in NewPostsWatcher behind a
+  // SoftErrorBoundary. That split is deliberate and load-bearing: it is the
+  // only part of this page that needs a browser Supabase client, and
+  // docs/BUG_AUDIT_2026-08-18.md C4 caught /social showing "Something went
+  // wrong" — server 200, client throw during hydration — because that client
+  // was constructed unconditionally in *this* component, so a feed full of
+  // perfectly readable posts died with it. Now the worst case is no pill.
+  const realtimeWatcher = (
+    <SoftErrorBoundary context="social.newPostsWatcher">
+      <NewPostsWatcher
+        followingOnly={followingOnly}
+        latestCreatedAt={posts[0]?.createdAt ?? null}
+        onNewPosts={handleNewPosts}
+      />
+    </SoftErrorBoundary>
+  );
 
   function handleLoadMore() {
     setError(null);
@@ -169,6 +128,7 @@ export function SocialFeed({
   if (posts.length === 0) {
     return (
       <div className="flex flex-col gap-3">
+        {realtimeWatcher}
         {newPostsPill}
         <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <p className="text-sm text-foreground-muted">
@@ -183,6 +143,7 @@ export function SocialFeed({
 
   return (
     <div className="flex flex-col gap-3">
+      {realtimeWatcher}
       {newPostsPill}
       {posts.map((post, index) => (
         <PostCard
