@@ -46,9 +46,19 @@ export function MatchRoomTab({
   viewer = null,
   posts: initialPosts,
   scrollToPostId = null,
+  homeTeamName,
+  awayTeamName,
+  isFinished = false,
 }: {
   fixtureId: string;
   signedIn: boolean;
+  /** KN-100: the two real club names, so the "Who wins?" template can offer
+   * them as poll options rather than the composer inventing labels. */
+  homeTeamName: string;
+  awayTeamName: string;
+  /** KN-100: after full time "who wins?" is answered, so that template is not
+   * offered — and "man of the match" becomes the one that makes sense. */
+  isFinished?: boolean;
   /** KN-62: who is watching, for Realtime Presence. Keyed by profile id so two
    * tabs of one person count once; the name is only ever used for the typing
    * line, never for the watching count. */
@@ -99,7 +109,14 @@ export function MatchRoomTab({
     <div className="flex flex-col gap-3">
       <RoomPresenceBar watching={watching} typingNames={typingNames} />
 
-      <RoomComposer signedIn={signedIn} fixtureId={fixtureId} onTypingChange={setTyping} />
+      <RoomComposer
+        signedIn={signedIn}
+        fixtureId={fixtureId}
+        onTypingChange={setTyping}
+        homeTeamName={homeTeamName}
+        awayTeamName={awayTeamName}
+        isFinished={isFinished}
+      />
 
       {posts.length === 0 ? (
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">

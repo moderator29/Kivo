@@ -860,6 +860,12 @@ function MatchCentreTabsInner({
               viewer={viewer}
               posts={roomPosts}
               scrollToPostId={scrollToPostId}
+              // KN-100: the poll templates need the two real club names and
+              // whether the match has finished. Passed down rather than
+              // re-fetched — this component already has both.
+              homeTeamName={homeTeamName}
+              awayTeamName={awayTeamName}
+              isFinished={preMatch.status === "finished"}
             />
         )}
       </motion.div>
