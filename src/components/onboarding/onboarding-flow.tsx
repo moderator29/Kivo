@@ -519,6 +519,24 @@ export function SuccessPanel({
   );
 }
 
+// Discrete count-up keyframes for the XP badge, identical technique to
+// /rewards/page.tsx's own xpCountKeyframes (kept here rather than shared,
+// since that one is a Server Component computing it inline and this is a
+// Client Component — same output, different rendering context): each step
+// resets the `kivo-xp-count` counter to the real running value, landing
+// exactly on `xp` at 100% every time. RECOMMENDATIONS.md item 18 (item 317):
+// this was the one screen already built to celebrate a reward whose XP
+// number still just appeared fully-formed with no count.
+function xpCountUpKeyframes(xp: number): string {
+  const steps = xp > 0 ? Math.min(xp, 40) : 0;
+  if (steps === 0) return "";
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const percent = ((i / steps) * 100).toFixed(2);
+    const value = Math.round((xp * i) / steps);
+    return `${percent}% { counter-reset: kivo-xp-count ${value}; }`;
+  }).join("\n");
+}
+
 function BadgeReveal({ xp, badge }: { xp: number; badge: AwardedBadge | null }) {
   return (
     <div className="relative flex h-[26vh] min-h-[180px] w-full items-center justify-center sm:h-[320px]">
@@ -541,7 +559,21 @@ function BadgeReveal({ xp, badge }: { xp: number; badge: AwardedBadge | null }) 
           )}
           {xp > 0 && (
             <span className="absolute -bottom-2 right-0 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-3 py-1 text-xs font-bold text-live shadow-lg">
-              +{xp} XP
+              {/* Real value always in the DOM, correct even if the counter
+                  animation doesn't render (no CSS support, reduced motion). */}
+              <style>{`
+                @keyframes kivo-xp-count-up {
+                  ${xpCountUpKeyframes(xp)}
+                }
+                .kivo-xp-count-up::before {
+                  content: "+" counter(kivo-xp-count);
+                }
+              `}</style>
+              <span
+                aria-hidden="true"
+                className="kivo-xp-count-up inline-block animate-[kivo-xp-count-up_1.2s_cubic-bezier(0.22,1,0.36,1)_0.3s_forwards]"
+              />
+              <span className="sr-only">+{xp}</span> XP
             </span>
           )}
         </div>

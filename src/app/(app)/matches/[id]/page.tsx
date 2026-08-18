@@ -261,6 +261,19 @@ export default async function MatchCentrePage({
             0% { opacity: 0; transform: scale(0.82); }
             100% { opacity: 1; transform: scale(1); }
           }
+          /* RECOMMENDATIONS.md item 18/316: kivo-score-reveal above fires
+             identically for a genuine goal and a routine sync correction.
+             MatchScoreDisplay only plays this one on a real, detected score
+             increase — reusing kivo-gradient-victory (already the app's
+             real achievement color) as a brief glow layered behind the
+             score, so an actual goal gets a visibly bigger moment than a
+             stat nudge, on top of the existing reveal rather than
+             replacing it. */
+          @keyframes kivo-goal-glow {
+            0% { opacity: 0; transform: scale(0.85); }
+            30% { opacity: 0.55; transform: scale(1.08); }
+            100% { opacity: 0; transform: scale(1); }
+          }
         `}</style>
 
         <div className="flex items-center justify-between text-xs text-foreground-subtle">

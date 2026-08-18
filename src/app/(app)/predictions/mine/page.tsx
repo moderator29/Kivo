@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
 import { staggerDelay } from "@/lib/stagger";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import { PREDICTION_OUTCOME_LABEL, computeStreaks } from "@/lib/predictions";
@@ -247,10 +248,10 @@ export default async function MyPredictionsPage() {
                           {PREDICTION_OUTCOME_LABEL[row.predicted_outcome]}
                         </span>
                       </span>
-                      <span className={`flex shrink-0 items-center gap-1 text-xs font-medium ${result.className}`}>
+                      <ResultBadgeReveal isCorrect={(row.points_awarded ?? 0) > 0} className={result.className}>
                         <ResultIcon className="h-3.5 w-3.5" strokeWidth={2} />
                         {result.label}
-                      </span>
+                      </ResultBadgeReveal>
                     </div>
                   </div>
                 </FadeIn>
