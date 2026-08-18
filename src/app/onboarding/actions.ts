@@ -192,7 +192,10 @@ export async function finishOnboarding(
   let badge: AwardedBadge | null = null;
   try {
     [xpWritten, badge] = await Promise.all([
-      awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding"),
+      // KN-91: onboarding completes once per profile, so the profile id *is*
+      // the award's identity. A double-submitted final step now returns the
+      // existing award instead of writing a second one.
+      awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding", `onboarding:${profile.id}`),
       awardBadge(profile.id, "welcome"),
     ]);
   } catch (rewardError) {

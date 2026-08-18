@@ -5,12 +5,27 @@ import { logError } from "./log";
 
 export type RateLimitResult = { ok: true } | { ok: false; error: string };
 
-// Chance (1 in N) of also sweeping rows older than CLEANUP_MAX_AGE_SECONDS on
-// any given check. This is the only cleanup this table gets — there's no
-// pg_cron/scheduled-job budget for a dedicated janitor, so the sliding window
-// itself opportunistically keeps the table from growing forever instead.
-const CLEANUP_PROBABILITY = 1 / 200;
+/**
+ * KIVO_NEXT_GEN KN-93. This used to be a 1-in-200 chance of an **unbounded**
+ * `delete ... where created_at < X` — a full sweep of a table whose size grows
+ * with total platform activity, run inside `checkRateLimit`, which sits on the
+ * first line of essentially every write in the product. It was a sound design
+ * when it was written: there was no scheduler, so the sliding window
+ * opportunistically kept its own table from growing forever.
+ *
+ * There is a scheduler now (see `pruneRateLimitEvents` and its caller in
+ * src/app/api/cron/sync-live/route.ts), so the sweep belongs there and this is
+ * only a backstop for a deployment where the scheduled caller is not wired up.
+ * Two changes make it safe to keep in a latency path at all: it is an order of
+ * magnitude rarer, and — the part that actually matters — it is now *bounded*,
+ * because it goes through `prune_rate_limit_events(seconds, max_rows)`
+ * (migration 0061), which deletes at most a fixed number of rows per call. No
+ * single user request can pay an unbounded cost for everybody else's history.
+ */
+const CLEANUP_PROBABILITY = 1 / 2000;
 const CLEANUP_MAX_AGE_SECONDS = 60 * 60 * 24; // 1 day — comfortably past any window this app uses
+/** Deliberately small: this is the in-request backstop, not the real sweep. */
+const CLEANUP_BACKSTOP_MAX_ROWS = 200;
 
 /**
  * Sliding-window rate limiter backed by rate_limit_events (see
@@ -91,8 +106,10 @@ export async function checkRateLimit(
     if (insertError) logError("rateLimit.recordFailed", insertError, { action });
 
     if (Math.random() < CLEANUP_PROBABILITY) {
-      const staleBefore = new Date(Date.now() - CLEANUP_MAX_AGE_SECONDS * 1000).toISOString();
-      const { error: cleanupError } = await supabase.from("rate_limit_events").delete().lt("created_at", staleBefore);
+      const { error: cleanupError } = await supabase.rpc("prune_rate_limit_events", {
+        p_older_than_seconds: CLEANUP_MAX_AGE_SECONDS,
+        p_max_rows: CLEANUP_BACKSTOP_MAX_ROWS,
+      });
       if (cleanupError) logError("rateLimit.cleanupFailed", cleanupError, { action });
     }
   } catch (error) {
@@ -117,4 +134,35 @@ export async function getClientIp(): Promise<string> {
     if (first) return first;
   }
   return headerList.get("x-real-ip") ?? "unknown";
+}
+
+/**
+ * The real sweep (KN-93): called from the scheduled job, not from a user
+ * request. Deletes expired `rate_limit_events` rows and returns how many went.
+ *
+ * Bounded per call by `prune_rate_limit_events`' own row cap (migration 0061)
+ * rather than by anything here, so this can never become a long-running delete
+ * regardless of who calls it or how far behind the table has fallen. A backlog
+ * simply takes several scheduled runs to clear, which is the correct trade for
+ * a table nothing reads outside its own sliding window.
+ *
+ * Best-effort: returns 0 on any failure. Housekeeping must never be the reason
+ * a scheduled worker reports itself broken.
+ */
+export async function pruneRateLimitEvents(maxRows = 5000): Promise<number> {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data, error } = await supabase.rpc("prune_rate_limit_events", {
+      p_older_than_seconds: CLEANUP_MAX_AGE_SECONDS,
+      p_max_rows: maxRows,
+    });
+    if (error) {
+      logError("rateLimit.scheduledPruneFailed", error, {});
+      return 0;
+    }
+    return data ?? 0;
+  } catch (error) {
+    logError("rateLimit.scheduledPruneFailed", error, {});
+    return 0;
+  }
 }

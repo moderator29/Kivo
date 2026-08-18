@@ -8,6 +8,7 @@ import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { shouldNotify } from "@/lib/notification-preferences";
+import { buildNotification } from "@/lib/notification-payloads";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -129,25 +130,39 @@ async function notifyComment(
 
   if (recipientId === commenter.id) return;
 
-  const actorPrefix = type === "post_comment" ? "commenter" : "replier";
   const serviceClient = createServiceRoleSupabaseClient();
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, recipientId, "social_alerts_enabled"))) return;
 
-  const { error } = await serviceClient.from("notifications").insert({
-    profile_id: recipientId,
-    type,
-    // fixture_id (nullable) lets the bell/notifications page route back to
-    // the fixture's Match Centre Room tab for a room post, vs. /social for a
-    // general one — see postHref() in lib/notification-registry.ts.
-    payload: {
-      post_id: postId,
-      fixture_id: post.fixture_id,
-      [`${actorPrefix}_username`]: commenter.username,
-      [`${actorPrefix}_display_name`]: commenter.display_name,
-    },
-  });
+  // KN-90: the typed constructor. This producer is the one that most needed
+  // it — the actor keys used to be built with a computed property name
+  // (`[`${actorPrefix}_username`]`), which typechecks against an untyped jsonb
+  // column no matter what string it produces. A typo in that prefix would have
+  // written a payload the registry could not read, silently, with no failure
+  // anywhere. The two branches are now written out, which is longer and is the
+  // point: each one is checked against the payload type for its own
+  // notification type.
+  //
+  // fixture_id (nullable) lets the bell/notifications page route back to
+  // the fixture's Match Centre Room tab for a room post, vs. /social for a
+  // general one — see postHref() in lib/notification-registry.ts.
+  const notification =
+    type === "post_comment"
+      ? buildNotification(recipientId, "post_comment", {
+          post_id: postId,
+          fixture_id: post.fixture_id,
+          commenter_username: commenter.username,
+          commenter_display_name: commenter.display_name,
+        })
+      : buildNotification(recipientId, "comment_reply", {
+          post_id: postId,
+          fixture_id: post.fixture_id,
+          replier_username: commenter.username,
+          replier_display_name: commenter.display_name,
+        });
+
+  const { error } = await serviceClient.from("notifications").insert(notification);
   if (error) console.error("Failed to create comment notification", error);
 }
 

@@ -95,7 +95,10 @@ export async function scorePredictions(): Promise<{ error: string | null; record
 
     processed += 1;
     if (correct) {
-      await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction");
+      // KN-91: keyed on the prediction, so re-running this scoring pass — which
+      // an admin can do at any time, and which a partial failure invites —
+      // cannot credit the same correct prediction twice.
+      await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction", `prediction:${row.id}`);
       await awardBadge(row.profile_id, "first_prediction_correct");
 
       // Real running total, not a guessed streak — counts this user's

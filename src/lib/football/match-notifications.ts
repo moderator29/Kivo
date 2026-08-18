@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { EVENT_LABEL, isGoalEventType, isRedCardEventType } from "./event-labels";
 import { filterNotifiable, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
+import { buildNotification } from "@/lib/notification-payloads";
 
 // RECOMMENDATIONS.md item 285: every notification type this file produces
 // (match_kickoff, match_result, match_goal, match_red_card, player_event) is
@@ -151,11 +152,13 @@ export async function notifyFixtureStatusChange(
   const finalType = type;
   const finalSummary = summary;
 
-  await insertNotifications(supabase, audience, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
-    profile_id: profileId,
-    type: finalType,
-    payload: { fixture_id: input.fixtureId, summary: finalSummary },
-  }));
+  // KN-90: every payload below is built through the typed constructor, so a
+  // match notification cannot ship without the two fields its renderer has no
+  // way to reconstruct (the fixture it links to, and the summary line built
+  // here from team names the renderer never sees).
+  await insertNotifications(supabase, audience, MATCH_NOTIFICATION_COLUMN, (profileId) =>
+    buildNotification(profileId, finalType, { fixture_id: input.fixtureId, summary: finalSummary }),
+  );
 }
 
 export interface FixtureEventNotificationInput {
@@ -197,21 +200,17 @@ export async function notifyFixtureEvent(
 
     const teamFollowers = await teamAudience(supabase, input.teamId);
     for (const id of teamFollowers) notified.add(id);
-    await insertNotifications(supabase, teamFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
-      profile_id: profileId,
-      type,
-      payload: { fixture_id: input.fixtureId, summary, player_id: input.playerId },
-    }));
+    await insertNotifications(supabase, teamFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) =>
+      buildNotification(profileId, type, { fixture_id: input.fixtureId, summary, player_id: input.playerId }),
+    );
 
     if (input.playerId) {
       const playerFollowers = await playerAudience(supabase, input.playerId);
       const newOnes = [...playerFollowers].filter((id) => !notified.has(id));
       for (const id of newOnes) notified.add(id);
-      await insertNotifications(supabase, newOnes, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
-        profile_id: profileId,
-        type,
-        payload: { fixture_id: input.fixtureId, summary, player_id: input.playerId },
-      }));
+      await insertNotifications(supabase, newOnes, MATCH_NOTIFICATION_COLUMN, (profileId) =>
+        buildNotification(profileId, type, { fixture_id: input.fixtureId, summary, player_id: input.playerId }),
+      );
     }
     return;
   }
@@ -219,9 +218,11 @@ export async function notifyFixtureEvent(
   if (!input.playerId) return;
   const playerFollowers = await playerAudience(supabase, input.playerId);
   const summary = `${input.playerName ?? "A player you follow"} — ${EVENT_LABEL[input.eventType]} (${input.minute}') in ${input.teamName} vs ${input.opponentName}`;
-  await insertNotifications(supabase, playerFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
-    profile_id: profileId,
-    type: "player_event",
-    payload: { fixture_id: input.fixtureId, summary, player_id: input.playerId },
-  }));
+  await insertNotifications(supabase, playerFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) =>
+    buildNotification(profileId, "player_event", {
+      fixture_id: input.fixtureId,
+      summary,
+      player_id: input.playerId,
+    }),
+  );
 }

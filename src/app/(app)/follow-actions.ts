@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
 import { shouldNotify } from "@/lib/notification-preferences";
+import { buildNotification } from "@/lib/notification-payloads";
 
 // RECOMMENDATIONS item 175: "user" was already in the follow_target_type
 // enum (0001) and follows_no_self_follow already guards it — nothing
@@ -44,14 +45,15 @@ async function notifyNewFollower(followedProfileId: string, follower: { username
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, followedProfileId, "social_alerts_enabled"))) return;
 
-  const { error } = await serviceClient.from("notifications").insert({
-    profile_id: followedProfileId,
-    type: "new_follower",
-    payload: {
+  // KN-90: built through the typed constructor rather than an object literal,
+  // so a missing or renamed payload field is a type error here instead of a
+  // notification that renders fine and links nowhere.
+  const { error } = await serviceClient.from("notifications").insert(
+    buildNotification(followedProfileId, "new_follower", {
       follower_username: follower.username,
       follower_display_name: follower.display_name,
-    },
-  });
+    }),
+  );
   if (error) console.error("Failed to create new-follower notification", error);
 }
 

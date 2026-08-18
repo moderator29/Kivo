@@ -7,6 +7,7 @@ import { FOOTBALL_LIVE_POLLING_ENABLED, getActiveProviderStatus } from "@/lib/fo
 import { syncTodayFixtures } from "@/lib/football/sync";
 import { isAuthorizedCronRequest, isFixtureWorthSyncing } from "@/lib/football/live-worker-rules";
 import { logError } from "@/lib/log";
+import { pruneRateLimitEvents } from "@/lib/rate-limit";
 
 /**
  * The real, automated live-sync worker (founder directive, 2026-08-18) — the
@@ -161,6 +162,19 @@ export async function GET(request: Request) {
   // quota just to label a log row (see its doc comment in src/lib/football/index.ts).
   const { name: activeProviderName } = getActiveProviderStatus();
   const providerLabel = activeProviderName ?? "unconfigured";
+
+  // KIVO_NEXT_GEN KN-93. Deliberately the first thing after auth, and
+  // deliberately above every football gate below it: expiring rate-limit rows
+  // has nothing to do with whether a match is live or whether polling is
+  // enabled, and hanging it off those gates would mean the table is only ever
+  // swept on matchdays. This is the scheduled janitor that lets
+  // `checkRateLimit` stop doing a full-table delete inside a user request.
+  //
+  // Bounded per call by the SQL function itself, so a long backlog clears over
+  // several runs rather than in one long delete. Best-effort by contract — it
+  // cannot fail this request or change any decision made below it.
+  const pruned = await pruneRateLimitEvents();
+  if (pruned > 0) console.info(`Cron: pruned ${pruned} expired rate_limit_events rows`);
 
   // 1. The real gate. Never flip this from code — see FOOTBALL_LIVE_POLLING_ENABLED's
   // own doc comment.

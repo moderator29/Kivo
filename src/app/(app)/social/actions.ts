@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify } from "@/lib/notification-preferences";
 import { fetchPostsPage, type PostListItem } from "./posts";
+import { buildNotification } from "@/lib/notification-payloads";
 
 const MAX_POST_LENGTH = 2000;
 
@@ -84,9 +85,17 @@ export async function createPost(formData: FormData) {
   const fixtureId = String(formData.get("fixture_id") ?? "").trim() || null;
 
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase.from("posts").insert({ author_profile_id: profile.id, body, fixture_id: fixtureId });
+  // The id comes back because KN-91's XP award is keyed on it below — the post
+  // is the identity of the award, so a retried submission cannot pay twice.
+  // `posts` is publicly selectable (migration 0001), so reading it back here
+  // needs no policy change.
+  const { data: created, error } = await supabase
+    .from("posts")
+    .insert({ author_profile_id: profile.id, body, fixture_id: fixtureId })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !created) {
     console.error("Failed to create post", error);
     return { error: "Couldn't publish your post. Try again." };
   }
@@ -98,7 +107,7 @@ export async function createPost(formData: FormData) {
   // XP for it until the 24h window rolls over.
   const xpAllowance = await checkRateLimit(`user:${profile.id}`, "create_post_xp", MAX_XP_POSTS_PER_DAY, 60 * 60 * 24);
   await Promise.all([
-    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community") : Promise.resolve(),
+    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community", `post:${created.id}`) : Promise.resolve(),
     awardBadge(profile.id, "first_post"),
   ]);
 
@@ -169,7 +178,8 @@ export async function createPoll(formData: FormData) {
 
   const xpAllowance = await checkRateLimit(`user:${profile.id}`, "create_post_xp", MAX_XP_POSTS_PER_DAY, 60 * 60 * 24);
   await Promise.all([
-    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community") : Promise.resolve(),
+    // KN-91: same key shape as createPost above — a poll is a post.
+    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community", `post:${post.id}`) : Promise.resolve(),
     awardBadge(profile.id, "first_post"),
   ]);
 
@@ -306,19 +316,21 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   // never get the row in the first place.
   if (!(await shouldNotify(serviceClient, post.author_profile_id, "social_alerts_enabled"))) return;
 
-  const { error } = await serviceClient.from("notifications").insert({
-    profile_id: post.author_profile_id,
-    type: "post_like",
-    // fixture_id (nullable) lets the bell/notifications page route back to the
-    // fixture's Match Centre Room tab for a room post, vs. /social for a
-    // general one — see notificationHref() in lib/notification-registry.ts.
-    payload: {
+  // KN-90: the typed constructor, not an object literal — a dropped or renamed
+  // field is now a type error here rather than a notification that renders
+  // normally and whose link goes nowhere.
+  //
+  // fixture_id (nullable) lets the bell/notifications page route back to the
+  // fixture's Match Centre Room tab for a room post, vs. /social for a
+  // general one — see notificationHref() in lib/notification-registry.ts.
+  const { error } = await serviceClient.from("notifications").insert(
+    buildNotification(post.author_profile_id, "post_like", {
       post_id: postId,
       fixture_id: post.fixture_id,
       liker_username: liker.username,
       liker_display_name: liker.display_name,
-    },
-  });
+    }),
+  );
 
   if (error) console.error("Failed to create like notification", error);
 }
