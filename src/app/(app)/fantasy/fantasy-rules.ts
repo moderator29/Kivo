@@ -42,7 +42,23 @@ export function positionGroup(position: string | null): PositionGroupOrOther {
   if (p.includes("keeper") || p === "gk") return "Goalkeepers";
   if (p.includes("back") || p.includes("defen") || p === "df") return "Defenders";
   if (p.includes("mid") || p === "mf") return "Midfielders";
-  if (p.includes("forward") || p.includes("striker") || p.includes("wing") || p === "fw" || p === "st") {
+  // "attack" is not a nice-to-have synonym: API-Football — the primary
+  // provider — reports exactly four position values, and "Attacker" is the one
+  // it uses for forwards (see `position: p.position` in
+  // src/lib/football/providers/api-football.ts, straight from the vendor's
+  // players endpoint). Without this, every forward in a synced squad
+  // classified as "Other", which `validateRoster` rejects, so no legal fantasy
+  // squad could contain a striker at all. Found while writing the development
+  // seed (supabase/seed.sql), which has to produce squads matching SQUAD_RULES
+  // and could only do it by avoiding the provider's own vocabulary.
+  if (
+    p.includes("forward") ||
+    p.includes("striker") ||
+    p.includes("attack") ||
+    p.includes("wing") ||
+    p === "fw" ||
+    p === "st"
+  ) {
     return "Forwards";
   }
   return "Other";
