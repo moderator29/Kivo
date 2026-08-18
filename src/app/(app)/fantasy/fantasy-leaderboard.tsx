@@ -34,6 +34,21 @@ export function FantasyLeaderboard({
     );
   }
 
+  // Competition-style ranking: two teams tied on totalPoints share a rank
+  // (e.g. 1, 1, 3) instead of getting consecutive numbers, and the gold
+  // "achievement" ring is gated on the computed rank being 1 rather than on
+  // literal row position — so a genuine tie for first shows gold on both
+  // rows, not just whichever happened to sort first.
+  const ranks = entries.map((entry, index) => {
+    if (index === 0) return 1;
+    const prev = entries[index - 1];
+    const tied = entry.hasScores && prev.hasScores && entry.totalPoints === prev.totalPoints;
+    return tied ? -1 : index + 1; // -1 is a placeholder, resolved below
+  });
+  for (let i = 0; i < ranks.length; i++) {
+    if (ranks[i] === -1) ranks[i] = ranks[i - 1];
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="kivo-glass-brand flex flex-col gap-1 rounded-2xl p-4">
@@ -41,6 +56,7 @@ export function FantasyLeaderboard({
         <div className="flex flex-col divide-y divide-white/5">
           {entries.map((entry, index) => {
             const isViewer = entry.teamId === activeTeamId;
+            const rank = ranks[index];
             return (
               <div
                 key={entry.teamId}
@@ -50,12 +66,12 @@ export function FantasyLeaderboard({
               >
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-1 ${
-                    index === 0
+                    rank === 1
                       ? "bg-achievement/15 text-achievement ring-achievement/30"
                       : "bg-white/[0.06] text-foreground-subtle ring-white/10"
                   }`}
                 >
-                  {index + 1}
+                  {rank}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">

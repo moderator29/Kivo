@@ -146,6 +146,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
               type="button"
               onClick={() => setIsPrivate(true)}
               disabled={pending}
+              aria-pressed={isPrivate}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-semibold transition disabled:opacity-60 ${
                 isPrivate ? "border-transparent bg-kivo-cyan/15 text-kivo-cyan" : "border-white/10 text-foreground-muted hover:bg-white/5"
               }`}
@@ -157,6 +158,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
               type="button"
               onClick={() => setIsPrivate(false)}
               disabled={pending}
+              aria-pressed={!isPrivate}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-semibold transition disabled:opacity-60 ${
                 !isPrivate ? "border-transparent bg-kivo-cyan/15 text-kivo-cyan" : "border-white/10 text-foreground-muted hover:bg-white/5"
               }`}

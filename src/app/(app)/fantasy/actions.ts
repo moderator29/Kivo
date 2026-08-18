@@ -168,7 +168,7 @@ export async function setGameweekRoster(
     return { error: "Add players to your squad before saving." };
   }
 
-  const { data: players } = await supabase.from("players").select("id, position").in("id", playerIds);
+  const { data: players } = await supabase.from("players").select("id, position, full_name, known_as").in("id", playerIds);
   await ensureFantasyPlayerPrices(gameweek.season_id, playerIds);
   const { data: prices } = await supabase
     .from("fantasy_player_prices")
@@ -184,6 +184,7 @@ export async function setGameweekRoster(
       positionGroup: positionGroup(player?.position ?? null),
       price: priceMap.get(pick.playerId) ?? DEFAULT_FANTASY_PRICE,
       isStarting: pick.isStarting,
+      name: player?.known_as ?? player?.full_name ?? undefined,
     };
   });
 

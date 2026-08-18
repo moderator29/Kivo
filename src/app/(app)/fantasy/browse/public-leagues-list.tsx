@@ -100,7 +100,10 @@ export function PublicLeaguesList({
           {searching ? "Searching…" : "No public leagues match yet. Create your own and switch it to Public."}
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div
+          aria-busy={searching}
+          className={`flex flex-col gap-2 transition-opacity ${searching ? "opacity-50" : ""}`}
+        >
           {leagues.map((league, index) => (
             <FadeIn
               key={league.id}

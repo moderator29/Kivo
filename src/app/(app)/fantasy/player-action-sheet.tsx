@@ -76,7 +76,7 @@ export function PlayerActionSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-foreground-subtle transition hover:text-foreground"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-foreground-subtle transition hover:text-foreground"
               >
                 <X className="h-4 w-4" strokeWidth={1.75} />
               </button>
@@ -86,6 +86,7 @@ export function PlayerActionSheet({
               <ActionRow
                 icon={player.isStarting ? ArrowDownToLine : ArrowUpFromLine}
                 label={player.isStarting ? "Move to bench" : "Move to starting XI"}
+                disabled={locked}
                 onClick={() => {
                   onToggleStarting();
                   onClose();
@@ -94,18 +95,18 @@ export function PlayerActionSheet({
               <ActionRow
                 icon={Crown}
                 label={player.isCaptain ? "Already captain" : "Make captain"}
-                disabled={!isSaved || locked || pending || player.isCaptain}
-                hint={!isSaved ? "Save your squad first" : undefined}
+                disabled={!isSaved || locked || pending || player.isCaptain || player.isViceCaptain}
+                hint={!isSaved ? "Save your squad first" : player.isViceCaptain ? "Already vice-captain — change that first" : undefined}
                 onClick={onMakeCaptain}
               />
               <ActionRow
                 icon={Star}
                 label={player.isViceCaptain ? "Already vice-captain" : "Make vice-captain"}
                 disabled={!isSaved || locked || pending || player.isViceCaptain || player.isCaptain}
-                hint={!isSaved ? "Save your squad first" : undefined}
+                hint={!isSaved ? "Save your squad first" : player.isCaptain ? "Already captain — change that first" : undefined}
                 onClick={onMakeViceCaptain}
               />
-              <ActionRow icon={Trash2} label="Remove from squad" tone="critical" onClick={onRemove} />
+              <ActionRow icon={Trash2} label="Remove from squad" tone="critical" disabled={locked} onClick={onRemove} />
             </div>
           </motion.div>
         </motion.div>

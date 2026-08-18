@@ -73,6 +73,11 @@ export type RosterPick = {
   positionGroup: PositionGroupOrOther;
   price: number;
   isStarting: boolean;
+  /** Display name, used only to name the offending pick in a validation
+   * error (e.g. "Alex Carter doesn't have a recognised position yet").
+   * Optional because not every caller has it handy; validation still works
+   * without it, just with a less specific message. */
+  name?: string;
 };
 
 export type RosterValidation = { ok: true } | { ok: false; error: string };
@@ -99,7 +104,12 @@ export function validateRoster(picks: RosterPick[]): RosterValidation {
     seen.add(pick.playerId);
 
     if (pick.positionGroup === "Other") {
-      return { ok: false, error: "One of your picks doesn't have a recognised position yet. Try a different player." };
+      return {
+        ok: false,
+        error: pick.name
+          ? `${pick.name} doesn't have a recognised position yet. Remove them or try a different player.`
+          : "One of your picks doesn't have a recognised position yet. Try a different player.",
+      };
     }
 
     counts[pick.positionGroup]++;
@@ -177,4 +187,30 @@ export function formatDeadlineCountdown(deadlineAt: string, now: Date = new Date
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+}
+
+/** Absolute kickoff-deadline time, shown alongside the relative countdown so
+ * "45m" always has a concrete "what time is that" anchor next to it. */
+export function formatDeadlineAbsolute(deadlineAt: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(deadlineAt));
+}
+
+export type DeadlineUrgency = "normal" | "soon" | "urgent" | "passed";
+
+/** Coarse urgency tier for the countdown's color, so "45m" reads as visibly
+ * more urgent than "6d 22h" well before the deadline actually locks the
+ * gameweek (that hard cutover is `locked`, computed separately). */
+export function deadlineUrgency(deadlineAt: string, now: Date = new Date()): DeadlineUrgency {
+  const diffMs = new Date(deadlineAt).getTime() - now.getTime();
+  if (diffMs <= 0) return "passed";
+  const hoursRemaining = diffMs / 3_600_000;
+  if (hoursRemaining < 1) return "urgent";
+  if (hoursRemaining < 24) return "soon";
+  return "normal";
 }

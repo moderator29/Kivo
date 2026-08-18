@@ -37,7 +37,20 @@ export function PlayerPicker({
   const [error, setError] = useState<string | null>(null);
   const [searching, startSearching] = useTransition();
   const panelRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   useFocusTrap(open, panelRef, onClose);
+
+  // useFocusTrap focuses the first focusable element in DOM order, which is
+  // the close button above the search box, not the search box itself —
+  // opening the picker should put the cursor straight in the search field.
+  // Declared after useFocusTrap so its rAF is scheduled second and wins
+  // within the same open-triggered frame, without touching the shared hook
+  // (used by other dialogs where "first focusable" is the right default).
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
   // Bumped on every search actually fired so a slow earlier response can't
   // overwrite a faster later one (RECOMMENDATIONS item 85) — a response only
   // applies if its captured sequence number is still the latest when it
@@ -86,7 +99,12 @@ export function PlayerPicker({
           >
             <div className="flex items-center justify-between gap-3">
               <h2 id="player-picker-title" className="text-sm font-semibold text-foreground">Add a player</h2>
-              <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-foreground-subtle transition hover:text-foreground"
+              >
                 <X className="h-4 w-4" strokeWidth={1.75} />
               </button>
             </div>
@@ -94,6 +112,7 @@ export function PlayerPicker({
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
               <input
+                ref={searchInputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search players…"
@@ -107,7 +126,8 @@ export function PlayerPicker({
                   key={group}
                   type="button"
                   onClick={() => onFilterChange(group)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  aria-pressed={filter === group}
+                  className={`inline-flex h-10 items-center justify-center rounded-full px-3.5 text-[11px] font-semibold transition ${
                     filter === group ? "kivo-gradient-victory text-kivo-white" : "border border-white/10 text-foreground-muted hover:bg-white/5"
                   }`}
                 >
