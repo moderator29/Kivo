@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { EVENT_LABEL } from "@/lib/football/event-labels";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -12,7 +12,6 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
 import { HeatmapView } from "@/components/matches/heatmap-view";
-import { HeatmapEngine } from "@/lib/football/heatmap-engine";
 import type { PositionalObservation } from "@/lib/football/positional-types";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import { LocalDateTime } from "@/components/ui/relative-time";
@@ -111,6 +110,10 @@ type MatchCentreTabsProps = {
    * wasn't on the normally-loaded page) before it ever reaches here. */
   scrollToPostId?: string | null;
   signedIn: boolean;
+  /** KN-62: the viewer's own profile id and display name, for Match Room
+   * presence. Null when it could not be resolved — presence then simply never
+   * tracks, rather than putting an unnamed body in the "watching" count. */
+  viewer: { id: string; name: string } | null;
   canSyncDetails: boolean;
   syncDetailsAction: SyncDetailsAction;
   /** Most recent successful/partial sync_runs timestamp for this fixture's
@@ -460,8 +463,6 @@ function LineupsTab({
   );
 }
 
-const heatmapEngine = new HeatmapEngine();
-
 /**
  * RECOMMENDATIONS.md item 228: `HeatmapView`/`HeatmapEngine` were already
  * built and tested; this tab is the "add it as a tab" half of that item now
@@ -489,9 +490,21 @@ function HeatmapTab({
 }) {
   const homeObservations: PositionalObservation[] = [];
   const awayObservations: PositionalObservation[] = [];
-  const anyData =
-    heatmapEngine.build(homeObservations, { matchId: fixtureId }).hasData ||
-    heatmapEngine.build(awayObservations, { matchId: fixtureId }).hasData;
+
+  // KN-34. This used to call heatmapEngine.build() on both arrays on every
+  // render purely to ask `hasData`, and build() constructs a full density grid
+  // before it can answer. Both arrays are hardcoded empty (no
+  // PositionalDataProvider exists — see this component's doc comment above,
+  // which is correct and documented, not an oversight), so those two grids
+  // could only ever come back `hasData: false`. Two grid builds per render, on
+  // the most-tapped screen in the product, to compute a constant.
+  //
+  // Asking the arrays directly is the same question with none of the work, and
+  // it stays correct the day a provider does land: `hasData` in the engine is
+  // itself derived from whether any observation survived normalisation, so an
+  // empty input can never produce a truthy answer. Nothing about the empty
+  // state's honesty changes — only what it costs to reach it.
+  const anyData = homeObservations.length > 0 || awayObservations.length > 0;
 
   if (!anyData) {
     return <HeatmapView observations={[]} matchId={fixtureId} subjectLabel="this match" />;
@@ -689,6 +702,7 @@ function MatchCentreTabsInner({
   roomPosts,
   scrollToPostId = null,
   signedIn,
+  viewer,
   canSyncDetails,
   syncDetailsAction,
   detailsLastSyncedAt,
@@ -799,38 +813,56 @@ function MatchCentreTabsInner({
         </div>
       )}
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={active}
-          role="tabpanel"
-          id={`match-centre-panel-${tabSlug(active)}`}
-          aria-labelledby={`match-centre-tab-${tabSlug(active)}`}
-          tabIndex={0}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {active === "Overview" && <OverviewTab preMatch={preMatch} />}
-          {active === "Details" && <DetailsTab events={events} />}
-          {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
-          {active === "Lineups" && (
-            <LineupsTab
-              homeTeamId={homeTeamId}
-              awayTeamId={awayTeamId}
-              homeTeamName={homeTeamName}
-              awayTeamName={awayTeamName}
-              lineups={lineups}
-              viewerFantasyRoster={viewerFantasyRoster}
+      {/* KN-35. This was `<AnimatePresence mode="wait">` with an exit
+          transition, which is exactly the pattern RECOMMENDATIONS.md item 75
+          removed from page navigation (page-transition.tsx is enter-only now)
+          and for exactly the same reason: `mode="wait"` holds the INCOMING
+          panel back until the outgoing one has finished animating out, so
+          every tap costs the exit duration before anything new can even begin
+          to appear. On page navigation that read as sluggishness; here it is
+          worse, because this is the most-tapped control in the product and a
+          tab switch is meant to feel instant, not narrated.
+
+          Enter-only, keyed on the active tab: the new panel starts rendering
+          immediately and fades up, and the old one is simply gone. Motion still
+          communicates state (something changed, and in which direction) without
+          charging the user for the transition out of content they have already
+          decided to leave. */}
+      <motion.div
+        key={active}
+        role="tabpanel"
+        id={`match-centre-panel-${tabSlug(active)}`}
+        aria-labelledby={`match-centre-tab-${tabSlug(active)}`}
+        tabIndex={0}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {active === "Overview" && <OverviewTab preMatch={preMatch} />}
+        {active === "Details" && <DetailsTab events={events} />}
+        {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+        {active === "Lineups" && (
+          <LineupsTab
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+            lineups={lineups}
+            viewerFantasyRoster={viewerFantasyRoster}
+          />
+        )}
+        {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
+        {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+        {active === "Room" && (
+          <MatchRoomTab
+              fixtureId={fixtureId}
+              signedIn={signedIn}
+              viewer={viewer}
+              posts={roomPosts}
+              scrollToPostId={scrollToPostId}
             />
-          )}
-          {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
-          {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
-          {active === "Room" && (
-            <MatchRoomTab fixtureId={fixtureId} signedIn={signedIn} posts={roomPosts} scrollToPostId={scrollToPostId} />
-          )}
-        </motion.div>
-      </AnimatePresence>
+        )}
+      </motion.div>
     </div>
   );
 }

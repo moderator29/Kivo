@@ -450,6 +450,7 @@ export default async function MatchCentrePage({
             scrollToPostId={targetPostId ?? null}
             stats={statsForTab}
             signedIn={Boolean(profile)}
+            viewer={profile ? { id: profile.id, name: profile.display_name || profile.username } : null}
             canSyncDetails={canManageFootballData(profile?.role)}
             syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
             detailsLastSyncedAt={detailsLastSyncedAt}
