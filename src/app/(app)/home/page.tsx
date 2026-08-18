@@ -6,6 +6,8 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
 import { HomeLeadCard } from "@/components/home/home-lead";
+import { Greeting } from "@/components/home/greeting";
+import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { AiTeaser } from "@/components/home/ai-teaser";
 import { RecentlyViewedStrip } from "@/components/home/recently-viewed-strip";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -17,13 +19,7 @@ import { selectHomeLead, type LeadFixture } from "@/lib/home-lead";
 import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome } from "@/lib/predictions";
 import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
 import { fetchFixturesForTeams } from "@/lib/football/fixtures-by-team";
-
-function greeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
+import { scheduleAutoSyncIfStale } from "@/lib/football/auto-sync";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -76,10 +72,37 @@ function toLeadFixture(row: FixtureRowShape, teamNames: Map<string, string>): Le
 }
 
 export default async function HomePage() {
+  // Founder instruction (2026-08-18): football data arrives without anybody
+  // pressing anything. This asks for a sync only if what this page is about
+  // to render is already stale, and the work runs *after* the response is
+  // sent — a provider outage cannot slow this page down or break it. Every
+  // guard (staleness threshold, attempt cooldown, the sync lease, the quota
+  // floor) lives in one place: src/lib/football/auto-sync.ts. It is not live
+  // scores, and that file says so in as many words.
+  scheduleAutoSyncIfStale("matches");
+
   // Routed through KIVO's own profile rather than reading the auth user
   // directly — consistent with the rest of the app, and never throws if
   // Supabase isn't configured for this environment (see lib/profile.ts).
   const profile = await getOrCreateProfile();
+
+  // KN-33. The greeting used to be `new Date().getHours()` in a Server
+  // Component, which on Vercel is UTC — a fan opening KIVO in Lagos at 08:00
+  // was told "Good evening" on the first line of the first screen after
+  // sign-in. When the user has told us their timezone (profiles.timezone,
+  // migration 0054) the correct hour is computable here, server-side, with no
+  // hydration flash and no dependence on the device clock. When they haven't,
+  // this stays null and <Greeting> reads the browser's own clock after mount —
+  // which is the only honest source available, and must never be guessed at
+  // during SSR.
+  const statedTimeZone = resolveTimeZone(profile?.timezone);
+  const statedGreetingHour = statedTimeZone.isStated
+    ? Number(
+        new Intl.DateTimeFormat("en-GB", { timeZone: statedTimeZone.timeZone, hour: "2-digit", hourCycle: "h23" }).format(
+          new Date(),
+        ),
+      )
+    : null;
 
   // The (app) layout already guarantees a signed-in viewer with a real
   // profile row, so a null here is not a guest — it is a transient read
@@ -98,10 +121,15 @@ export default async function HomePage() {
   // "on today" and "in the past".
   const nowDate = new Date();
   const now = nowDate.getTime();
-  const startOfDay = new Date(now);
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+  // KN-32: the viewer's day, not the server's. `setUTCHours(0,0,0,0)` meant a
+  // 00:30 WAT kickoff — routine in the stated launch market, which is UTC+1 —
+  // fell on the previous UTC day and simply vanished from "today's matches" for
+  // the people it was closest to. `startOfDayInTimeZone` is DST-correct;
+  // `resolveTimeZone` falls back to UTC (and says it is a fallback) for a user
+  // who has not stated a zone, so nothing regresses for them.
+  const viewerTimeZone = statedTimeZone.timeZone;
+  const startOfDay = startOfDayInTimeZone(viewerTimeZone, nowDate);
+  const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
 
   // "Your teams" — the one place `follows` actually changes what's on screen
   // (RECOMMENDATIONS item 13). Two-step because `followed_id` has no DB-level
@@ -257,7 +285,7 @@ export default async function HomePage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-foreground-subtle">{greeting()}</p>
+        <Greeting statedHour={statedGreetingHour} />
         <h1 className="text-2xl font-semibold text-foreground">{firstName}, here&apos;s your football.</h1>
       </FadeIn>
 

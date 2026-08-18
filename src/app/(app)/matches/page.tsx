@@ -4,7 +4,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
-import { MatchesDateStrip, dateKey, todayUtc } from "@/components/matches/date-strip";
+import { MatchesDateStrip, dateKey, todayIn } from "@/components/matches/date-strip";
+import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
@@ -13,6 +14,7 @@ import { RoomActivityNote } from "@/components/matches/room-activity-note";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { DISPLAY_LOCALE } from "@/lib/format";
+import { scheduleAutoSyncIfStale } from "@/lib/football/auto-sync";
 
 const item = getNavItem("matches");
 
@@ -23,12 +25,23 @@ const DATE_PARAM_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** Resolves the `?date=` search param to a UTC day boundary, defaulting to
  * today when the param is missing or malformed (never trusting client input
  * for the DB range query below). */
-function resolveSelectedDate(dateParam: string | undefined): Date {
+function resolveSelectedDate(dateParam: string | undefined, timeZone: string): Date {
   if (dateParam && DATE_PARAM_RE.test(dateParam)) {
-    const parsed = new Date(`${dateParam}T00:00:00.000Z`);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
+    // KN-32. The `?date=` key names a calendar day, and the instant that day
+    // *starts* depends on whose day it is. Parsing it as UTC midnight and then
+    // querying a 24-hour window from there showed a UTC+1 viewer 23:00 the
+    // night before through 22:59 of the day they asked for — off by an hour at
+    // both ends, which is exactly where late kickoffs live.
+    const [year, month, day] = dateParam.split("-").map(Number);
+    if (year && month && day) {
+      // Noon UTC on that date is inside the right calendar day in every zone on
+      // earth (max offset is ±14h), so flooring it lands on the correct local
+      // midnight without needing to know the offset first.
+      const midday = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+      if (!Number.isNaN(midday.getTime())) return startOfDayInTimeZone(timeZone, midday);
+    }
   }
-  return todayUtc();
+  return todayIn(timeZone);
 }
 
 export default async function MatchesPage({
@@ -36,13 +49,24 @@ export default async function MatchesPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
+  // Founder instruction (2026-08-18): football data arrives without anybody
+  // pressing anything. This asks for a sync only if what this page is about
+  // to render is already stale, and the work runs *after* the response is
+  // sent — a provider outage cannot slow this page down or break it. Every
+  // guard (staleness threshold, attempt cooldown, the sync lease, the quota
+  // floor) lives in one place: src/lib/football/auto-sync.ts. It is not live
+  // scores, and that file says so in as many words.
+  scheduleAutoSyncIfStale("matches");
+
   const { date: dateParam } = await searchParams;
   const supabase = createServerSupabaseClient();
 
-  const startOfDay = resolveSelectedDate(dateParam);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
-  const isToday = dateKey(startOfDay) === dateKey(todayUtc());
+  const { timeZone: viewerTimeZone } = resolveTimeZone(profile?.timezone);
+  const startOfDay = resolveSelectedDate(dateParam, viewerTimeZone);
+  // Next local midnight, found by stepping well past it and re-flooring, so a
+  // DST transition inside the window cannot make the day 23 or 25 hours long.
+  const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
+  const isToday = dateKey(startOfDay, viewerTimeZone) === dateKey(todayIn(viewerTimeZone), viewerTimeZone);
 
   const [{ data: fixtures }, fixturesLastSyncedAt] = await Promise.all([
     supabase

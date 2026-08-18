@@ -11,6 +11,8 @@ import { LiveCentreSections } from "@/components/matches/live-centre-sections";
 import type { LiveListFixture } from "@/components/matches/live-fixture-list";
 import { getViewerFantasyRosterBySeasons } from "@/lib/football/fantasy-lineup-crossref";
 import { getNavItem } from "@/lib/navigation";
+import { scheduleAutoSyncIfStale } from "@/lib/football/auto-sync";
+import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 
 /** The list rows this page works with: everything LiveCentreSections renders,
  * plus the season the fantasy cross-reference below needs. */
@@ -37,14 +39,29 @@ const LIVE_FIXTURES_LIMIT = 60;
 const TODAY_FIXTURES_LIMIT = 120;
 
 export default async function LivePage() {
+  // Founder instruction (2026-08-18): football data arrives without anybody
+  // pressing anything. This asks for a sync only if what this page is about
+  // to render is already stale, and the work runs *after* the response is
+  // sent — a provider outage cannot slow this page down or break it. Every
+  // guard (staleness threshold, attempt cooldown, the sync lease, the quota
+  // floor) lives in one place: src/lib/football/auto-sync.ts. It is not live
+  // scores, and that file says so in as many words.
+  scheduleAutoSyncIfStale("live");
+
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
   const canRefreshLive = canManageFootballData(profile?.role);
 
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+  // KN-32: "today's fixtures" means the viewer's today. Under the previous
+  // `setUTCHours(0,0,0,0)` a 00:30 kickoff in Lagos (UTC+1, the stated launch
+  // market) belonged to the previous UTC day and dropped off this page for
+  // exactly the audience it was nearest to. Falls back to UTC — explicitly, via
+  // resolveTimeZone — for anyone who has not stated a zone.
+  const { timeZone: viewerTimeZone } = resolveTimeZone(profile?.timezone);
+  const startOfDay = startOfDayInTimeZone(viewerTimeZone);
+  // Next local midnight, found by stepping well past it and re-flooring, so a
+  // DST transition inside the window cannot make the day 23 or 25 hours long.
+  const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
 
   const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),

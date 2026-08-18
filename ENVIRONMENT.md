@@ -65,6 +65,42 @@ Supabase's built-in email sender is intended for development and is heavily rate
 | `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts` — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
 | `FOOTBALL_SYNC_COMPETITION_IDS` | RECOMMENDATIONS.md item 28: comma-separated **provider-native** competition/league ids (API-Football's numeric league ids, or TheSportsDB's `idLeague` when that provider is selected) to scope `syncTodayFixtures` to. Read in `src/lib/football/competitions-config.ts` | Optional | Unset = no filter, every league the provider reports for the day still syncs (unchanged from before this item). Filters the already-fetched response rather than issuing one provider request per league — costs zero extra quota. |
 
+## How football data arrives — three layers, only one of them is live scores
+
+Founder instruction, 2026-08-18: "Make it automatic — no need for triggering now." Nothing needs pressing any more, but the three mechanisms are genuinely different and it matters which is which.
+
+| Layer | Cadence | What you need to do | Keeps fresh |
+|---|---|---|---|
+| **On-demand** (`src/lib/football/auto-sync.ts`) | When somebody loads `/home`, `/matches` or `/live` and the data is stale | **Nothing** — already live | Everything, eventually. The visitor who triggers it sees the old data; the next one sees the new data. A quiet site refreshes nothing |
+| **Daily baseline** (`/api/cron/sync-daily`) | Once a day, 05:00 UTC | **Paste six lines into `vercel.json`** — see immediately below. The route is built and deployed; only the schedule is missing | Today's fixtures and the clubs/competitions they create, plus five league tables a day |
+| **Once-a-minute worker** (`/api/cron/sync-live`) | Every minute | Two Vault secrets **and** `FOOTBALL_LIVE_POLLING_ENABLED=true` (below) | Live scores. Only this row is live scores |
+
+### FOUNDER: the one paste that turns on the daily baseline
+
+`vercel.json` is deployment configuration, so this session deliberately did not edit it — that file is yours. The route it points at (`/api/cron/sync-daily`) is built, deployed and waiting. Add the `crons` array:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/sync-daily",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}
+```
+
+Three things about that block, each one a thing that broke a deploy or could:
+
+- **`0 5 * * *` is once a day**, which is what the Hobby plan permits. The entry that previously blocked every deployment was `* * * * *` against `/api/cron/sync-live`. Do not point a sub-daily schedule at anything while on Hobby.
+- **The path has no query string.** Vercel's cron documentation only ever shows a bare path; that is why the daily behaviour lives at its own route rather than as `?mode=daily` on the live one.
+- **`CRON_SECRET` must be set in Vercel** or the route answers 500 rather than accepting unauthenticated requests. Vercel sends it back as a Bearer token on every cron invocation.
+
+Nothing about this starts spending live-polling quota: this route makes one fixtures call plus at most five standings calls, once a day, against a 100-a-day free tier.
+
+Full reasoning: `docs/LIVE_DATA.md` and `DECISIONS.md` ("Automated sync trigger").
+
 ## Automated live-sync worker — scheduled from Supabase since 2026-08-18
 
 `src/app/api/cron/sync-live/route.ts` is the worker. It now has a real caller: **Supabase `pg_cron`**, firing once a minute (migration `0067_scheduled_live_sync_trigger.sql`). Vercel Cron is not it — the Hobby plan permits daily crons only and a more frequent expression fails the deployment outright, so `vercel.json`'s `crons` array was removed. See `DECISIONS.md` (2026-08-18, "Automated sync trigger") for why `pg_cron` beat GitHub Actions and an external pinger.

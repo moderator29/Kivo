@@ -4,6 +4,49 @@ Log of decisions with real consequences (irreversible, costly, or scope-defining
 
 ---
 
+### 2026-08-18 — Automated sync trigger: Supabase `pg_cron` + `pg_net`, not Vercel Cron, GitHub Actions or an external pinger
+
+**Decision**: Schedule `/api/cron/sync-live` from inside Supabase, with `pg_cron` firing `private.trigger_live_sync()` every minute and `pg_net` making the HTTP call. Both credentials it needs — the app's base URL and the value of `CRON_SECRET` — live in Supabase Vault, so the job is **inert until the founder adds them** and requires no code change or deployment to switch on. Migration `0067_scheduled_live_sync_trigger.sql`.
+
+**Rationale**: The worker route has been built, adaptive, quota-floored and unit-tested since 2026-08-18 with nothing calling it, because `vercel.json` no longer schedules it. Vercel Cron cannot be that caller: the Hobby plan permits **daily** crons only, and any more frequent expression fails the deployment outright. A live-scores product cannot run on one request a day, and moving off Hobby is a spend decision that belongs to the founder, not something to design around silently.
+
+Three real alternatives were considered against that constraint:
+
+| Option | Granularity | Why not / why yes |
+|---|---|---|
+| **Vercel Cron** | Daily on Hobby | Ruled out by the plan. Would need a paid upgrade — the founder's call, not an engineering workaround. |
+| **GitHub Actions `schedule`** | 5 min minimum | **Rejected.** Documented five-minute floor; delays of 5-30 minutes are ordinary at peak and unavoidable (the queue is on GitHub's side, so a self-hosted runner does not help); scheduled workflows are auto-disabled after 60 days of repository inactivity. "Sometimes half an hour late, and silently off after a quiet two months" disqualifies it for live scores specifically. On a private repo the included minutes also do not survive a 5-minute cadence. |
+| **External pinger** (cron-job.org, UptimeRobot) | 1 min, free | **Rejected as primary, kept as the documented fallback.** It works and needs nothing from this repository — but it puts `CRON_SECRET` in a third party's settings page with no SLA and no audit trail, and adds a vendor whose failure mode is silence. |
+| **Supabase `pg_cron` + `pg_net`** | 1 min | **Chosen.** Available on every Supabase plan including free. Runs inside the infrastructure that already holds the data the worker reads and writes, so it is one fewer vendor rather than one more. The secret lives in Vault, not in a third party's dashboard and not in a migration file that lives in git forever. `cron.job_run_details` gives a real execution history neither alternative offers. |
+
+**Consequences**:
+- The worker route itself is unchanged. This is purely a caller — the six gates that decide whether a provider call is actually warranted still live in the route.
+- **Nothing starts spending provider quota because of this.** `FOOTBALL_LIVE_POLLING_ENABLED` and `API_FOOTBALL_KEY` remain the founder's switches; the Vault secrets only change the worker from *never asked* to *asked once a minute*.
+- Rotating `CRON_SECRET` is now a Vault edit and a Vercel edit, with no migration and no redeploy, because the function reads the secret on every fire rather than baking it in.
+- `pg_cron` and `pg_net` are now installed on the live project. Additive and reversible (`cron.unschedule`, `drop function`), and the extensions are deliberately left installed on a reversal since other things may come to depend on them.
+- pg_net stores every response in `net._http_response` and nothing prunes it, so a second hourly job does — six hours of retention, which is long enough to debug an overnight failure. `sync_runs` remains the durable record.
+- The cron route's own no-op logging changed with it. Recording a row for every no-op was right when nothing called the route; at one call a minute the two steady-state conditions ("polling is off", "nothing is live") would each write 1,440 identical rows a day. A no-op describing a *standing condition* is now recorded once and suppressed for 30 minutes; a no-op describing something going *wrong* is still recorded every time. Nothing is lost — `cron.job_run_details` answers "did it even run" independently.
+
+**What this does not decide**: whether KIVO should eventually move to a paid Vercel plan and use Vercel Cron. If that happens, this becomes redundant and should be unscheduled rather than left running alongside it — two schedulers calling the same worker would rely entirely on the sync lease (KN-82) to stay correct, which works, but is not a design anyone chose.
+
+**Amended the same day, after the founder's instruction "Make it automatic — no need for triggering now" and a correction to the premise.** Vercel Cron is not entirely off the table: the Hobby plan rejects *sub-daily* schedules only, and a **daily** cron is permitted. The `crons` array had been removed because a once-a-minute entry blocked every deployment, not because crons were unavailable. That reopens a design space this entry had closed, so the answer is now three layers rather than one, each honest about what it does and does not keep fresh:
+
+| Layer | Cadence | Needs from the founder | Keeps fresh |
+|---|---|---|---|
+| **On-demand freshness** (`src/lib/football/auto-sync.ts`) | Whenever somebody loads a football page and the data is already stale | **Nothing.** Runs on the deployment that exists, with the key already set | Everything, eventually — but only for the *next* visitor after a gap, and not at all on a quiet site |
+| **Daily baseline** (`/api/cron/sync-daily`) | Once a day | Six lines pasted into `vercel.json` (the exact block is in `ENVIRONMENT.md`) — the route is built and deployed | Fixtures, clubs, competitions — the reference data, plus five league tables a day. Never a live scoreline |
+| **Once-a-minute worker** (`/api/cron/sync-live`, pg_cron) | Every minute | Two Vault secrets **and** `FOOTBALL_LIVE_POLLING_ENABLED=true` | Live scores, properly |
+
+The one that actually answers the founder's instruction is the first, because it is the only one that needs nothing. It uses `after()` (Next.js) so the provider call happens once the response has been sent — a slow or dead vendor can never delay a render — and it is bounded by four things, each preventing a failure that is real on 100 requests a day: a per-surface staleness threshold, a three-minute cooldown counted on *attempts* rather than successes (without which one failing sync would be retried by every page view and drain the day's quota in a minute), the sync lease from KN-82 so ten simultaneous page loads produce one sync, and the same quota floor the cron worker and Data Health's amber pill use.
+
+**Stated plainly, because "automatic sync" is easy to over-hear**: none of this is live scores except the third row, and the third row is still the founder's switch. On-demand freshness means the first visitor after a gap sees stale data and the next one sees fresh data. A quiet site refreshes nothing.
+
+Two rules held throughout: `FOOTBALL_LIVE_POLLING_ENABLED` is only ever *read*, never written from code — it is the founder's protection against per-minute quota burn, and the daily route skips it only because one request a day cannot burn anything, which is a different question from the one the flag asks. And `vercel.json` was deliberately left untouched by this session: deployment configuration is the founder's, and a `vercel.json` that fails validation blocks every deploy — which cost hours earlier the same day. The exact block to paste is documented in `ENVIRONMENT.md`, and it is `0 5 * * *` (daily, which Hobby accepts) against a bare path with no query string, because Vercel's cron documentation only ever shows a bare path — which is also why the daily behaviour is its own route rather than a `?mode=` parameter on the live one.
+
+`sync_runs.trigger_source` gained `'auto'` and `'daily'` (migration `0070`) so Data Health can tell four very different quota profiles apart rather than collapsing them into "cron".
+
+---
+
 ### 2026-08-14 — Football data provider: API-Football, free tier, provider abstraction mandatory
 
 **Decision**: Build the `FootballDataProvider` interface now and implement it first against API-Football's free tier. Zero budget for paid football data during MVP development — do not require or assume a paid subscription anywhere in the code.
