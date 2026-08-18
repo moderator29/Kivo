@@ -1340,13 +1340,14 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auth_user_id: string | null
           avatar_kivo_id: string | null
           avatar_type: Database["public"]["Enums"]["avatar_type"]
           avatar_uploaded_url: string | null
           avatar_url: string | null
           background_id: string | null
           bio: string | null
-          clerk_user_id: string
+          clerk_user_id: string | null
           country: string | null
           created_at: string
           display_name: string | null
@@ -1364,13 +1365,14 @@ export type Database = {
           username: string
         }
         Insert: {
+          auth_user_id?: string | null
           avatar_kivo_id?: string | null
           avatar_type?: Database["public"]["Enums"]["avatar_type"]
           avatar_uploaded_url?: string | null
           avatar_url?: string | null
           background_id?: string | null
           bio?: string | null
-          clerk_user_id: string
+          clerk_user_id?: string | null
           country?: string | null
           created_at?: string
           display_name?: string | null
@@ -1388,13 +1390,14 @@ export type Database = {
           username: string
         }
         Update: {
+          auth_user_id?: string | null
           avatar_kivo_id?: string | null
           avatar_type?: Database["public"]["Enums"]["avatar_type"]
           avatar_uploaded_url?: string | null
           avatar_url?: string | null
           background_id?: string | null
           bio?: string | null
-          clerk_user_id?: string
+          clerk_user_id?: string | null
           country?: string | null
           created_at?: string
           display_name?: string | null
@@ -2022,6 +2025,13 @@ export type Database = {
           team_id: string
         }[]
       }
+      get_my_followers: {
+        Args: never
+        Returns: {
+          created_at: string
+          follower_profile_id: string
+        }[]
+      }
       get_poll_results: {
         Args: { p_post_id: string }
         Returns: {
@@ -2044,13 +2054,6 @@ export type Database = {
           profile_id: string
           total_points: number
           username: string
-        }[]
-      }
-      get_my_followers: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          created_at: string
-          follower_profile_id: string
         }[]
       }
       get_public_profile_by_username: {

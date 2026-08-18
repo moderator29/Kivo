@@ -5,7 +5,6 @@ import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import { KivoInkFilter } from "@/components/theme/ink-filter";
-import { ThemedClerkProvider } from "@/components/theme/themed-clerk-provider";
 import { DEFAULT_THEME, THEME_COLOR } from "@/lib/theme";
 import "./globals.css";
 
@@ -72,8 +71,6 @@ export const viewport: Viewport = {
   themeColor: THEME_COLOR[DEFAULT_THEME],
 };
 
-const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   const app = <MotionConfig reducedMotion="user">{children}</MotionConfig>;
 
@@ -99,12 +96,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeScript />
         <KivoInkFilter />
         <ThemeProvider>
-          {/* Clerk is themed from React state rather than CSS variables (see
-              ThemedClerkProvider), so it has to sit INSIDE ThemeProvider. It
-              also throws immediately without a publishable key, so public
-              pages like the marketing landing page still render without it
-              when Clerk isn't configured for the environment. */}
-          {clerkConfigured ? <ThemedClerkProvider>{app}</ThemedClerkProvider> : app}
+          {/* No auth provider wrapper any more: Supabase Auth's session lives
+              in cookies that the server reads directly (src/lib/auth.ts) and
+              that @supabase/ssr's browser client reads on demand
+              (src/lib/supabase/client.ts), so nothing needs a React context
+              around the tree. This is where Clerk's ThemedClerkProvider used
+              to sit — it had to be inside ThemeProvider because Clerk was
+              themed from React state rather than CSS variables. KIVO's own
+              sign-in form (src/components/auth/email-code-form.tsx) is styled
+              from the same design tokens as the rest of the app, so it follows
+              the theme with no bridging at all. */}
+          {app}
           {/* RECOMMENDATIONS.md item 212: cookieless, privacy-respecting page
               view counts — no PII, no fingerprinting, nothing for a user to
               consent to. Served same-origin (/_vercel/insights/*) in
