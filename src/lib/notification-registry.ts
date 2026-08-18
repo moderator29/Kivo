@@ -8,6 +8,7 @@ import {
   Target,
   Timer,
   Trophy,
+  Users,
   UserPlus,
   Heart,
   type LucideIcon,
@@ -43,6 +44,7 @@ export type NotificationType =
   | "prediction_reminder"
   | "fantasy_deadline"
   | "fantasy_points"
+  | "fantasy_roster_carried"
   | "badge_earned"
   | "moderation_outcome";
 
@@ -163,6 +165,15 @@ export const NOTIFICATION_REGISTRY: Record<NotificationType, RegistryEntry> = {
     icon: Trophy,
     href: () => "/fantasy",
   },
+  // KN-61: KIVO can now score a squad its owner never confirmed (scoring
+  // carries the last one forward, item 17's second half), so the product owes
+  // that owner an actual message rather than a badge on a screen they would
+  // have to think to open.
+  fantasy_roster_carried: {
+    title: (p) => str(p, "summary") ?? "Your fantasy squad was carried forward",
+    icon: Users,
+    href: () => "/fantasy",
+  },
   badge_earned: {
     title: (p) => {
       const name = str(p, "badge_name");
@@ -242,7 +253,7 @@ export const NOTIFICATION_GROUPS = [
   {
     id: "fantasy",
     label: "Fantasy",
-    types: ["fantasy_deadline", "fantasy_points"],
+    types: ["fantasy_deadline", "fantasy_points", "fantasy_roster_carried"],
   },
   {
     id: "you",

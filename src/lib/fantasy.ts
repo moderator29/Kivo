@@ -1,9 +1,9 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { DEFAULT_FANTASY_PRICE } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -112,6 +112,17 @@ export async function ensureFantasyPlayerPrices(seasonId: string, playerIds: str
 }
 
 export type CarryForwardResult = { carriedFromGameweekNumber: number | null };
+
+/** One team whose squad was carried forward by the bulk path — i.e. whose
+ * owner never opened /fantasy for this gameweek. KN-61 uses this to notify
+ * them; nothing else in the product would have. */
+export type CarriedForwardTeam = {
+  fantasyTeamId: string;
+  ownerProfileId: string;
+  fromGameweekNumber: number;
+};
+
+export type BulkCarryForwardResult = { teamsCarried: number; carried: CarriedForwardTeam[] };
 
 /**
  * Lazily carries a team's squad forward into a gameweek that has no roster
@@ -233,16 +244,24 @@ export async function carryForwardMissingFantasyRosters(
   seasonId: string,
   currentGameweekId: string,
   currentGameweekNumber: number,
-): Promise<{ teamsCarried: number }> {
-  if (currentGameweekNumber <= 1) return { teamsCarried: 0 };
+): Promise<BulkCarryForwardResult> {
+  if (currentGameweekNumber <= 1) return { teamsCarried: 0, carried: [] };
 
   const { data: leagues } = await service.from("fantasy_leagues").select("id").eq("season_id", seasonId);
   const leagueIds = (leagues ?? []).map((l) => l.id);
-  if (leagueIds.length === 0) return { teamsCarried: 0 };
+  if (leagueIds.length === 0) return { teamsCarried: 0, carried: [] };
 
-  const { data: teams } = await service.from("fantasy_teams").select("id").in("league_id", leagueIds);
+  // KN-61: owners come back with the teams now, because a squad carried
+  // forward here belongs to somebody who never opened the app for this
+  // gameweek — the one case where nobody sees the "Carried forward from GW{N}"
+  // badge, and therefore the one case that needs telling.
+  const { data: teams } = await service
+    .from("fantasy_teams")
+    .select("id, owner_profile_id")
+    .in("league_id", leagueIds);
   const allTeamIds = (teams ?? []).map((t) => t.id);
-  if (allTeamIds.length === 0) return { teamsCarried: 0 };
+  if (allTeamIds.length === 0) return { teamsCarried: 0, carried: [] };
+  const ownerByTeamId = new Map((teams ?? []).map((t) => [t.id, t.owner_profile_id]));
 
   const { data: existingRosterTeams } = await service
     .from("fantasy_rosters")
@@ -251,7 +270,7 @@ export async function carryForwardMissingFantasyRosters(
     .in("fantasy_team_id", allTeamIds);
   const haveRoster = new Set((existingRosterTeams ?? []).map((r) => r.fantasy_team_id));
   const missingTeamIds = allTeamIds.filter((id) => !haveRoster.has(id));
-  if (missingTeamIds.length === 0) return { teamsCarried: 0 };
+  if (missingTeamIds.length === 0) return { teamsCarried: 0, carried: [] };
 
   const { data: priorGameweeks } = await service
     .from("fantasy_gameweeks")
@@ -259,7 +278,7 @@ export async function carryForwardMissingFantasyRosters(
     .eq("season_id", seasonId)
     .lt("number", currentGameweekNumber)
     .order("number", { ascending: false });
-  if (!priorGameweeks || priorGameweeks.length === 0) return { teamsCarried: 0 };
+  if (!priorGameweeks || priorGameweeks.length === 0) return { teamsCarried: 0, carried: [] };
 
   const priorGameweekIds = priorGameweeks.map((g) => g.id);
   const gwNumberById = new Map(priorGameweeks.map((g) => [g.id, g.number]));
@@ -269,7 +288,7 @@ export async function carryForwardMissingFantasyRosters(
     .select("fantasy_team_id, gameweek_id, player_id, is_starting, is_captain, is_vice_captain")
     .in("fantasy_team_id", missingTeamIds)
     .in("gameweek_id", priorGameweekIds);
-  if (!priorRosterRows || priorRosterRows.length === 0) return { teamsCarried: 0 };
+  if (!priorRosterRows || priorRosterRows.length === 0) return { teamsCarried: 0, carried: [] };
 
   const rowsByTeam = new Map<string, typeof priorRosterRows>();
   for (const row of priorRosterRows) {
@@ -291,6 +310,7 @@ export async function carryForwardMissingFantasyRosters(
     is_vice_captain: boolean;
   }[] = [];
   let teamsCarried = 0;
+  const carried: CarriedForwardTeam[] = [];
   for (const [teamId, rows] of rowsByTeam) {
     let bestNumber = -1;
     for (const r of rows) {
@@ -300,6 +320,10 @@ export async function carryForwardMissingFantasyRosters(
     const bestRows = rows.filter((r) => gwNumberById.get(r.gameweek_id) === bestNumber);
     if (bestRows.length === 0) continue;
     teamsCarried++;
+    const ownerProfileId = ownerByTeamId.get(teamId);
+    if (ownerProfileId) {
+      carried.push({ fantasyTeamId: teamId, ownerProfileId, fromGameweekNumber: bestNumber });
+    }
     for (const r of bestRows) {
       toInsert.push({
         fantasy_team_id: teamId,
@@ -311,17 +335,17 @@ export async function carryForwardMissingFantasyRosters(
       });
     }
   }
-  if (toInsert.length === 0) return { teamsCarried: 0 };
+  if (toInsert.length === 0) return { teamsCarried: 0, carried: [] };
 
   const { error } = await service
     .from("fantasy_rosters")
     .upsert(toInsert, { onConflict: "fantasy_team_id,gameweek_id,player_id", ignoreDuplicates: true });
   if (error) {
     logError("fantasy.bulkCarryForwardRosters", error);
-    return { teamsCarried: 0 };
+    return { teamsCarried: 0, carried: [] };
   }
 
-  return { teamsCarried };
+  return { teamsCarried, carried };
 }
 
 const GAMEWEEK_WEEK_MS = 7 * 24 * 60 * 60 * 1000;

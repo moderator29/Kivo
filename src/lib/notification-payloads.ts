@@ -51,6 +51,16 @@ export type NotificationPayloadByType = {
   match_goal: { fixture_id: string; summary: string; player_id: string | null };
   match_red_card: { fixture_id: string; summary: string; player_id: string | null };
   player_event: { fixture_id: string; summary: string; player_id: string | null };
+  /** KN-61. Both fantasy payloads carry a pre-built summary for the same
+   * reason the match ones do: the renderer has no access to a gameweek number
+   * or a points total, and reconstructing either at read time would mean a
+   * query per notification in the list. */
+  fantasy_points: { gameweek_number: number; points: number; summary: string };
+  fantasy_roster_carried: {
+    gameweek_number: number;
+    carried_from_gameweek_number: number;
+    summary: string;
+  };
 };
 
 /** The types that actually have a producer today. The rest of

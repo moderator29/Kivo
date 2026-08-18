@@ -1,6 +1,5 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -25,6 +24,8 @@ import { computeGameweekPricingPoints, computePriceNudges, applyPriceNudge } fro
 import { DEFAULT_FANTASY_PRICE } from "@/app/(app)/fantasy/fantasy-rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { notifyFantasyGameweekOutcome } from "@/lib/fantasy-notifications";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -339,7 +340,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   // scoring treats "never touched this gameweek" the same way every real
   // fantasy game does: kept the same squad, not fielded no one. See
   // RECOMMENDATIONS.md item 17.
-  await carryForwardMissingFantasyRosters(service, gameweek.season_id, gameweekId, gameweek.number);
+  const { carried } = await carryForwardMissingFantasyRosters(service, gameweek.season_id, gameweekId, gameweek.number);
 
   const { data: events, error: eventsError } = await service
     .from("fixture_events")
@@ -447,6 +448,37 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   if (upsertError) {
     logError("admin.data-health.fantasy-actions.writeFantasyPoints", upsertError);
     return { error: "Couldn't save fantasy points. Try again." };
+  }
+
+  // KN-61: tell the managers. Until now a squad could be carried forward for
+  // somebody who never opened the app, scored, and land on a leaderboard with
+  // the owner none the wiser unless they thought to visit /fantasy and read a
+  // badge. One notification each, merging "we kept your squad" and "here's what
+  // it scored" into a single line when both are true — see
+  // notifyFantasyGameweekOutcome. Best-effort by design: the points are the
+  // work, this is the telling, and a failed insert must not fail the run.
+  const carriedFromByTeam = new Map(carried.map((entry) => [entry.fantasyTeamId, entry]));
+  const pointsByTeamId = new Map(upsertRows.map((row) => [row.fantasy_team_id, row.points]));
+  const notifiableTeamIds = [...new Set([...pointsByTeamId.keys(), ...carriedFromByTeam.keys()])];
+
+  if (notifiableTeamIds.length > 0) {
+    const { data: notifiableTeams, error: notifiableTeamsError } = await service
+      .from("fantasy_teams")
+      .select("id, owner_profile_id")
+      .in("id", notifiableTeamIds);
+    if (notifiableTeamsError) {
+      logError("admin.data-health.fantasy-actions.loadOwnersForGameweekNotices", notifiableTeamsError);
+    } else {
+      await notifyFantasyGameweekOutcome(
+        service,
+        (notifiableTeams ?? []).map((team) => ({
+          ownerProfileId: team.owner_profile_id,
+          gameweekNumber: gameweek.number,
+          points: pointsByTeamId.get(team.id) ?? null,
+          carriedFromGameweekNumber: carriedFromByTeam.get(team.id)?.fromGameweekNumber ?? null,
+        })),
+      );
+    }
   }
 
   // "Scored" means a real positive fantasy_points row just written above —
