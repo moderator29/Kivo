@@ -17,7 +17,7 @@ import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hi
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
-import { timeAgo } from "@/lib/format";
+import { RelativeTime } from "@/components/ui/relative-time";
 
 const REPORT_REASONS = ["Spam", "Harassment or abuse", "Misinformation", "Inappropriate content", "Other"] as const;
 
@@ -387,7 +387,7 @@ export function PostCard({
           ) : (
             <span className="truncate text-sm font-medium text-foreground">{authorName}</span>
           )}
-          <span className="text-xs text-foreground-subtle">{timeAgo(createdAt)}</span>
+          <RelativeTime iso={createdAt} className="text-xs text-foreground-subtle" />
         </div>
       </div>
       <PostBody body={body} />

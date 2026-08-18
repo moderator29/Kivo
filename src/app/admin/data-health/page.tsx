@@ -1,4 +1,5 @@
 import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, CircleSlash, Trophy, Activity, ShieldCheck, ListChecks, Clock3, ArrowLeftRight, RadioTower } from "lucide-react";
+import { DISPLAY_LOCALE, formatNumber } from "@/lib/format";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -31,7 +32,7 @@ const STATUS_STYLE: Record<SyncStatus, { icon: typeof CheckCircle2; className: s
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleString(undefined, {
+  return new Date(value).toLocaleString(DISPLAY_LOCALE, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -460,12 +461,12 @@ export default async function DataHealthPage() {
             <span className="text-[11px] text-foreground-subtle">Success rate</span>
           </div>
           <div className="flex flex-col items-center gap-1 text-center">
-            <span className="text-lg font-semibold text-foreground">{totalRecordsProcessed.toLocaleString()}</span>
+            <span className="text-lg font-semibold text-foreground">{formatNumber(totalRecordsProcessed)}</span>
             <span className="text-[11px] text-foreground-subtle">Records synced</span>
           </div>
           <div className="flex flex-col items-center gap-1 text-center">
             <span className="text-lg font-semibold text-foreground">
-              {quotaUsedToday === null ? "-" : quotaUsedToday.toLocaleString()}
+              {quotaUsedToday === null ? "-" : formatNumber(quotaUsedToday)}
             </span>
             <span className="text-[11px] text-foreground-subtle">Quota used today</span>
           </div>

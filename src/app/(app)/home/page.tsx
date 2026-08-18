@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Trophy, Target, Flame, Users, Star, ArrowRight } from "lucide-react";
+import { DISPLAY_LOCALE } from "@/lib/format";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
@@ -243,7 +244,7 @@ export default async function HomePage() {
                 homeName={fixture.home_team?.name ?? "Home"}
                 awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
                 awayName={fixture.away_team?.name ?? "Away"}
-                scoreLabel={new Date(fixture.kickoff_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                scoreLabel={new Date(fixture.kickoff_at).toLocaleDateString(DISPLAY_LOCALE, { month: "short", day: "numeric" })}
                 live={false}
                 index={index}
               />

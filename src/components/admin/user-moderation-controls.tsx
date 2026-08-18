@@ -10,6 +10,7 @@ import {
   type SuspendDurationDays,
 } from "@/app/admin/users/actions";
 import type { Database } from "@/lib/supabase/types";
+import { LocalDateTime } from "@/components/ui/relative-time";
 
 type ModerationStatus = Database["public"]["Enums"]["moderation_status"];
 
@@ -144,7 +145,9 @@ export function UserModerationControls({
           {badge.label}
         </span>
         {liveStatus === "suspended" && liveExpiresAt && (
-          <span className="text-[11px] text-foreground-subtle">until {new Date(liveExpiresAt).toLocaleString()}</span>
+          <span className="text-[11px] text-foreground-subtle">
+            until <LocalDateTime iso={liveExpiresAt} format="full" />
+          </span>
         )}
       </div>
 

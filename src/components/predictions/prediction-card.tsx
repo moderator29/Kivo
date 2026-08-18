@@ -9,6 +9,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
 import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome as Outcome } from "@/lib/predictions";
 import { formatDeadlineCountdown } from "@/app/(app)/fantasy/fantasy-rules";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { cn } from "@/lib/utils";
 
@@ -171,11 +172,7 @@ export function PredictionCard({
         <span className="min-w-0 flex-1 truncate text-xs text-foreground-subtle">{competitionName}</span>
         <div className="flex shrink-0 flex-col items-end gap-0.5">
           <span className="text-xs text-foreground-subtle">
-            {new Date(kickoffAt).toLocaleString(undefined, {
-              weekday: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            <LocalDateTime iso={kickoffAt} format="weekdayTime" />
           </span>
           <PredictionLockCountdown kickoffAt={kickoffAt} now={now} locked={locked} nearLock={nearLock} />
         </div>

@@ -33,7 +33,7 @@ import { summarizeGoalTiming } from "@/lib/football/goal-timing";
 import { resultFor, type FormResult } from "@/lib/football/results";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { parseUuidParam } from "@/lib/params";
-import { calculateAge, formatDate } from "@/lib/format";
+import { calculateAge, formatDate, formatNumber } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
 
@@ -400,7 +400,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               <span>
                 {team.venue.name}
                 {team.venue.city ? `, ${team.venue.city}` : ""}
-                {team.venue.capacity ? ` · Capacity ${team.venue.capacity.toLocaleString()}` : ""}
+                {team.venue.capacity ? ` · Capacity ${formatNumber(team.venue.capacity)}` : ""}
               </span>
             </Link>
           ) : (

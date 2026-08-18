@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { Copy, Check, Clock, Plus, History, Compass, Crown } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { setGameweekRoster, setFantasyCaptain, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
 import { HowScoringWorks } from "./how-scoring-works";
@@ -18,7 +19,6 @@ import {
   SQUAD_SIZE,
   FANTASY_BUDGET_CAP,
   formatFantasyPrice,
-  formatDeadlineAbsolute,
   validateRoster,
   type PositionGroup,
   type PositionGroupOrOther,
@@ -412,7 +412,7 @@ export function FantasyBuilder({
               label={`Gameweek ${gameweek.number}`}
               value={<DeadlineCountdown deadlineAt={gameweek.deadlineAt} />}
               valueClass={locked ? "text-critical" : "text-foreground"}
-              caption={formatDeadlineAbsolute(gameweek.deadlineAt)}
+              caption={<LocalDateTime iso={gameweek.deadlineAt} format="deadline" />}
             />
             <StatTile
               label="Budget left"

@@ -3,7 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getTransparencyFreshness } from "@/lib/football/last-synced";
-import { timeAgo } from "@/lib/format";
+import { formatNumber, timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 
 export const metadata: Metadata = {
@@ -64,7 +64,7 @@ export default async function TransparencyPage() {
           {rows.map((row) => (
             <div key={row.table} className="flex flex-col gap-1">
               <dt className="text-xs text-foreground-muted">{row.label}</dt>
-              <dd className="text-2xl font-semibold text-foreground">{row.count.toLocaleString()}</dd>
+              <dd className="text-2xl font-semibold text-foreground">{formatNumber(row.count)}</dd>
             </div>
           ))}
         </dl>

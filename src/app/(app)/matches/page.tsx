@@ -10,6 +10,7 @@ import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
+import { DISPLAY_LOCALE } from "@/lib/format";
 
 const item = getNavItem("matches");
 
@@ -59,7 +60,7 @@ export default async function MatchesPage({
     getLastSyncedAt(["fixture"]),
   ]);
 
-  const dateLabel = startOfDay.toLocaleDateString(undefined, {
+  const dateLabel = startOfDay.toLocaleDateString(DISPLAY_LOCALE, {
     weekday: "long",
     month: "long",
     day: "numeric",

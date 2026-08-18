@@ -5,7 +5,7 @@ import Link from "next/link";
 import { markAllNotificationsRead, markNotificationRead } from "@/app/(app)/notifications/actions";
 import type { NotificationRow } from "@/lib/notifications";
 import { describeNotification, notificationHref, notificationIcon } from "@/lib/notification-registry";
-import { timeAgo } from "@/lib/format";
+import { RelativeTime } from "@/components/ui/relative-time";
 import { cn } from "@/lib/utils";
 
 type ReadAction = { type: "read"; id: string } | { type: "read-all" };
@@ -79,7 +79,7 @@ export function NotificationsList({ notifications }: { notifications: Notificati
                   {!notification.read_at && <span className="sr-only">Unread. </span>}
                   {describeNotification(notification)}
                 </p>
-                <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
+                <RelativeTime iso={notification.created_at} className="mt-0.5 block text-xs text-foreground-subtle" />
               </div>
               {!notification.read_at && (
                 <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />

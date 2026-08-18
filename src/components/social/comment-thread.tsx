@@ -9,7 +9,7 @@ import { getComments, createComment, type CommentDTO } from "@/app/(app)/social/
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
-import { timeAgo } from "@/lib/format";
+import { RelativeTime } from "@/components/ui/relative-time";
 
 const MAX_COMMENT_INPUT_LENGTH = 1000;
 
@@ -37,7 +37,7 @@ function CommentItem({
           ) : (
             <span className="text-xs font-medium text-foreground">{comment.authorName}</span>
           )}
-          <span className="text-[11px] text-foreground-subtle">{timeAgo(comment.createdAt)}</span>
+          <RelativeTime iso={comment.createdAt} className="text-[11px] text-foreground-subtle" />
         </div>
         <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>
         <div className="flex items-center gap-1">

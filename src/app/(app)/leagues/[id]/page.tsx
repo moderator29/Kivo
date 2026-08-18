@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { Shield, ArrowLeft } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -196,7 +197,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
                   {fixture.home_team?.name ?? "Home"} vs {fixture.away_team?.name ?? "Away"}
                 </span>
                 <span className="shrink-0 text-xs text-foreground-subtle">
-                  {new Date(fixture.kickoff_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  <LocalDateTime iso={fixture.kickoff_at} format="dayTime" />
                 </span>
               </div>
             ))}
