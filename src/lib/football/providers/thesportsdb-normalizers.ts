@@ -8,6 +8,7 @@
  * these are worth testing in isolation.
  */
 import type { NormalizedFixture } from "../types";
+import { parseMatchday } from "../matchday";
 
 export interface TheSportsDbEvent {
   idEvent: string;
@@ -19,6 +20,9 @@ export interface TheSportsDbEvent {
   strTime: string | null;
   strTimestamp: string | null;
   strStatus: string | null;
+  /** Bare numeric round ("12"), when the free tier reports one at all. Read
+   * defensively for the same reason as the badge fields below. */
+  intRound?: string | null;
   idHomeTeam: string | null;
   idAwayTeam: string | null;
   strHomeTeam: string | null;
@@ -124,6 +128,11 @@ export function mapEvent(item: TheSportsDbEvent): NormalizedFixture {
     season: parseSeasonYear(item.strSeason, kickoffAt),
     kickoffAt,
     status: mapTheSportsDbStatus(item.strStatus),
+    // TheSportsDB reports the round as a bare numeric string in `intRound`
+    // rather than as a label. `parseMatchday` requires a separator or keyword
+    // precisely so a bare number is never guessed at, so this prefixes the
+    // provider's own word for it rather than loosening that rule for everyone.
+    matchday: parseMatchday(item.intRound ? `Round ${item.intRound}` : null),
     // Not reliably available on the free tier — see thesportsdb.ts's top comment.
     minute: null,
     homeTeam: {

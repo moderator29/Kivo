@@ -25,6 +25,7 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
     kickoffAt: new Date().toISOString(),
     status: "scheduled",
     minute: null,
+    matchday: 1,
     homeTeam: { providerId: "mock-team-1", name: "Remo Stars", shortName: "REM", crestUrl: null },
     awayTeam: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
     homeScore: null,

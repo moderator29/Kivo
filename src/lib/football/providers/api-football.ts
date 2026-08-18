@@ -13,6 +13,7 @@ import type {
 import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
 import { ApiFootballError, requestWithRetry } from "./api-football-request";
 import { buildRawResponseSample, type RawResponseSample } from "../raw-response-sample";
+import { parseMatchday } from "../matchday";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 
@@ -139,7 +140,10 @@ interface ApiFootballFixtureResponse {
       status: { short: string; elapsed: number | null };
       venue: { id: number | null; name: string | null };
     };
-    league: { id: number; name: string; season: number };
+    // `round` is free text ("Regular Season - 12", "Quarter-finals"). KIVO
+    // reads a matchday number out of it where there is one and stores null
+    // where there is not — see parseMatchday in ../matchday.ts.
+    league: { id: number; name: string; season: number; round?: string | null };
     teams: {
       home: { id: number; name: string; logo: string | null };
       away: { id: number; name: string; logo: string | null };
@@ -250,7 +254,8 @@ export class ApiFootballProvider implements FootballDataProvider {
       awayScore: item.goals.away,
       homeScoreHt: item.score.halftime.home,
       awayScoreHt: item.score.halftime.away,
-      venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
+      matchday: parseMatchday(item.league.round),
+    venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
     }));
@@ -287,7 +292,8 @@ export class ApiFootballProvider implements FootballDataProvider {
       awayScore: item.goals.away,
       homeScoreHt: item.score.halftime.home,
       awayScoreHt: item.score.halftime.away,
-      venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
+      matchday: parseMatchday(item.league.round),
+    venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
     };

@@ -406,6 +406,14 @@ async function upsertFixture(
   if (fixture.homeScoreHt !== null) args.p_home_score_ht = fixture.homeScoreHt;
   if (fixture.awayScoreHt !== null) args.p_away_score_ht = fixture.awayScoreHt;
   if (fixture.minute !== null) args.p_minute_elapsed = fixture.minute;
+  // KIVO_NEXT_GEN KN-84. `fixtures.matchday` has existed since migration 0001
+  // with a doc comment promising a round/gameweek number, and nothing had ever
+  // written to it — no normalizer read the provider's round, and this RPC did
+  // not carry it. Omitted (rather than passed as null) when the provider gives
+  // no numbered round, which is what lets the function's own coalesce keep a
+  // number an earlier sync legitimately established. See parseMatchday in
+  // ./matchday.ts for why a cup round is null and never a guess.
+  if (fixture.matchday !== null) args.p_matchday = fixture.matchday;
 
   const { data: kivoFixtureId, error } = await supabase.rpc("upsert_fixture_with_mapping", args);
   if (error) throw error;
@@ -455,6 +463,22 @@ async function upsertFixture(
   };
 }
 
+/**
+ * KN-32 deliberately does NOT reach this function, and it is worth saying why
+ * rather than leaving it looking like a site that was missed.
+ *
+ * Every other "today" in the app answers a question on behalf of a specific
+ * person, so it belongs in that person's timezone. This one does not: it is the
+ * date parameter of a provider request, made by a background job with no
+ * viewer. API-Football's `?date=` is its own calendar convention, and asking it
+ * for "the day it is in Lagos" would mean the set of fixtures KIVO holds
+ * depends on whichever user happened to trigger a sync — which is worse than a
+ * boundary being off, because it makes the database's contents non-deterministic.
+ *
+ * The user-facing boundaries do the right thing on top of this. `kickoff_at` is
+ * a `timestamptz` naming a real instant, so a page querying a local day's range
+ * is exact regardless of which UTC date the row was fetched under.
+ */
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }

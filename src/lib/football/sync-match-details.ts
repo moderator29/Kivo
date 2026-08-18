@@ -760,6 +760,29 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
         { onConflict: "season_id,team_id" },
       );
       if (error) throw error;
+
+      // KIVO_NEXT_GEN KN-85: the table row above was just overwritten in place,
+      // which is what destroyed every previous version of it. This appends what
+      // it now says to an immutable history, and writes nothing when nothing
+      // changed — so a table refreshed hourly between matchdays does not grow.
+      const { error: snapshotError } = await supabase.rpc("record_standings_snapshot", {
+        p_season_id: seasonId,
+        p_team_id: teamId,
+        p_position: row.rank,
+        p_played: row.played,
+        p_won: row.won,
+        p_drawn: row.drawn,
+        p_lost: row.lost,
+        p_goals_for: row.goalsFor,
+        p_goals_against: row.goalsAgainst,
+        p_points: row.points,
+      });
+      // Deliberately not thrown: history is valuable, and it is not worth
+      // failing a standings sync that already wrote the real table for.
+      if (snapshotError) {
+        logError("football.standings.recordSnapshot", snapshotError, { seasonId, teamId });
+      }
+
       processed += 1;
       succeededProviderIds.push(row.team.providerId);
     } catch (err) {

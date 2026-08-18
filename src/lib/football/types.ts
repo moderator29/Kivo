@@ -41,6 +41,13 @@ export interface NormalizedFixture {
    * awayScore pre-kickoff. Never estimated from the full-time score. */
   homeScoreHt: number | null;
   awayScoreHt: number | null;
+  /** Round/gameweek number within the competition, mirroring `fixtures.matchday`
+   * (migration 0001). Null is a real answer and a common one: a cup
+   * quarter-final does not belong to a numbered matchday, and numbering
+   * knockout rounds would fabricate an ordering the competition does not have.
+   * Derived by `parseMatchday` (./matchday.ts) from whatever round label the
+   * provider reports — see that module for why "Round of 16" is null and not 16. */
+  matchday: number | null;
   /** Null when the provider doesn't report a stable venue id for this fixture — the sync
    * pipeline leaves fixtures.venue_id null in that case rather than dedupe-by-name. */
   venueProviderId: string | null;
