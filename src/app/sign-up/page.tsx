@@ -17,19 +17,26 @@ export const dynamic = "force-dynamic";
 export default async function SignUpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect_url?: string | string[] }>;
+  searchParams: Promise<{ redirect_url?: string | string[]; add?: string | string[] }>;
 }) {
   // Guest-gated actions (like, predict, send, post) send guests here with
   // ?redirect_url=<the page they were on> so signing up actually returns them
   // to what they were doing. Sanitized here AND again inside the action — this
   // value originates in a URL anyone can craft.
-  const redirectTo = sanitizeRedirectPath((await searchParams).redirect_url);
+  const params = await searchParams;
+  const redirectTo = sanitizeRedirectPath(params.redirect_url);
+
+  // Mirrors /sign-in: a signed-in visitor is normally sent away from here, but
+  // the account switcher's "Add account" can legitimately land someone who is
+  // already signed in on a form for a brand-new account. Their current session
+  // is untouched until a new code is verified.
+  const addAccount = (Array.isArray(params.add) ? params.add[0] : params.add) === "1";
 
   // Same reasoning as /sign-in: resolved through the profile, not the bare
   // session, so a session whose profile won't load terminates here instead of
   // being volleyed between this page and the app group forever.
   const viewer = await resolveViewerProfile();
-  if (viewer.status === "ready") {
+  if (viewer.status === "ready" && !addAccount) {
     redirect(redirectTo ?? "/home");
   }
   if (viewer.status === "unavailable") {
@@ -51,7 +58,7 @@ export default async function SignUpPage({
 
         {isAuthConfigured() ? (
           <FadeIn delay={0.12} className="flex w-full flex-col items-center gap-4">
-            <EmailCodeForm mode="sign-up" redirectTo={redirectTo} />
+            <EmailCodeForm mode="sign-up" redirectTo={redirectTo} addAccount={addAccount} />
             <p className="max-w-xs text-center text-xs text-foreground-subtle">
               By creating an account, you agree to KIVO&apos;s{" "}
               <Link href="/terms" className="text-accent transition-colors hover:text-foreground">

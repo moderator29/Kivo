@@ -16,11 +16,21 @@ import { createSupabaseDouble } from "@/lib/supabase/query-double";
  */
 
 let double: ReturnType<typeof createSupabaseDouble>;
+/** Which slots the device is holding, and which ones got signed out. */
+let slotsHeld: number[] = [];
+const signedOutSlots: number[] = [];
 
 vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: () => double.client,
+}));
+vi.mock("@/lib/supabase/stored-accounts", () => ({
+  occupiedSlots: async () => slotsHeld,
+  signOutStoredSlot: async (slot: number) => {
+    signedOutSlots.push(slot);
+    return { error: null };
+  },
 }));
 
 async function signOutOthers() {
@@ -30,6 +40,8 @@ async function signOutOthers() {
 
 beforeEach(() => {
   vi.resetModules();
+  slotsHeld = [];
+  signedOutSlots.length = 0;
 });
 
 describe("signOutOtherDevices", () => {
@@ -77,5 +89,46 @@ describe("signOutOtherDevices", () => {
     const result = await signOutOthers();
 
     expect(result.error).toMatch(/something went wrong/i);
+  });
+});
+
+/**
+ * The security half of multi-account switching.
+ *
+ * A stored account is a live credential, and the switcher — the only place it
+ * can be revoked from — lives inside the signed-in app. If "Sign out" left the
+ * stored ones behind, a device whose owner had deliberately signed out would
+ * still be holding working sessions for other accounts with no screen in the
+ * product from which to reach them. That failure is completely invisible in
+ * the UI, which is exactly why it gets a test.
+ */
+describe("signOut", () => {
+  it("signs out the account you're using with scope 'local', not everyone's devices", async () => {
+    double = createSupabaseDouble({ "auth.signOut": { error: null } });
+
+    const { signOut } = await import("./session-actions");
+    await signOut();
+
+    const call = double.calls.find((entry) => entry.table === "auth.signOut");
+    expect(call?.chain).toEqual(["local"]);
+  });
+
+  it("revokes every other account stored on this device too", async () => {
+    double = createSupabaseDouble({ "auth.signOut": { error: null } });
+    slotsHeld = [0, 2];
+
+    const { signOut } = await import("./session-actions");
+    await signOut();
+
+    expect(signedOutSlots).toEqual([0, 2]);
+  });
+
+  it("does nothing extra when no other account is stored", async () => {
+    double = createSupabaseDouble({ "auth.signOut": { error: null } });
+
+    const { signOut } = await import("./session-actions");
+    await signOut();
+
+    expect(signedOutSlots).toEqual([]);
   });
 });

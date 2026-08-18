@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ProfilePageShell } from "@/components/profile/profile-page-shell";
 import { SettingRow, SettingRowGroup } from "@/components/profile/setting-row";
+import { AccountSwitcherLaunchRow } from "@/components/auth/account-switcher-sheet";
 import { ProfileCover } from "@/components/profile/profile-cover";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -91,6 +92,15 @@ export default async function EditProfilePage() {
           value={club ? club.short_name || club.name : null}
           placeholder="Pick one club"
         />
+      </SettingRowGroup>
+
+      {/* Multi-account lives here rather than in Settings because this page is
+          already the answer to "who am I on KIVO" — and switching account is
+          the largest version of that question. The row opens the switcher in
+          place; it does not navigate, so there is no second page to keep in
+          sync with this one. */}
+      <SettingRowGroup label="Accounts">
+        <AccountSwitcherLaunchRow />
       </SettingRowGroup>
 
       {/* The cover gets a real preview rather than a row with a filename,

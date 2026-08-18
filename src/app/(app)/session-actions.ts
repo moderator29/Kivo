@@ -1,8 +1,9 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { occupiedSlots, signOutStoredSlot } from "@/lib/supabase/stored-accounts";
+import { logError } from "@/lib/log";
 
 /**
  * Ending a session, as opposed to starting one.
@@ -25,10 +26,33 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  *
  * Redirects to the marketing page rather than returning, so a signed-out
  * viewer never lands on a page that was rendered for their now-dead session.
+ *
+ * "This device" is taken literally: any accounts kept for switching are signed
+ * out too. See the comment inside for why that is not optional.
  */
 export async function signOut() {
   const supabase = createServerSupabaseClient();
   await supabase.auth.signOut({ scope: "local" });
+
+  // Every OTHER account stored on this device goes with it, revoked rather
+  // than merely forgotten.
+  //
+  // This is not tidiness, it is the security half of multi-account switching.
+  // A stored account is a live credential (see the header of
+  // src/lib/supabase/stored-accounts.ts), and the only surface that can revoke
+  // one is the switcher sheet — which lives inside the signed-in app. Leaving
+  // them behind would mean a device whose owner has deliberately signed out
+  // still holds working sessions for two or three accounts, with no screen
+  // anywhere in the product from which to reach them. "Sign out" on a device
+  // has to mean the device, or it means nothing.
+  //
+  // Failures are already swallowed-and-logged inside signOutStoredSlot, and it
+  // clears the cookie either way, so this cannot leave the user stuck on a
+  // sign-out that half worked.
+  for (const slot of await occupiedSlots()) {
+    await signOutStoredSlot(slot);
+  }
+
   redirect("/");
 }
 

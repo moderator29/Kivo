@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import type { AuthError } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "./supabase/server";
 import { resolveViewerProfile } from "./profile";
@@ -9,6 +10,7 @@ import { isAuthConfigured, sanitizeRedirectPath } from "./auth";
 import { checkRateLimit, getClientIp } from "./rate-limit";
 import { trustedOriginFor } from "./site-url";
 import { RESEND_COOLDOWN_SECONDS, type AuthActionResult, type AuthMode } from "./auth-shared";
+import { MAX_STORED_ACCOUNTS, findFreeSlot, stashSessionInSlot, type SessionTokens } from "./supabase/stored-accounts";
 import { logError } from "@/lib/log";
 
 /**
@@ -267,6 +269,7 @@ export async function verifyEmailCode(
   email: string,
   code: string,
   redirectTo?: string,
+  addAccount?: boolean,
 ): Promise<AuthActionResult | undefined> {
   if (!isAuthConfigured()) {
     return { error: "Sign-in isn't configured in this environment yet." };
@@ -287,8 +290,64 @@ export async function verifyEmailCode(
   if (throttled) return throttled;
 
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase.auth.verifyOtp({ email: address, token, type: "email" });
+
+  // ADDING an account rather than replacing one. Everything about this branch
+  // happens BEFORE the code is verified, on purpose: if there is nowhere to put
+  // the outgoing session, the user is told now, while their account is still
+  // signed in and their code is still unused — rather than after `verifyOtp`
+  // has already replaced the session cookie and taken the decision away.
+  //
+  // `outgoing` is only ever populated when the caller passed `addAccount`, which
+  // only the in-app "Add account" entry point does. An ordinary sign-in on a
+  // device where somebody else's session is still sitting in the cookie keeps
+  // its old behaviour — that session is replaced and NOT quietly kept alive in
+  // a slot, which on a shared computer is the safer of the two.
+  let outgoing: { slot: number; tokens: SessionTokens } | null = null;
+  if (addAccount) {
+    const { data: existing } = await supabase.auth.getSession();
+    if (existing.session?.access_token && existing.session.refresh_token) {
+      const slot = await findFreeSlot();
+      if (slot === null) {
+        return {
+          error: `You can keep ${MAX_STORED_ACCOUNTS + 1} accounts on this device. Sign one out before adding another.`,
+        };
+      }
+      outgoing = {
+        slot,
+        tokens: {
+          userId: existing.session.user?.id ?? "",
+          accessToken: existing.session.access_token,
+          refreshToken: existing.session.refresh_token,
+        },
+      };
+    }
+  }
+
+  const { data: verified, error } = await supabase.auth.verifyOtp({ email: address, token, type: "email" });
   if (error) return describeAuthError(error, "sign-in");
+
+  // The session cookie now holds the NEW account. Park the one it replaced in
+  // the slot reserved above so the switcher can get back to it — unless the
+  // user just signed in as the account they were already using, in which case
+  // there is nothing to keep and storing it would list the same person twice.
+  if (outgoing && verified.user && outgoing.tokens.userId !== verified.user.id) {
+    const kept = await stashSessionInSlot(outgoing.slot, outgoing.tokens);
+    if (kept.error) {
+      // Not fatal — the account they asked for IS signed in — but the previous
+      // one is now unreachable from this device, which they will notice.
+      logError("auth-actions.stashPreviousAccount", kept.error, {
+        detail: "Added an account, but the previous session could not be kept for switching.",
+      });
+    }
+  }
+
+  // A different person is now rendering every server component in this app.
+  // Next 16 documents `revalidatePath("/", "layout")` as purging the Client
+  // Cache and invalidating all cached data, which is what keeps a page the
+  // previous account rendered from being handed to this one on a back
+  // navigation. Only on the add path: an ordinary sign-in has no earlier
+  // signed-in account whose payloads could still be in the cache.
+  if (addAccount) revalidatePath("/", "layout");
 
   // The session cookies are written by now, and createServerSupabaseClient() is
   // request-cached, so this call already runs as the freshly signed-in user —

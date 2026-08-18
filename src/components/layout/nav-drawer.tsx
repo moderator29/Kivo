@@ -6,13 +6,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "motion/react";
-import { Menu, UserRound, Copy, Check, Plus } from "lucide-react";
+import { Menu, UserRound, Copy, Check, Plus, UsersRound } from "lucide-react";
 import { isActiveRoute, NAV_ITEMS, type NavItem } from "@/lib/navigation";
 import { buildNavGroups } from "@/lib/nav-groups";
 import { getViewerNavStats, type ViewerNavStats } from "@/app/(app)/nav-actions";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { AccountSwitcherSheet } from "@/components/auth/account-switcher-sheet";
 import type { ViewerProfileSummary } from "./app-shell";
 
 /** Past this much leftward travel (or this much leftward flick), the gesture
@@ -53,6 +54,7 @@ export function NavDrawer({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [stats, setStats] = useState<ViewerNavStats | null>(null);
   // "Are we in the browser yet" as a read of an external fact rather than as
   // state React owns — the same useSyncExternalStore shape (and reasoning) the
@@ -177,7 +179,19 @@ export function NavDrawer({
               className="absolute inset-y-0 left-0 flex w-[85vw] max-w-[22rem] touch-pan-y flex-col border-r border-hairline-soft bg-surface-3/95 shadow-float backdrop-blur-2xl"
             >
               {viewerProfile && (
-                <IdentityBlock viewer={viewerProfile} stats={stats} />
+                <IdentityBlock
+                  viewer={viewerProfile}
+                  stats={stats}
+                  onOpenSwitcher={() => {
+                    // The drawer goes away as the sheet arrives. Two
+                    // simultaneous focus traps fight each other — the drawer's
+                    // would pull Tab back out of the sheet — and a sheet
+                    // stacked over a drawer over the page is three layers deep
+                    // on a phone.
+                    setOpen(false);
+                    setSwitcherOpen(true);
+                  }}
+                />
               )}
 
               <nav
@@ -216,13 +230,26 @@ export function NavDrawer({
           </AnimatePresence>,
           document.body,
         )}
+
+      {/* Mounted here, outside the drawer's own AnimatePresence, on purpose:
+          opening the switcher closes the drawer, and a sheet rendered inside
+          the drawer would be unmounted by that same click. It portals itself. */}
+      <AccountSwitcherSheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </>
   );
 }
 
 /** Identity first, at full size: who you are is the thing you came to this
  * panel to act on, not a 32px row above a list. */
-function IdentityBlock({ viewer, stats }: { viewer: ViewerProfileSummary; stats: ViewerNavStats | null }) {
+function IdentityBlock({
+  viewer,
+  stats,
+  onOpenSwitcher,
+}: {
+  viewer: ViewerProfileSummary;
+  stats: ViewerNavStats | null;
+  onOpenSwitcher: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const handle = `@${viewer.username}`;
 
@@ -325,6 +352,21 @@ function IdentityBlock({ viewer, stats }: { viewer: ViewerProfileSummary; stats:
           </span>
         </div>
       )}
+
+      {/* The switcher's home. It belongs in the identity block rather than in
+          the nav list below, because it acts on who you are, not on where you
+          are going — the same reason Appearance sits in its own footer instead
+          of pretending to be a destination. Nothing is fetched until it is
+          actually opened. */}
+      <button
+        type="button"
+        onClick={onOpenSwitcher}
+        aria-haspopup="dialog"
+        className="kivo-focus flex w-full items-center gap-2.5 rounded-xl border border-hairline bg-surface-2/60 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+      >
+        <UsersRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+        <span className="flex-1 truncate text-sm font-semibold text-foreground">Switch account</span>
+      </button>
     </div>
   );
 }

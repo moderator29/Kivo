@@ -26,7 +26,10 @@ export default async function PrivacySettingsPage() {
       </SettingsCard>
 
       <SettingsCard title="This device" delay={0.08}>
-        <p className="text-xs text-foreground-subtle">Sign out of KIVO on this device.</p>
+        <p className="text-xs text-foreground-subtle">
+          Signs you out of KIVO on this device — including any other accounts you&apos;ve kept signed in for
+          switching.
+        </p>
         {/* A plain form posting to the server action, rather than a client
             component wrapping a button: the action already redirects, and this
             way the control still works with JavaScript disabled. */}

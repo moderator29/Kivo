@@ -21,7 +21,20 @@ import { RESEND_COOLDOWN_SECONDS, type AuthMode } from "@/lib/auth-shared";
  * session cookie, so the user lands inside the product rather than back on a
  * public page.
  */
-export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo?: string }) {
+export function EmailCodeForm({
+  mode,
+  redirectTo,
+  addAccount = false,
+}: {
+  mode: AuthMode;
+  redirectTo?: string;
+  /** Set only by the "Add account" entry point in the account switcher. It
+   *  travels all the way to `verifyEmailCode`, which uses it to decide whether
+   *  the session this one replaces is kept for switching back to — see
+   *  src/lib/auth-actions.ts. Nothing here changes until a code is actually
+   *  verified, which is what makes abandoning this form harmless. */
+  addAccount?: boolean;
+}) {
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -76,7 +89,7 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
     setNotice(null);
     startTransition(async () => {
       // Only returns on failure — success redirects out of this page entirely.
-      const result = await verifyEmailCode(email, code, redirectTo);
+      const result = await verifyEmailCode(email, code, redirectTo, addAccount);
       if (result) setError(result.error);
     });
   }
@@ -95,12 +108,20 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
           >
             <header className="flex flex-col gap-1.5 text-center">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                {mode === "sign-up" ? "Create your KIVO account" : "Welcome back"}
+                {addAccount
+                  ? mode === "sign-up"
+                    ? "Create another account"
+                    : "Add another account"
+                  : mode === "sign-up"
+                    ? "Create your KIVO account"
+                    : "Welcome back"}
               </h1>
               <p className="text-sm text-foreground-muted">
-                {mode === "sign-up"
-                  ? "Enter your email and we'll send you a 6-digit code to get started. No password to remember."
-                  : "Enter your email and we'll send you a 6-digit code."}
+                {addAccount
+                  ? "Enter the email for the account you want to add. You'll stay signed in to the one you're using until this one is verified."
+                  : mode === "sign-up"
+                    ? "Enter your email and we'll send you a 6-digit code to get started. No password to remember."
+                    : "Enter your email and we'll send you a 6-digit code."}
               </p>
             </header>
 
