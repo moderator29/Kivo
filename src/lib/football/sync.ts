@@ -7,6 +7,10 @@ import type { FixtureStatus, NormalizedFixture, NormalizedTeam } from "./types";
 import { notifyFixtureStatusChange, type FixtureStatusChangeInput } from "./match-notifications";
 import { createAsyncMemo, createKeyedSerializer, mapWithConcurrency } from "@/lib/concurrency";
 import { getSyncedCompetitionProviderIds } from "./competitions-config";
+// KIVO_NEXT_GEN KN-12: batchFindMappedIds used to live privately in this file.
+// sync-match-details.ts is now a second caller, so it moved to the shared
+// provider-mappings module (and gained chunking on the way).
+import { batchFindMappedIds } from "./provider-mappings";
 import {
   claimSyncLock,
   flagAbsentFixtures,
@@ -20,7 +24,6 @@ import {
 } from "./sync-instrumentation";
 
 type ServiceClient = SupabaseClient<Database>;
-type EntityType = Database["public"]["Enums"]["provider_entity_type"];
 type DbFixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
 export interface SyncResult {
@@ -34,38 +37,6 @@ export interface SyncResult {
  * future divergence between the two types is a type error here, not a typo. */
 function toDbFixtureStatus(status: FixtureStatus): DbFixtureStatus {
   return status;
-}
-
-/**
- * RECOMMENDATIONS.md item 27: one `provider_mappings` round trip for every distinct
- * provider id of a given entity type, instead of one round trip per fixture. Called
- * once up front per entity type (competition/team/venue) with every distinct id the
- * whole day's fixture batch references; the returned map is then threaded through
- * upsertCompetition/upsertTeam/upsertVenue below as their existence check, and each
- * of those mutates it in place when it inserts a brand-new row so a later fixture in
- * the same run that references the same provider id reuses it instead of inserting
- * again. Empty input skips the request entirely — a day with e.g. no venue ids at
- * all shouldn't fire an empty `.in()` query.
- */
-async function batchFindMappedIds(
-  supabase: ServiceClient,
-  provider: string,
-  entityType: EntityType,
-  providerEntityIds: string[],
-): Promise<Map<string, string>> {
-  const known = new Map<string, string>();
-  if (providerEntityIds.length === 0) return known;
-
-  const { data, error } = await supabase
-    .from("provider_mappings")
-    .select("provider_entity_id, kivo_entity_id")
-    .eq("provider", provider)
-    .eq("entity_type", entityType)
-    .in("provider_entity_id", providerEntityIds);
-
-  if (error) throw error;
-  for (const row of data ?? []) known.set(row.provider_entity_id, row.kivo_entity_id);
-  return known;
 }
 
 /** Updates the row on every sync (a renamed competition or a new short name

@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
-import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
+import { batchFindMappedIds, createMapping, findProviderEntityId } from "./provider-mappings";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
 import { notifyFixtureEvent } from "./match-notifications";
@@ -25,8 +26,36 @@ import type {
 
 type ServiceClient = SupabaseClient<Database>;
 
-async function upsertTeam(supabase: ServiceClient, provider: string, team: NormalizedTeam): Promise<string> {
-  const existing = await findMappedId(supabase, provider, "team", team.providerId);
+/**
+ * provider entity id -> KIVO id, resolved once up front for a whole sync run.
+ *
+ * KIVO_NEXT_GEN KN-12: every function below used to call `findMappedId` per
+ * row. `processLineupSide` did it once per player (~22 a side, ~44 a fixture),
+ * `processEvents` up to four times per event, and `syncStandings` once per
+ * table row plus the upsert. RECOMMENDATIONS.md item 29 extracted those helpers
+ * into one module and item 27 batched them — but only in sync.ts; this file was
+ * never part of either pass, so a single "sync match details" click still cost
+ * well over a hundred sequential single-row lookups before it wrote anything.
+ *
+ * Same contract as sync.ts's use of the same helper: the map is the existence
+ * check, and a function that inserts a brand-new entity mutates it in place so
+ * a later row in the same run reuses the id instead of inserting again.
+ */
+type MappingIndex = Map<string, string>;
+
+/** Bounded concurrency for a lineup side's ~22 independent row upserts.
+ * Matches syncTodayFixtures' pool size and reasoning (KIVO_NEXT_GEN KN-11):
+ * Supabase's per-project connection pool is the constraint, and nothing in
+ * that loop spends provider quota. */
+const LINEUP_WRITE_CONCURRENCY = 6;
+
+async function upsertTeam(
+  supabase: ServiceClient,
+  provider: string,
+  team: NormalizedTeam,
+  knownMappings: MappingIndex,
+): Promise<string> {
+  const existing = knownMappings.get(team.providerId);
   if (existing) return existing;
 
   const { data, error } = await supabase
@@ -37,6 +66,7 @@ async function upsertTeam(supabase: ServiceClient, provider: string, team: Norma
   if (error || !data) throw error ?? new Error("Failed to insert team");
 
   await createMapping(supabase, provider, "team", team.providerId, data.id);
+  knownMappings.set(team.providerId, data.id);
   return data.id;
 }
 
@@ -69,6 +99,7 @@ async function upsertFixtureEvent(
   event: NormalizedMatchEvent & { eventType: Exclude<NormalizedMatchEventType, "unknown"> },
   teamNames: FixtureTeamNames,
   systemProfileId: string | null,
+  eventMappings: MappingIndex,
 ): Promise<void> {
   const payload: Database["public"]["Tables"]["fixture_events"]["Insert"] = {
     fixture_id: fixtureId,
@@ -81,7 +112,7 @@ async function upsertFixtureEvent(
     detail: event.detail,
   };
 
-  const existingId = await findMappedId(supabase, providerName, "fixture_event", event.providerId);
+  const existingId = eventMappings.get(event.providerId);
   if (existingId) {
     const { error } = await supabase.from("fixture_events").update(payload).eq("id", existingId);
     if (error) throw error;
@@ -133,6 +164,7 @@ async function upsertFixtureEvent(
 
     if (existingByNaturalKey) {
       await createMapping(supabase, providerName, "fixture_event", event.providerId, existingByNaturalKey.id);
+      eventMappings.set(event.providerId, existingByNaturalKey.id);
     }
     return;
   }
@@ -140,6 +172,7 @@ async function upsertFixtureEvent(
   if (error || !data) throw error ?? new Error("Failed to insert fixture event");
 
   await createMapping(supabase, providerName, "fixture_event", event.providerId, data.id);
+  eventMappings.set(event.providerId, data.id);
 
   // RECOMMENDATIONS.md notification items: goal / red card / a followed
   // player's involvement — real event, first-ever insert only (see the doc
@@ -222,8 +255,10 @@ async function processLineupSide(
   side: NormalizedTeamLineup,
   unresolved: string[],
   autoSyncMissingSquads: boolean,
+  teamMappings: MappingIndex,
+  playerMappings: MappingIndex,
 ): Promise<number> {
-  const teamId = await findMappedId(supabase, providerName, "team", side.team.providerId);
+  const teamId = teamMappings.get(side.team.providerId);
   if (!teamId) {
     unresolved.push(`team ${providerName}:${side.team.providerId} (${side.team.name}) has no KIVO mapping. Its whole lineup was skipped`);
     return 0;
@@ -231,14 +266,27 @@ async function processLineupSide(
 
   await ensureTeamHasSquad(supabase, teamId, side.team.name, unresolved, autoSyncMissingSquads);
 
-  let processed = 0;
-  for (const entry of side.entries) {
-    const playerId = await findMappedId(supabase, providerName, "player", entry.playerProviderId);
+  // The squad auto-sync above can have inserted players this run, so the
+  // mapping index is refreshed for anything still missing rather than assumed
+  // stale — one extra round trip at most, and only when a lineup actually
+  // references a player that was not mapped before this function ran.
+  const stillUnmapped = side.entries
+    .map((entry) => entry.playerProviderId)
+    .filter((providerId) => !playerMappings.has(providerId));
+  if (stillUnmapped.length > 0) {
+    const late = await batchFindMappedIds(supabase, providerName, "player", stillUnmapped);
+    for (const [providerId, kivoId] of late) playerMappings.set(providerId, kivoId);
+  }
+
+  // Bounded concurrency rather than a serial await per player: a full side is
+  // ~22 independent upserts against one table, and they have no ordering
+  // relationship with each other. Same pool size and same reasoning as
+  // syncTodayFixtures' loop — Supabase's connection pool, not the provider, is
+  // the constraint here (nothing in this loop touches the provider at all).
+  const results = await mapWithConcurrency(side.entries, LINEUP_WRITE_CONCURRENCY, async (entry) => {
+    const playerId = playerMappings.get(entry.playerProviderId);
     if (!playerId) {
-      unresolved.push(
-        `player ${providerName}:${entry.playerProviderId} (${entry.playerName}) on team ${side.team.name} is not in KIVO yet. Lineup entry skipped`,
-      );
-      continue;
+      return `player ${providerName}:${entry.playerProviderId} (${entry.playerName}) on team ${side.team.name} is not in KIVO yet. Lineup entry skipped`;
     }
 
     const { error } = await supabase.from("lineups").upsert(
@@ -254,7 +302,15 @@ async function processLineupSide(
       { onConflict: "fixture_id,team_id,player_id" },
     );
     if (error) throw error;
-    processed += 1;
+    return null;
+  });
+
+  // Collected and appended in input order, so a concurrent pool cannot make the
+  // admin-facing `unresolved` list come out in a different order each run.
+  let processed = 0;
+  for (const message of results) {
+    if (message === null) processed += 1;
+    else unresolved.push(message);
   }
   return processed;
 }
@@ -267,9 +323,17 @@ async function processEvents(
   unresolved: string[],
   teamNames: FixtureTeamNames,
   systemProfileId: string | null,
+  teamMappings: MappingIndex,
+  playerMappings: MappingIndex,
+  eventMappings: MappingIndex,
 ): Promise<number> {
   let processed = 0;
 
+  // Deliberately still sequential, unlike the lineup loop above: each iteration
+  // can fire a notification fan-out and write a Match Room post, and the order
+  // those land in a live Room is the order the events happened. The cost this
+  // item is about was never the loop's shape — it was the four single-row
+  // lookups per event, which are now map reads.
   for (const event of events) {
     const eventType = event.eventType;
     if (!isKnownEventType(eventType)) {
@@ -279,22 +343,20 @@ async function processEvents(
       continue;
     }
 
-    const teamId = await findMappedId(supabase, providerName, "team", event.teamProviderId);
+    const teamId = teamMappings.get(event.teamProviderId);
     if (!teamId) {
       unresolved.push(`team ${providerName}:${event.teamProviderId} has no KIVO mapping. Event skipped`);
       continue;
     }
 
-    const playerId = event.playerProviderId
-      ? await findMappedId(supabase, providerName, "player", event.playerProviderId)
-      : null;
+    const playerId = event.playerProviderId ? (playerMappings.get(event.playerProviderId) ?? null) : null;
     if (event.playerProviderId && !playerId) {
       unresolved.push(
         `player ${providerName}:${event.playerProviderId} (${event.playerName ?? "unknown"}) not in KIVO. Event ${event.providerId} recorded without a player link`,
       );
     }
     const relatedPlayerId = event.relatedPlayerProviderId
-      ? await findMappedId(supabase, providerName, "player", event.relatedPlayerProviderId)
+      ? (playerMappings.get(event.relatedPlayerProviderId) ?? null)
       : null;
 
     try {
@@ -308,6 +370,7 @@ async function processEvents(
         { ...event, eventType },
         teamNames,
         systemProfileId,
+        eventMappings,
       );
       processed += 1;
     } catch (err) {
@@ -331,12 +394,13 @@ async function processStatistics(
   fixtureId: string,
   statistics: NormalizedFixtureStatistics | null,
   unresolved: string[],
+  teamMappings: MappingIndex,
 ): Promise<number> {
   if (!statistics) return 0;
 
   let processed = 0;
   for (const side of statistics.teams) {
-    const teamId = await findMappedId(supabase, providerName, "team", side.team.providerId);
+    const teamId = teamMappings.get(side.team.providerId);
     if (!teamId) {
       unresolved.push(
         `team ${providerName}:${side.team.providerId} (${side.team.name}) has no KIVO mapping. Its statistics were skipped`,
@@ -493,16 +557,63 @@ export async function syncFixtureDetails(
     unresolved.push(`statistics fetch: ${message}`);
   }
 
+  // KIVO_NEXT_GEN KN-12: resolve every provider id this whole run references in
+  // three round trips, up front, instead of one single-row lookup per player,
+  // per event, per event's players, and per statistics side. Everything has
+  // been fetched by this point, so every id the run will ever ask about is
+  // already known — there is nothing to discover incrementally, which is what
+  // made the per-row lookups avoidable rather than merely unfortunate.
+  const teamProviderIds = [
+    ...(lineups?.teams ?? []).map((t) => t.team.providerId),
+    ...events.map((e) => e.teamProviderId),
+    ...(statistics?.teams ?? []).map((t) => t.team.providerId),
+  ];
+  const playerProviderIds = [
+    ...(lineups?.teams ?? []).flatMap((t) => t.entries.map((entry) => entry.playerProviderId)),
+    ...events.flatMap((e) => [e.playerProviderId, e.relatedPlayerProviderId]),
+  ].filter((id): id is string => id !== null);
+
+  const [teamMappings, playerMappings, eventMappings] = await Promise.all([
+    batchFindMappedIds(supabase, provider.name, "team", teamProviderIds),
+    batchFindMappedIds(supabase, provider.name, "player", playerProviderIds),
+    batchFindMappedIds(
+      supabase,
+      provider.name,
+      "fixture_event",
+      events.map((e) => e.providerId),
+    ),
+  ]);
+
   let processed = 0;
 
   if (lineups) {
     for (const side of lineups.teams) {
-      processed += await processLineupSide(supabase, provider.name, fixtureId, side, unresolved, autoSyncMissingSquads);
+      processed += await processLineupSide(
+        supabase,
+        provider.name,
+        fixtureId,
+        side,
+        unresolved,
+        autoSyncMissingSquads,
+        teamMappings,
+        playerMappings,
+      );
     }
   }
 
-  processed += await processEvents(supabase, provider.name, fixtureId, events, unresolved, teamNames, systemProfileId);
-  processed += await processStatistics(supabase, provider.name, fixtureId, statistics, unresolved);
+  processed += await processEvents(
+    supabase,
+    provider.name,
+    fixtureId,
+    events,
+    unresolved,
+    teamNames,
+    systemProfileId,
+    teamMappings,
+    playerMappings,
+    eventMappings,
+  );
+  processed += await processStatistics(supabase, provider.name, fixtureId, statistics, unresolved, teamMappings);
 
   const finishedAt = new Date().toISOString();
   const hadWork =
@@ -610,6 +721,17 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
     return fail(message);
   }
 
+  // KIVO_NEXT_GEN KN-12: one lookup for the whole table instead of one per
+  // row inside upsertTeam. A standings table is 18-24 teams that KIVO has
+  // almost always already mapped from the fixtures sync, so this replaces
+  // ~20 sequential single-row selects with one.
+  const teamMappings = await batchFindMappedIds(
+    supabase,
+    provider.name,
+    "team",
+    rows.map((row) => row.team.providerId),
+  );
+
   let processed = 0;
   const errors: string[] = [];
   // KN-81: the retryable half of the same information `errors` renders as
@@ -620,7 +742,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
 
   for (const row of rows) {
     try {
-      const teamId = await upsertTeam(supabase, provider.name, row.team);
+      const teamId = await upsertTeam(supabase, provider.name, row.team, teamMappings);
       const { error } = await supabase.from("standings").upsert(
         {
           season_id: seasonId,
