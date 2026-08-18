@@ -38,6 +38,7 @@ import { parseUuidParam } from "@/lib/params";
 import { calculateAge, formatDate, formatNumber } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
@@ -390,13 +391,13 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>}
           </FadeIn>
           <FadeIn delay={0.1} className="flex items-center gap-2">
-            <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={!!profile} />
+            <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={viewerIsSignedIn(profile)} />
             <FollowWithMute
               targetType="team"
               targetId={team.id}
               initialFollowing={isFollowing}
               initialMuted={isMuted}
-              signedIn={!!profile}
+              signedIn={viewerIsSignedIn(profile)}
             />
           </FadeIn>
         </div>

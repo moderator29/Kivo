@@ -7,6 +7,7 @@ import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getTransparencyFreshness } from "@/lib/football/last-synced";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 import type { ConversationSummary } from "./actions";
 
 const item = getNavItem("ai");
@@ -76,7 +77,7 @@ export default async function AiCopilotPage({
 
   return (
     <AiChat
-      signedIn={Boolean(profile)}
+      signedIn={viewerIsSignedIn(profile)}
       initialConversations={initialConversations}
       hasFollowedEntities={grounding.hasFollowedEntities}
       hasSyncedFixtures={grounding.hasSyncedFixtures}

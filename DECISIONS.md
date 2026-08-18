@@ -233,3 +233,18 @@ The recommendation, stated as a recommendation and not acted on: build the previ
 **What the UX cost is, and what pays for it**: a user who mistypes their address now waits for an email that will never arrive, instead of being told immediately. That is a real regression and it is paid for on the code screen, which now carries a permanent, unconditional line: *"Nothing arrived at all? You may not have a KIVO account yet — create one."* Shown to everybody, so it reveals nothing, and it prompts exactly the action the old message prompted. `/sign-up` is unchanged; it creates the account or signs the existing one in, and has always answered identically either way.
 
 **Consequence for support**: the reporter can no longer tell these cases apart, but an operator can. `docs/ACCOUNT_RECOVERY.md` §2 makes checking `auth.users` for the address the second triage step, precisely because the product deliberately will not.
+
+---
+
+### 2026-08-18 — The guest-affordance layer is kept behind one flag, not deleted
+
+**Context**: KIVO used to be fully browsable signed out. Gating the whole `(app)` group (founder's call, same day) made that state structurally unreachable, and left behind a layer built for it: roughly twenty components still take a `signedIn` prop, render `<GuestLockHint>`'s padlock when it is false, and `router.push("/sign-up?redirect_url=…")` on tap. `KIVO_NEXT_GEN.md` KN-39 asked for one deliberate call — keep it behind a flag so un-gating is a config change, or delete it.
+
+**Decision**: keep it, behind `GUEST_PREVIEW_ENABLED` in `src/lib/guest-preview.ts` (currently `false`).
+
+**Rationale**: deleting is the tidier answer and the wrong one here for two reasons. Un-gating is a live possibility, not a hypothetical — a public read-only match page for shared links is already an open item (KN-119), and an invite-shaped preview is the obvious first growth lever for a pre-launch product. And the layer costs nothing while it sits: the components are correct, tested by use in their signed-in path, and the props are inert. What it *did* cost was legibility — twenty independent `signedIn={Boolean(profile)}` expressions with no statement anywhere of whether a guest can exist. One flag says it once.
+
+**What was actually unacceptable, and is now fixed**: the padlock could *lie*. Inside the gate, a page whose own `getOrCreateProfile()` read transiently failed would render every control as locked and offer a signed-in user a sign-up button — an app telling a paying-attention user they do not have the account they are signed in with. `GuestLockHint` now checks the flag itself, so no call site can produce that, and `viewerIsSignedIn()` is the single derivation for the prop: while the app is gated it is unconditionally `true`, because the group's layout has already handled both the signed-out case (redirect) and the unreadable-profile case (`<ProfileUnavailable>`). A `null` profile below that is a transient failure, and the honest response to it is a control that works and reports a real error.
+
+**Not yet done, deliberately**: the page-level call sites route through `viewerIsSignedIn` (`/ai`, `/teams/[id]`, `/players/[id]`, `/leagues/[id]`, `/matches/[id]`, `/predictions`), but `/social`, `/saved` and `/u/[username]` were being rewritten by other agents at the time and were left alone rather than merged into a conflict. Until those three are converted, flipping the flag is *almost* the whole of re-enabling a guest preview rather than all of it. The remaining edit is mechanical and named here so it is not rediscovered as a mystery.
+

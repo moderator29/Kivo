@@ -24,6 +24,7 @@ import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { calculateAge, formatDate } from "@/lib/format";
 import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { DEFAULT_FANTASY_PRICE, formatFantasyPrice } from "@/app/(app)/fantasy/fantasy-rules";
 
 // RECOMMENDATIONS.md item 296: same minimum-sample suppression convention as
@@ -214,13 +215,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             )}
           </FadeIn>
           <FadeIn delay={0.1} className="flex items-center gap-2">
-            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={!!profile} />
+            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={viewerIsSignedIn(profile)} />
             <FollowWithMute
               targetType="player"
               targetId={player.id}
               initialFollowing={isFollowing}
               initialMuted={isMuted}
-              signedIn={!!profile}
+              signedIn={viewerIsSignedIn(profile)}
             />
           </FadeIn>
         </div>

@@ -15,6 +15,7 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -101,7 +102,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           </p>
         </FadeIn>
         <FadeIn delay={0.1}>
-          <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={!!profile} />
+          <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={viewerIsSignedIn(profile)} />
         </FadeIn>
       </div>
 

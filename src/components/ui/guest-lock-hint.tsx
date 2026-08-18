@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import { GUEST_PREVIEW_ENABLED } from "@/lib/guest-preview";
 
 /**
  * Shared tooltip text for every guest-gated control that silently
@@ -24,6 +25,13 @@ export const GUEST_ACTION_TITLE = "Sign up to do this";
  * false, so a signed-in viewer's controls never pick up a locked look.
  */
 export function GuestLockHint({ show, className }: { show: boolean; className?: string }) {
-  if (!show) return null;
+  // KN-39: the padlock is gated on the product having a guest preview at all,
+  // not only on this one call site's `signedIn` prop. With the app fully gated
+  // a locked control is unreachable by design — and if a page's own profile
+  // read transiently fails, the honest outcome is a control that works and
+  // reports a real error, never one that tells a signed-in user they need an
+  // account. One flag, checked once, instead of trusting twenty call sites to
+  // agree.
+  if (!GUEST_PREVIEW_ENABLED || !show) return null;
   return <Lock className={className ?? "h-3 w-3 shrink-0"} strokeWidth={2.5} aria-hidden="true" />;
 }

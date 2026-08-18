@@ -24,6 +24,7 @@ import { buildMatchShareCardData } from "@/lib/football/match-share-card";
 import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { absoluteUrl } from "@/lib/site-url";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -64,7 +65,7 @@ export default async function MatchCentrePage({
   const { data: fixture } = await supabase
     .from("fixtures")
     .select(
-      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
+      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
        competition:competitions(name, short_name),
@@ -310,7 +311,18 @@ export default async function MatchCentrePage({
         `}</style>
 
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
-          <span>{fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}</span>
+          <span>
+            {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+            {/* KIVO_NEXT_GEN KN-84. `matchday` has existed as a column since
+                migration 0001 and, until now, nothing ever wrote to it. It is
+                rendered only when the provider actually reported a numbered
+                round: a cup quarter-final has no matchday, and parseMatchday
+                returns null rather than inventing one, so this simply does not
+                appear for those fixtures. */}
+            {fixture.matchday !== null && (
+              <span className="text-foreground-subtle"> · Matchday {fixture.matchday}</span>
+            )}
+          </span>
           {fixture.venue?.name && (
             <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-accent">
               <MapPin className="h-3 w-3" strokeWidth={2} />
@@ -387,7 +399,7 @@ export default async function MatchCentrePage({
         <FadeIn delay={0.1}>
           <FanRatingCard
             fixtureId={fixture.id}
-            signedIn={Boolean(profile)}
+            signedIn={viewerIsSignedIn(profile)}
             initialRating={ownFanRating.data?.rating ?? null}
             ratingCount={fanRatingCount}
             avgRating={fanRatingAvg}
@@ -449,7 +461,7 @@ export default async function MatchCentrePage({
             roomPosts={roomPostsForTab}
             scrollToPostId={targetPostId ?? null}
             stats={statsForTab}
-            signedIn={Boolean(profile)}
+            signedIn={viewerIsSignedIn(profile)}
             viewer={profile ? { id: profile.id, name: profile.display_name || profile.username } : null}
             canSyncDetails={canManageFootballData(profile?.role)}
             syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
