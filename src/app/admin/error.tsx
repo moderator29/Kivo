@@ -15,6 +15,7 @@
 // re-rendering the segment"), so that's what the button below uses. See
 // src/app/error.tsx for the same note in more detail.
 
+import { logError } from "@/lib/log";
 import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
@@ -29,7 +30,7 @@ export default function AdminSegmentError({
   useEffect(() => {
     // No error-tracking service wired up yet — that's a separate decision.
     // This at least keeps the failure visible in server/console logs.
-    console.error(error);
+    logError("admin.error.error", error);
   }, [error]);
 
   return (

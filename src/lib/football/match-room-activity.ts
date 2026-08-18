@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 
@@ -40,7 +41,7 @@ export async function getMatchRoomActivity(
 
   const { data, error } = await supabase.rpc("get_match_room_activity", { p_fixture_ids: fixtureIds });
   if (error) {
-    console.error("Failed to load match room activity", error);
+    logError("football.match-room-activity.loadMatchRoomActivity", error);
     return activity;
   }
 

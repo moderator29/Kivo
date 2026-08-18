@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -44,7 +45,7 @@ export async function submitFanRating(fixtureId: string, rating: number) {
     .upsert({ profile_id: profile.id, fixture_id: fixtureId, rating }, { onConflict: "profile_id,fixture_id" });
 
   if (error) {
-    console.error("Failed to submit fan rating", error);
+    logError("matches.fan-rating-actions.submitFanRating", error);
     return { error: "Couldn't save your rating. Try again." };
   }
 

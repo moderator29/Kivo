@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LEAGUES_PAGE_SIZE } from "./constants";
 
@@ -44,7 +45,7 @@ export async function loadMoreLeagues(offset: number): Promise<{ error: string |
     .range(offset, offset + LEAGUES_PAGE_SIZE);
 
   if (error) {
-    console.error("Failed to load more leagues", error);
+    logError("leagues.loadMore", error);
     return { error: "Couldn't load more leagues. Try again.", leagues: [], hasMore: false };
   }
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -42,7 +43,7 @@ export async function scorePredictions(): Promise<{ error: string | null; record
     .not("away_score", "is", null);
 
   if (fixturesError) {
-    console.error("Failed to load finished fixtures for scoring", fixturesError);
+    logError("admin.data-health.predictions-actions.loadFinishedFixturesScoring", fixturesError);
     return { error: "Couldn't load finished fixtures. Try again." };
   }
 
@@ -64,7 +65,7 @@ export async function scorePredictions(): Promise<{ error: string | null; record
     .is("points_awarded", null);
 
   if (predictionsError) {
-    console.error("Failed to load unscored predictions", predictionsError);
+    logError("admin.data-health.predictions-actions.loadUnscoredPredictions", predictionsError);
     return { error: "Couldn't load predictions to score. Try again." };
   }
 
@@ -89,7 +90,7 @@ export async function scorePredictions(): Promise<{ error: string | null; record
       .eq("id", row.id);
 
     if (updateError) {
-      console.error(`Failed to score prediction ${row.id}`, updateError);
+      logError("admin.data-health.predictions-actions.scorePrediction", updateError, { detail: `Failed to score prediction ${row.id}` });
       continue;
     }
 

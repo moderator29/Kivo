@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
@@ -69,7 +70,7 @@ function describeAuthError(error: AuthError, mode: AuthMode): AuthActionResult {
     return { error: "That code is wrong or has expired. Check it and try again." };
   }
 
-  console.error(`Supabase auth ${mode} failed`, { code, status: error.status, message });
+  logError("auth-actions.supabaseAuth", { code, status: error.status, message }, { detail: `Supabase auth ${mode} failed` });
   return { error: "Something went wrong on our side. Try again in a moment." };
 }
 
@@ -125,11 +126,8 @@ async function throttleOrPassThrough(
     const result = await throttle(action, address, perEmail, perIp, windowSeconds);
     if (!result.ok) return { error: result.error, retryAfterSeconds: windowSeconds };
   } catch (error) {
-    console.error(
-      `Rate limiting is NOT active for ${action} — SUPABASE_SERVICE_ROLE_KEY is missing or invalid. ` +
-        "This endpoint is unthrottled until that is fixed.",
-      error,
-    );
+    logError("auth-actions.rateLimitingIsNot", error, { detail: `Rate limiting is NOT active for ${action} — SUPABASE_SERVICE_ROLE_KEY is missing or invalid. ` +
+        "This endpoint is unthrottled until that is fixed." });
   }
   return undefined;
 }

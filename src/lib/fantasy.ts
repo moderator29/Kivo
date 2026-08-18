@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -48,7 +49,7 @@ export async function getOrCreateFantasyTeam(
         .maybeSingle();
       return { team: retried ?? null, error: retried ? null : "Couldn't create your fantasy team. Try again." };
     }
-    console.error("Failed to create fantasy team", error);
+    logError("fantasy.createTeam", error);
     return { team: null, error: "Couldn't create your fantasy team. Try again." };
   }
 
@@ -106,7 +107,7 @@ export async function ensureFantasyPlayerPrices(seasonId: string, playerIds: str
     .upsert(rows, { onConflict: "player_id,season_id", ignoreDuplicates: true });
 
   if (error) {
-    console.error("Failed to backfill fantasy player prices", error);
+    logError("fantasy.backfillPlayerPrices", error);
   }
 }
 
@@ -188,7 +189,7 @@ export async function carryForwardFantasyRoster(
       .upsert(rows, { onConflict: "fantasy_team_id,gameweek_id,player_id", ignoreDuplicates: true });
 
     if (error) {
-      console.error("Failed to carry forward fantasy roster", error);
+      logError("fantasy.carryForwardRoster", error);
       return { carriedFromGameweekNumber: null };
     }
     return { carriedFromGameweekNumber: gw.number };
@@ -316,7 +317,7 @@ export async function carryForwardMissingFantasyRosters(
     .from("fantasy_rosters")
     .upsert(toInsert, { onConflict: "fantasy_team_id,gameweek_id,player_id", ignoreDuplicates: true });
   if (error) {
-    console.error("Failed to bulk carry forward fantasy rosters before scoring", error);
+    logError("fantasy.bulkCarryForwardRosters", error);
     return { teamsCarried: 0 };
   }
 

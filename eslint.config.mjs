@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import iconStrokeWeight from "./eslint-rules/icon-stroke-weight.mjs";
+import noBareConsoleError from "./eslint-rules/no-bare-console-error.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -20,14 +21,23 @@ const eslintConfig = defineConfig([
   // can load them without a build step. See each rule file's header for the
   // KIVO_NEXT_GEN item it closes.
   {
-    files: ["src/**/*.tsx"],
+    files: ["src/**/*.{ts,tsx}"],
     plugins: {
       kivo: {
         rules: {
           "icon-stroke-weight": iconStrokeWeight,
+          "no-bare-console-error": noBareConsoleError,
         },
       },
     },
+    rules: {
+      // KN-129: a structured error sink only some failures reach is worse than
+      // none, because an empty log search reads as "no errors".
+      "kivo/no-bare-console-error": "error",
+    },
+  },
+  {
+    files: ["src/**/*.tsx"],
     rules: {
       // KN-71: stroke weight comes from the optical scale in
       // src/lib/design-system.ts, not from whatever a call site reached for.

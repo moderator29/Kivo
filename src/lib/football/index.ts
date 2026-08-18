@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { FootballDataProvider } from "./types";
 import { ApiFootballProvider } from "./providers/api-football";
@@ -95,9 +96,7 @@ export async function getFootballDataProvider(): Promise<FootballDataProvider> {
     if (providerChoice === "thesportsdb") {
       // Requested but not configured — fail loud in the server log rather than
       // silently serving API-Football data under a "TheSportsDB" expectation.
-      console.error(
-        "FOOTBALL_DATA_PROVIDER=thesportsdb but THE_SPORTS_DB_API_KEY is unset — falling back to API-Football.",
-      );
+      logError("football.dataProviderThesportsdbBut", "FOOTBALL_DATA_PROVIDER=thesportsdb but THE_SPORTS_DB_API_KEY is unset — falling back to API-Football.");
     }
     cachedProvider = new ApiFootballProvider(apiFootballKey);
   } else if (process.env.NODE_ENV !== "production") {

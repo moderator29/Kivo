@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -69,7 +70,7 @@ export async function checkUsername(username: string): Promise<{ available: bool
   });
 
   if (error) {
-    console.error("Failed to check username availability", error);
+    logError("onboarding.checkUsernameAvailability", error);
     return { available: null };
   }
 
@@ -103,7 +104,7 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
     if (error.code === "23505") {
       return { error: "That username is taken. Try another." };
     }
-    console.error("Failed to save username", error);
+    logError("onboarding.saveUsername", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -170,7 +171,7 @@ export async function finishOnboarding(
     .single();
 
   if (error || !updated) {
-    console.error("Failed to finish onboarding", error);
+    logError("onboarding.finish", error);
     return {
       error: "We couldn't save that. Check your connection and try again.",
       xpAwarded: 0,
@@ -199,7 +200,7 @@ export async function finishOnboarding(
       awardBadge(profile.id, "welcome"),
     ]);
   } catch (rewardError) {
-    console.error("Failed to award onboarding rewards", rewardError);
+    logError("onboarding.awardRewards", rewardError);
   }
 
   // Read the club back by the id the row actually ended up with, so a team

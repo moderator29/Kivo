@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -54,7 +55,7 @@ async function notifyNewFollower(followedProfileId: string, follower: { username
       follower_display_name: follower.display_name,
     }),
   );
-  if (error) console.error("Failed to create new-follower notification", error);
+  if (error) logError("follow-actions.createNewFollowerNotification", error);
 }
 
 export async function toggleFollow(targetType: FollowTargetType, targetId: string, currentlyFollowing: boolean) {
@@ -80,7 +81,7 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
       });
 
   if (error) {
-    console.error("Failed to toggle follow", error);
+    logError("follow-actions.toggleFollow", error);
     return { error: "Couldn't update. Try again.", following: currentlyFollowing };
   }
 
@@ -153,7 +154,7 @@ export async function toggleFollowMute(targetType: "team" | "player", targetId: 
     .maybeSingle();
 
   if (error) {
-    console.error("Failed to toggle follow mute", error);
+    logError("follow-actions.toggleFollowMute", error);
     return { error: "Couldn't update. Try again.", muted: currentlyMuted };
   }
   if (!data) {

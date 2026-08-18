@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -30,7 +31,7 @@ export async function toggleSave(targetType: SaveTargetType, targetId: string, c
     : await supabase.from("saves").insert({ profile_id: profile.id, target_type: targetType, target_id: targetId });
 
   if (error) {
-    console.error("Failed to toggle save", error);
+    logError("save-actions.toggleSave", error);
     return { error: "Couldn't update. Try again.", saved: currentlySaved };
   }
 

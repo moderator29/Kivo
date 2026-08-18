@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -96,7 +97,7 @@ export async function createPost(formData: FormData) {
     .single();
 
   if (error || !created) {
-    console.error("Failed to create post", error);
+    logError("social.createPost", error);
     return { error: "Couldn't publish your post. Try again." };
   }
 
@@ -162,7 +163,7 @@ export async function createPoll(formData: FormData) {
     .single();
 
   if (postError || !post) {
-    console.error("Failed to create poll post", postError);
+    logError("social.createPollPost", postError);
     return { error: "Couldn't publish your poll. Try again." };
   }
 
@@ -171,7 +172,7 @@ export async function createPoll(formData: FormData) {
     .insert(options.map((label, position) => ({ post_id: post.id, position, label })));
 
   if (optionsError) {
-    console.error("Failed to create poll options", optionsError);
+    logError("social.createPollOptions", optionsError);
     await supabase.from("posts").delete().eq("id", post.id);
     return { error: "Couldn't publish your poll. Try again." };
   }
@@ -211,7 +212,7 @@ export async function voteOnPoll(postId: string, optionId: string) {
 
   const { error: deleteError } = await supabase.from("poll_votes").delete().eq("post_id", postId).eq("profile_id", profile.id);
   if (deleteError) {
-    console.error("Failed to clear existing poll vote", deleteError);
+    logError("social.clearExistingPollVote", deleteError);
     return { error: "Couldn't record your vote. Try again." };
   }
 
@@ -219,7 +220,7 @@ export async function voteOnPoll(postId: string, optionId: string) {
     .from("poll_votes")
     .insert({ post_id: postId, option_id: optionId, profile_id: profile.id });
   if (insertError) {
-    console.error("Failed to record poll vote", insertError);
+    logError("social.recordPollVote", insertError);
     return { error: "Couldn't record your vote. Try again." };
   }
 
@@ -256,7 +257,7 @@ export async function setReaction(targetType: "post" | "comment", targetId: stri
     .eq("profile_id", profile.id);
 
   if (deleteError) {
-    console.error("Failed to clear existing reaction", deleteError);
+    logError("social.clearExistingReaction", deleteError);
     return { error: "Couldn't update your reaction." };
   }
 
@@ -269,7 +270,7 @@ export async function setReaction(targetType: "post" | "comment", targetId: stri
     });
 
     if (insertError) {
-      console.error("Failed to set reaction", insertError);
+      logError("social.setReaction", insertError);
       return { error: "Couldn't update your reaction." };
     }
 
@@ -332,5 +333,5 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
     }),
   );
 
-  if (error) console.error("Failed to create like notification", error);
+  if (error) logError("social.createLikeNotification", error);
 }

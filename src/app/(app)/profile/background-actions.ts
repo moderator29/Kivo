@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -17,7 +18,7 @@ export async function selectBackground(backgroundId: string) {
   const { error } = await supabase.from("profiles").update({ background_id: backgroundId }).eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to select profile background", error);
+    logError("profile.background-actions.selectBackground", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -37,7 +38,7 @@ export async function clearBackground() {
   const { error } = await supabase.from("profiles").update({ background_id: null }).eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to clear profile background", error);
+    logError("profile.background-actions.clearBackground", error);
     return { error: "Something went wrong. Try again." };
   }
 

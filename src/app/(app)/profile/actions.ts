@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -34,7 +35,7 @@ export async function checkUsernameAvailable(username: string): Promise<{ availa
   });
 
   if (error) {
-    console.error("Failed to check username availability", error);
+    logError("profile.checkUsernameAvailability", error);
     return { available: null };
   }
 
@@ -58,7 +59,7 @@ export async function updateUsername(formData: FormData) {
 
   if (error) {
     if (error.code === "23505") return { error: "That username is taken. Try another." };
-    console.error("Failed to update username", error);
+    logError("profile.updateUsername", error);
     return { error: "Something went wrong. Try again." };
   }
 

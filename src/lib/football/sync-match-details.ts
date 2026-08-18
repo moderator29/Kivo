@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -375,7 +376,7 @@ async function processEvents(
       processed += 1;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Fixture details sync: failed to upsert event ${providerName}:${event.providerId}`, err);
+      logError("football.sync-match-details.fixtureDetailsSyncUpsert", err, { detail: `Fixture details sync: failed to upsert event ${providerName}:${event.providerId}` });
       unresolved.push(`event ${providerName}:${event.providerId}: ${message}`);
     }
   }
@@ -433,7 +434,7 @@ async function processStatistics(
       { onConflict: "fixture_id,team_id" },
     );
     if (error) {
-      console.error(`Fixture details sync: failed to upsert statistics for team ${providerName}:${side.team.providerId}`, error);
+      logError("football.sync-match-details.fixtureDetailsSyncUpsert", error, { detail: `Fixture details sync: failed to upsert statistics for team ${providerName}:${side.team.providerId}` });
       unresolved.push(`statistics for team ${providerName}:${side.team.providerId} (${side.team.name}): ${error.message}`);
       continue;
     }
@@ -469,7 +470,7 @@ export async function syncFixtureDetails(
     .single();
 
   if (startError || !syncRun) {
-    console.error("Failed to start fixture details sync run", startError);
+    logError("football.sync-match-details.startFixtureDetailsSync", startError);
     return {
       status: "failed",
       recordsProcessed: 0,
@@ -537,7 +538,7 @@ export async function syncFixtureDetails(
     lineups = await provider.getLineups(fixtureProviderId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Fixture details sync: getLineups failed (continuing without lineups)", err);
+    logError("football.sync-match-details.fixtureDetailsSyncGetlineups", err);
     unresolved.push(`lineups fetch: ${message}`);
   }
 
@@ -545,7 +546,7 @@ export async function syncFixtureDetails(
     events = await provider.getMatchEvents(fixtureProviderId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Fixture details sync: getMatchEvents failed (continuing without events)", err);
+    logError("football.sync-match-details.fixtureDetailsSyncGetmatchevents", err);
     unresolved.push(`events fetch: ${message}`);
   }
 
@@ -553,7 +554,7 @@ export async function syncFixtureDetails(
     statistics = await provider.getFixtureStatistics(fixtureProviderId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Fixture details sync: getFixtureStatistics failed (continuing without statistics)", err);
+    logError("football.sync-match-details.fixtureDetailsSyncGetfixturestatistics", err);
     unresolved.push(`statistics fetch: ${message}`);
   }
 
@@ -668,7 +669,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
     .single();
 
   if (startError || !syncRun) {
-    console.error("Failed to start standings sync run", startError);
+    logError("football.sync-match-details.startStandingsSyncRun", startError);
     return {
       status: "failed",
       recordsProcessed: 0,
@@ -717,7 +718,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
     rows = await provider.getStandings(leagueProviderId, year);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Standings sync: getStandings failed", err);
+    logError("football.sync-match-details.standingsSyncGetstandings", err);
     return fail(message);
   }
 
@@ -763,7 +764,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
       succeededProviderIds.push(row.team.providerId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Standings sync: failed to upsert standing for team ${provider.name}:${row.team.providerId}`, err);
+      logError("football.sync-match-details.standingsSyncUpsertStanding", err, { detail: `Standings sync: failed to upsert standing for team ${provider.name}:${row.team.providerId}` });
       errors.push(`team ${provider.name}:${row.team.providerId} (${row.team.name}): ${message}`);
       entityFailures.push({
         providerEntityId: row.team.providerId,

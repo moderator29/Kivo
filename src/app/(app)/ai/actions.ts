@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -49,7 +50,7 @@ export async function loadConversationMessages(
     .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("Failed to load conversation messages", error);
+    logError("ai.loadConversationMessages", error);
     return { messages: null, error: "Couldn't load that conversation." };
   }
 
@@ -77,7 +78,7 @@ export async function renameConversation(
     .eq("profile_id", profile.id);
 
   if (error) {
-    console.error("Failed to rename AI conversation", error);
+    logError("ai.renameConversation", error);
     return { error: "Couldn't rename that conversation." };
   }
 
@@ -105,7 +106,7 @@ export async function deleteConversation(conversationId: string): Promise<{ erro
     .eq("profile_id", profile.id);
 
   if (error) {
-    console.error("Failed to delete AI conversation", error);
+    logError("ai.deleteConversation", error);
     return { error: "Couldn't delete that conversation." };
   }
 

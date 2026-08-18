@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -80,7 +81,7 @@ export async function createFantasyLeague(input: {
     }
 
     if (error?.code === "23505") continue; // invite_code collision — retry with a fresh code
-    console.error("Failed to create fantasy league", error);
+    logError("fantasy.createLeague", error);
     return { error: "Couldn't create your league. Try again.", leagueId: null };
   }
 
@@ -239,7 +240,7 @@ export async function setGameweekRoster(
       .eq("gameweek_id", gameweekId)
       .in("player_id", toRemove);
     if (removeError) {
-      console.error("Failed to remove dropped fantasy roster picks", removeError);
+      logError("fantasy.removeDroppedRosterPicks", removeError);
       return { error: "Couldn't save your squad. Try again." };
     }
   }
@@ -258,7 +259,7 @@ export async function setGameweekRoster(
     .upsert(rows, { onConflict: "fantasy_team_id,gameweek_id,player_id" });
 
   if (upsertError) {
-    console.error("Failed to save fantasy roster", upsertError);
+    logError("fantasy.saveRoster", upsertError);
     return { error: "Couldn't save your squad. Try again." };
   }
 
@@ -328,7 +329,7 @@ export async function setFantasyCaptain(
       ? await supabase.from("fantasy_rosters").update({ is_captain: false }).in("id", holderIds)
       : await supabase.from("fantasy_rosters").update({ is_vice_captain: false }).in("id", holderIds);
     if (clearError) {
-      console.error("Failed to clear previous fantasy captain", clearError);
+      logError("fantasy.clearPreviousCaptain", clearError);
       return { error: "Couldn't update captaincy. Try again." };
     }
   }
@@ -337,7 +338,7 @@ export async function setFantasyCaptain(
     ? await supabase.from("fantasy_rosters").update({ is_captain: true }).eq("id", target.id)
     : await supabase.from("fantasy_rosters").update({ is_vice_captain: true }).eq("id", target.id);
   if (setError) {
-    console.error("Failed to set fantasy captain", setError);
+    logError("fantasy.setCaptain", setError);
     return { error: "Couldn't update captaincy. Try again." };
   }
 
@@ -401,7 +402,7 @@ export async function searchFantasyPlayers(
 
   const { data: players, error } = await request.limit(60);
   if (error) {
-    console.error("Failed to search players", error);
+    logError("fantasy.searchPlayers", error);
     return { error: "Couldn't load players. Try again.", players: [] };
   }
 
@@ -467,7 +468,7 @@ export async function listPublicFantasyLeagues(
   });
 
   if (error) {
-    console.error("Failed to list public fantasy leagues", error);
+    logError("fantasy.listPublicLeagues", error);
     return { error: "Couldn't load public leagues. Try again.", leagues: [], hasMore: false };
   }
 

@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
@@ -133,7 +134,7 @@ export async function filterNotifiable(
         // Fail closed for this chunk rather than notifying people who may have
         // opted out: an unreadable preference is not consent. Logged, not
         // thrown, so one bad chunk can't abort a whole sync's fan-out.
-        console.error("filterNotifiable: preference lookup failed, skipping this chunk", error);
+        logError("notification-preferences.filternotifiablePreferenceLookupSkipping", error);
         for (const id of chunk) blocked.add(id);
         return;
       }

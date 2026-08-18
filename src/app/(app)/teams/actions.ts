@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { TEAMS_PAGE_SIZE } from "./constants";
 
@@ -27,7 +28,7 @@ export async function loadMoreTeams(offset: number): Promise<{ error: string | n
     .range(offset, offset + TEAMS_PAGE_SIZE);
 
   if (error) {
-    console.error("Failed to load more teams", error);
+    logError("teams.loadMore", error);
     return { error: "Couldn't load more teams. Try again.", teams: [], hasMore: false };
   }
 

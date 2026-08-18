@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
@@ -99,7 +100,7 @@ async function insertNotifications(
   if (rows.length === 0) return;
 
   const { error } = await supabase.from("notifications").insert(rows);
-  if (error) console.error("match-notifications: failed to insert notification batch", error);
+  if (error) logError("football.match-notifications.matchNotificationsInsertNotification", error);
 }
 
 export interface FixtureStatusChangeInput {

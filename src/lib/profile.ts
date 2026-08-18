@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import { cache } from "react";
 import { createServerSupabaseClient } from "./supabase/server";
@@ -93,7 +94,7 @@ export const resolveViewerProfile = cache(async (): Promise<ProfileResolution> =
       const { data: retried } = await supabase.from("profiles").select("*").eq("auth_user_id", user.id).maybeSingle();
       return retried ? { status: "ready", profile: retried } : { status: "unavailable" };
     }
-    console.error("Failed to create profile", error);
+    logError("profile.create", error);
     return { status: "unavailable" };
   }
 

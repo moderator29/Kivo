@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -52,7 +53,7 @@ export async function getComments(postId: string): Promise<{ comments: CommentDT
   ]);
 
   if (error) {
-    console.error("Failed to load comments", error);
+    logError("social.comment-actions.loadComments", error);
     return { comments: [], error: "Couldn't load comments. Try again." };
   }
 
@@ -163,7 +164,7 @@ async function notifyComment(
         });
 
   const { error } = await serviceClient.from("notifications").insert(notification);
-  if (error) console.error("Failed to create comment notification", error);
+  if (error) logError("social.comment-actions.createCommentNotification", error);
 }
 
 /**
@@ -208,7 +209,7 @@ export async function createComment(postId: string, body: string, parentCommentI
     .single();
 
   if (error || !inserted) {
-    console.error("Failed to create comment", error);
+    logError("social.comment-actions.createComment", error);
     return { error: "Couldn't post your comment. Try again.", comment: null };
   }
 

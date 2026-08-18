@@ -90,7 +90,7 @@ export async function fetchPostsPage(
       .select("id, body, created_at, author_profile_id, is_system")
       .in("id", options.postIds);
     if (error) {
-      console.error("Failed to load posts", error);
+      logError("social.posts.load", error);
       return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
     }
     const rowById = new Map((data ?? []).map((p) => [p.id, p]));
@@ -144,7 +144,7 @@ export async function fetchPostsPage(
 
     const { data: rows, error } = await query;
     if (error) {
-      console.error("Failed to load posts", error);
+      logError("social.posts.load", error);
       return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
     }
 

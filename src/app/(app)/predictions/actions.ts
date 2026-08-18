@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -44,7 +45,7 @@ export async function submitPrediction(fixtureId: string, outcome: PredictionOut
     );
 
   if (error) {
-    console.error("Failed to submit prediction", error);
+    logError("predictions.submitPrediction", error);
     return { error: "Couldn't save your prediction. Try again." };
   }
 

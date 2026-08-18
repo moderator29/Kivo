@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
@@ -48,7 +49,7 @@ export async function getKivoSystemProfileId(supabase: ServiceClient): Promise<s
     .eq("username", KIVO_SYSTEM_USERNAME)
     .maybeSingle();
   if (error) {
-    console.error("match-room-system-posts: failed to resolve the KIVO system profile", error);
+    logError("football.match-room-system-posts.matchRoomSystemPosts", error);
     return null;
   }
   return data?.id ?? null;
@@ -101,5 +102,5 @@ export async function insertSystemEventPost(
     body,
     is_system: true,
   });
-  if (error) console.error("match-room-system-posts: failed to insert system Room post", error);
+  if (error) logError("football.match-room-system-posts.matchRoomSystemPosts", error);
 }

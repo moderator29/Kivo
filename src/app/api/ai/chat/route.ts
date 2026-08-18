@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import { NextResponse } from "next/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -142,7 +143,7 @@ export async function POST(req: Request) {
       .select("id")
       .single();
     if (error || !created) {
-      console.error("Failed to create AI conversation", error);
+      logError("api.ai.chat.createConversation", error);
       return NextResponse.json({ error: "Couldn't start a conversation." }, { status: 500 });
     }
     conversationId = created.id;
@@ -185,7 +186,7 @@ export async function POST(req: Request) {
       .from("ai_messages")
       .insert({ conversation_id: conversationId, role: "user", content: message });
     if (insertUserError) {
-      console.error("Failed to persist user message", insertUserError);
+      logError("api.ai.chat.persistUserMessage", insertUserError);
     }
   }
 
@@ -265,7 +266,7 @@ export async function POST(req: Request) {
           output_tokens: finalMessage.usage.output_tokens,
         });
         if (insertAssistantError) {
-          console.error("Failed to persist assistant message", insertAssistantError);
+          logError("api.ai.chat.persistAssistantMessage", insertAssistantError);
         }
 
         // ai_conversations.updated_at only moves on an update to that row
@@ -278,12 +279,12 @@ export async function POST(req: Request) {
           .update({ updated_at: new Date().toISOString() })
           .eq("id", finalConversationId);
         if (touchError) {
-          console.error("Failed to bump AI conversation updated_at", touchError);
+          logError("api.ai.chat.bumpConversationUpdated", touchError);
         }
 
         send({ type: "done" });
       } catch (err) {
-        console.error("Anthropic streaming request failed", err);
+        logError("api.ai.chat.anthropicStreamingRequest", err);
         send({ type: "error", error: "AI Copilot is temporarily unavailable. Try again in a moment." });
       } finally {
         controller.close();

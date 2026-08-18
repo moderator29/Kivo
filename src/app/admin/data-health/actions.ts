@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -63,7 +64,7 @@ export async function markAnomalyReviewed(anomalyId: string): Promise<{ error: s
     .maybeSingle();
 
   if (error) {
-    console.error("Failed to mark anomaly reviewed", error);
+    logError("admin.data-health.markAnomalyReviewed", error);
     return { error: "Something went wrong. Try again." };
   }
   // No row came back: either the id does not exist, or somebody else reviewed
@@ -221,7 +222,7 @@ export async function pruneSyncRuns(): Promise<{ error: string | null; recordsPr
   const { data: deletedCount, error } = await service.rpc("prune_sync_runs", { p_older_than_days: 90 });
 
   if (error) {
-    console.error("Failed to prune sync_runs", error);
+    logError("admin.data-health.pruneSyncRuns", error);
     return { error: "Couldn't prune old sync runs. Try again." };
   }
 

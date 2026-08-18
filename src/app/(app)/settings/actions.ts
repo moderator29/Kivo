@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -93,7 +94,7 @@ export async function updateNotificationPreference(column: NotificationPreferenc
     .upsert(buildPreferencePayload(column, value, profile.id), { onConflict: "profile_id" });
 
   if (error) {
-    console.error("Failed to update notification preference", error);
+    logError("settings.updateNotificationPreference", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -123,7 +124,7 @@ export async function updateProfileDetails(formData: FormData) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to update profile details", error);
+    logError("settings.updateProfileDetails", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -150,7 +151,7 @@ export async function updateActivityVisibility(showActivityPublicly: boolean) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to update activity visibility", error);
+    logError("settings.updateActivityVisibility", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -192,7 +193,7 @@ export async function updateTimezone(timezone: string | null) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to update timezone", error);
+    logError("settings.updateTimezone", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -240,18 +241,18 @@ export async function deleteAccount() {
         .from("avatars")
         .remove(objects.map((object) => `${user.id}/${object.name}`));
       if (removeError) {
-        console.error("Failed to remove avatar objects before account deletion", removeError);
+        logError("settings.removeAvatarObjectsAccount", removeError);
         return { error: "Something went wrong. Try again." };
       }
     }
 
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) {
-      console.error("Failed to delete Supabase Auth user", error);
+      logError("settings.deleteSupabaseAuthUser", error);
       return { error: "Something went wrong. Try again." };
     }
   } catch (error) {
-    console.error("Failed to delete account", error);
+    logError("settings.deleteAccount", error);
     return { error: "Something went wrong. Try again." };
   }
 

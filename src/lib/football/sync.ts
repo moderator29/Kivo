@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -517,7 +518,7 @@ async function dispatchStatusNotifications(
     try {
       await notifyFixtureStatusChange(supabase, input);
     } catch (err) {
-      console.error(`Football sync: notification fan-out failed for fixture ${input.fixtureId}`, err);
+      logError("football.sync.notificationFanOutFixture", err, { detail: `Football sync: notification fan-out failed for fixture ${input.fixtureId}` });
     }
   });
 }
@@ -533,7 +534,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
     .single();
 
   if (startError || !syncRun) {
-    console.error("Failed to start football sync run", startError);
+    logError("football.sync.startRun", startError);
     return {
       status: "failed",
       recordsProcessed: 0,
@@ -618,7 +619,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
         ...fields,
       })
       .eq("id", syncRun.id);
-    if (error) console.error("Football sync: failed to write terminal sync_runs status", error);
+    if (error) logError("football.sync.writeTerminalRunsStatus", error);
   };
 
   const pendingNotifications: FixtureStatusChangeInput[] = [];
@@ -629,7 +630,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
     try {
       fixtures = await provider.getFixturesByDate(todayIsoDate());
     } catch (err) {
-      console.error("Football sync: getFixturesByDate failed", err);
+      logError("football.sync.getfixturesbydate", err);
       throw err;
     }
 
@@ -774,7 +775,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
         if (!(await renewSyncLockIfNeeded(supabase, lock))) lostLease = true;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`Football sync: failed to sync fixture ${fixture.provider}:${fixture.providerId}`, err);
+        logError("football.sync.fixture", err, { detail: `Football sync: failed to sync fixture ${fixture.provider}:${fixture.providerId}` });
         errors.push(
           `${fixture.provider}:${fixture.providerId} (${fixture.homeTeam.name} v ${fixture.awayTeam.name}): ${message}`,
         );
@@ -880,7 +881,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Football sync: run failed before reaching a terminal state", err);
+    logError("football.sync.runReachingTerminalState", err);
     await finalizeRun({ status: "failed", records_processed: processed, error_message: message });
     return { status: "failed", recordsProcessed: processed, error: message };
   } finally {
