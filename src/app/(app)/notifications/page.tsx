@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NotificationsList } from "@/components/notifications/notifications-list";
 import { NOTIFICATION_GROUPS, notificationGroup } from "@/lib/notification-registry";
+import { getNotificationFantasyContext } from "@/lib/football/notification-fantasy-context";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Notifications" };
@@ -73,6 +74,13 @@ export default async function NotificationsPage({
     ),
   ]);
 
+  // KN-45: a goal by the viewer's own captain should not read identically to
+  // a goal by somebody they have never heard of. Computed at read time from
+  // the current squad (see getNotificationFantasyContext for why not at write
+  // time), bounded to the page on screen, and empty for anyone without a
+  // fantasy team — in which case every row renders exactly as before.
+  const fantasyContext = await getNotificationFantasyContext(supabase, profile.id, notifications ?? []);
+
   const visibleGroups = groupCounts.filter((entry) => entry.count > 0);
   const totalAcrossGroups = groupCounts.reduce((sum, entry) => sum + entry.count, 0);
 
@@ -122,7 +130,10 @@ export default async function NotificationsPage({
         </FadeIn>
       ) : (
         <FadeIn delay={0.06}>
-          <NotificationsList notifications={notifications} />
+          <NotificationsList
+            notifications={notifications}
+            fantasyContext={Object.fromEntries(fantasyContext)}
+          />
         </FadeIn>
       )}
 

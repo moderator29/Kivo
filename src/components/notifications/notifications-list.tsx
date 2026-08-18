@@ -2,7 +2,7 @@
 
 import { useOptimistic, useTransition } from "react";
 import Link from "next/link";
-import { Check, CheckCheck } from "lucide-react";
+import { Check, CheckCheck, Shirt } from "lucide-react";
 import { markAllNotificationsRead, markNotificationRead } from "@/app/(app)/notifications/actions";
 import type { NotificationRow } from "@/lib/notifications";
 import { describeNotification, notificationHref, notificationIcon } from "@/lib/notification-registry";
@@ -27,7 +27,17 @@ function applyRead(notifications: NotificationRow[], action: ReadAction): Notifi
  * bell also owns the popover shell, focus trap, and live unread badge that
  * have no equivalent here.
  */
-export function NotificationsList({ notifications }: { notifications: NotificationRow[] }) {
+export function NotificationsList({
+  notifications,
+  fantasyContext = {},
+}: {
+  notifications: NotificationRow[];
+  /** KN-45: notification id -> the viewer's own fantasy relationship to the
+   * player it names. A plain object rather than a Map because this crosses the
+   * server/client boundary. Empty for a viewer with no fantasy squad, in which
+   * case every row renders exactly as it always did. */
+  fantasyContext?: Record<string, { isCaptain: boolean }>;
+}) {
   const [optimisticNotifications, applyOptimisticRead] = useOptimistic(notifications, applyRead);
   const [, startTransition] = useTransition();
   const hasUnread = optimisticNotifications.some((n) => !n.read_at);
@@ -76,6 +86,7 @@ export function NotificationsList({ notifications }: { notifications: Notificati
         {optimisticNotifications.map((notification) => {
           const Icon = notificationIcon(notification);
           const unread = !notification.read_at;
+          const fantasy = fantasyContext[notification.id];
           return (
             <div
               key={notification.id}
@@ -100,6 +111,18 @@ export function NotificationsList({ notifications }: { notifications: Notificati
                     {unread && <span className="sr-only">Unread. </span>}
                     {describeNotification(notification)}
                   </p>
+                  {/* KN-45: the same goal, told differently because it is
+                      differently relevant to this reader. Only ever rendered
+                      from a real roster row — a viewer with no fantasy team
+                      never sees it, and it disappears the moment they transfer
+                      the player out, because it is computed from the current
+                      squad rather than stamped onto the notification. */}
+                  {fantasy && (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-md border border-accent/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                      <Shirt className="h-2.5 w-2.5 shrink-0" strokeWidth={2} />
+                      {fantasy.isCaptain ? "Your captain" : "In your XI"}
+                    </span>
+                  )}
                   <RelativeTime iso={notification.created_at} className="mt-0.5 block text-xs text-foreground-subtle" />
                 </div>
               </Link>
