@@ -28,22 +28,38 @@ type EntityType = Database["public"]["Enums"]["provider_entity_type"];
  * looking at, so it shouldn't read as fresh.
  */
 export async function getLastSyncedAt(entityTypes: EntityType[]): Promise<string | null> {
-  const service = createServiceRoleSupabaseClient();
-  const { data, error } = await service
-    .from("sync_runs")
-    .select("last_synced_at")
-    .in("entity_type", entityTypes)
-    .in("status", ["success", "partial"])
-    .not("last_synced_at", "is", null)
-    .order("last_synced_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Same hardening, and for the same reason, as getTransparencyFreshness
+  // below: /matches, /teams/[id], /players/[id] and /leagues/[id] are all
+  // guest-viewable and all call this. `createServiceRoleSupabaseClient()`
+  // throws *synchronously at construction* ("supabaseKey is required.") when
+  // SUPABASE_SERVICE_ROLE_KEY is missing — rotated, mistyped, or simply not
+  // set yet in a Preview environment — so leaving the construction outside
+  // the try/catch let a footnote ("Fixtures synced 4h ago") replace four of
+  // the most-trafficked pages in the app with the error boundary. The
+  // freshness note already renders "Not synced yet" for a null
+  // (src/components/football/last-synced-note.tsx), so degrading to null
+  // reuses an existing, honest UI path instead of needing a new one.
+  try {
+    const service = createServiceRoleSupabaseClient();
+    const { data, error } = await service
+      .from("sync_runs")
+      .select("last_synced_at")
+      .in("entity_type", entityTypes)
+      .in("status", ["success", "partial"])
+      .not("last_synced_at", "is", null)
+      .order("last_synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (error) {
-    console.error("getLastSyncedAt: sync_runs query failed", error);
+    if (error) {
+      logError("football.getLastSyncedAt", error, { entityTypes: entityTypes.join(",") });
+      return null;
+    }
+    return data?.last_synced_at ?? null;
+  } catch (error) {
+    logError("football.getLastSyncedAt", error, { entityTypes: entityTypes.join(",") });
     return null;
   }
-  return data?.last_synced_at ?? null;
 }
 
 /**
