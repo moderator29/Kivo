@@ -20,6 +20,14 @@ export default async function SignUpPage({
   const redirectUrl = sanitizeRedirectPath((await searchParams).redirect_url);
 
   return (
+    // Real bug this fixed: with no fallbackRedirectUrl set, Clerk's own
+    // default post-sign-up destination is "/" (this app's marketing landing
+    // page), not anywhere inside (app). A brand-new signee never reached
+    // (app)/layout.tsx's onboarding_completed check, because they never hit
+    // an (app) route at all — landing back on the marketing page reads
+    // exactly like sign-up silently failing. fallbackRedirectUrl only
+    // applies when forceRedirectUrl (the guest-return-path case above) is
+    // unset, so a guest's original destination still takes priority.
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
       <div className="kivo-aurora" aria-hidden="true">
         <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
@@ -36,7 +44,9 @@ export default async function SignUpPage({
           <FadeIn delay={0.12} className="flex flex-col items-center gap-4">
             <SignUp
               forceRedirectUrl={redirectUrl}
+              fallbackRedirectUrl="/home"
               signInForceRedirectUrl={redirectUrl}
+              signInFallbackRedirectUrl="/home"
             />
             <p className="max-w-xs text-center text-xs text-foreground-subtle">
               By signing up, you agree to KIVO&apos;s{" "}

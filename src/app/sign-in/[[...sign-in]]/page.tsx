@@ -13,6 +13,12 @@ export default async function SignInPage({
   // Symmetric with sign-up: carries a guest's return path through here too,
   // in case a gated action ever routes to sign-in instead, or a guest lands
   // here directly with a redirect_url already attached.
+  //
+  // fallbackRedirectUrl="/home" below fixes the same real bug sign-up had:
+  // without it, Clerk's own default post-sign-in destination is "/" (the
+  // marketing landing page), not anywhere inside (app) — a returning user
+  // with no redirect_url would land back on the landing page instead of the
+  // app, which reads exactly like sign-in silently failing.
   const redirectUrl = sanitizeRedirectPath((await searchParams).redirect_url);
 
   return (
@@ -32,7 +38,9 @@ export default async function SignInPage({
           <FadeIn delay={0.12}>
             <SignIn
               forceRedirectUrl={redirectUrl}
+              fallbackRedirectUrl="/home"
               signUpForceRedirectUrl={redirectUrl}
+              signUpFallbackRedirectUrl="/home"
             />
           </FadeIn>
         ) : (
