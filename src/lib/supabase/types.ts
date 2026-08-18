@@ -306,6 +306,47 @@ export type Database = {
           },
         ]
       }
+      entity_merges: {
+        Row: {
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          id: string
+          merged_id: string
+          merged_snapshot: Json
+          moved_counts: Json
+          performed_at: string
+          performed_by: string | null
+          survivor_id: string
+        }
+        Insert: {
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          id?: string
+          merged_id: string
+          merged_snapshot: Json
+          moved_counts: Json
+          performed_at?: string
+          performed_by?: string | null
+          survivor_id: string
+        }
+        Update: {
+          entity_type?: Database["public"]["Enums"]["provider_entity_type"]
+          id?: string
+          merged_id?: string
+          merged_snapshot?: Json
+          moved_counts?: Json
+          performed_at?: string
+          performed_by?: string | null
+          survivor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_merges_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fan_ratings: {
         Row: {
           created_at: string
@@ -2631,6 +2672,14 @@ export type Database = {
       mark_notifications_read: {
         Args: { p_notification_ids: string[] }
         Returns: undefined
+      }
+      merge_teams: {
+        Args: {
+          p_dry_run?: boolean
+          p_merged_id: string
+          p_survivor_id: string
+        }
+        Returns: Json
       }
       notification_payload_is_valid: {
         Args: { p_payload: Json; p_type: string }
