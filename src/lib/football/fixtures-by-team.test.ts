@@ -72,3 +72,20 @@ describe("fetchFixturesForTeams", () => {
     expect(out.map((r) => r.id)).toEqual(["x"]);
   });
 });
+
+describe("fetchFixturesForTeams ordering", () => {
+  it("returns the globally latest fixtures when asked for descending order", async () => {
+    const byColumn: Record<string, Row[]> = {
+      home_team_id: [
+        { id: "d", kickoff_at: "2026-08-18T17:00:00Z" },
+        { id: "b", kickoff_at: "2026-08-18T13:00:00Z" },
+      ],
+      away_team_id: [
+        { id: "c", kickoff_at: "2026-08-18T15:00:00Z" },
+        { id: "a", kickoff_at: "2026-08-18T11:00:00Z" },
+      ],
+    };
+    const out = await fetchFixturesForTeams(["a", "b"], 3, async (column) => ({ data: byColumn[column] }), "desc");
+    expect(out.map((r) => r.id)).toEqual(["d", "c", "b"]);
+  });
+});

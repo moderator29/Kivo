@@ -48,14 +48,21 @@ export function chunkTeamIds(teamIds: readonly string[], size: number = TEAM_ID_
  * `query` is a callback rather than a Supabase builder so this module stays
  * pure and unit-testable, and so each caller keeps its own `select`, date range
  * and status filters without this function needing to know about any of them.
- * The callback must apply the same `order("kickoff_at", ascending)` and
- * `limit` the caller wants overall — see the merge argument above for why that
- * is exact rather than a heuristic.
+ * The callback must apply the same `order("kickoff_at", …)` direction and the
+ * same `limit` the caller wants overall — see the merge argument above for why
+ * that is exact rather than a heuristic.
+ *
+ * `order` exists because both directions are genuinely wanted: "the next N
+ * fixtures" (ascending, /home) and "the last N results" (descending, the
+ * watchlist digest). The merge argument is symmetric — the latest N of the
+ * union is necessarily inside the union of the latest-N prefixes, exactly as
+ * the earliest N is.
  */
 export async function fetchFixturesForTeams<Row extends { id: string; kickoff_at: string }>(
   teamIds: readonly string[],
   limit: number,
   query: (column: "home_team_id" | "away_team_id", ids: string[]) => PromiseLike<{ data: Row[] | null }>,
+  order: "asc" | "desc" = "asc",
 ): Promise<Row[]> {
   const chunks = chunkTeamIds(teamIds);
   if (chunks.length === 0) return [];
@@ -72,5 +79,6 @@ export async function fetchFixturesForTeams<Row extends { id: string; kickoff_at
     }
   }
 
-  return [...byId.values()].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at)).slice(0, limit);
+  const direction = order === "desc" ? -1 : 1;
+  return [...byId.values()].sort((a, b) => direction * a.kickoff_at.localeCompare(b.kickoff_at)).slice(0, limit);
 }

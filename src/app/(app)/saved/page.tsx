@@ -9,6 +9,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { SaveButton } from "@/components/ui/save-button";
 import { PostCard } from "@/components/social/post-card";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
+import { WatchlistDigestPanel } from "@/components/football/watchlist-digest-panel";
 
 export const metadata: Metadata = { title: "Saved" };
 
@@ -78,6 +79,12 @@ export default async function SavedPage() {
         <h1 className="text-xl font-semibold text-foreground">Saved</h1>
         <p className="text-sm text-foreground-subtle">Posts, teams and players you&apos;ve saved.</p>
       </FadeIn>
+
+      {/* KIVO_NEXT_GEN KN-106: what actually changed, above the list of what you
+          bookmarked. Renders nothing at all when nothing is watched. Placed
+          above the empty-state branch on purpose: someone can follow teams
+          without ever saving anything, and their digest is still real. */}
+      <WatchlistDigestPanel profileId={profile.id} />
 
       {isEmpty ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
