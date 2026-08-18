@@ -4,12 +4,35 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp, type AwardedBadge } from "@/lib/rewards";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
 const ONBOARDING_COMPLETE_XP = 10;
 
+export type OnboardingTeam = {
+  name: string;
+  short_name: string | null;
+  crest_url: string | null;
+};
+
+/**
+ * Everything the completion screen shows, and nothing it doesn't: each field
+ * is read back from the row that was actually written (or from the award
+ * calls' own real results), so the "Welcome to KIVO" moment can only ever
+ * render facts the database agrees with. A field that isn't real comes back
+ * null/0 and the UI omits that piece entirely rather than inventing a
+ * plausible-looking stand-in.
+ */
 export type OnboardingCompletion = {
+  /** Non-null when the profile write itself failed — the flow must stay put and retry, not congratulate. */
+  error: string | null;
+  /** 0 when the xp_ledger insert didn't land; never show XP the ledger has no record of. */
   xpAwarded: number;
   badge: AwardedBadge | null;
+  /** The username as persisted, not as typed. */
+  username: string;
+  /** Null when they skipped the (optional) club step. */
+  team: OnboardingTeam | null;
+  avatarSrc: string | null;
 };
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
@@ -94,8 +117,17 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
  * Deliberately does *not* redirect: it used to jump straight to /home the
  * instant XP/a badge were awarded, so the "Welcome to KIVO" moment never
  * actually rendered anywhere. Returning the real award instead lets the
- * client show a genuine completion screen (the actual badge + XP just
- * earned) and navigate on to /home only once the user confirms.
+ * client show a genuine completion screen (the actual badge, XP, handle and
+ * club just earned/chosen) and navigate on to /home only once the user
+ * confirms.
+ *
+ * The profile row is re-read via `.select()` on the update itself rather than
+ * echoing back the arguments: what the completion screen shows then comes
+ * from the row Postgres actually holds, so it can't drift from the truth
+ * (e.g. a username normalized on write). A failed update returns `error` and
+ * awards nothing — previously it logged and carried on, handing the user a
+ * congratulations screen for a profile whose `onboarding_completed` was still
+ * false, which would bounce them straight back here from /home.
  */
 export async function finishOnboarding(teamId: string | null): Promise<OnboardingCompletion> {
   const profile = await getOrCreateProfile();
@@ -104,21 +136,64 @@ export async function finishOnboarding(teamId: string | null): Promise<Onboardin
   }
 
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ favourite_team_id: teamId, onboarding_completed: true })
-    .eq("id", profile.id);
+    .eq("id", profile.id)
+    .select("username, favourite_team_id, avatar_type, avatar_kivo_id, avatar_uploaded_url, avatar_url")
+    .single();
 
-  if (error) {
+  if (error || !updated) {
     console.error("Failed to finish onboarding", error);
+    return {
+      error: "We couldn't save that. Check your connection and try again.",
+      xpAwarded: 0,
+      badge: null,
+      username: profile.username,
+      team: null,
+      avatarSrc: null,
+    };
   }
 
-  const [, badge] = await Promise.all([
-    awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding"),
-    awardBadge(profile.id, "welcome"),
-  ]);
+  // The rewards run on the service-role client (xp_ledger/user_badges have no
+  // client-facing write policy), which throws outright rather than returning an
+  // error if SUPABASE_SERVICE_ROLE_KEY is missing from the environment. By this
+  // point `onboarding_completed` is already true, so letting that propagate
+  // would strand the user on the club step retrying a step that has in fact
+  // succeeded. Degrade instead: the welcome screen renders without the reward
+  // pieces, which is honest — nothing was written, so nothing is claimed.
+  let xpWritten = false;
+  let badge: AwardedBadge | null = null;
+  try {
+    [xpWritten, badge] = await Promise.all([
+      awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding"),
+      awardBadge(profile.id, "welcome"),
+    ]);
+  } catch (rewardError) {
+    console.error("Failed to award onboarding rewards", rewardError);
+  }
 
-  return { xpAwarded: ONBOARDING_COMPLETE_XP, badge };
+  // Read the club back by the id the row actually ended up with, so a team
+  // that vanished between the picker rendering and this write shows as "no
+  // club picked" rather than as a name the profile isn't really pointing at.
+  let team: OnboardingTeam | null = null;
+  if (updated.favourite_team_id) {
+    const { data } = await supabase
+      .from("teams")
+      .select("name, short_name, crest_url")
+      .eq("id", updated.favourite_team_id)
+      .maybeSingle();
+    team = data ?? null;
+  }
+
+  return {
+    error: null,
+    xpAwarded: xpWritten ? ONBOARDING_COMPLETE_XP : 0,
+    badge,
+    username: updated.username,
+    team,
+    avatarSrc: resolveAvatarSrc(updated),
+  };
 }
 
 /**

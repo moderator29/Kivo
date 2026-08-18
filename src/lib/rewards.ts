@@ -5,11 +5,22 @@ import { createServiceRoleSupabaseClient } from "./supabase/server";
  * xp_ledger/user_badges have no client-facing write policy by design — these
  * are trust-sensitive ledgers, only ever written by server-side logic via the
  * service-role client. This is that logic's single entry point.
+ *
+ * Returns whether the ledger row was actually written. Every pre-existing
+ * caller awaits this purely for its side effect and ignores the result (so
+ * this is additive, not a breaking change), but a caller that wants to
+ * *display* the XP it just awarded — onboarding's completion screen — needs
+ * to know: showing "+10 XP" after a failed insert would be telling the user
+ * they earned something the ledger has no record of.
  */
-export async function awardXp(profileId: string, amount: number, reason: string) {
+export async function awardXp(profileId: string, amount: number, reason: string): Promise<boolean> {
   const supabase = createServiceRoleSupabaseClient();
   const { error } = await supabase.from("xp_ledger").insert({ profile_id: profileId, amount, reason });
-  if (error) console.error(`Failed to award ${amount}XP (${reason})`, error);
+  if (error) {
+    console.error(`Failed to award ${amount}XP (${reason})`, error);
+    return false;
+  }
+  return true;
 }
 
 export type AwardedBadge = { name: string; description: string | null; icon_url: string | null };

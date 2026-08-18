@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { StaticImageData } from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
 import kivoIntroArtwork from "../../../public/brand/kivo-artwork-hero.webp";
 import kivoUsernameArtwork from "../../../public/brand/kivo-artwork-social.webp";
 import kivoTeamArtwork from "../../../public/brand/kivo-artwork-action.webp";
 import { saveUsernameStep, finishOnboarding, skipOnboarding, checkUsername } from "@/app/onboarding/actions";
+import type { OnboardingCompletion } from "@/app/onboarding/actions";
 import type { AwardedBadge } from "@/lib/rewards";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
@@ -46,9 +48,11 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 export function OnboardingFlow({
   defaultUsername,
   availableTeams,
+  avatarSrc,
 }: {
   defaultUsername: string;
   availableTeams: Team[];
+  avatarSrc: string | null;
 }) {
   const router = useRouter();
   const hasTeams = availableTeams.length > 0;
@@ -59,7 +63,7 @@ export function OnboardingFlow({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [award, setAward] = useState<{ xp: number; badge: AwardedBadge | null } | null>(null);
+  const [award, setAward] = useState<OnboardingCompletion | null>(null);
 
   const [usernameValue, setUsernameValue] = useState(
     defaultUsername.startsWith("user_") ? "" : defaultUsername,
@@ -133,9 +137,17 @@ export function OnboardingFlow({
     });
   }
 
+  // A failed write must not advance to a congratulations screen: the profile
+  // would still be `onboarding_completed: false`, so /home would bounce the
+  // user straight back here. Surface the real error on the step they're on
+  // and let them retry instead.
   async function complete(teamId: string | null) {
     const result = await finishOnboarding(teamId);
-    setAward({ xp: result.xpAwarded, badge: result.badge });
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setAward(result);
     goTo("success", 1);
   }
 
@@ -203,11 +215,14 @@ export function OnboardingFlow({
             />
           )}
 
-          {step === "success" && (
+          {step === "success" && award && (
             <SuccessPanel
-              xp={award?.xp ?? 0}
-              badge={award?.badge ?? null}
-              onContinue={() => router.push("/home")}
+              completion={award}
+              fallbackAvatarSrc={avatarSrc}
+              // `replace`, not `push`: onboarding is done, so this entry in
+              // history now redirects to /home anyway — leaving it there just
+              // makes Back feel broken.
+              onContinue={() => router.replace("/home")}
             />
           )}
         </motion.div>
@@ -231,7 +246,7 @@ export function StepDots({ count, activeIndex }: { count: number; activeIndex: n
         <span
           key={i}
           className={`h-1.5 rounded-full transition-all duration-300 ${
-            i === activeIndex ? "w-6 bg-kivo-cyan" : "w-1.5 bg-white/15"
+            i === activeIndex ? "w-6 bg-accent" : "w-1.5 bg-hairline-strong"
           }`}
         />
       ))}
@@ -253,8 +268,15 @@ export function StepDots({ count, activeIndex }: { count: number; activeIndex: n
 function HeroArt({ src }: { src: StaticImageData }) {
   return (
     <div className="relative -mx-2 flex h-[26vh] min-h-[180px] items-center justify-center self-stretch sm:h-[320px]">
-      <div className="kivo-artwork-float kivo-artwork-mask-bleed relative h-full w-full">
-        <Image src={src} alt="" fill className="object-cover" sizes="100vw" />
+      {/* The top/bottom fade is a DARK-mode treatment: the artwork is near-black
+          at its edges, so dissolving it into an obsidian page is invisible and
+          reads as full-bleed editorial photography. Over a near-white page the
+          exact same mask fades dark art into light ground, which paints a grey
+          smear along both edges instead of disappearing. So light mode drops
+          the mask entirely and frames the art as what it honestly is there — a
+          contained image card with a real edge and a soft shadow under it. */}
+      <div className="kivo-artwork-float kivo-artwork-mask-bleed relative h-full w-full light:[mask-image:none]! light:[-webkit-mask-image:none]! light:overflow-hidden light:rounded-3xl light:ring-1 light:ring-hairline light:shadow-[0_18px_44px_-26px_rgba(11,14,23,0.5)]">
+        <Image src={src} alt="" fill className="object-cover" sizes="(min-width: 640px) 448px, 100vw" />
       </div>
     </div>
   );
@@ -372,7 +394,7 @@ export function UsernamePanel({
             value={usernameValue}
             onChange={(e) => onUsernameChange(e.target.value)}
             placeholder="e.g. lagos_ultra"
-            className="w-full rounded-2xl border border-white/10 bg-kivo-obsidian px-4 py-4 pr-11 text-base text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
+            className="w-full rounded-2xl border border-hairline bg-surface-1 px-4 py-4 pr-11 text-base text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-soft"
           />
           <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
             {availability === "checking" && (
@@ -467,13 +489,13 @@ export function TeamPanel({
               onClick={() => onSelect(team.id)}
               className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-left text-xs font-medium transition-colors disabled:opacity-50 ${
                 isSelected
-                  ? "border-kivo-cyan/60 bg-kivo-cyan/10 text-foreground"
-                  : "border-white/10 bg-kivo-obsidian text-foreground-muted hover:border-white/20"
+                  ? "border-accent bg-accent-soft text-foreground"
+                  : "border-hairline bg-surface-1 text-foreground-muted hover:border-hairline-strong hover:bg-surface-2"
               }`}
             >
               <TeamCrest crestUrl={team.crest_url} name={team.name} size={22} />
               <span className="truncate">{team.short_name ?? team.name}</span>
-              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-kivo-cyan" strokeWidth={2.5} />}
+              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.5} />}
             </button>
           );
         })}
@@ -490,32 +512,120 @@ export function TeamPanel({
   );
 }
 
+/**
+ * The arrival moment. Everything on this screen is a fact the database now
+ * holds about this specific user — the KIVO avatar assigned to their profile,
+ * the handle they just claimed (as persisted, not as typed), the club they
+ * picked, the badge row `awardBadge` returned, and XP that only appears if
+ * the ledger insert really landed (see OnboardingCompletion in
+ * src/app/onboarding/actions.ts). Anything that isn't real for this user is
+ * omitted rather than substituted: no invented member number, no "you're the
+ * Nth fan", no placeholder club.
+ */
 export function SuccessPanel({
-  xp,
-  badge,
+  completion,
+  fallbackAvatarSrc,
   onContinue,
 }: {
-  xp: number;
-  badge: AwardedBadge | null;
+  completion: OnboardingCompletion;
+  fallbackAvatarSrc: string | null;
   onContinue: () => void;
 }) {
+  const { xpAwarded, badge, username, team } = completion;
+  const avatarSrc = completion.avatarSrc ?? fallbackAvatarSrc;
+
   return (
     <div className="flex flex-col items-center gap-7 text-center">
-      <BadgeReveal xp={xp} badge={badge} />
+      <BadgeReveal xp={xpAwarded} badge={badge} />
+
       <div className="flex flex-col items-center gap-3">
         <Kicker>You&apos;re in</Kicker>
         <h1 className="max-w-xs text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          {badge?.name ?? "Welcome to KIVO"}
+          Welcome to KIVO.
         </h1>
+        {/* Only claims the badge when there really is one — the `badges` row
+            can legitimately be missing (an environment that never ran the
+            0004 seed), and congratulating someone on a badge they don't hold
+            is exactly the kind of invented detail this screen must not
+            carry. */}
         <p className="max-w-xs text-sm text-foreground-muted">
-          {badge?.description ?? "Your profile is ready. Let's go."}
+          {badge
+            ? "Your profile is live and your first badge is on it. Here's what's yours."
+            : "Your profile is live. Here's what's yours."}
         </p>
       </div>
+
+      <dl className="kivo-glass w-full divide-y divide-hairline-soft overflow-hidden rounded-3xl text-left">
+        <SummaryRow label="Your handle">
+          {/* The KIVO avatar this account was assigned, at the same modest
+              scale every other avatar surface in the app uses (profile
+              header 64px, settings preview 56px). Deliberately not blown up
+              into a hero portrait: RECOMMENDATIONS.md item 233 records that
+              the five confirmed-clean avatars still have a squad number
+              printed on the jersey that happens to match their own asset
+              index, which is illegible at avatar scale but becomes plainly
+              readable at 100px+ — and an internal id must never be visible
+              in the UI. */}
+          <KivoAvatar src={avatarSrc} name={username} size={24} />
+          <span className="truncate font-semibold text-foreground">@{username}</span>
+        </SummaryRow>
+
+        {team && (
+          <SummaryRow label="Your club">
+            <TeamCrest crestUrl={team.crest_url} name={team.name} size={20} />
+            <span className="truncate font-semibold text-foreground">{team.name}</span>
+          </SummaryRow>
+        )}
+
+        {badge && (
+          <SummaryRow label="First badge">
+            <BadgeIcon badge={badge} size={20} />
+            <span className="truncate font-semibold text-foreground">{badge.name}</span>
+          </SummaryRow>
+        )}
+
+        {xpAwarded > 0 && (
+          <SummaryRow label="Experience">
+            <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
+            <span className="font-semibold text-foreground">+{xpAwarded} XP</span>
+          </SummaryRow>
+        )}
+      </dl>
+
       <PillButton onClick={onContinue}>
-        Continue to KIVO
+        Enter KIVO
         <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
       </PillButton>
     </div>
+  );
+}
+
+function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+      <dt className="shrink-0 text-xs font-medium uppercase tracking-[0.14em] text-foreground-subtle">{label}</dt>
+      <dd className="flex min-w-0 items-center gap-2 text-sm">{children}</dd>
+    </div>
+  );
+}
+
+// The badge's real icon when `badges.icon_url` has one, the KIVO mark when it
+// doesn't — never a generic trophy stand-in that would imply a different
+// award than the one actually earned.
+function BadgeIcon({ badge, size }: { badge: AwardedBadge; size: number }) {
+  if (!badge.icon_url) {
+    return <KivoMarkGlyph size={size} />;
+  }
+  return (
+    <Image
+      src={badge.icon_url}
+      alt=""
+      width={size}
+      height={size}
+      unoptimized
+      className="shrink-0"
+      style={{ width: size, height: size }}
+    />
   );
 }
 
@@ -537,11 +647,19 @@ function xpCountUpKeyframes(xp: number): string {
   }).join("\n");
 }
 
+/**
+ * The hero of the completion screen: the real badge this user just earned,
+ * lit and floating, with the real XP counting up beside it. The badge art is
+ * a clean commissioned asset (`badges.icon_url`), which is why *this* is what
+ * gets shown at hero scale rather than the user's avatar — see the note on
+ * the handle row above. Falls back to the KIVO mark when the badge row has no
+ * icon, never to a generic trophy that would imply a different award.
+ */
 function BadgeReveal({ xp, badge }: { xp: number; badge: AwardedBadge | null }) {
   return (
-    <div className="relative flex h-[26vh] min-h-[180px] w-full items-center justify-center sm:h-[320px]">
+    <div className="relative flex h-[26vh] min-h-[180px] w-full items-center justify-center sm:h-[300px]">
       <div
-        className="absolute h-56 w-56 rounded-full kivo-gradient-victory opacity-30 blur-3xl"
+        className="kivo-gradient-victory absolute h-56 w-56 rounded-full opacity-30 blur-3xl"
         aria-hidden="true"
       />
       <div className="kivo-artwork-float relative">
@@ -557,8 +675,9 @@ function BadgeReveal({ xp, badge }: { xp: number; badge: AwardedBadge | null }) 
           ) : (
             <KivoMarkGlyph size={64} />
           )}
+
           {xp > 0 && (
-            <span className="absolute -bottom-2 right-0 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-3 py-1 text-xs font-bold text-live shadow-lg">
+            <span className="absolute -bottom-2 right-0 whitespace-nowrap rounded-full border border-hairline bg-surface-3 px-3 py-1 text-xs font-bold text-live shadow-lg">
               {/* Real value always in the DOM, correct even if the counter
                   animation doesn't render (no CSS support, reduced motion). */}
               <style>{`
