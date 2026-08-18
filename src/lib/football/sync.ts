@@ -4,7 +4,8 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database, Json } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import type { FixtureStatus, NormalizedFixture, NormalizedTeam } from "./types";
-import { notifyFixtureStatusChange } from "./match-notifications";
+import { notifyFixtureStatusChange, type FixtureStatusChangeInput } from "./match-notifications";
+import { createAsyncMemo, createKeyedSerializer, mapWithConcurrency } from "@/lib/concurrency";
 import { getSyncedCompetitionProviderIds } from "./competitions-config";
 
 type ServiceClient = SupabaseClient<Database>;
@@ -174,6 +175,41 @@ async function upsertSeason(supabase: ServiceClient, competitionId: string, seas
   return seasonId;
 }
 
+/**
+ * KIVO_NEXT_GEN KN-10: `upsertSeason` above is three round trips (a select and
+ * two updates) and was called once per fixture, unconditionally — even when the
+ * previous fixture in the same loop had already resolved the identical
+ * `(competition, season)` pair. Every fixture in a competition on a given day
+ * shares one season, so a 300-fixture day spent roughly 900 round trips
+ * re-deciding the same handful of answers. Item 27's batching pass reached
+ * competition/team/venue and missed this one.
+ *
+ * Two layers, both needed, for two different reasons:
+ *
+ *  - **Memoized on the promise, not the value** (`createAsyncMemo`). A plain
+ *    `Map<key, id>` would fix the sequential loop this replaced, but the loop is
+ *    now a bounded worker pool (KN-11) where several lanes reach the same
+ *    unresolved key before any of them has filled the map. Sharing the in-flight
+ *    promise is what makes "once per pair" true under concurrency too.
+ *  - **Serialized per competition** (`createKeyedSerializer`). `upsertSeason`'s
+ *    two `is_current` writes are only safe against
+ *    `idx_seasons_one_current_per_competition` (at most one current season per
+ *    competition) while no other season of the *same* competition is being
+ *    flipped concurrently. Two different years of one competition are two
+ *    different memo keys, so the memo alone would happily interleave them.
+ *
+ * Scoped to one sync run — a fresh resolver per call of syncTodayFixtures, never
+ * a module-level cache, so a season that changes between runs is re-read.
+ */
+function createSeasonResolver(supabase: ServiceClient) {
+  const memo = createAsyncMemo<string, string>();
+  const serializePerCompetition = createKeyedSerializer<string>();
+  return (competitionId: string, seasonYear: number): Promise<string> =>
+    memo(`${competitionId}:${seasonYear}`, () =>
+      serializePerCompetition(competitionId, () => upsertSeason(supabase, competitionId, seasonYear)),
+    );
+}
+
 /** `name` is nullable (migration 0017) rather than backfilled with a fabricated
  * "Unknown venue" string — a provider id with no reported name stays honestly
  * unnamed. Never overwrites a real name with a later null, same rule as
@@ -284,7 +320,7 @@ async function upsertFixture(
   refs: ResolvedFixtureRefs,
   previousStatus: DbFixtureStatus | null,
   previousScores: { homeScore: number | null; awayScore: number | null } | null,
-): Promise<void> {
+): Promise<FixtureStatusChangeInput | null> {
   // RECOMMENDATIONS.md item 303 ("conflict detection"): a same-provider
   // sanity check, not a second-provider merge (there's no second source to
   // reconcile against yet — see DECISIONS.md's provider-failover entry).
@@ -350,25 +386,31 @@ async function upsertFixture(
   const { data: kivoFixtureId, error } = await supabase.rpc("upsert_fixture_with_mapping", args);
   if (error) throw error;
 
-  // RECOMMENDATIONS.md notification items: kickoff/full-time. Fires off the
-  // exact status write this function just made, using the real KIVO fixture
-  // id the RPC itself returns (not the provider id) — see
+  // RECOMMENDATIONS.md notification items: kickoff/full-time, described by the
+  // exact status write this function just made, using the real KIVO fixture id
+  // the RPC itself returns (not the provider id) — see
   // notifyFixtureStatusChange's own doc comment for why `previousStatus`
-  // (looked up once per whole run, see syncTodayFixtures) has to be known
-  // and different from the new status before this does anything.
-  if (kivoFixtureId) {
-    await notifyFixtureStatusChange(supabase, {
-      fixtureId: kivoFixtureId,
-      homeTeamId: refs.homeTeamId,
-      awayTeamId: refs.awayTeamId,
-      homeTeamName: fixture.homeTeam.name,
-      awayTeamName: fixture.awayTeam.name,
-      previousStatus,
-      newStatus: toDbFixtureStatus(fixture.status),
-      homeScore: fixture.homeScore,
-      awayScore: fixture.awayScore,
-    });
-  }
+  // (looked up once per whole run, see syncTodayFixtures) has to be known and
+  // different from the new status before it does anything.
+  //
+  // KIVO_NEXT_GEN KN-11: this used to *await* that fan-out here, inside the
+  // write path, so a club with real followers put its whole audience query and
+  // insert between two fixture writes. The fan-out is unchanged, it just runs
+  // after the run has been recorded as finished — described here, dispatched
+  // there. Football data landing in the database is the part that must survive
+  // a function timeout; a notification is not worth blocking it for.
+  if (!kivoFixtureId) return null;
+  return {
+    fixtureId: kivoFixtureId,
+    homeTeamId: refs.homeTeamId,
+    awayTeamId: refs.awayTeamId,
+    homeTeamName: fixture.homeTeam.name,
+    awayTeamName: fixture.awayTeam.name,
+    previousStatus,
+    newStatus: toDbFixtureStatus(fixture.status),
+    homeScore: fixture.homeScore,
+    awayScore: fixture.awayScore,
+  };
 }
 
 function todayIsoDate(): string {
@@ -401,6 +443,57 @@ function todayIsoDate(): string {
  * per-fixture work that's now limited to season/fixture resolution and inserts for
  * whatever competitions/teams/venues actually turned out to be new.
  */
+/**
+ * Bounded concurrency for the per-fixture write loop (KIVO_NEXT_GEN KN-11).
+ *
+ * The loop was fully sequential: every upsert awaited in series, hundreds of
+ * fixtures deep, on a serverless function with a wall-clock timeout — the shape
+ * most likely to be killed part-way through, which is exactly what used to
+ * leave KN-4's `running` row behind. `Promise.all` over the whole array is not
+ * the answer either: an unfiltered day is hundreds of fixtures and each one
+ * issues several statements, so an unbounded burst just moves the failure from
+ * "too slow" to "too many connections".
+ *
+ * Six is chosen against a real constraint rather than picked for feel: Supabase
+ * pools connections per project and this runs on the service-role client shared
+ * with everything else the server is doing, so the pool — not KIVO — is the
+ * scarce resource. Six keeps a comfortable margin under any plausible pool size
+ * while still collapsing a 300-fixture day from 300 serial waits to ~50. The
+ * provider is not a factor here: the whole day is fetched in one request before
+ * this loop starts, so no amount of concurrency in it spends extra quota.
+ */
+const FIXTURE_WRITE_CONCURRENCY = 6;
+
+/**
+ * Lower than the write pool on purpose: each of these fans out to an audience
+ * query plus a bulk insert, and it runs after the sync is already recorded as
+ * finished, so there is nothing to race it to a deadline.
+ */
+const NOTIFICATION_FANOUT_CONCURRENCY = 3;
+
+/**
+ * KIVO_NEXT_GEN KN-11: kickoff/full-time notifications used to be awaited
+ * inside `upsertFixture`, between two fixture writes. They now run here, after
+ * the run row has already reached a terminal status, so a slow or failing
+ * fan-out can neither delay football data landing in the database nor leave the
+ * run looking unfinished if the function is killed. Every failure is contained
+ * per fixture — a notification is the least important thing happening in this
+ * file and must never be able to fail a sync that actually wrote its data.
+ */
+async function dispatchStatusNotifications(
+  supabase: ServiceClient,
+  notifications: FixtureStatusChangeInput[],
+): Promise<void> {
+  if (notifications.length === 0) return;
+  await mapWithConcurrency(notifications, NOTIFICATION_FANOUT_CONCURRENCY, async (input) => {
+    try {
+      await notifyFixtureStatusChange(supabase, input);
+    } catch (err) {
+      console.error(`Football sync: notification fan-out failed for fixture ${input.fixtureId}`, err);
+    }
+  });
+}
+
 export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manual"): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
@@ -420,173 +513,209 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
     };
   }
 
-  let fixtures: NormalizedFixture[];
-  try {
-    fixtures = await provider.getFixturesByDate(todayIsoDate());
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("Football sync: getFixturesByDate failed", err);
-    await supabase
+  /**
+   * KIVO_NEXT_GEN KN-4: the run row above is inserted as `running`, and before
+   * this it was only ever updated on two paths — a `getFixturesByDate` failure,
+   * and a clean finish. Everything in between could throw straight out of the
+   * function (`batchFindMappedIds` rethrows any PostgREST error, the prior-status
+   * lookup did a bare `if (priorError) throw priorError`), and on that path the
+   * row stayed `running` forever: Data Health showed a phantom in-progress sync
+   * permanently, and the cron worker's dedup query — which treats an
+   * already-`running` cron run as live work — suppressed the next real run.
+   *
+   * So: one funnel, called from the success path, from the catch, and from a
+   * `finally` that only fires if neither of those got there. The run row cannot
+   * be left non-terminal by any exit this function has.
+   */
+  let finalized = false;
+  let processed = 0;
+  const finalizeRun = async (fields: Database["public"]["Tables"]["sync_runs"]["Update"]): Promise<void> => {
+    if (finalized) return;
+    finalized = true;
+    const { error } = await supabase
       .from("sync_runs")
       .update({
-        status: "failed",
         finished_at: new Date().toISOString(),
-        records_processed: 0,
-        error_message: message,
-        // RECOMMENDATIONS.md item 53: real quota data even on a hard failure —
-        // a rate-limited or otherwise non-OK response still updates this via
-        // ApiFootballError.quotaRemaining (see api-football-request.ts).
+        // RECOMMENDATIONS.md item 53: real quota data on every terminal path,
+        // not just the two that used to write it — a rate-limited or otherwise
+        // non-OK response still carries a remaining count (see
+        // ApiFootballError.quotaRemaining in api-football-request.ts).
         provider_quota_remaining: provider.getQuotaRemaining(),
-        // RECOMMENDATIONS.md item 65: the raw response sample is most
-        // valuable on exactly this path — a hard getFixturesByDate failure
-        // is the case an admin most needs to see what the provider actually
-        // sent back.
+        // RECOMMENDATIONS.md item 65: likewise for the raw response sample. It
+        // is most valuable on exactly the failure paths that previously wrote
+        // nothing at all — "what did the provider actually send back" is the
+        // first question an admin asks about a run that died mid-way.
         raw_response_sample: provider.getLastRawResponseSample() as Json | null,
+        ...fields,
       })
       .eq("id", syncRun.id);
-    return { status: "failed", recordsProcessed: 0, error: message };
-  }
+    if (error) console.error("Football sync: failed to write terminal sync_runs status", error);
+  };
 
-  // RECOMMENDATIONS.md item 28: scope the whole run to configured
-  // competitions, if any are configured — see competitions-config.ts for why
-  // this filters the already-fetched response rather than issuing one
-  // provider request per league, and why "unset" means "no filter" rather
-  // than a KIVO-invented default league list. Filtering here, before any of
-  // the mapping/upsert work below, is what keeps competitions/teams/venues
-  // outside the configured set from ever being written at all — not just
-  // hidden from the UI afterwards.
-  const syncedCompetitionIds = getSyncedCompetitionProviderIds();
-  const fixturesBeforeScoping = fixtures.length;
-  if (syncedCompetitionIds) {
-    fixtures = fixtures.filter((f) => syncedCompetitionIds.has(f.competitionProviderId));
-  }
-  const scopedOutCount = fixturesBeforeScoping - fixtures.length;
-  if (scopedOutCount > 0) {
-    console.info(
-      `Football sync: scoped out ${scopedOutCount}/${fixturesBeforeScoping} fixtures outside FOOTBALL_SYNC_COMPETITION_IDS`,
-    );
-  }
+  const pendingNotifications: FixtureStatusChangeInput[] = [];
+  let result: SyncResult;
 
-  // RECOMMENDATIONS.md item 27: resolve every distinct competition/team/venue
-  // provider id this whole batch needs in three round trips total, up front,
-  // instead of a findMappedId query per entity per fixture. The per-fixture loop
-  // below then only issues an insert for provider ids that came back missing,
-  // and only ever hits provider_mappings again to write those new rows.
-  const competitionProviderIds = Array.from(new Set(fixtures.map((f) => f.competitionProviderId)));
-  const teamProviderIds = Array.from(new Set(fixtures.flatMap((f) => [f.homeTeam.providerId, f.awayTeam.providerId])));
-  const venueProviderIds = Array.from(
-    new Set(fixtures.map((f) => f.venueProviderId).filter((id): id is string => id !== null)),
-  );
-
-  const [competitionMappings, teamMappings, venueMappings] = await Promise.all([
-    batchFindMappedIds(supabase, provider.name, "competition", competitionProviderIds),
-    batchFindMappedIds(supabase, provider.name, "team", teamProviderIds),
-    batchFindMappedIds(supabase, provider.name, "venue", venueProviderIds),
-  ]);
-
-  // Notification items (kickoff/full-time): batch-resolve each fixture's
-  // real prior status the same up-front way as the mappings above, one
-  // extra round trip for the whole run rather than one per fixture. A
-  // provider id with no existing mapping is a fixture KIVO has never synced
-  // before — its entry is simply absent from this map, and
-  // notifyFixtureStatusChange treats "no known prior status" as "don't
-  // guess, don't notify" (see its doc comment).
-  const fixtureProviderIds = Array.from(new Set(fixtures.map((f) => f.providerId)));
-  const fixtureMappings = await batchFindMappedIds(supabase, provider.name, "fixture", fixtureProviderIds);
-  const priorStatusByKivoId = new Map<string, DbFixtureStatus>();
-  // RECOMMENDATIONS.md item 303 ("conflict detection"): the same batched
-  // lookup above already fetches each known fixture's prior status for
-  // notifications — carrying its scores along too costs nothing extra (same
-  // row, same round trip) and is what upsertFixture below uses for a
-  // same-provider sanity check (a score that would go backward is a real
-  // anomaly signal, never silently written over).
-  const priorScoresByKivoId = new Map<string, { homeScore: number | null; awayScore: number | null }>();
-  const knownKivoFixtureIds = Array.from(fixtureMappings.values());
-  if (knownKivoFixtureIds.length > 0) {
-    const { data: priorRows, error: priorError } = await supabase
-      .from("fixtures")
-      .select("id, status, home_score, away_score")
-      .in("id", knownKivoFixtureIds);
-    if (priorError) throw priorError;
-    for (const row of priorRows ?? []) {
-      priorStatusByKivoId.set(row.id, row.status);
-      priorScoresByKivoId.set(row.id, { homeScore: row.home_score, awayScore: row.away_score });
-    }
-  }
-
-  let processed = 0;
-  const errors: string[] = [];
-
-  for (const fixture of fixtures) {
+  try {
+    let fixtures: NormalizedFixture[];
     try {
-      const competitionId = await upsertCompetition(
-        supabase,
-        provider.name,
-        fixture.competitionProviderId,
-        fixture.competitionName,
-        competitionMappings,
-      );
-      const seasonId = await upsertSeason(supabase, competitionId, fixture.season);
-      const homeTeamId = await upsertTeam(supabase, provider.name, fixture.homeTeam, teamMappings);
-      const awayTeamId = await upsertTeam(supabase, provider.name, fixture.awayTeam, teamMappings);
-      const venueId = fixture.venueProviderId
-        ? await upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName, venueMappings)
-        : null;
-
-      const knownKivoId = fixtureMappings.get(fixture.providerId) ?? null;
-      const previousStatus = knownKivoId ? (priorStatusByKivoId.get(knownKivoId) ?? null) : null;
-      const previousScores = knownKivoId ? (priorScoresByKivoId.get(knownKivoId) ?? null) : null;
-
-      await upsertFixture(
-        supabase,
-        provider.name,
-        fixture,
-        {
-          competitionId,
-          seasonId,
-          homeTeamId,
-          awayTeamId,
-          venueId,
-        },
-        previousStatus,
-        previousScores,
-      );
-      processed += 1;
+      fixtures = await provider.getFixturesByDate(todayIsoDate());
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Football sync: failed to sync fixture ${fixture.provider}:${fixture.providerId}`, err);
-      errors.push(`${fixture.provider}:${fixture.providerId} (${fixture.homeTeam.name} v ${fixture.awayTeam.name}): ${message}`);
+      console.error("Football sync: getFixturesByDate failed", err);
+      throw err;
     }
-  }
 
-  const finishedAt = new Date().toISOString();
-  const hadFixtures = fixtures.length > 0;
-  const dbStatus: Database["public"]["Enums"]["sync_status"] =
-    errors.length === 0 ? "success" : hadFixtures && processed === 0 ? "failed" : "partial";
-  // Keep this bounded — a bad day shouldn't write an unbounded error_message blob.
-  const errorMessage = errors.length > 0 ? errors.slice(0, 20).join("; ") : null;
+    // RECOMMENDATIONS.md item 28: scope the whole run to configured
+    // competitions, if any are configured — see competitions-config.ts for why
+    // this filters the already-fetched response rather than issuing one
+    // provider request per league, and why "unset" means "no filter" rather
+    // than a KIVO-invented default league list. Filtering here, before any of
+    // the mapping/upsert work below, is what keeps competitions/teams/venues
+    // outside the configured set from ever being written at all — not just
+    // hidden from the UI afterwards.
+    const syncedCompetitionIds = getSyncedCompetitionProviderIds();
+    const fixturesBeforeScoping = fixtures.length;
+    if (syncedCompetitionIds) {
+      fixtures = fixtures.filter((f) => syncedCompetitionIds.has(f.competitionProviderId));
+    }
+    const scopedOutCount = fixturesBeforeScoping - fixtures.length;
+    if (scopedOutCount > 0) {
+      console.info(
+        `Football sync: scoped out ${scopedOutCount}/${fixturesBeforeScoping} fixtures outside FOOTBALL_SYNC_COMPETITION_IDS`,
+      );
+    }
 
-  await supabase
-    .from("sync_runs")
-    .update({
+    // RECOMMENDATIONS.md item 27: resolve every distinct competition/team/venue
+    // provider id this whole batch needs in three round trips total, up front,
+    // instead of a findMappedId query per entity per fixture. The per-fixture loop
+    // below then only issues an insert for provider ids that came back missing,
+    // and only ever hits provider_mappings again to write those new rows.
+    const competitionProviderIds = Array.from(new Set(fixtures.map((f) => f.competitionProviderId)));
+    const teamProviderIds = Array.from(new Set(fixtures.flatMap((f) => [f.homeTeam.providerId, f.awayTeam.providerId])));
+    const venueProviderIds = Array.from(
+      new Set(fixtures.map((f) => f.venueProviderId).filter((id): id is string => id !== null)),
+    );
+
+    const [competitionMappings, teamMappings, venueMappings] = await Promise.all([
+      batchFindMappedIds(supabase, provider.name, "competition", competitionProviderIds),
+      batchFindMappedIds(supabase, provider.name, "team", teamProviderIds),
+      batchFindMappedIds(supabase, provider.name, "venue", venueProviderIds),
+    ]);
+
+    // Notification items (kickoff/full-time): batch-resolve each fixture's
+    // real prior status the same up-front way as the mappings above, one
+    // extra round trip for the whole run rather than one per fixture. A
+    // provider id with no existing mapping is a fixture KIVO has never synced
+    // before — its entry is simply absent from this map, and
+    // notifyFixtureStatusChange treats "no known prior status" as "don't
+    // guess, don't notify" (see its doc comment).
+    const fixtureProviderIds = Array.from(new Set(fixtures.map((f) => f.providerId)));
+    const fixtureMappings = await batchFindMappedIds(supabase, provider.name, "fixture", fixtureProviderIds);
+    const priorStatusByKivoId = new Map<string, DbFixtureStatus>();
+    // RECOMMENDATIONS.md item 303 ("conflict detection"): the same batched
+    // lookup above already fetches each known fixture's prior status for
+    // notifications — carrying its scores along too costs nothing extra (same
+    // row, same round trip) and is what upsertFixture below uses for a
+    // same-provider sanity check (a score that would go backward is a real
+    // anomaly signal, never silently written over).
+    const priorScoresByKivoId = new Map<string, { homeScore: number | null; awayScore: number | null }>();
+    const knownKivoFixtureIds = Array.from(fixtureMappings.values());
+    if (knownKivoFixtureIds.length > 0) {
+      const { data: priorRows, error: priorError } = await supabase
+        .from("fixtures")
+        .select("id, status, home_score, away_score")
+        .in("id", knownKivoFixtureIds);
+      if (priorError) throw priorError;
+      for (const row of priorRows ?? []) {
+        priorStatusByKivoId.set(row.id, row.status);
+        priorScoresByKivoId.set(row.id, { homeScore: row.home_score, awayScore: row.away_score });
+      }
+    }
+
+    const errors: string[] = [];
+    const resolveSeason = createSeasonResolver(supabase);
+
+    await mapWithConcurrency(fixtures, FIXTURE_WRITE_CONCURRENCY, async (fixture) => {
+      try {
+        const competitionId = await upsertCompetition(
+          supabase,
+          provider.name,
+          fixture.competitionProviderId,
+          fixture.competitionName,
+          competitionMappings,
+        );
+        const seasonId = await resolveSeason(competitionId, fixture.season);
+        const [homeTeamId, awayTeamId, venueId] = await Promise.all([
+          upsertTeam(supabase, provider.name, fixture.homeTeam, teamMappings),
+          upsertTeam(supabase, provider.name, fixture.awayTeam, teamMappings),
+          fixture.venueProviderId
+            ? upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName, venueMappings)
+            : Promise.resolve(null),
+        ]);
+
+        const knownKivoId = fixtureMappings.get(fixture.providerId) ?? null;
+        const previousStatus = knownKivoId ? (priorStatusByKivoId.get(knownKivoId) ?? null) : null;
+        const previousScores = knownKivoId ? (priorScoresByKivoId.get(knownKivoId) ?? null) : null;
+
+        const notification = await upsertFixture(
+          supabase,
+          provider.name,
+          fixture,
+          {
+            competitionId,
+            seasonId,
+            homeTeamId,
+            awayTeamId,
+            venueId,
+          },
+          previousStatus,
+          previousScores,
+        );
+        if (notification) pendingNotifications.push(notification);
+        processed += 1;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Football sync: failed to sync fixture ${fixture.provider}:${fixture.providerId}`, err);
+        errors.push(
+          `${fixture.provider}:${fixture.providerId} (${fixture.homeTeam.name} v ${fixture.awayTeam.name}): ${message}`,
+        );
+      }
+    });
+
+    const hadFixtures = fixtures.length > 0;
+    const dbStatus: Database["public"]["Enums"]["sync_status"] =
+      errors.length === 0 ? "success" : hadFixtures && processed === 0 ? "failed" : "partial";
+    // Keep this bounded — a bad day shouldn't write an unbounded error_message blob.
+    const errorMessage = errors.length > 0 ? errors.slice(0, 20).join("; ") : null;
+
+    await finalizeRun({
       status: dbStatus,
-      finished_at: finishedAt,
-      last_synced_at: finishedAt,
+      last_synced_at: new Date().toISOString(),
       records_processed: processed,
       error_message: errorMessage,
-      // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
-      // not an estimate — see ApiFootballProvider.getQuotaRemaining().
-      provider_quota_remaining: provider.getQuotaRemaining(),
-      // RECOMMENDATIONS.md item 65: written on every finish, not only a hard
-      // failure, so an admin can inspect "what did the provider actually
-      // send back" on request for a run that otherwise succeeded.
-      raw_response_sample: provider.getLastRawResponseSample() as Json | null,
-    })
-    .eq("id", syncRun.id);
+    });
 
-  return {
-    status: dbStatus === "failed" ? "failed" : "succeeded",
-    recordsProcessed: processed,
-    error: errorMessage ?? undefined,
-  };
+    result = {
+      status: dbStatus === "failed" ? "failed" : "succeeded",
+      recordsProcessed: processed,
+      error: errorMessage ?? undefined,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Football sync: run failed before reaching a terminal state", err);
+    await finalizeRun({ status: "failed", records_processed: processed, error_message: message });
+    return { status: "failed", recordsProcessed: processed, error: message };
+  } finally {
+    // Only reachable if both paths above somehow failed to finalize (e.g. the
+    // catch block's own update threw). Never leave the row `running`.
+    await finalizeRun({
+      status: "failed",
+      records_processed: processed,
+      error_message: "Sync ended without recording a terminal status.",
+    });
+  }
+
+  // Deliberately after the run row is terminal — see dispatchStatusNotifications.
+  await dispatchStatusNotifications(supabase, pendingNotifications);
+
+  return result;
 }

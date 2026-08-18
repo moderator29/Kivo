@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { EVENT_LABEL, isGoalEventType, isRedCardEventType } from "./event-labels";
-import { shouldNotify, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
+import { filterNotifiable, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
 
 // RECOMMENDATIONS.md item 285: every notification type this file produces
 // (match_kickoff, match_result, match_goal, match_red_card, player_event) is
@@ -73,11 +73,17 @@ async function playerAudience(supabase: ServiceClient, playerId: string): Promis
 
 /**
  * RECOMMENDATIONS.md item 285: the shared write path every producer below
- * funnels through, so the shouldNotify gate only has to be wired in once.
- * Checked per audience member — this codebase's real audiences are follower
- * counts, not mass-marketing lists, so a per-id check (not a batched query)
- * matches the same simplicity-over-scale trade-off already made throughout
- * this file (teamAudience/playerAudience's own plain two-query shape).
+ * funnels through, so the preference gate only has to be wired in once.
+ *
+ * KIVO_NEXT_GEN KN-9: the gate used to be `shouldNotify` mapped over the
+ * audience — one single-row select per recipient, all fired concurrently from
+ * inside a running sync before a single notification row was written. This
+ * file's own comment defended that as "simplicity over scale", which was
+ * honest while the product had no followers and stops being true the first
+ * time one club does; a goal for a 50,000-follower club is 50,000 queries
+ * ahead of one insert, at the exact moment the platform is busiest.
+ * `filterNotifiable` is the same rule (absent row = defaults = notify) in one
+ * chunked query per 300 recipients.
  */
 async function insertNotifications(
   supabase: ServiceClient,
@@ -88,8 +94,7 @@ async function insertNotifications(
   const ids = Array.from(new Set(profileIds));
   if (ids.length === 0) return;
 
-  const allowed = await Promise.all(ids.map(async (id) => ((await shouldNotify(supabase, id, column)) ? id : null)));
-  const rows = allowed.filter((id): id is string => id !== null).map(build);
+  const rows = (await filterNotifiable(supabase, ids, column)).map(build);
   if (rows.length === 0) return;
 
   const { error } = await supabase.from("notifications").insert(rows);

@@ -79,3 +79,70 @@ export async function shouldNotify(
   const prefs = data ?? NOTIFICATION_PREFERENCE_DEFAULTS;
   return prefs.in_app_enabled && prefs[column];
 }
+
+/**
+ * Batched form of `shouldNotify`, for producers with a real audience rather
+ * than a single recipient (KIVO_NEXT_GEN KN-9).
+ *
+ * `insertNotifications` (src/lib/football/match-notifications.ts) used to map
+ * `shouldNotify` over every recipient, so one goal for a club with N followers
+ * fired N concurrent single-row selects from inside a running sync, before a
+ * single notification row was written. The file's own comment argued that
+ * matched its "simplicity over scale" trade-off, which was fair when the
+ * product had no followers — it stops being fair the first time a popular club
+ * does, and the shape degrades exactly when the platform is busiest (a live
+ * match, every producer firing at once).
+ *
+ * Absent rows default open, identically to `shouldNotify`: a user who has never
+ * touched Settings has no `notification_preferences` row, and the defaults in
+ * `NOTIFICATION_PREFERENCE_DEFAULTS` mirror the migration's own column
+ * defaults. Missing from the result set therefore means "hasn't set a
+ * preference", never "opted out".
+ *
+ * Chunked because the ids travel in a URL-encoded PostgREST `in.(...)` filter,
+ * and an audience is unbounded by nature — the same failure mode KN-15
+ * describes for /home's follow filter, avoided here up front rather than
+ * discovered at some particular follower count. Returns ids in input order.
+ */
+const PREFERENCE_LOOKUP_CHUNK_SIZE = 300;
+
+export async function filterNotifiable(
+  supabase: SupabaseClient<Database>,
+  profileIds: Iterable<string>,
+  column: NotificationPreferenceColumn,
+): Promise<string[]> {
+  const ids = Array.from(new Set(profileIds));
+  if (ids.length === 0) return [];
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += PREFERENCE_LOOKUP_CHUNK_SIZE) {
+    chunks.push(ids.slice(i, i + PREFERENCE_LOOKUP_CHUNK_SIZE));
+  }
+
+  const blocked = new Set<string>();
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const { data, error } = await supabase
+        .from("notification_preferences")
+        .select(
+          "profile_id, email_enabled, push_enabled, in_app_enabled, marketing_emails_enabled, match_alerts_enabled, social_alerts_enabled, prediction_alerts_enabled, fantasy_alerts_enabled",
+        )
+        .in("profile_id", chunk);
+
+      if (error) {
+        // Fail closed for this chunk rather than notifying people who may have
+        // opted out: an unreadable preference is not consent. Logged, not
+        // thrown, so one bad chunk can't abort a whole sync's fan-out.
+        console.error("filterNotifiable: preference lookup failed, skipping this chunk", error);
+        for (const id of chunk) blocked.add(id);
+        return;
+      }
+
+      for (const row of data ?? []) {
+        if (!(row.in_app_enabled && row[column])) blocked.add(row.profile_id);
+      }
+    }),
+  );
+
+  return ids.filter((id) => !blocked.has(id));
+}
