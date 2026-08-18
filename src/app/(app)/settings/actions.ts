@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { COUNTRY_CODES } from "@/lib/countries";
+import { isSupportedTimeZone } from "@/lib/timezone";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   NOTIFICATION_PREFERENCE_COLUMNS,
@@ -150,6 +151,48 @@ export async function updateActivityVisibility(showActivityPublicly: boolean) {
 
   if (error) {
     console.error("Failed to update activity visibility", error);
+    return { error: "Something went wrong. Try again." };
+  }
+
+  revalidatePath("/settings");
+  return { error: null };
+}
+
+/**
+ * KN-89. The only writer of `profiles.timezone` (migration 0054), and
+ * deliberately the only one there will ever be: the value comes from the user
+ * confirming their own device's zone, never from IP geolocation.
+ *
+ * Three validation layers, none redundant. This action rejects anything the
+ * runtime's own ICU data does not know (`isSupportedTimeZone`), so a typo or a
+ * hand-crafted request never reaches Postgres. Migration 0054's trigger checks
+ * the same thing against `pg_timezone_names`, which is the copy that actually
+ * matters for anything the database computes. And the column's shape
+ * constraint means the field cannot become free text even if the trigger were
+ * dropped.
+ *
+ * `null` is a first-class value, not a failure: "clear my timezone" is a real
+ * choice, and every consumer falls back to UTC and says so (see
+ * src/lib/timezone.ts) rather than pretending to know.
+ */
+export async function updateTimezone(timezone: string | null) {
+  const value = typeof timezone === "string" ? timezone.trim() : null;
+
+  if (value !== null && value.length > 0 && !isSupportedTimeZone(value)) {
+    return { error: "That isn't a time zone we recognise." };
+  }
+
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in." };
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ timezone: value && value.length > 0 ? value : null })
+    .eq("id", profile.id);
+
+  if (error) {
+    console.error("Failed to update timezone", error);
     return { error: "Something went wrong. Try again." };
   }
 

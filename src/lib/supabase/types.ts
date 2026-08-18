@@ -1361,6 +1361,7 @@ export type Database = {
           onboarding_completed: boolean
           role: Database["public"]["Enums"]["user_role"]
           show_activity_publicly: boolean
+          timezone: string | null
           updated_at: string
           username: string
         }
@@ -1386,6 +1387,7 @@ export type Database = {
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           show_activity_publicly?: boolean
+          timezone?: string | null
           updated_at?: string
           username: string
         }
@@ -1411,6 +1413,7 @@ export type Database = {
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           show_activity_publicly?: boolean
+          timezone?: string | null
           updated_at?: string
           username?: string
         }

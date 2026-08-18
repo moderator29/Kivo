@@ -15,6 +15,7 @@ import type { AwardedBadge } from "@/lib/rewards";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
+import { useDeviceTimeZone } from "@/lib/use-device-timezone";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 const AVAILABILITY_DEBOUNCE_MS = 450;
@@ -64,6 +65,14 @@ export function OnboardingFlow({
   const [pending, startTransition] = useTransition();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [award, setAward] = useState<OnboardingCompletion | null>(null);
+
+  // KN-89. The device's own zone, read from the platform rather than during
+  // render: the server has no device zone to resolve, so reading it during
+  // render would make the first paint disagree with hydration for every
+  // visitor outside UTC. Shown to the user below before it is saved (see the
+  // disclosure line under the carousel) — KIVO is told a timezone, it never
+  // works one out from an IP address.
+  const deviceTimezone = useDeviceTimeZone();
 
   const [usernameValue, setUsernameValue] = useState(
     defaultUsername.startsWith("user_") ? "" : defaultUsername,
@@ -142,7 +151,7 @@ export function OnboardingFlow({
   // user straight back here. Surface the real error on the step they're on
   // and let them retry instead.
   async function complete(teamId: string | null) {
-    const result = await finishOnboarding(teamId);
+    const result = await finishOnboarding(teamId, deviceTimezone);
     if (result.error) {
       setError(result.error);
       return;
@@ -176,7 +185,7 @@ export function OnboardingFlow({
             aria-label="Back"
             className="kivo-glass kivo-glass-interactive flex h-10 w-10 items-center justify-center rounded-full transition-colors"
           >
-            <ArrowLeft className="h-4 w-4 text-foreground" strokeWidth={2} />
+            <ArrowLeft className="h-4 w-4 text-foreground" strokeWidth={1.75} />
           </button>
         ) : null}
       </div>
@@ -227,6 +236,16 @@ export function OnboardingFlow({
           )}
         </motion.div>
       </AnimatePresence>
+
+      {/* KN-89. Stated, not silent: the user sees which zone is about to be
+          saved before the step that saves it, and is told where to change it.
+          Absent entirely when the browser will not report one, rather than
+          claiming a zone we do not have. */}
+      {(step === "username" || step === "team") && deviceTimezone && (
+        <p className="text-center text-[11px] text-foreground-subtle">
+          Times will show in {deviceTimezone}. Change it any time in Settings.
+        </p>
+      )}
 
       {step !== "success" && <StepDots count={steps.length} activeIndex={activeIndex} />}
     </div>
@@ -345,7 +364,7 @@ export function IntroPanel({ onNext }: { onNext: () => void }) {
       </div>
       <PillButton onClick={onNext}>
         Get started
-        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
       </PillButton>
     </div>
   );
@@ -400,8 +419,8 @@ export function UsernamePanel({
             {availability === "checking" && (
               <span className="block h-4 w-4 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
             )}
-            {availability === "available" && <Check className="h-4 w-4 text-live" strokeWidth={2.5} />}
-            {availability === "taken" && <X className="h-4 w-4 text-critical" strokeWidth={2.5} />}
+            {availability === "available" && <Check className="h-4 w-4 text-live" strokeWidth={1.75} />}
+            {availability === "taken" && <X className="h-4 w-4 text-critical" strokeWidth={1.75} />}
           </span>
         </div>
 
@@ -441,7 +460,7 @@ export function UsernamePanel({
 
         <PillButton type="submit" disabled={pending || availability === "taken"} pending={pending}>
           {pending ? "Saving…" : "Continue"}
-          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={2.5} />}
+          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={1.75} />}
         </PillButton>
       </form>
 
@@ -495,7 +514,7 @@ export function TeamPanel({
             >
               <TeamCrest crestUrl={team.crest_url} name={team.name} size={22} />
               <span className="truncate">{team.short_name ?? team.name}</span>
-              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.5} />}
+              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />}
             </button>
           );
         })}
@@ -504,7 +523,7 @@ export function TeamPanel({
       <div className="flex w-full flex-col gap-3">
         <PillButton onClick={onContinue} disabled={pending || !selectedTeamId} pending={pending}>
           {pending ? "Saving…" : "Continue"}
-          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={2.5} />}
+          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={1.75} />}
         </PillButton>
         <SkipLink onClick={onSkip} disabled={pending} />
       </div>
@@ -586,7 +605,7 @@ export function SuccessPanel({
 
         {xpAwarded > 0 && (
           <SummaryRow label="Experience">
-            <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
+            <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             <span className="font-semibold text-foreground">+{xpAwarded} XP</span>
           </SummaryRow>
         )}
@@ -594,7 +613,7 @@ export function SuccessPanel({
 
       <PillButton onClick={onContinue}>
         Enter KIVO
-        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
       </PillButton>
     </div>
   );

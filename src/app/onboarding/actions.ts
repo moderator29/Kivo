@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp, type AwardedBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { isSupportedTimeZone } from "@/lib/timezone";
 
 const ONBOARDING_COMPLETE_XP = 10;
 
@@ -128,17 +129,42 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
  * awards nothing — previously it logged and carried on, handing the user a
  * congratulations screen for a profile whose `onboarding_completed` was still
  * false, which would bounce them straight back here from /home.
+ *
+ * `deviceTimezone` (KN-89) is the browser's own
+ * `Intl.DateTimeFormat().resolvedOptions().timeZone`, which the flow displays
+ * to the user on the step before this fires — see the note inside on why it is
+ * best-effort and can never fail a signup.
  */
-export async function finishOnboarding(teamId: string | null): Promise<OnboardingCompletion> {
+export async function finishOnboarding(
+  teamId: string | null,
+  deviceTimezone: string | null = null,
+): Promise<OnboardingCompletion> {
   const profile = await getOrCreateProfile();
   if (!profile) {
     redirect("/sign-in");
   }
 
+  // KN-89. The browser proposes its own `Intl` zone and the flow shows the
+  // user which zone that is before this runs, so storing it here is a
+  // confirmation rather than an inference — the rule is that KIVO is *told* a
+  // timezone, never that it works one out from an IP address.
+  //
+  // Validated, then dropped on the floor if it doesn't validate. A zone this
+  // runtime does not recognise must not be the reason a signup cannot
+  // complete: the column stays null, every consumer falls back to UTC and says
+  // so, and Settings offers the same choice again later.
+  const timezone = deviceTimezone !== null && isSupportedTimeZone(deviceTimezone) ? deviceTimezone : null;
+
   const supabase = createServerSupabaseClient();
   const { data: updated, error } = await supabase
     .from("profiles")
-    .update({ favourite_team_id: teamId, onboarding_completed: true })
+    .update({
+      favourite_team_id: teamId,
+      onboarding_completed: true,
+      // Never overwrite a zone the user has already stated with a device
+      // reading — the stated one is the more deliberate signal of the two.
+      ...(timezone !== null && profile.timezone === null ? { timezone } : {}),
+    })
     .eq("id", profile.id)
     .select("username, favourite_team_id, avatar_type, avatar_kivo_id, avatar_uploaded_url, avatar_url")
     .single();

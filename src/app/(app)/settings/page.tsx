@@ -12,6 +12,7 @@ import { NotificationPreferencesPanel } from "@/components/settings/notification
 import { ModerationStatusPanel } from "@/components/settings/moderation-status-panel";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
 import { ActivityPrivacyToggle } from "@/components/settings/activity-privacy-toggle";
+import { TimezoneSection } from "@/components/settings/timezone-section";
 import { OtherDevicesSection } from "@/components/settings/other-devices-section";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
 import { DataExportSection } from "@/components/settings/data-export-section";
@@ -94,6 +95,10 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <TimezoneSection initialTimezone={profile.timezone} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Privacy</span>
           <ActivityPrivacyToggle initialShowActivityPublicly={profile.show_activity_publicly} />
         </div>
@@ -142,7 +147,7 @@ export default async function SettingsPage() {
               type="submit"
               className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
-              <LogOut className="h-4 w-4" strokeWidth={2} />
+              <LogOut className="h-4 w-4" strokeWidth={1.75} />
               Sign out
             </button>
           </form>
