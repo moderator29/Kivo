@@ -33,7 +33,7 @@ export default function GlobalError({
         <Image src={kivoLogo} alt="" width={48} height={48} className="kivo-ink h-12 w-12 shrink-0" priority />
 
         <div className="kivo-gradient-intelligence flex h-16 w-16 items-center justify-center rounded-2xl">
-          <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.75} />
+          <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.5} />
         </div>
 
         <div className="flex flex-col gap-2">

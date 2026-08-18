@@ -52,7 +52,7 @@ export function AppearanceSection() {
             </div>
           </div>
           <span className="flex items-center gap-1.5 rounded-full border border-hairline bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-foreground-muted shadow-soft">
-            <Heart className="h-3 w-3" strokeWidth={1.75} />
+            <Heart className="h-3 w-3" strokeWidth={2} />
             Like
           </span>
         </div>
@@ -71,7 +71,7 @@ export function AppearanceSection() {
 
         <div className="flex items-center gap-2">
           <span className="kivo-gradient-prime flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold text-on-accent">
-            <Check className="h-3 w-3" strokeWidth={2.5} />
+            <Check className="h-3 w-3" strokeWidth={2} />
             Primary
           </span>
           <span className="text-[11px] font-medium text-accent">Accent link</span>

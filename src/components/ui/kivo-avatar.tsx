@@ -42,7 +42,7 @@ export function KivoAvatar({
       className={`flex shrink-0 items-center justify-center rounded-full bg-surface-2 ${className}`}
       style={{ width: size, height: size }}
     >
-      <CircleUserRound className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.5} />
+      <CircleUserRound className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
     </div>
   );
 }

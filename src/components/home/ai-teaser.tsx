@@ -35,7 +35,7 @@ export function AiTeaser({ aiConfigured }: { aiConfigured: boolean }) {
           ? "AI Copilot. Ask anything about your teams, players and matches."
           : "AI Copilot is coming. Grounded answers about your teams, players and matches."}
       </p>
-      <ArrowRight className="relative z-10 h-4 w-4 shrink-0 text-on-accent/80 transition-transform group-hover:translate-x-0.5" />
+      <ArrowRight strokeWidth={1.75} className="relative z-10 h-4 w-4 shrink-0 text-on-accent/80 transition-transform group-hover:translate-x-0.5" />
     </Link>
   );
 }

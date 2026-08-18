@@ -319,7 +319,7 @@ export function FantasyBuilder({
               onClick={copyInviteCode}
               className="flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 text-xs font-semibold tracking-wide text-foreground-muted transition hover:bg-surface-2 active:scale-95"
             >
-              {copied ? <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />}
+              {copied ? <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={2} />}
               {league.inviteCode}
               <span className="sr-only" role="status" aria-live="polite">
                 {copied ? "Invite code copied" : ""}
@@ -349,7 +349,7 @@ export function FantasyBuilder({
           href="/fantasy/browse"
           className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-accent"
         >
-          <Compass className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <Compass className="h-3.5 w-3.5" strokeWidth={2} />
           Browse public leagues
         </Link>
       </FadeIn>
@@ -419,7 +419,7 @@ export function FantasyBuilder({
               delay={0.02}
               className="flex w-fit items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-3 py-1.5 text-[11px] text-foreground-subtle"
             >
-              <History className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              <History className="h-3 w-3 shrink-0" strokeWidth={2} />
               Carried forward from GW{carriedForwardFromGameweek}
             </FadeIn>
           )}
@@ -466,7 +466,7 @@ export function FantasyBuilder({
               className="flex items-center gap-2 rounded-2xl border border-achievement/30 bg-achievement/10 px-3.5 py-2.5 text-xs text-achievement"
               role="status"
             >
-              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               {saveNotice}
             </FadeIn>
           )}
@@ -476,7 +476,7 @@ export function FantasyBuilder({
               delay={0.12}
               className="flex items-center gap-2 rounded-2xl border border-achievement/30 bg-achievement/10 px-3.5 py-2.5 text-xs text-achievement"
             >
-              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               No captain selected — their points won&apos;t be doubled this gameweek.
             </FadeIn>
           )}

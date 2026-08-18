@@ -81,7 +81,7 @@ export function PublicLeaguesList({
   return (
     <div className="flex flex-col gap-4">
       <FadeIn delay={0.02} className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={2} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -118,7 +118,7 @@ export function PublicLeaguesList({
                 <span className="flex items-center gap-1 truncate text-xs text-foreground-subtle">
                   {league.seasonLabel}
                   <span aria-hidden="true">·</span>
-                  <Users className="h-3 w-3" strokeWidth={1.75} />
+                  <Users className="h-3 w-3" strokeWidth={2} />
                   {league.teamCount}/{league.maxTeams}
                 </span>
               </div>

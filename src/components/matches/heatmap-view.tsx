@@ -42,7 +42,7 @@ export function HeatmapView({ observations, playerId, matchId, subjectLabel }: H
       <div className="kivo-glass relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl p-8 text-center">
         <PitchLines />
         <div className="relative flex h-12 w-12 items-center justify-center rounded-full border border-hairline bg-surface-1">
-          <Radar className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Radar className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
         </div>
         <div className="relative flex flex-col gap-1.5">
           <p className="text-sm font-medium text-foreground">Positional data unavailable for this match</p>

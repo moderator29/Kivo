@@ -165,7 +165,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           {profile.bio && <p className="whitespace-pre-wrap text-sm text-foreground">{profile.bio}</p>}
           {profile.country && (
             <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
-              <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} />
               {getCountryName(profile.country)}
             </span>
           )}
@@ -225,7 +225,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         // zero — "0 XP earned" would misread as "hasn't earned anything" when
         // this profile's owner has simply opted out of showing it.
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-8 text-center">
-          <Lock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Lock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">This user keeps their activity private.</p>
         </FadeIn>
       )}

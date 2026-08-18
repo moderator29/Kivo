@@ -207,7 +207,7 @@ export function CommentThread({
               {replyTo && (
                 <div className="flex items-center justify-between text-[11px] text-foreground-subtle">
                   <span className="flex items-center gap-1">
-                    <CornerDownRight className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+                    <CornerDownRight className="h-3 w-3 shrink-0" strokeWidth={2} />
                     Replying to {replyTo.authorName}
                   </span>
                   <button type="button" onClick={() => setReplyTo(null)} className="hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">

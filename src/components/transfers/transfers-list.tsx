@@ -102,7 +102,7 @@ export function TransfersList({
                 <TeamLink team={transfer.from_team} />
                 <ArrowLeftRight
                   className="h-3.5 w-3.5 shrink-0 animate-[kivo-transfer-arrow-nudge_3.4s_ease-in-out_infinite] text-foreground-subtle"
-                  strokeWidth={1.75}
+                  strokeWidth={2}
                 />
                 <TeamLink team={transfer.to_team} />
               </div>

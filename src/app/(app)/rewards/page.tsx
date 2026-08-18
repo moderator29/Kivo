@@ -242,14 +242,14 @@ export default async function RewardsPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="kivo-glass rounded-2xl p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={1.75} />
+              <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={2} />
               Tier
             </span>
             <p className="mt-1.5 text-lg font-bold text-foreground">{tier.tierName}</p>
           </div>
           <div className="kivo-glass rounded-2xl p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
+              <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
               Longest streak
             </span>
             <p className="mt-1.5 text-lg font-bold text-foreground">

@@ -116,7 +116,7 @@ function SignedInComposer({ fixtureId, placeholder }: { fixtureId?: string; plac
               mode === "poll" ? "bg-surface-2 text-foreground" : "text-foreground-subtle hover:text-foreground-muted"
             }`}
           >
-            <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <BarChart3 className="h-3.5 w-3.5" strokeWidth={2} />
             Poll
           </button>
         </div>

@@ -50,9 +50,9 @@ export function ModerationStatusPanel({ status, reason, expiresAt }: ModerationS
     >
       <div className={`flex items-center gap-2 text-sm font-semibold ${isBanned ? "text-critical" : "text-warning"}`}>
         {isBanned ? (
-          <Ban className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+          <Ban className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
         ) : (
-          <ShieldAlert className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+          <ShieldAlert className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
         )}
         {isBanned ? "Account banned" : "Account suspended"}
       </div>

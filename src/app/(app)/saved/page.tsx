@@ -81,7 +81,7 @@ export default async function SavedPage() {
 
       {isEmpty ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
-          <Bookmark className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Bookmark className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">
             Nothing saved yet. Tap the bookmark icon on a post, team or player page to save it here.
           </p>

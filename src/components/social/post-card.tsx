@@ -174,7 +174,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             <span className="absolute inset-y-0 left-0 bg-accent-soft" style={{ width: `${pct}%` }} aria-hidden="true" />
             <span className="relative flex items-center justify-between gap-2">
               <span className={cn("flex min-w-0 items-center gap-1 truncate", isOwn ? "font-semibold text-foreground" : "text-foreground-muted")}>
-                {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
+                {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2} />}
                 <span className="truncate">{option.label}</span>
               </span>
               <span className="flex shrink-0 items-center gap-1 text-xs text-foreground-subtle">
@@ -428,12 +428,12 @@ export function PostCard({
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                   className="flex items-center gap-1 text-live"
                 >
-                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  <Check className="h-3.5 w-3.5" strokeWidth={2} />
                   Reported
                 </motion.span>
               ) : (
                 <motion.span key="flag" className="flex items-center gap-1.5">
-                  <Flag className="h-3.5 w-3.5" strokeWidth={1.75} fill={reported ? "currentColor" : "none"} />
+                  <Flag className="h-3.5 w-3.5" strokeWidth={2} fill={reported ? "currentColor" : "none"} />
                   {reported ? "Reported" : "Report"}
                   {/* RECOMMENDATIONS item 235 */}
                   <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0 text-foreground-subtle" />

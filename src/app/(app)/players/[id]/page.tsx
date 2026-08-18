@@ -235,7 +235,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             href={`/players/compare?a=${player.id}`}
             className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
           >
-            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
             Compare with another player
           </Link>
         </FadeIn>
@@ -304,7 +304,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               href="/fantasy"
               className="flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
             >
-              <Trophy className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <Trophy className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               Build your fantasy squad
             </Link>
           </div>
@@ -392,7 +392,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                       Club not synced
                     </span>
                   )}
-                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
                   {transfer.to_team ? (
                     <Link
                       href={`/teams/${transfer.to_team.id}`}

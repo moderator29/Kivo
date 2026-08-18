@@ -48,7 +48,7 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
   if (!preview) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-dashed border-hairline bg-surface-1 px-3 py-2 text-xs text-foreground-subtle">
-        <FileQuestion className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+        <FileQuestion className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
         Content no longer available.
       </div>
     );

@@ -116,7 +116,7 @@ export default async function LivePage() {
       {hasLiveFixtures && liveFixtures && (
         <FadeIn delay={0.05} className="kivo-glass-brand rounded-2xl p-5">
           <div className="mb-3 flex items-center gap-2">
-            <Radio className="h-4 w-4 text-live" strokeWidth={2} />
+            <Radio className="h-4 w-4 text-live" strokeWidth={1.75} />
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Live now</h2>
           </div>
           {/* No live dot here — redundant with this section's own Radio-icon

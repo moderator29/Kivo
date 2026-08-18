@@ -127,7 +127,7 @@ export default async function MyPredictionsPage() {
 
       {rows.length === 0 ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
-          <Target className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Target className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">
             You haven&apos;t made any predictions yet. Pick an outcome on an upcoming fixture to start your record.
           </p>

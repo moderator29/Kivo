@@ -218,7 +218,7 @@ export function PredictionCard({
                 }`}
               >
                 {active && <span className="kivo-gradient-victory absolute inset-0" />}
-                {active && <Lock className="relative h-3 w-3 shrink-0 text-on-accent" strokeWidth={2.5} />}
+                {active && <Lock className="relative h-3 w-3 shrink-0 text-on-accent" strokeWidth={2} />}
                 <span className={`relative ${active ? "text-on-accent" : "text-foreground-muted"}`}>
                   {PREDICTION_OUTCOME_LABEL[outcome]}
                 </span>
@@ -292,7 +292,7 @@ export function PredictionCard({
             role="status"
             aria-live="polite"
           >
-            <Check className="h-3 w-3" strokeWidth={2.5} />
+            <Check className="h-3 w-3" strokeWidth={2} />
             Prediction saved
           </motion.p>
         ) : null}

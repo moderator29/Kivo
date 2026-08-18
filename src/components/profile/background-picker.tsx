@@ -72,7 +72,7 @@ export function BackgroundPicker({ backgroundId }: { backgroundId: string | null
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-center gap-1 text-xs font-medium text-live"
               >
-                <Check className="h-3 w-3" strokeWidth={2.5} />
+                <Check className="h-3 w-3" strokeWidth={2} />
                 Saved
               </motion.span>
             )}
@@ -117,7 +117,7 @@ export function BackgroundPicker({ backgroundId }: { backgroundId: string | null
               />
               {isActive && (
                 <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent">
-                  <Check className="h-2.5 w-2.5 text-on-accent" strokeWidth={3} />
+                  <Check className="h-2.5 w-2.5 text-on-accent" strokeWidth={2} />
                 </span>
               )}
               {isThisPending && (

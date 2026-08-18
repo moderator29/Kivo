@@ -55,7 +55,7 @@ export default async function BrowsePublicFantasyLeaguesPage() {
           href="/fantasy"
           className="flex w-fit items-center gap-1.5 text-xs font-medium text-foreground-subtle transition hover:text-foreground-muted"
         >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} />
           Back to fantasy
         </Link>
         <h1 className="text-xl font-semibold text-foreground">Browse public leagues</h1>

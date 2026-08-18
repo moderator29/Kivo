@@ -103,7 +103,7 @@ export default async function ProfilePage() {
           {profile.bio && <p className="whitespace-pre-wrap text-sm text-foreground">{profile.bio}</p>}
           {profile.country && (
             <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
-              <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} />
               {getCountryName(profile.country)}
             </span>
           )}

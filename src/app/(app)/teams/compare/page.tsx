@@ -108,7 +108,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
         {team.country && <p className="text-xs text-foreground-subtle">{team.country}</p>}
         {team.venueName ? (
           <p className="flex items-center gap-1 text-[11px] text-foreground-subtle">
-            <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+            <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} />
             {team.venueName}
             {team.venueCity ? `, ${team.venueCity}` : ""}
           </p>
@@ -268,13 +268,13 @@ export default async function TeamComparePage({
 
           <FadeIn delay={0.2} className="flex flex-col gap-2 text-center text-[11px] text-foreground-subtle">
             <div className="flex items-center justify-center gap-1.5">
-              <Trophy className="h-3 w-3" strokeWidth={1.75} />
+              <Trophy className="h-3 w-3" strokeWidth={2} />
               League position
               <span aria-hidden="true">·</span>
-              <History className="h-3 w-3" strokeWidth={1.75} />
+              <History className="h-3 w-3" strokeWidth={2} />
               Last 5 finished results
               <span aria-hidden="true">·</span>
-              <Users className="h-3 w-3" strokeWidth={1.75} />
+              <Users className="h-3 w-3" strokeWidth={2} />
               Squad size
             </div>
             <p>All figures come from KIVO&apos;s synced football data. Nothing here is estimated or AI-generated.</p>

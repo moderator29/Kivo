@@ -121,7 +121,7 @@ export default function AboutPage() {
               className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Explore KIVO
-              <ArrowRight className="h-4 w-4" strokeWidth={2} />
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
             </Link>
             <Link
               href="/sign-up"

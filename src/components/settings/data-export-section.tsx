@@ -61,7 +61,7 @@ export function DataExportSection({ username }: { username: string }) {
         onClick={handleExport}
         className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-50"
       >
-        <Download className="h-4 w-4" strokeWidth={2} />
+        <Download className="h-4 w-4" strokeWidth={1.75} />
         {pending ? "Preparing…" : "Download my data"}
       </button>
       {error && (

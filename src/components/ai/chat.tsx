@@ -609,7 +609,7 @@ export function AiChat({
                   {copiedMessageId === m.id ? (
                     <Check className="h-3 w-3" strokeWidth={2} />
                   ) : (
-                    <Copy className="h-3 w-3" strokeWidth={1.75} />
+                    <Copy className="h-3 w-3" strokeWidth={2} />
                   )}
                 </button>
                 {/* Item 194: regenerate only ever applies to the single most
@@ -625,7 +625,7 @@ export function AiChat({
                     title="Regenerate response"
                     className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
-                    <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
+                    <RotateCcw className="h-3 w-3" strokeWidth={2} />
                   </button>
                 )}
                 {m.createdAt && <LocalDateTime iso={m.createdAt} format="clock" className="text-[11px]" />}
@@ -696,7 +696,7 @@ export function AiChat({
           className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
           aria-label="Send"
         >
-          <ArrowUp className="h-4 w-4" strokeWidth={2} />
+          <ArrowUp className="h-4 w-4" strokeWidth={1.75} />
         </motion.button>
       </form>
     </div>

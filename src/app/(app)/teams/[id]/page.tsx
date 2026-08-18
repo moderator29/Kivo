@@ -396,7 +396,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               href={`/venues/${team.venue_id}`}
               className="mt-4 flex items-start gap-2 text-xs text-foreground-muted transition hover:text-accent"
             >
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.75} />
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />
               <span>
                 {team.venue.name}
                 {team.venue.city ? `, ${team.venue.city}` : ""}
@@ -405,7 +405,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             </Link>
           ) : (
             <div className="mt-4 flex items-center gap-2 text-xs text-foreground-subtle">
-              <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               <span>Venue not yet synced</span>
             </div>
           )}
@@ -415,7 +415,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             href={`/teams/compare?a=${team.id}`}
             className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
           >
-            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
             Compare with another team
           </Link>
         </FadeIn>

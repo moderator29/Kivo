@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon } from "lucide-react";
+import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon, Palette } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
 import { getAuthUser } from "@/lib/auth";
@@ -16,6 +16,10 @@ const ADMIN_NAV = [
   { href: "/admin/moderation", label: "Moderation", icon: ShieldAlert },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/data-health", label: "Data health", icon: DatabaseIcon },
+  // KN-63. An internal reference, not an operational tool — last in the list
+  // for that reason, but in the list, because a design system nobody can find
+  // is the same as no design system.
+  { href: "/admin/design", label: "Design system", icon: Palette },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {

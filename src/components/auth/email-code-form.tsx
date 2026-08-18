@@ -108,7 +108,7 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
                 Email address
               </label>
               <div className="relative">
-                <Mail
+                <Mail strokeWidth={1.75}
                   className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle"
                   aria-hidden="true"
                 />
@@ -201,7 +201,7 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
                 }}
                 className="inline-flex items-center gap-1 text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50"
               >
-                <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+                <ArrowLeft strokeWidth={2} className="h-3 w-3" aria-hidden="true" />
                 Use a different email
               </button>
             </div>
@@ -279,7 +279,7 @@ function SubmitButton({
       whileTap={pending || disabled ? undefined : { scale: 0.97 }}
       className="kivo-gradient-prime flex w-full items-center justify-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
     >
-      {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+      {pending ? <Loader2 strokeWidth={1.75} className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
       {children}
     </motion.button>
   );

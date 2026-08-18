@@ -77,7 +77,7 @@ export function UsernameEditor({ username }: { username: string }) {
           className="flex items-center gap-1.5 text-sm text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           @{username}
-          <Pencil className="h-3 w-3" strokeWidth={1.75} />
+          <Pencil className="h-3 w-3" strokeWidth={2} />
         </button>
         <AnimatePresence>
           {justSaved && (
@@ -88,7 +88,7 @@ export function UsernameEditor({ username }: { username: string }) {
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="flex items-center gap-1 text-xs font-medium text-live"
             >
-              <Check className="h-3 w-3" strokeWidth={2.5} />
+              <Check className="h-3 w-3" strokeWidth={2} />
               Saved
             </motion.span>
           )}
@@ -128,8 +128,8 @@ export function UsernameEditor({ username }: { username: string }) {
             {availability === "checking" && (
               <span className="block h-3 w-3 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
             )}
-            {availability === "available" && <Check className="h-3 w-3 text-live" strokeWidth={2.5} />}
-            {availability === "taken" && <X className="h-3 w-3 text-critical" strokeWidth={2.5} />}
+            {availability === "available" && <Check className="h-3 w-3 text-live" strokeWidth={2} />}
+            {availability === "taken" && <X className="h-3 w-3 text-critical" strokeWidth={2} />}
           </span>
         </div>
         <button
@@ -139,7 +139,7 @@ export function UsernameEditor({ username }: { username: string }) {
           className="text-live disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label="Save"
         >
-          <Check className="h-4 w-4" strokeWidth={2} />
+          <Check className="h-4 w-4" strokeWidth={1.75} />
         </button>
         <button
           type="button"
@@ -150,7 +150,7 @@ export function UsernameEditor({ username }: { username: string }) {
           className="text-foreground-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label="Cancel"
         >
-          <X className="h-4 w-4" strokeWidth={2} />
+          <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
       </div>
       <span role="status" aria-live="polite">

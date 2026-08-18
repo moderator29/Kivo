@@ -137,7 +137,7 @@ export default async function FollowingPage() {
 
       {isEmpty ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
-          <Star className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Star className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">
             You&apos;re not following anything yet. Tap the star on a team, player or competition page to follow it.
           </p>

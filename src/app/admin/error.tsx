@@ -36,7 +36,7 @@ export default function AdminSegmentError({
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-16 text-center">
       <div className="kivo-glass-brand flex w-full max-w-md flex-col items-center gap-7 rounded-3xl px-8 py-12">
         <div className="kivo-gradient-intelligence flex h-16 w-16 items-center justify-center rounded-2xl">
-          <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.75} />
+          <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.5} />
         </div>
 
         <div className="flex flex-col gap-2">
