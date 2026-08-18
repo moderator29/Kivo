@@ -7,6 +7,7 @@ import { KivoMark } from "@/components/ui/kivo-mark";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { FaqSection } from "@/components/marketing/faq-section";
+import { InsidePreview } from "@/components/marketing/inside-preview";
 
 // This page used to be `"use client"` in full just so two elements could
 // float via `motion.div` — that shipped React, `motion` and the whole page
@@ -214,22 +215,36 @@ const HOW_IT_WORKS = [
   },
 ];
 
-const FOOTER_LINKS: { heading: string; links: { label: string; href: string }[] }[] = [
+/** A landing-page link to something that lives behind the door. Sends the
+ * visitor to sign-in with the real destination attached, so the auth flow lands
+ * them on what they clicked rather than dumping everyone on /home (KN-38, using
+ * the redirect KN-123 built). */
+function signInTo(path: string): string {
+  return `/sign-in?redirect_url=${encodeURIComponent(path)}`;
+}
+
+const FOOTER_LINKS: { heading: string; note?: string; links: { label: string; href: string }[] }[] = [
   {
-    heading: "Product",
+    // KN-38: every one of these used to point straight into the gated app, so
+    // each was a link that silently became a login form. They now go through
+    // /sign-in carrying their real destination — which the auth flow honours
+    // (KN-123), so signing in lands on the thing that was clicked — and the
+    // heading says what to expect before the click rather than after it.
+    heading: "Inside KIVO",
+    note: "Account required",
     links: [
-      { label: "Live scores", href: "/live" },
-      { label: "Match Centre", href: "/matches" },
-      { label: "Fantasy", href: "/fantasy" },
-      { label: "Predictions", href: "/predictions" },
-      { label: "AI Copilot", href: "/ai" },
+      { label: "Live scores", href: signInTo("/live") },
+      { label: "Match Centre", href: signInTo("/matches") },
+      { label: "Fantasy", href: signInTo("/fantasy") },
+      { label: "Predictions", href: signInTo("/predictions") },
+      { label: "AI Copilot", href: signInTo("/ai") },
     ],
   },
   {
     heading: "Company",
     links: [
       { label: "About", href: "/about" },
-      { label: "Transparency", href: "/transparency" },
+      { label: "Transparency", href: signInTo("/transparency") },
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
     ],
@@ -309,25 +324,37 @@ export default function LandingPage() {
               </p>
             </FadeIn>
 
+            {/* KN-38: "Explore KIVO" pointed at /home, which is behind the
+                door — the button that led the whole page bounced every visitor
+                into a sign-in form. A CTA that cannot do what it says is the
+                fastest way to make a gate feel like a bug. */}
             <FadeIn delay={0.32} className="flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/home"
+                href="/sign-up"
                 className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
-                Explore KIVO
+                Create your free account
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
               </Link>
               <Link
-                href="/sign-up"
+                href="/sign-in"
                 className="kivo-glass-sharp kivo-raise flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
-                Create free account
+                I already have one
               </Link>
             </FadeIn>
 
+            {/* The line this replaces said "No account needed to look around.
+                Sign up only when you want to play." That stopped being true the
+                day the app was gated, and it was the first thing a visitor read
+                before being sent to a login form. This says the true thing, and
+                says *why* — an account is not a toll, it is what makes the
+                product work at all. */}
             <FadeIn delay={0.4}>
-              <p className="text-xs text-foreground-subtle">
-                No account needed to look around. Sign up only when you want to play.
+              <p className="max-w-md text-xs leading-relaxed text-foreground-subtle">
+                KIVO needs an account because there is no version of it that isn&apos;t yours: your clubs decide what
+                leads your home screen, your predictions and squad are the point, and Match Rooms are people, not
+                readers. It takes an email address and a six-digit code — no password to forget.
               </p>
             </FadeIn>
           </div>
@@ -348,6 +375,33 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
+
+        {/* KN-38: with the app gated, the landing page can no longer say "look
+            around" — so it has to show. This is the only place on the page that
+            shows the product's own interface rather than describing it, and it
+            shows the layout with its content slots labelled rather than filled
+            with invented football. See InsidePreview's own doc comment for why
+            a plausible-looking example scoreline would still be fabricated
+            data. */}
+        <section className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-6 py-16 lg:flex-row lg:items-center lg:gap-16 lg:px-12">
+          <ScrollReveal className="flex flex-1 flex-col gap-4">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">A look inside</span>
+            <h2 className="max-w-md text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              The first screen is built around your clubs.
+            </h2>
+            <p className="max-w-md text-sm leading-relaxed text-foreground-muted lg:text-base">
+              KIVO opens on whatever is actually true for you right now, in priority order — a club you follow playing
+              live, then the next kick-off, then a fantasy deadline, then the calls you haven&apos;t made. Every card
+              tells you why it&apos;s there.
+            </p>
+            <p className="max-w-md text-sm leading-relaxed text-foreground-muted lg:text-base">
+              That is also why there is a door: none of it works without knowing whose football this is.
+            </p>
+          </ScrollReveal>
+          <ScrollReveal delay={0.08} className="flex w-full flex-1 justify-center">
+            <InsidePreview />
+          </ScrollReveal>
+        </section>
 
         <section className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 py-16 sm:grid-cols-2 lg:px-12">
           {PROOF_POINTS.map((point, index) => (
@@ -476,8 +530,11 @@ export default function LandingPage() {
             <div className="grid grid-cols-2 gap-8 sm:flex sm:gap-16">
               {FOOTER_LINKS.map((group) => (
                 <div key={group.heading} className="flex flex-col gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
-                    {group.heading}
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
+                      {group.heading}
+                    </span>
+                    {group.note && <span className="text-[10px] text-foreground-subtle/70">{group.note}</span>}
                   </span>
                   <ul className="flex flex-col">
                     {group.links.map((link) => (
@@ -498,7 +555,7 @@ export default function LandingPage() {
           <div className="flex flex-col gap-2 border-t border-hairline-soft pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
             <span>© {new Date().getFullYear()} KIVO</span>
             <Link
-              href="/transparency"
+              href={signInTo("/transparency")}
               className="inline-flex items-center gap-1.5 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Real football data, real fans, no fabricated stats. Ever. See what&apos;s synced
