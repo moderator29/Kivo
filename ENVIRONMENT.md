@@ -74,7 +74,11 @@ Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a s
 
 ## Automated live-sync worker (Vercel Cron) — added 2026-08-18
 
-`src/app/api/cron/sync-live/route.ts`, scheduled via the `crons` array in `vercel.json` (`* * * * *`, once a minute — Vercel Cron's documented minimum interval). The schedule itself is unconditional; the route decides on every firing whether anything is actually worth a provider call (live/halftime fixtures, or one kicking off within ~10 minutes) before it spends any quota. See `docs/LIVE_DATA.md` for the full checklist of what's real vs. still unverifiable about this worker.
+`src/app/api/cron/sync-live/route.ts` — the route itself is real and unconditionally ready to be scheduled. **Not currently wired to a schedule**: `vercel.json`'s `crons` array was removed 2026-08-18 because Vercel's Hobby (free) plan only permits daily cron jobs, and this route's design (fire every minute, decide internally whether anything's worth a provider call) needs the Pro plan's every-minute interval to work as intended — a Hobby deployment fails outright with the `* * * * *` entry present ("Hobby accounts are limited to daily cron jobs"). To reactivate once on a paid plan, add back to `vercel.json`:
+```json
+"crons": [{ "path": "/api/cron/sync-live", "schedule": "* * * * *" }]
+```
+The route decides on every firing whether anything is actually worth a provider call (live/halftime fixtures, or one kicking off within ~10 minutes) before it spends any quota. See `docs/LIVE_DATA.md` for the full checklist of what's real vs. still unverifiable about this worker.
 
 | Variable | Purpose | Required | Notes |
 |---|---|---|---|
