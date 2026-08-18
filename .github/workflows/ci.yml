@@ -38,8 +38,6 @@ jobs:
           # next build needs these at build time for static analysis / type
           # generation even though no real backend calls happen during CI — dummy
           # placeholder values are enough since no page in the App Router is
-          # statically prerendered against live Clerk/Supabase data at build time.
+          # statically prerendered against live Supabase data at build time.
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_placeholder"
-          CLERK_SECRET_KEY: "sk_test_placeholder"
