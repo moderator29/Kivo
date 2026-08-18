@@ -1,12 +1,12 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp, type AwardedBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { isSupportedTimeZone } from "@/lib/timezone";
+import { logError } from "@/lib/log";
 
 const ONBOARDING_COMPLETE_XP = 10;
 
@@ -112,6 +112,54 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
 }
 
 /**
+ * KN-40: the four alert categories, as three choices instead of eight
+ * switches.
+ *
+ * Onboarding is the one guaranteed moment of a user's attention this product
+ * gets, and until now it spent that moment on two questions. Every other
+ * personalisation signal KIVO holds — follows, these preferences, activity
+ * privacy, theme — was discoverable only by someone who went looking in
+ * Settings.
+ *
+ * Deliberately only the four *category* columns. `email_enabled` and
+ * `push_enabled` are left at their table defaults and are not offered here,
+ * because KIVO has neither transactional email nor push infrastructure yet
+ * (see ENVIRONMENT.md): asking somebody to choose email alerts during signup
+ * would be selling a delivery channel that does not exist. `marketing_emails_enabled`
+ * is untouched for the same reason plus a consent one — an opt-in buried in a
+ * signup flow is not consent.
+ *
+ * Skipping writes nothing at all, which leaves the table's own defaults in
+ * place; it is not a fourth preset.
+ */
+export const ALERT_PRESETS = {
+  everything: {
+    match_alerts_enabled: true,
+    social_alerts_enabled: true,
+    prediction_alerts_enabled: true,
+    fantasy_alerts_enabled: true,
+  },
+  football_only: {
+    match_alerts_enabled: true,
+    social_alerts_enabled: false,
+    prediction_alerts_enabled: true,
+    fantasy_alerts_enabled: true,
+  },
+  matches_only: {
+    match_alerts_enabled: true,
+    social_alerts_enabled: false,
+    prediction_alerts_enabled: false,
+    fantasy_alerts_enabled: false,
+  },
+} as const;
+
+export type AlertPreset = keyof typeof ALERT_PRESETS;
+
+function isAlertPreset(value: string | null): value is AlertPreset {
+  return value !== null && Object.prototype.hasOwnProperty.call(ALERT_PRESETS, value);
+}
+
+/**
  * Step 2 of 2 (or the only step, when no teams are synced yet to offer a
  * picker for). `teamId` is optional by design — favourite_team_id is a
  * personalization anchor (src/lib/ai/grounding.ts), not a requirement.
@@ -139,6 +187,13 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
 export async function finishOnboarding(
   teamId: string | null,
   deviceTimezone: string | null = null,
+  /** KN-40: clubs the user chose to follow on the optional step. The favourite
+   * club is added to this set server-side — picking a club as your favourite
+   * and then not following it is a distinction nobody intends. */
+  followTeamIds: string[] = [],
+  /** KN-40: which alert preset they picked, or null for "skipped", which
+   * writes nothing and leaves the table defaults alone. */
+  alertPreset: string | null = null,
 ): Promise<OnboardingCompletion> {
   const profile = await getOrCreateProfile();
   if (!profile) {
@@ -180,6 +235,39 @@ export async function finishOnboarding(
       team: null,
       avatarSrc: null,
     };
+  }
+
+  // KN-40: the two optional steps, written after the profile update has
+  // already succeeded and deliberately best-effort. Neither can fail a signup:
+  // a user who has just completed onboarding must never be bounced back into it
+  // because a *preference* insert failed. Both are re-offerable — the follows
+  // from any club page, the alerts from Settings — so the cost of a silent miss
+  // is small and the cost of a hard failure here is somebody stuck outside the
+  // product.
+  const clubsToFollow = [...new Set([...(teamId ? [teamId] : []), ...followTeamIds])].filter(
+    (id) => typeof id === "string" && id.length > 0,
+  );
+
+  if (clubsToFollow.length > 0) {
+    // `follows` has a unique constraint per (follower, type, id) — ignoring
+    // duplicates makes a double-submitted final step a no-op rather than an
+    // error, the same shape the fantasy carry-forward upserts use.
+    const { error: followError } = await supabase.from("follows").upsert(
+      clubsToFollow.map((followedId) => ({
+        follower_profile_id: profile.id,
+        followed_type: "team" as const,
+        followed_id: followedId,
+      })),
+      { onConflict: "follower_profile_id,followed_type,followed_id", ignoreDuplicates: true },
+    );
+    if (followError) logError("onboarding.followClubs", followError);
+  }
+
+  if (isAlertPreset(alertPreset)) {
+    const { error: preferenceError } = await supabase
+      .from("notification_preferences")
+      .upsert({ profile_id: profile.id, ...ALERT_PRESETS[alertPreset] }, { onConflict: "profile_id" });
+    if (preferenceError) logError("onboarding.alertPreset", preferenceError);
   }
 
   // The rewards run on the service-role client (xp_ledger/user_badges have no
