@@ -308,18 +308,38 @@ export async function setReaction(targetType: "post" | "comment", targetId: stri
  * so "Load more" keeps respecting whichever tab the viewer had selected. */
 export async function loadMorePosts(
   offset: number,
-  options?: { filter?: SocialFilter },
-): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
+  options?: {
+    filter?: SocialFilter;
+    /**
+     * KIVO_NEXT_GEN KN-94. When present, paging is keyset rather than offset:
+     * "give me the posts strictly older than this exact row". A post written
+     * between two page requests then cannot shift the window and make the
+     * reader miss one — which offset paging does silently, and which deduping
+     * the resulting duplicate client-side hides rather than fixes.
+     *
+     * Safe to accept from the client: it is only ever a position in an ordering
+     * the server itself controls, and every row it can reach is one the same
+     * RLS policies would have returned anyway.
+     */
+    cursor?: { createdAt: string; id: string };
+  },
+): Promise<{
+  error: string | null;
+  posts: PostListItem[];
+  hasMore: boolean;
+  nextCursor: { createdAt: string; id: string } | null;
+}> {
   const profile = await getOrCreateProfile();
   // The scope is re-derived from the viewer's own profile on every call rather
   // than passed in from the client: a filter name is safe to accept from a
   // URL, a team id is not — accepting one would let anyone page through any
   // club's fan feed by editing a request.
   const scope = resolveFeedScope(options?.filter ?? "all", profile);
-  if (scope.kind === "unavailable") return { error: null, posts: [], hasMore: false };
+  if (scope.kind === "unavailable") return { error: null, posts: [], hasMore: false, nextCursor: null };
   return fetchPostsPage(offset, profile?.id ?? null, {
     followingOnly: scope.kind === "following",
     teamId: scope.kind === "team" ? scope.teamId : undefined,
+    cursor: options?.cursor,
   });
 }
 

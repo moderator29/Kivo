@@ -75,8 +75,32 @@ export async function fetchPostsPage(
      * they share one code path — see src/lib/social-filters.ts. */
     teamId?: string;
     postIds?: string[];
+    /**
+     * KIVO_NEXT_GEN KN-94. Keyset cursor: the `created_at`/`id` of the last
+     * post already shown. When present it replaces offset paging entirely for
+     * the general feed.
+     *
+     * Offset paging is wrong for a feed and the reason is not theoretical: a
+     * post written between page 1 and page 2 shifts the whole window down one,
+     * so the reader gets a duplicate at the top of page 2 and a post they will
+     * never see falls off the bottom. A sibling fix already dedupes the
+     * duplicate client-side, which hides the symptom the reader notices and
+     * leaves the one they do not — the skipped post. A cursor cannot skip,
+     * because it asks for "older than this exact row" rather than "rows 20-39
+     * of whatever the list is right now".
+     *
+     * `id` is the tiebreak, not decoration: two posts can share a `created_at`
+     * to the microsecond, and without a second key one of them is unreachable.
+     */
+    cursor?: { createdAt: string; id: string };
   },
-): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
+): Promise<{
+  error: string | null;
+  posts: PostListItem[];
+  hasMore: boolean;
+  /** Pass back as `options.cursor` for the next page. Null when there is no next page. */
+  nextCursor: { createdAt: string; id: string } | null;
+}> {
   const limit = options?.limit ?? SOCIAL_PAGE_SIZE;
   const supabase = createServerSupabaseClient();
 
@@ -93,14 +117,14 @@ export async function fetchPostsPage(
     // feed query below) — this is "give me exactly this post id back",
     // e.g. a notification deep-link, and should resolve regardless of who
     // authored it.
-    if (options.postIds.length === 0) return { error: null, posts: [], hasMore: false };
+    if (options.postIds.length === 0) return { error: null, posts: [], hasMore: false, nextCursor: null };
     const { data, error } = await supabase
       .from("posts")
       .select("id, body, created_at, author_profile_id, is_system")
       .in("id", options.postIds);
     if (error) {
       logError("social.posts.load", error);
-      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false, nextCursor: null };
     }
     const rowById = new Map((data ?? []).map((p) => [p.id, p]));
     // .in() doesn't guarantee the result order matches the input array, so
@@ -126,12 +150,12 @@ export async function fetchPostsPage(
     });
     if (idError) {
       logError("social.posts.teamFeed", idError);
-      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false, nextCursor: null };
     }
     const orderedIds = (idRows ?? []).map((row) => row.post_id);
     hasMore = orderedIds.length > limit;
     const pageIds = orderedIds.slice(0, limit);
-    if (pageIds.length === 0) return { error: null, posts: [], hasMore: false };
+    if (pageIds.length === 0) return { error: null, posts: [], hasMore: false, nextCursor: null };
 
     const { data, error } = await supabase
       .from("posts")
@@ -139,7 +163,7 @@ export async function fetchPostsPage(
       .in("id", pageIds);
     if (error) {
       logError("social.posts.teamFeedHydrate", error);
-      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false, nextCursor: null };
     }
     // .in() does not preserve the input order, and the RPC's ordering (newest
     // first) is the whole point of asking it.
@@ -153,7 +177,7 @@ export async function fetchPostsPage(
     // falling back to the full feed.
     let followedAuthorIds: string[] | null = null;
     if (options?.followingOnly) {
-      if (!viewerProfileId) return { error: null, posts: [], hasMore: false };
+      if (!viewerProfileId) return { error: null, posts: [], hasMore: false, nextCursor: null };
       const { data: followRows } = await supabase
         .from("follows")
         .select("followed_id")
@@ -162,14 +186,30 @@ export async function fetchPostsPage(
       followedAuthorIds = (followRows ?? []).map((f) => f.followed_id);
       // .in("author_profile_id", []) would send a malformed `in.()` filter to
       // PostgREST — short-circuit instead of ever sending that.
-      if (followedAuthorIds.length === 0) return { error: null, posts: [], hasMore: false };
+      if (followedAuthorIds.length === 0) return { error: null, posts: [], hasMore: false, nextCursor: null };
     }
 
     let query = supabase
       .from("posts")
       .select("id, body, created_at, author_profile_id, is_system")
+      // `id` desc is part of the sort, not a flourish: it is what makes the
+      // keyset comparison below a total order, so no post can hide behind
+      // another with an identical timestamp.
       .order("created_at", { ascending: false })
-      .range(offset, offset + limit);
+      .order("id", { ascending: false });
+
+    if (options?.cursor) {
+      // "Strictly older than the last row I showed" — the tuple comparison
+      // (created_at, id) < (cursor.createdAt, cursor.id), written the way
+      // PostgREST expresses it. Immune to rows being inserted while the reader
+      // is paging, which is exactly what offset paging is not.
+      const { createdAt, id } = options.cursor;
+      query = query
+        .or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`)
+        .limit(limit + 1);
+    } else {
+      query = query.range(offset, offset + limit);
+    }
 
     if (options?.fixtureId) {
       query = query.eq("fixture_id", options.fixtureId);
@@ -193,7 +233,7 @@ export async function fetchPostsPage(
     const { data: rows, error } = await query;
     if (error) {
       logError("social.posts.load", error);
-      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false, nextCursor: null };
     }
 
     const allRows = rows ?? [];
@@ -311,9 +351,18 @@ export async function fetchPostsPage(
   const viewerVoteByPost = new Map((viewerVoteRows.data ?? []).map((v) => [v.post_id, v.option_id]));
   const savedPostIds = new Set((saveRows ?? []).map((s) => s.target_id));
 
+  // KN-94: the cursor is the *last row actually served*, so the next request
+  // resumes exactly where this one stopped regardless of what was written in
+  // between. Null when there is no next page, which is what stops a caller
+  // asking for one.
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor =
+    hasMore && lastRow ? { createdAt: lastRow.created_at, id: lastRow.id } : null;
+
   return {
     error: null,
     hasMore,
+    nextCursor,
     posts: pageRows.map((post) => {
       const viewerReactionSummary = viewerReactionByPost.get(post.id) ?? { count: 0, viewerReaction: null };
       const author = authorById.get(post.author_profile_id);
