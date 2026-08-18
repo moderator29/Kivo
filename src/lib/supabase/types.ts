@@ -237,6 +237,69 @@ export type Database = {
         }
         Relationships: []
       }
+      data_anomalies: {
+        Row: {
+          anomaly_type: Database["public"]["Enums"]["data_anomaly_type"]
+          created_at: string
+          detail: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          id: string
+          kivo_entity_id: string | null
+          new_value: Json | null
+          previous_value: Json | null
+          provider: string
+          provider_entity_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sync_run_id: string | null
+        }
+        Insert: {
+          anomaly_type: Database["public"]["Enums"]["data_anomaly_type"]
+          created_at?: string
+          detail: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          id?: string
+          kivo_entity_id?: string | null
+          new_value?: Json | null
+          previous_value?: Json | null
+          provider: string
+          provider_entity_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sync_run_id?: string | null
+        }
+        Update: {
+          anomaly_type?: Database["public"]["Enums"]["data_anomaly_type"]
+          created_at?: string
+          detail?: string
+          entity_type?: Database["public"]["Enums"]["provider_entity_type"]
+          id?: string
+          kivo_entity_id?: string | null
+          new_value?: Json | null
+          previous_value?: Json | null
+          provider?: string
+          provider_entity_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sync_run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_anomalies_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_anomalies_sync_run_id_fkey"
+            columns: ["sync_run_id"]
+            isOneToOne: false
+            referencedRelation: "sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fan_ratings: {
         Row: {
           created_at: string
@@ -715,6 +778,7 @@ export type Database = {
       }
       fixtures: {
         Row: {
+          absence_flagged_at: string | null
           away_score: number | null
           away_score_ht: number | null
           away_team_id: string
@@ -727,12 +791,14 @@ export type Database = {
           kickoff_at: string
           matchday: number | null
           minute_elapsed: number | null
+          provider_last_seen_at: string | null
           season_id: string
           status: Database["public"]["Enums"]["fixture_status"]
           updated_at: string
           venue_id: string | null
         }
         Insert: {
+          absence_flagged_at?: string | null
           away_score?: number | null
           away_score_ht?: number | null
           away_team_id: string
@@ -745,12 +811,14 @@ export type Database = {
           kickoff_at: string
           matchday?: number | null
           minute_elapsed?: number | null
+          provider_last_seen_at?: string | null
           season_id: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
           venue_id?: string | null
         }
         Update: {
+          absence_flagged_at?: string | null
           away_score?: number | null
           away_score_ht?: number | null
           away_team_id?: string
@@ -763,6 +831,7 @@ export type Database = {
           kickoff_at?: string
           matchday?: number | null
           minute_elapsed?: number | null
+          provider_last_seen_at?: string | null
           season_id?: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -1719,6 +1788,145 @@ export type Database = {
           },
         ]
       }
+      support_requests: {
+        Row: {
+          created_at: string
+          handled_at: string | null
+          handled_by: string | null
+          id: string
+          internal_note: string | null
+          message: string
+          profile_id: string | null
+          reply_email: string
+          status: Database["public"]["Enums"]["support_request_status"]
+          topic: Database["public"]["Enums"]["support_request_topic"]
+        }
+        Insert: {
+          created_at?: string
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          internal_note?: string | null
+          message: string
+          profile_id?: string | null
+          reply_email: string
+          status?: Database["public"]["Enums"]["support_request_status"]
+          topic: Database["public"]["Enums"]["support_request_topic"]
+        }
+        Update: {
+          created_at?: string
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          internal_note?: string | null
+          message?: string
+          profile_id?: string | null
+          reply_email?: string
+          status?: Database["public"]["Enums"]["support_request_status"]
+          topic?: Database["public"]["Enums"]["support_request_topic"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_requests_handled_by_fkey"
+            columns: ["handled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_locks: {
+        Row: {
+          acquired_at: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          expires_at: string
+          holder: string | null
+          provider: string
+          sync_run_id: string | null
+          token: string
+        }
+        Insert: {
+          acquired_at?: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          expires_at: string
+          holder?: string | null
+          provider: string
+          sync_run_id?: string | null
+          token: string
+        }
+        Update: {
+          acquired_at?: string
+          entity_type?: Database["public"]["Enums"]["provider_entity_type"]
+          expires_at?: string
+          holder?: string | null
+          provider?: string
+          sync_run_id?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_locks_sync_run_id_fkey"
+            columns: ["sync_run_id"]
+            isOneToOne: false
+            referencedRelation: "sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_run_failures: {
+        Row: {
+          context: Json
+          created_at: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          error_code: string | null
+          error_message: string
+          id: string
+          provider: string
+          provider_entity_id: string
+          resolved_at: string | null
+          sync_run_id: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          error_code?: string | null
+          error_message: string
+          id?: string
+          provider: string
+          provider_entity_id: string
+          resolved_at?: string | null
+          sync_run_id: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          entity_type?: Database["public"]["Enums"]["provider_entity_type"]
+          error_code?: string | null
+          error_message?: string
+          id?: string
+          provider?: string
+          provider_entity_id?: string
+          resolved_at?: string | null
+          sync_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_run_failures_sync_run_id_fkey"
+            columns: ["sync_run_id"]
+            isOneToOne: false
+            referencedRelation: "sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_runs: {
         Row: {
           created_at: string
@@ -1730,6 +1938,7 @@ export type Database = {
           provider: string
           provider_quota_remaining: number | null
           raw_response_sample: Json | null
+          records_failed: number | null
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
@@ -1745,6 +1954,7 @@ export type Database = {
           provider: string
           provider_quota_remaining?: number | null
           raw_response_sample?: Json | null
+          records_failed?: number | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1760,6 +1970,7 @@ export type Database = {
           provider?: string
           provider_quota_remaining?: number | null
           raw_response_sample?: Json | null
+          records_failed?: number | null
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
@@ -1978,11 +2189,41 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_sync_lock: {
+        Args: {
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_holder?: string
+          p_lease_seconds?: number
+          p_provider: string
+          p_sync_run_id?: string
+        }
+        Returns: string
+      }
+      flag_absent_fixtures: {
+        Args: {
+          p_kickoff_from: string
+          p_kickoff_to: string
+          p_provider: string
+          p_run_started_at: string
+        }
+        Returns: number
+      }
       get_activity_streak: {
         Args: { p_profile_id: string }
         Returns: {
           current_streak: number
           longest_streak: number
+        }[]
+      }
+      get_data_anomaly_summary: {
+        Args: { p_days?: number }
+        Returns: {
+          anomaly_type: Database["public"]["Enums"]["data_anomaly_type"]
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          last_seen_at: string
+          provider: string
+          total: number
+          unreviewed: number
         }[]
       }
       get_fan_rating_summary: {
@@ -2094,6 +2335,23 @@ export type Database = {
           username: string
         }[]
       }
+      get_sync_health_summary: {
+        Args: { p_days?: number }
+        Returns: {
+          avg_duration_seconds: number
+          day: string
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          failed: number
+          max_duration_seconds: number
+          partial: number
+          provider: string
+          records_failed: number
+          records_processed: number
+          runs: number
+          skipped: number
+          succeeded: number
+        }[]
+      }
       get_xp_total: { Args: { p_profile_id: string }; Returns: number }
       is_username_available: {
         Args: { p_exclude_profile_id?: string; p_username: string }
@@ -2127,6 +2385,20 @@ export type Database = {
         Returns: undefined
       }
       prune_sync_runs: { Args: { p_older_than_days?: number }; Returns: number }
+      record_data_anomaly: {
+        Args: {
+          p_anomaly_type: Database["public"]["Enums"]["data_anomaly_type"]
+          p_detail: string
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_kivo_entity_id?: string
+          p_new_value?: Json
+          p_previous_value?: Json
+          p_provider: string
+          p_provider_entity_id?: string
+          p_sync_run_id?: string
+        }
+        Returns: string
+      }
       redeem_invite_code: {
         Args: { p_invite_code: string }
         Returns: {
@@ -2136,6 +2408,31 @@ export type Database = {
           name: string
           season_id: string
         }[]
+      }
+      release_sync_lock: {
+        Args: {
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_provider: string
+          p_token: string
+        }
+        Returns: boolean
+      }
+      renew_sync_lock: {
+        Args: {
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_lease_seconds?: number
+          p_provider: string
+          p_token: string
+        }
+        Returns: boolean
+      }
+      resolve_sync_run_failures: {
+        Args: {
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_provider: string
+          p_provider_entity_ids: string[]
+        }
+        Returns: number
       }
       upsert_competition_with_mapping: {
         Args: {
@@ -2186,6 +2483,12 @@ export type Database = {
     Enums: {
       ai_message_role: "system" | "user" | "assistant" | "tool"
       avatar_type: "kivo" | "uploaded"
+      data_anomaly_type:
+        | "score_regression"
+        | "status_regression"
+        | "duplicate_event"
+        | "absent_entity"
+        | "provider_disagreement"
       delivery_channel: "push" | "email" | "sms" | "in_app"
       delivery_status: "pending" | "sent" | "delivered" | "failed"
       fixture_event_type:
@@ -2227,6 +2530,13 @@ export type Database = {
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
       save_target_type: "post" | "team" | "player"
+      support_request_status: "open" | "in_progress" | "closed"
+      support_request_topic:
+        | "sign_in"
+        | "account"
+        | "bug"
+        | "data_correction"
+        | "other"
       sync_status: "running" | "success" | "partial" | "failed" | "skipped"
       transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
@@ -2367,6 +2677,13 @@ export const Constants = {
     Enums: {
       ai_message_role: ["system", "user", "assistant", "tool"],
       avatar_type: ["kivo", "uploaded"],
+      data_anomaly_type: [
+        "score_regression",
+        "status_regression",
+        "duplicate_event",
+        "absent_entity",
+        "provider_disagreement",
+      ],
       delivery_channel: ["push", "email", "sms", "in_app"],
       delivery_status: ["pending", "sent", "delivered", "failed"],
       fixture_event_type: [
@@ -2411,6 +2728,14 @@ export const Constants = {
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
       report_status: ["pending", "reviewing", "actioned", "dismissed"],
       save_target_type: ["post", "team", "player"],
+      support_request_status: ["open", "in_progress", "closed"],
+      support_request_topic: [
+        "sign_in",
+        "account",
+        "bug",
+        "data_correction",
+        "other",
+      ],
       sync_status: ["running", "success", "partial", "failed", "skipped"],
       transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [

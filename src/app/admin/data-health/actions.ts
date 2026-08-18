@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { FOOTBALL_LIVE_POLLING_ENABLED } from "@/lib/football";
 import { syncTodayFixtures } from "@/lib/football/sync";
@@ -33,6 +33,51 @@ export async function triggerFootballSync(): Promise<{ error: string | null; rec
   }
 
   return { error: null, recordsProcessed: result.recordsProcessed };
+}
+
+/**
+ * KIVO_NEXT_GEN KN-95: marks one detected data conflict as looked at.
+ *
+ * Runs on the caller's OWN session, not the service-role client, and that is
+ * the point. `data_anomalies_review_admin` (migration 0056) already encodes
+ * every rule this needs — only a football-data/platform admin may update, and
+ * the WITH CHECK forces `reviewed_by` to be the caller's real profile id, so a
+ * review cannot be attributed to somebody else and cannot be silently cleared.
+ * Going through the service-role client here would bypass all of that and
+ * force this function to re-implement it, which is exactly how the two drift
+ * apart. The role check below is for the error message, not for security.
+ */
+export async function markAnomalyReviewed(anomalyId: string): Promise<{ error: string | null }> {
+  const profile = await getOrCreateProfile();
+  if (!profile || !canManageFootballData(profile.role)) {
+    return { error: "You don't have football data admin access." };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("data_anomalies")
+    .update({ reviewed_at: new Date().toISOString(), reviewed_by: profile.id })
+    .eq("id", anomalyId)
+    .is("reviewed_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to mark anomaly reviewed", error);
+    return { error: "Something went wrong. Try again." };
+  }
+  // No row came back: either the id does not exist, or somebody else reviewed
+  // it first. Neither is an error worth showing — the anomaly is reviewed
+  // either way, which is what the admin wanted.
+  if (!data) {
+    revalidatePath("/admin/data-health");
+    return { error: null };
+  }
+
+  await logAudit(profile.id, "data_anomaly.reviewed", "data_anomaly", { anomaly_id: anomalyId });
+
+  revalidatePath("/admin/data-health");
+  return { error: null };
 }
 
 /** Shared auth + real-provider guard for the on-demand sync actions below —

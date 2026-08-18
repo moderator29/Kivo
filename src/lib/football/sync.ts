@@ -7,6 +7,17 @@ import type { FixtureStatus, NormalizedFixture, NormalizedTeam } from "./types";
 import { notifyFixtureStatusChange, type FixtureStatusChangeInput } from "./match-notifications";
 import { createAsyncMemo, createKeyedSerializer, mapWithConcurrency } from "@/lib/concurrency";
 import { getSyncedCompetitionProviderIds } from "./competitions-config";
+import {
+  claimSyncLock,
+  flagAbsentFixtures,
+  markFixturesSeen,
+  recordAnomaly,
+  recordEntityFailures,
+  releaseSyncLock,
+  renewSyncLockIfNeeded,
+  resolveEntityFailures,
+  type EntityFailure,
+} from "./sync-instrumentation";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -320,39 +331,67 @@ async function upsertFixture(
   refs: ResolvedFixtureRefs,
   previousStatus: DbFixtureStatus | null,
   previousScores: { homeScore: number | null; awayScore: number | null } | null,
+  syncRunId: string,
 ): Promise<FixtureStatusChangeInput | null> {
   // RECOMMENDATIONS.md item 303 ("conflict detection"): a same-provider
   // sanity check, not a second-provider merge (there's no second source to
   // reconcile against yet — see DECISIONS.md's provider-failover entry).
   // Flags, never blocks: the write below still lands either way, since a
   // false positive here (e.g. a legitimate admin correction) shouldn't drop
-  // real provider data. This only makes an anomaly visible in server logs
-  // (item 204's existing "every failure path is console.error" convention)
-  // instead of it landing silently.
+  // real provider data.
+  //
+  // KIVO_NEXT_GEN KN-95: the *detection* below is unchanged; where it lands
+  // is. It used to exist only as a console.warn, which made the anomaly
+  // visible to whoever happened to be tailing a server log and to nobody
+  // else — so "3 fixtures had a score regress this week", the sentence the
+  // founding brief's conflict detection is meant to be able to say, could not
+  // be said. Each detection is collected here and written to `data_anomalies`
+  // after the upsert (see below), carrying both values that disagreed. The
+  // console line stays: it is what a developer watching a live sync reads.
+  const anomalies: {
+    type: Database["public"]["Enums"]["data_anomaly_type"];
+    detail: string;
+    previous: Json;
+    next: Json;
+  }[] = [];
+  const fixtureLabel = `${fixture.homeTeam.name} v ${fixture.awayTeam.name}`;
+
   if (previousScores) {
     if (
       fixture.homeScore !== null &&
       previousScores.homeScore !== null &&
       fixture.homeScore < previousScores.homeScore
     ) {
-      console.warn(
-        `Football sync anomaly: ${provider}:${fixture.providerId} home score decreased ${previousScores.homeScore} -> ${fixture.homeScore} (${fixture.homeTeam.name} v ${fixture.awayTeam.name})`,
-      );
+      anomalies.push({
+        type: "score_regression",
+        detail: `Home score decreased ${previousScores.homeScore} -> ${fixture.homeScore} (${fixtureLabel})`,
+        previous: { home_score: previousScores.homeScore },
+        next: { home_score: fixture.homeScore },
+      });
     }
     if (
       fixture.awayScore !== null &&
       previousScores.awayScore !== null &&
       fixture.awayScore < previousScores.awayScore
     ) {
-      console.warn(
-        `Football sync anomaly: ${provider}:${fixture.providerId} away score decreased ${previousScores.awayScore} -> ${fixture.awayScore} (${fixture.homeTeam.name} v ${fixture.awayTeam.name})`,
-      );
+      anomalies.push({
+        type: "score_regression",
+        detail: `Away score decreased ${previousScores.awayScore} -> ${fixture.awayScore} (${fixtureLabel})`,
+        previous: { away_score: previousScores.awayScore },
+        next: { away_score: fixture.awayScore },
+      });
     }
   }
   if (previousStatus === "finished" && toDbFixtureStatus(fixture.status) !== "finished") {
-    console.warn(
-      `Football sync anomaly: ${provider}:${fixture.providerId} status regressed from finished to ${fixture.status} (${fixture.homeTeam.name} v ${fixture.awayTeam.name})`,
-    );
+    anomalies.push({
+      type: "status_regression",
+      detail: `Status regressed from finished to ${fixture.status} (${fixtureLabel})`,
+      previous: { status: previousStatus },
+      next: { status: toDbFixtureStatus(fixture.status) },
+    });
+  }
+  for (const anomaly of anomalies) {
+    console.warn(`Football sync anomaly: ${provider}:${fixture.providerId} ${anomaly.detail}`);
   }
   // p_venue_id/p_home_score/p_away_score/p_home_score_ht/p_away_score_ht/
   // p_minute_elapsed are optional RPC args for the same reason as
@@ -385,6 +424,24 @@ async function upsertFixture(
 
   const { data: kivoFixtureId, error } = await supabase.rpc("upsert_fixture_with_mapping", args);
   if (error) throw error;
+
+  // Persisted after the write, never before: an anomaly row pointing at a
+  // fixture whose write then failed would be a record of something that never
+  // happened. recordAnomaly is best-effort by contract (see its module doc) —
+  // failing to log a conflict must not fail the sync that detected it.
+  for (const anomaly of anomalies) {
+    await recordAnomaly(supabase, {
+      anomalyType: anomaly.type,
+      provider,
+      entityType: "fixture",
+      detail: anomaly.detail,
+      syncRunId,
+      providerEntityId: fixture.providerId,
+      kivoEntityId: kivoFixtureId,
+      previousValue: anomaly.previous,
+      newValue: anomaly.next,
+    });
+  }
 
   // RECOMMENDATIONS.md notification items: kickoff/full-time, described by the
   // exact status write this function just made, using the real KIVO fixture id
@@ -514,6 +571,47 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
   }
 
   /**
+   * KIVO_NEXT_GEN KN-82: two overlapping runs used to be prevented only by the
+   * cron route's "is there a `running` cron row from the last two minutes"
+   * query — a heuristic, not a lock, and one KN-4 showed a stuck row could
+   * poison. This is the real thing: a lease on (provider, entity_type), held
+   * for the duration of the run and released in `finally`.
+   *
+   * It also covers a case the old heuristic never did. That query only ever
+   * looked at `trigger_source = 'cron'` rows, so an admin clicking "Sync now"
+   * while the worker was mid-run collided freely — both spending provider
+   * quota on the same fixtures. The lease is keyed on the work, not on who
+   * asked for it, so manual and automated runs now exclude each other too.
+   *
+   * A refused claim is a first-class outcome, recorded as a `skipped` run with
+   * a plain-English reason (the same convention the cron route already uses
+   * for every no-op it makes), not an error.
+   */
+  // Captured once, before any work: KN-86's absence check compares each
+  // fixture's `provider_last_seen_at` against the moment this run began, so it
+  // must not drift as the run progresses.
+  const runStartedAt = new Date().toISOString();
+
+  const lock = await claimSyncLock(supabase, provider.name, "fixture", {
+    holder: triggerSource,
+    syncRunId: syncRun.id,
+  });
+
+  if (!lock) {
+    await supabase
+      .from("sync_runs")
+      .update({
+        status: "skipped",
+        finished_at: new Date().toISOString(),
+        records_processed: 0,
+        records_failed: 0,
+        error_message: "Skipped: another fixtures sync run currently holds the lock for this provider.",
+      })
+      .eq("id", syncRun.id);
+    return { status: "succeeded", recordsProcessed: 0, error: undefined };
+  }
+
+  /**
    * KIVO_NEXT_GEN KN-4: the run row above is inserted as `running`, and before
    * this it was only ever updated on two paths — a `getFixturesByDate` failure,
    * and a clean finish. Everything in between could throw straight out of the
@@ -632,9 +730,30 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
     }
 
     const errors: string[] = [];
+    /**
+     * KIVO_NEXT_GEN KN-81. `errors` above still builds the truncated,
+     * human-readable `error_message` blob, because that is what an admin skims.
+     * This is the queryable half: one row per failed entity, so "fixture 47 of
+     * 300 failed" becomes a retryable list instead of a sentence that gets cut
+     * off after the twentieth failure and drops the rest entirely.
+     */
+    const entityFailures: EntityFailure[] = [];
+    /** Provider ids that actually landed this run — used for two things after
+     * the loop: closing previously-open failures for those same entities
+     * (KN-81), and knowing which fixtures the provider genuinely reported so
+     * the rest can be considered for an absence flag (KN-86). */
+    const succeededProviderIds: string[] = [];
+    const seenFixtureIds: string[] = [];
+    /** Set if this run's lease is taken over mid-flight, which can only happen
+     * if the run outlived its lease. Continuing past that point would mean two
+     * workers writing the same fixtures — exactly what the lease exists to
+     * stop — so the remaining fixtures are abandoned and the run is honest
+     * about being partial. */
+    let lostLease = false;
     const resolveSeason = createSeasonResolver(supabase);
 
     await mapWithConcurrency(fixtures, FIXTURE_WRITE_CONCURRENCY, async (fixture) => {
+      if (lostLease) return;
       try {
         const competitionId = await upsertCompetition(
           supabase,
@@ -669,28 +788,117 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
           },
           previousStatus,
           previousScores,
+          syncRun.id,
         );
-        if (notification) pendingNotifications.push(notification);
+        if (notification) {
+          pendingNotifications.push(notification);
+          seenFixtureIds.push(notification.fixtureId);
+        }
+        succeededProviderIds.push(fixture.providerId);
         processed += 1;
+
+        // A no-op until the lease is half spent, then one round trip to extend
+        // it. False means somebody else took the lease over after it expired,
+        // and this run must stop writing rather than race them.
+        if (!(await renewSyncLockIfNeeded(supabase, lock))) lostLease = true;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`Football sync: failed to sync fixture ${fixture.provider}:${fixture.providerId}`, err);
         errors.push(
           `${fixture.provider}:${fixture.providerId} (${fixture.homeTeam.name} v ${fixture.awayTeam.name}): ${message}`,
         );
+        entityFailures.push({
+          providerEntityId: fixture.providerId,
+          message,
+          // PostgrestError carries a SQLSTATE on `code`; a thrown Error does
+          // not. Read it structurally rather than parsing the message.
+          code: typeof err === "object" && err !== null && "code" in err ? String(err.code) : null,
+          label: `${fixture.homeTeam.name} v ${fixture.awayTeam.name}`,
+        });
       }
     });
 
+    // KN-81: close failures for entities a later run genuinely succeeded on,
+    // and open a row for each one that failed this time. Both are single
+    // statements for the whole run, not a write per entity.
+    await Promise.all([
+      resolveEntityFailures(supabase, {
+        provider: provider.name,
+        entityType: "fixture",
+        providerEntityIds: succeededProviderIds,
+      }),
+      recordEntityFailures(supabase, {
+        syncRunId: syncRun.id,
+        provider: provider.name,
+        entityType: "fixture",
+        failures: entityFailures,
+      }),
+      markFixturesSeen(supabase, seenFixtureIds),
+    ]);
+
+    /**
+     * KN-86. Nothing ever noticed a fixture the provider stopped reporting: a
+     * postponed-then-rescheduled match kept its last-known status on /matches
+     * indefinitely. This flags them for admin review — and only flags, because
+     * absence from one response is a question, not a verdict, and an
+     * auto-delete here would destroy real rows on a provider hiccup.
+     *
+     * Three conditions before it runs at all, each removing a class of false
+     * positive rather than tuning a threshold:
+     *   - the run must have processed something. A run that returned nothing
+     *     is evidence about the provider, not about any individual fixture.
+     *   - the run must not have lost its lease, or "absent" would really mean
+     *     "this run stopped early".
+     *   - the window is only the UTC day this run actually asked about
+     *     (`todayIsoDate`), never a fixture the run never looked for.
+     *
+     * The SQL adds the rest (previously-seen only, pre-final statuses only,
+     * this provider's mappings only) — see `flag_absent_fixtures` in migration
+     * 0056. One known and accepted limitation: if
+     * FOOTBALL_SYNC_COMPETITION_IDS is narrowed after fixtures were already
+     * synced, the now-unscoped ones stop being reported and will be flagged.
+     * That is arguably correct — KIVO really has stopped receiving updates for
+     * them — and it is a flag for a human, not an automatic change.
+     */
+    if (processed > 0 && !lostLease) {
+      const dayStart = new Date(`${todayIsoDate()}T00:00:00.000Z`);
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const flagged = await flagAbsentFixtures(supabase, {
+        provider: provider.name,
+        runStartedAt: runStartedAt,
+        kickoffFrom: dayStart.toISOString(),
+        kickoffTo: dayEnd.toISOString(),
+      });
+      if (flagged > 0) {
+        console.warn(`Football sync: flagged ${flagged} fixture(s) the provider stopped reporting today`);
+      }
+    }
+
     const hadFixtures = fixtures.length > 0;
     const dbStatus: Database["public"]["Enums"]["sync_status"] =
-      errors.length === 0 ? "success" : hadFixtures && processed === 0 ? "failed" : "partial";
+      lostLease
+        ? "partial"
+        : errors.length === 0
+          ? "success"
+          : hadFixtures && processed === 0
+            ? "failed"
+            : "partial";
     // Keep this bounded — a bad day shouldn't write an unbounded error_message blob.
-    const errorMessage = errors.length > 0 ? errors.slice(0, 20).join("; ") : null;
+    // The full, untruncated list now lives in sync_run_failures (KN-81); this
+    // stays the skimmable summary it always was.
+    const errorMessage = lostLease
+      ? "Stopped early: this run's sync lock was taken over by another run after its lease expired."
+      : errors.length > 0
+        ? errors.slice(0, 20).join("; ")
+        : null;
 
     await finalizeRun({
       status: dbStatus,
       last_synced_at: new Date().toISOString(),
       records_processed: processed,
+      // KN-88: null would have been indistinguishable from "no failures", so
+      // this is written on every terminal path that actually counted.
+      records_failed: entityFailures.length,
       error_message: errorMessage,
     });
 
@@ -712,6 +920,12 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
       records_processed: processed,
       error_message: "Sync ended without recording a terminal status.",
     });
+    // KN-82: released here rather than on the success path, so a crash, a
+    // throw, or a returned failure all free the lease immediately instead of
+    // making the next run wait out the full lease. The lease's own expiry
+    // remains the backstop for the one case this cannot cover — the process
+    // being killed outright.
+    await releaseSyncLock(supabase, lock);
   }
 
   // Deliberately after the run row is terminal — see dispatchStatusNotifications.

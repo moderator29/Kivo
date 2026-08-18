@@ -37,9 +37,11 @@ import { logError } from "@/lib/log";
  *   3. A real provider must actually be configured (mirrors
  *      requireFootballDataAccess in admin/data-health/actions.ts) — never run
  *      against nothing just because a cron fired.
- *   4. Dedup — is a cron-triggered run already in flight? (The prerequisite
- *      docs/LIVE_DATA.md flagged as missing: "dedup logic proven under
- *      concurrent/overlapping worker runs — not built".)
+ *   4. Dedup — does any run (cron or admin) currently hold the fixtures sync
+ *      lease? (The prerequisite docs/LIVE_DATA.md flagged as missing: "dedup
+ *      logic proven under concurrent/overlapping worker runs — not built".
+ *      KN-82 replaced the original two-minute heuristic with a real lease;
+ *      see step 3 in the code below.)
  *   5. Quota floor — is there enough of today's provider quota left to
  *      spend automatically, unsupervised? (See QUOTA_SAFETY_FLOOR below.)
  *   6. Is anything in `fixtures` actually live/halftime, or scheduled to kick
@@ -82,7 +84,6 @@ const QUOTA_SAFETY_FLOOR = 10;
  * very last requests of the day.
  */
 
-const DEDUP_WINDOW_MINUTES = 2;
 const IMMINENT_WINDOW_MINUTES = 10;
 /**
  * A 'scheduled' fixture whose kickoff has already passed by more than this
@@ -182,21 +183,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, decision: "no_provider_configured" });
   }
 
-  // 3. Dedup — the prerequisite docs/LIVE_DATA.md flagged as missing. Looks
-  // for a cron-triggered run this same route already started that's still
-  // 'running' and started recently; an orphaned 'running' row from a crashed
-  // invocation ages out of this window on its own after DEDUP_WINDOW_MINUTES,
-  // so there's no separate cleanup job needed for a stuck row.
-  const dedupWindowStart = new Date(Date.now() - DEDUP_WINDOW_MINUTES * 60_000).toISOString();
-  const { data: runningRun, error: dedupError } = await supabase
-    .from("sync_runs")
-    .select("id, started_at")
+  // 3. Dedup. This used to be a heuristic: "is there a cron-triggered
+  // sync_runs row with status 'running' from the last two minutes". KN-82 and
+  // KN-4 between them show why that was not enough — a run killed mid-flight
+  // leaves a permanently-'running' row that suppresses the next real run until
+  // it ages out, and the query only ever looked at cron rows, so an admin
+  // clicking "Sync now" and this worker could collide freely and spend the
+  // same quota twice.
+  //
+  // The real answer is the lease `syncTodayFixtures` now takes (migration
+  // 0056): one row per (provider, entity_type), with an expiry, held by
+  // whoever is actually running regardless of who triggered them. Reading it
+  // here is a precise question — "does an unexpired lease exist" — and lets
+  // this route decline *before* creating a run row, rather than starting one
+  // that immediately skips.
+  //
+  // `syncTodayFixtures` still claims the lease itself; this check is not the
+  // guarantee, it is the cheap early exit. The guarantee is the atomic claim,
+  // which is what makes the race between this read and that claim harmless.
+  const { data: heldLock, error: dedupError } = await supabase
+    .from("sync_locks")
+    .select("holder, acquired_at, expires_at")
+    .eq("provider", providerLabel)
     .eq("entity_type", "fixture")
-    .eq("trigger_source", "cron")
-    .eq("status", "running")
-    .gte("started_at", dedupWindowStart)
-    .order("started_at", { ascending: false })
-    .limit(1)
+    .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
   if (dedupError) {
@@ -208,10 +218,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, decision: "dedup_check_failed" }, { status: 500 });
   }
 
-  if (runningRun) {
+  if (heldLock) {
     await logSkippedRun(supabase, {
       provider: providerLabel,
-      reason: `Skipped: another cron sync run is already in progress (sync_runs id ${runningRun.id}, started ${runningRun.started_at}).`,
+      reason: `Skipped: a ${heldLock.holder ?? "unknown"} sync run holds the fixtures lock (since ${heldLock.acquired_at}, lease until ${heldLock.expires_at}).`,
     });
     return NextResponse.json({ ok: true, decision: "already_running" });
   }

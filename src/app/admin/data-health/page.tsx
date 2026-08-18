@@ -12,6 +12,7 @@ import { ScoreFantasyGameweekButton } from "@/components/admin/score-fantasy-gam
 import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
 import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers-button";
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
+import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
@@ -615,6 +616,8 @@ export default async function DataHealthPage() {
           </div>
         )}
       </div>
+
+      <SyncReliabilityPanel />
 
       <DataQualityPanel />
     </div>

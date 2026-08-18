@@ -8,6 +8,12 @@ import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
 import { notifyFixtureEvent } from "./match-notifications";
 import { getKivoSystemProfileId, insertSystemEventPost } from "./match-room-system-posts";
+import {
+  recordAnomaly,
+  recordEntityFailures,
+  resolveEntityFailures,
+  type EntityFailure,
+} from "./sync-instrumentation";
 import type {
   NormalizedFixtureStatistics,
   NormalizedLineups,
@@ -83,6 +89,54 @@ async function upsertFixtureEvent(
   }
 
   const { data, error } = await supabase.from("fixture_events").insert(payload).select("id").single();
+
+  /**
+   * KIVO_NEXT_GEN KN-87. Dedup used to rest entirely on `provider_mappings`,
+   * which holds exactly as long as the provider's event ids are stable — and
+   * stops holding the moment a provider re-issues ids after a correction. Then
+   * the same goal exists twice and every count downstream (goal timing, the
+   * discipline table, fantasy scoring, the rating engine) is quietly wrong.
+   *
+   * Migration 0056 adds a unique index on what actually identifies the event in
+   * the real world: fixture, team, type, minute, added time, and both players.
+   * A 23505 here therefore means "this event is already recorded under a
+   * different provider id" — which is a successful outcome, not a failure. It
+   * maps the new provider id onto the row that already exists, so the next
+   * sync takes the cheap update branch above, and records the collision as a
+   * real anomaly rather than a log line, because a provider re-keying its
+   * events is exactly the kind of thing Data Health should be able to show.
+   *
+   * The notification and Match Room post below are deliberately skipped on
+   * this path: the event was already announced when it was first inserted, and
+   * announcing it again because the provider changed an id would be a
+   * notification about nothing.
+   */
+  if (error?.code === "23505") {
+    const { data: existingByNaturalKey } = await supabase
+      .from("fixture_events")
+      .select("id")
+      .eq("fixture_id", fixtureId)
+      .eq("team_id", teamId)
+      .eq("event_type", event.eventType)
+      .eq("minute", event.minute)
+      .limit(1)
+      .maybeSingle();
+
+    await recordAnomaly(supabase, {
+      anomalyType: "duplicate_event",
+      provider: providerName,
+      entityType: "fixture_event",
+      detail: `Provider re-reported an already-recorded ${event.eventType} at minute ${event.minute} under a new id (${event.providerId}).`,
+      providerEntityId: event.providerId,
+      kivoEntityId: existingByNaturalKey?.id ?? null,
+    });
+
+    if (existingByNaturalKey) {
+      await createMapping(supabase, providerName, "fixture_event", event.providerId, existingByNaturalKey.id);
+    }
+    return;
+  }
+
   if (error || !data) throw error ?? new Error("Failed to insert fixture event");
 
   await createMapping(supabase, providerName, "fixture_event", event.providerId, data.id);
@@ -466,6 +520,11 @@ export async function syncFixtureDetails(
       finished_at: finishedAt,
       last_synced_at: finishedAt,
       records_processed: processed,
+      // KIVO_NEXT_GEN KN-88: previously a run that did 8 of 10 and a run that
+      // did 8 of 8 were indistinguishable in this table — `records_processed`
+      // counted successes and nothing counted the rest. `unresolved` is
+      // already the real list of things that did not work; this is its length.
+      records_failed: unresolved.length,
       error_message: errorMessage,
       // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
       // not an estimate — see ApiFootballProvider.getQuotaRemaining().
@@ -553,6 +612,11 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
 
   let processed = 0;
   const errors: string[] = [];
+  // KN-81: the retryable half of the same information `errors` renders as
+  // prose — one row per team that failed, so a standings run that lost three
+  // clubs can be retried for those three instead of re-fetching the table.
+  const entityFailures: EntityFailure[] = [];
+  const succeededProviderIds: string[] = [];
 
   for (const row of rows) {
     try {
@@ -574,12 +638,33 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
       );
       if (error) throw error;
       processed += 1;
+      succeededProviderIds.push(row.team.providerId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Standings sync: failed to upsert standing for team ${provider.name}:${row.team.providerId}`, err);
       errors.push(`team ${provider.name}:${row.team.providerId} (${row.team.name}): ${message}`);
+      entityFailures.push({
+        providerEntityId: row.team.providerId,
+        message,
+        code: typeof err === "object" && err !== null && "code" in err ? String(err.code) : null,
+        label: row.team.name,
+      });
     }
   }
+
+  await Promise.all([
+    resolveEntityFailures(supabase, {
+      provider: provider.name,
+      entityType: "team",
+      providerEntityIds: succeededProviderIds,
+    }),
+    recordEntityFailures(supabase, {
+      syncRunId: syncRun.id,
+      provider: provider.name,
+      entityType: "team",
+      failures: entityFailures,
+    }),
+  ]);
 
   const finishedAt = new Date().toISOString();
   const hadRows = rows.length > 0;
@@ -594,6 +679,7 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
       finished_at: finishedAt,
       last_synced_at: finishedAt,
       records_processed: processed,
+      records_failed: entityFailures.length, // KN-88, same reasoning as syncFixtureDetails above
       error_message: errorMessage,
       // RECOMMENDATIONS.md item 53: the provider's own remaining-quota count,
       // not an estimate — see ApiFootballProvider.getQuotaRemaining().
