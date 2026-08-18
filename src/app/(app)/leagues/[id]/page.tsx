@@ -9,6 +9,7 @@ import { canManageFootballData } from "@/lib/admin";
 import { triggerStandingsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
@@ -134,12 +135,15 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           // every stat column as part of one giant link's name is worse, not
           // better.
           <div className="kivo-glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[26rem] border-collapse text-xs">
+            <table className="w-full min-w-[34rem] border-collapse text-xs">
               <thead>
                 <tr className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   <th scope="col" className="px-3 py-2 text-left font-semibold">#</th>
                   <th scope="col" className="py-2 text-left font-semibold">Team</th>
                   <th scope="col" className="py-2 text-right font-semibold">P</th>
+                  <th scope="col" className="py-2 text-right font-semibold">W</th>
+                  <th scope="col" className="py-2 text-right font-semibold">D</th>
+                  <th scope="col" className="py-2 text-right font-semibold">L</th>
                   <th scope="col" className="py-2 text-right font-semibold">GD</th>
                   <th scope="col" className="px-3 py-2 text-right font-semibold">Pts</th>
                 </tr>
@@ -154,11 +158,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
                           href={`/teams/${row.team.id}`}
                           className="flex items-center gap-2 truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
                         >
-                          {row.team.crest_url ? (
-                            <Image src={row.team.crest_url} alt="" width={16} height={16} className="shrink-0 object-contain" />
-                          ) : (
-                            <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-                          )}
+                          <TeamCrest crestUrl={row.team.crest_url} name={row.team.name} size={16} />
                           <span className="truncate">{row.team.name}</span>
                         </Link>
                       ) : (
@@ -169,6 +169,9 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
                       )}
                     </td>
                     <td className="py-2 text-right text-foreground-muted">{row.played}</td>
+                    <td className="py-2 text-right text-foreground-muted">{row.won}</td>
+                    <td className="py-2 text-right text-foreground-muted">{row.drawn}</td>
+                    <td className="py-2 text-right text-foreground-muted">{row.lost}</td>
                     <td className="py-2 text-right text-foreground-muted">{row.goals_for - row.goals_against}</td>
                     <td className="px-3 py-2 text-right font-semibold text-foreground">{row.points}</td>
                   </tr>

@@ -5,6 +5,7 @@ import { positionGroup, type PositionGroup } from "@/app/(app)/fantasy/fantasy-r
 import { escapeLikePattern } from "@/lib/text";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { getOrCreateProfile } from "@/lib/profile";
+import { RESULTS_LIMIT } from "./constants";
 
 export type PlayerSearchResult = {
   id: string;
@@ -14,8 +15,6 @@ export type PlayerSearchResult = {
   teamName: string | null;
   photoUrl: string | null;
 };
-
-const RESULTS_LIMIT = 100;
 
 // Mirrors searchFantasyPlayers' DB-level position OR-filter in
 // src/app/(app)/fantasy/actions.ts exactly (same free-text `position` column,
@@ -46,7 +45,7 @@ export async function searchPlayers(
   query: string,
   position: PositionGroup | "All",
   teamId: string | "All",
-): Promise<{ error: string | null; players: PlayerSearchResult[] }> {
+): Promise<{ error: string | null; players: PlayerSearchResult[]; truncated: boolean }> {
   // RECOMMENDATIONS.md item 198/199: /players is guest-viewable (see
   // README's "(app)" description), so this is reachable by unauthenticated
   // callers the same way searchPlatform is — keyed by profile when signed
@@ -54,7 +53,7 @@ export async function searchPlayers(
   const profile = await getOrCreateProfile();
   const rateLimitKey = profile ? `user:${profile.id}` : `ip:${await getClientIp()}`;
   const rateLimit = await checkRateLimit(rateLimitKey, "search_players", 30, 60);
-  if (!rateLimit.ok) return { error: rateLimit.error, players: [] };
+  if (!rateLimit.ok) return { error: rateLimit.error, players: [], truncated: false };
 
   const supabase = createServerSupabaseClient();
 
@@ -71,7 +70,7 @@ export async function searchPlayers(
   const { data: players, error } = await request.limit(RESULTS_LIMIT);
   if (error) {
     console.error("Failed to search players", error);
-    return { error: "Couldn't load players. Try again.", players: [] };
+    return { error: "Couldn't load players. Try again.", players: [], truncated: false };
   }
 
   // The ilike OR above is a coarse push-down (keeps the position filter in
@@ -79,8 +78,14 @@ export async function searchPlayers(
   // drop any false positives it let through, same two-step as fantasy's.
   const filtered = (players ?? []).filter((p) => position === "All" || positionGroup(p.position) === position);
 
+  // Hitting the raw (pre-classifier) row count means the DB query itself was
+  // cut off by `.limit()` — there may be more real matches beyond it, even
+  // if the classifier above then drops some of these RESULTS_LIMIT rows.
+  const truncated = (players ?? []).length === RESULTS_LIMIT;
+
   return {
     error: null,
+    truncated,
     players: filtered.map((p) => ({
       id: p.id,
       name: p.known_as ?? p.full_name,

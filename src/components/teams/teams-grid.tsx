@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Image from "next/image";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Shield } from "lucide-react";
+import { Search } from "lucide-react";
 import { StaggeredList } from "@/components/ui/staggered-list";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
 import { loadMoreTeams, type TeamListItem } from "@/app/(app)/teams/actions";
 
@@ -13,11 +13,19 @@ import { loadMoreTeams, type TeamListItem } from "@/app/(app)/teams/actions";
  * `loadMoreTeams` (offset-based, not true infinite scroll — RECOMMENDATIONS
  * item 112). Existing tiles keep their React key across a load, so only the
  * newly-appended tiles play the FadeIn entrance.
+ *
+ * The name filter below is a plain client-side substring match over
+ * whatever page(s) are already loaded — finding a team late in the alphabet
+ * used to mean repeated "Load more" clicks (audit item 5). Filtering
+ * doesn't fetch anything itself, so a team past the loaded pages still
+ * needs a "Load more" click before it can match; that's an accepted
+ * trade-off for not standing up a new server action here.
  */
 export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: TeamListItem[]; initialHasMore: boolean }) {
   const [teams, setTeams] = useState(initialTeams);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const [loading, startLoading] = useTransition();
 
   function handleLoadMore() {
@@ -33,30 +41,45 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
     });
   }
 
+  const filteredTeams = useMemo(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return teams;
+    return teams.filter((team) => [team.name, team.shortName, team.country].some((field) => field?.toLowerCase().includes(trimmed)));
+  }, [teams, query]);
+
   return (
     <div className="flex flex-col gap-4">
-      <StaggeredList
-        items={teams}
-        keyExtractor={(team) => team.id}
-        delay={(index) => staggerDelay(index % 60, 0.03)}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3"
-        renderItem={(team) => (
-          <Link
-            href={`/teams/${team.id}`}
-            className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-          >
-            {team.crestUrl ? (
-              <Image src={team.crestUrl} alt={team.name} width={36} height={36} className="h-9 w-9 object-contain" />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5">
-                <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-              </div>
-            )}
-            <span className="truncate text-xs font-semibold text-foreground">{team.shortName ?? team.name}</span>
-            {team.country && <span className="truncate text-[11px] text-foreground-subtle">{team.country}</span>}
-          </Link>
-        )}
-      />
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter loaded teams…"
+          aria-label="Filter teams"
+          className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+        />
+      </div>
+
+      {filteredTeams.length === 0 ? (
+        <p className="py-10 text-center text-sm text-foreground-muted">No loaded teams match &quot;{query}&quot;.</p>
+      ) : (
+        <StaggeredList
+          items={filteredTeams}
+          keyExtractor={(team) => team.id}
+          delay={(index) => staggerDelay(index % 60, 0.03)}
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+          renderItem={(team) => (
+            <Link
+              href={`/teams/${team.id}`}
+              className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            >
+              <TeamCrest crestUrl={team.crestUrl} name={team.name} size={36} />
+              <span className="truncate text-xs font-semibold text-foreground">{team.shortName ?? team.name}</span>
+              {team.country && <span className="truncate text-[11px] text-foreground-subtle">{team.country}</span>}
+            </Link>
+          )}
+        />
+      )}
 
       {error && (
         <p className="text-center text-xs text-critical" role="status" aria-live="polite">
