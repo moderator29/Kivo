@@ -37,8 +37,10 @@ dead code left behind. Rate limiting for the free-tier quota is real (`x-ratelim
 parsed and surfaced on Data Health, item 53), not estimated.
 
 **Auth and data-access boundaries are consistently RLS-first.** 89 `create policy` statements
-across 43 migrations, Clerk as the sole identity authority with a real, idempotent webhook sync,
-and — notably — guest-visible surfaces are handled correctly via narrow `SECURITY DEFINER` RPCs
+across 43 migrations, a single identity authority resolved through one `SECURITY DEFINER`
+indirection helper (`private.current_profile_id()`) rather than by policies reading an identity
+column directly — which is what made the 2026-08-18 Clerk→Supabase-Auth swap a six-policy change
+instead of a fifty-policy one — and, notably, guest-visible surfaces are handled correctly via narrow `SECURITY DEFINER` RPCs
 (`get_public_profiles`, `get_public_profile_by_username`, `get_most_followed_teams`,
 `get_prediction_leaderboard`) rather than by loosening the base `profiles_select_own_or_admin`
 policy. That's the harder, more correct way to solve "guests need to see usernames," and it's the

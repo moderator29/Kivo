@@ -44,6 +44,8 @@ Event-driven (goal, kickoff, lineups, HT/FT, red card, penalty, transfer, milest
 
 ## Authentication strategy understood (per your update — this supersedes the PDF's "Supabase Auth" instruction)
 
+> **SUPERSEDED 2026-08-18.** This section is kept as a record of what was understood and built at the time. It is no longer how KIVO works: Clerk was removed entirely and auth moved to Supabase Auth with email one-time codes, which restores the original PDF instruction this section overrode. See `DECISIONS.md`, "Auth re-platformed", for the reasoning and the real costs. Everything below describes the previous architecture.
+
 **Clerk is the identity authority. Supabase is application data only.** Clerk owns signup/signin, email, X/Google/Apple, sessions, security. Supabase's native third-party auth integration (JWKS-based, trusts Clerk-issued JWTs directly — **not** the deprecated shared-secret JWT-template approach) lets Clerk session tokens authorize Postgres/Storage/Realtime. RLS policies key off `auth.jwt() ->> 'sub'` (the Clerk user ID). `profiles.clerk_user_id` is the single link between the two systems — no duplicated competing identity data. Admin auth also runs through Clerk + a KIVO role table, verified server-side.
 
 ## API strategy understood

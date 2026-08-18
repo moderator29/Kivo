@@ -12,23 +12,19 @@ This is the plain-language version, audited 2026-08-15 by tracing every code pat
 | `ANTHROPIC_API_KEY` | **Instantly works.** `isAiConfigured()` is the single gate checked by the `/ai` page (swaps from its Coming Soon state to the real chat UI) and by `/api/ai/chat` (returns a real streamed, grounded Claude response instead of a 503). There is no leftover stale/mock AI response anywhere — every code path that talks to Anthropic goes through `getAnthropicClient()`, which itself refuses to run without the key. |
 | `THE_SPORTS_DB_API_KEY` | **Instantly works, but only if `FOOTBALL_DATA_PROVIDER=thesportsdb` is also set.** `getFootballDataProvider()` defaults to API-Football; TheSportsDB is a config-selectable alternative provider (`src/lib/football/providers/thesportsdb.ts`), not a fallback that activates automatically. See `docs/PROVIDER_ABSTRACTION.md` for what it does and doesn't support on the free tier. |
 
-## ⚠️ One manual step only the founder can complete
+## ✅ No manual dashboard step is required any more
 
-Supabase's native third-party auth integration (Clerk JWTs authorizing Postgres/RLS) is configured **in the Supabase dashboard**, not through code or migrations — no API exposes this step. Before Clerk-authenticated requests can read/write Supabase data:
+Until 2026-08-18 this section carried a warning that a founder-only, code-unreachable step had to be completed by hand before *any* RLS-gated query would work: registering Clerk as a Third Party Auth provider in the Supabase dashboard, so Supabase would trust Clerk-issued JWTs against Clerk's JWKS. Getting it wrong (or not doing it) rejected every authenticated read and write, with all env vars set correctly and no error that pointed at the cause.
 
-1. Supabase Dashboard → **Authentication → Sign In / Providers → Third Party Auth** → Add provider → **Clerk**.
-2. Enter your Clerk instance's domain (find it in Clerk Dashboard → **Configure → Domains** — looks like `your-app.clerk.accounts.dev` in development, or your custom domain in production).
-3. Save. No JWT template, no shared secret — Supabase verifies Clerk's tokens directly against Clerk's public JWKS.
+**That step is gone.** Supabase Auth now issues the JWTs that Supabase itself verifies — there is no cross-vendor trust to configure, so there is nothing to click in either dashboard, and nothing that can drift out of sync between two providers. The keys in the Supabase section below are the whole of it.
 
-Until this is done, every RLS-gated query will be rejected (the JWT won't be trusted), even with all the env vars below set correctly.
+The one setting that *is* worth checking, because it changes what the user receives rather than whether auth works at all: Supabase Auth sends a **Magic Link** by default and only sends a six-digit code if the Magic Link email template contains `{{ .Token }}` (Dashboard → Authentication → Email Templates). KIVO's sign-in is code-entry only, so that template must include the token. This is a content choice, not a trust relationship — a wrong template sends a link instead of a code; it cannot silently reject authenticated queries the way the old Clerk step could.
 
-## ⚠️ Changing a Clerk key? You must trigger a brand-new Vercel deployment, not just save the env var
+## ⚠️ Changing a Supabase key? Still trigger a brand-new Vercel deployment
 
-This is a real, concrete failure mode, not a theoretical one — if sign-up/sign-in silently breaks (a verification code arrives, but submitting it bounces back to the sign-in/sign-up form instead of completing) right after adding or changing a Clerk key, **this is almost certainly why**.
+`NEXT_PUBLIC_*` variables are baked into the build output by Next.js, not read fresh at runtime — saving a new value in the Vercel dashboard does **not** change an already-built deployment. After changing `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`, trigger an actual new deployment ("Redeploy" on the latest deployment, or push a commit).
 
-`next.config.ts` computes the Content-Security-Policy's Clerk allowlist (`connect-src`/`script-src`/`frame-src`) by decoding `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` **at build time** (`resolveClerkFrontendApiHost()`) — this is a hard Next.js constraint: `NEXT_PUBLIC_*` variables are baked into the build output, not read fresh at runtime. Saving a new value for this variable in the Vercel dashboard does **not** retroactively change an already-built deployment's CSP header. If the key changes (a different Clerk instance, dev → production keys, a typo fixed) but the site is still serving an old build, the CSP will allow the *previous* Clerk frontend API host — meaning the *new* key's actual verification/session network calls get silently blocked by the browser's CSP, while the sign-up form itself still renders fine (that part just needs the key to be present in the client bundle, not for the CSP to match it). The user sees: code arrives by email, but submitting it does nothing/bounces back — exactly the CSP blocking the network call, with no visible error unless you open the browser's DevTools console (a CSP violation there confirms this diagnosis immediately).
-
-**The fix**: after changing any Clerk (or Supabase) env var in Vercel, trigger an actual new deployment — the dashboard's "Redeploy" action on the latest deployment works, or push a new commit. Simply saving the env var is not enough.
+This warning used to be much sharper, and specific to Clerk: `next.config.ts` decoded `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at build time to compute the CSP's Clerk allowlist, so a key change without a rebuild left the CSP allowing the *previous* Clerk host — sign-up appeared to work, the code email arrived, and submitting it silently did nothing because the browser blocked the verification call. **That failure mode no longer exists.** `next.config.ts` derives nothing from an auth key any more; the only origin in the CSP is `NEXT_PUBLIC_SUPABASE_URL`, and a stale value there fails loudly (every request to the wrong project errors) rather than only breaking the last step of sign-in.
 
 ---
 
@@ -40,27 +36,23 @@ This is a real, concrete failure mode, not a theoretical one — if sign-up/sign
 
 `NEXT_PUBLIC_APP_NAME` also appears in `.env.example` but is not read anywhere in `src/` today — see "Reserved / not currently read by the app" below.
 
-## Clerk — identity & authentication (primary auth provider)
+## Supabase — identity, authentication, and application data
+
+As of 2026-08-18 these three keys are the app's entire backend and identity configuration. There is no separate auth provider to key, and no fourth key to add later for sign-in.
 
 | Variable | Purpose | Required | Where to get it |
 |---|---|---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Client-side Clerk key | **Required** | Clerk Dashboard → API Keys |
-| `CLERK_SECRET_KEY` | Server-side Clerk key | **Required**, server-only | Clerk Dashboard → API Keys |
-| `CLERK_WEBHOOK_SECRET` | Verifies `/api/webhooks/clerk` signatures (svix) | **Required** for profile sync | Clerk Dashboard → Webhooks → your endpoint → Signing Secret |
-
-MVP sign-in methods: **Email + X only** (see `DECISIONS.md`). Enable "Sign in with X" in Clerk Dashboard → User & Authentication → Social Connections. Google/Apple are architected for but not enabled yet.
-
-Webhook endpoint to register in Clerk: `${NEXT_PUBLIC_APP_URL}/api/webhooks/clerk`, subscribed to `user.created`, `user.updated`, `user.deleted`.
-
-## Supabase — application data & backend (not used for auth)
-
-| Variable | Purpose | Required | Where to get it |
-|---|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Project URL | **Required** | Supabase Dashboard → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key — RLS-gated, safe client-side | **Required** | Supabase Dashboard → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses RLS — server-only, trusted contexts only (webhooks, admin mutations) | **Required**, server-only | Supabase Dashboard → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL — serves REST, Storage **and** Auth (`/auth/v1/otp`, `/auth/v1/verify`) | **Required** | Supabase Dashboard → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key — RLS-gated, safe client-side; also the key the browser uses to request and redeem a sign-in code | **Required** | Supabase Dashboard → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses RLS — server-only, trusted contexts only (admin mutations, `auth.admin.deleteUser` on account deletion) | **Required**, server-only | Supabase Dashboard → Project Settings → API |
 
 Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a second project).
+
+Sign-in method: **email one-time code only** (see `DECISIONS.md`, 2026-08-18). No password, no social provider. X/Google/Apple remain architected-for but are not enabled — enabling one is a dashboard provider toggle plus a sign-in button, not a re-platforming.
+
+### Sending the sign-in email in production
+
+Supabase's built-in email sender is intended for development and is heavily rate-limited (a handful of messages per hour per project, shared across every auth email). It is fine for local work and for testing, and it is **not** adequate for real signups. Before production traffic, configure custom SMTP under Dashboard → Project Settings → Authentication → SMTP Settings; `RESEND_API_KEY` below is the intended sender once that is wired. Nothing in the code changes when you do this — Supabase sends the mail either way.
 
 ## Football data — provider abstraction (see `DECISIONS.md`)
 
@@ -102,9 +94,9 @@ These are declared in `.env.example` for a feature that's designed but not built
 | Variable | Purpose once built | Status |
 |---|---|---|
 | `NEXT_PUBLIC_APP_NAME` | Would override the "KIVO" display name in metadata/UI | Not implemented — "KIVO" is hardcoded instead; setting this has no effect |
-| `RESEND_API_KEY` | Transactional email (not auth — Clerk handles verification/reset emails itself) | Not wired — [resend.com](https://resend.com) |
+| `RESEND_API_KEY` | Transactional email. Note this is **not** the sign-in email: Supabase Auth sends the OTP itself, either through its own rate-limited built-in sender or through custom SMTP configured in the Supabase dashboard (see above). Wiring Resend here would be for KIVO's own product email | Not wired — [resend.com](https://resend.com) |
 | `RESEND_FROM_EMAIL` | Sending address for transactional email | Not wired — requires a verified sending domain before production |
-| `WEBHOOK_SECRET` | Reserved for future non-Clerk webhook consumers | Not used — `CLERK_WEBHOOK_SECRET` is the only webhook secret actually read |
+| `WEBHOOK_SECRET` | Reserved for a future inbound webhook consumer | Not used. `CLERK_WEBHOOK_SECRET` used to be the one webhook secret actually read; the Clerk webhook route was deleted 2026-08-18 along with the rest of Clerk, so the app reads no webhook secret at all today |
 
 `CRON_SECRET` **used to be listed here** ("reserved, not used") — as of 2026-08-18 it's real; see the "Automated live-sync worker" section above, not this table.
 
@@ -113,8 +105,9 @@ These are declared in `.env.example` for a feature that's designed but not built
 ## Local setup
 
 1. `cp .env.example .env.local`
-2. Fill in Clerk + Supabase values (both required to run the app at all).
-3. Complete the manual Supabase↔Clerk dashboard step above.
-4. `npm run dev`
+2. Fill in the three Supabase values (required to run the app at all).
+3. `npm run dev`
+
+Step 3 used to be "complete the manual Supabase↔Clerk dashboard step above". It no longer exists — a fresh checkout goes from three pasted keys to a working, signed-in app with nothing to configure by hand in either dashboard.
 
 Everything else (football provider, AI, email) is optional — the app degrades gracefully (Coming Soon states, mock data in dev) without them, by design.

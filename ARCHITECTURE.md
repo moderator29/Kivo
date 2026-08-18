@@ -6,33 +6,34 @@
 KIVO USER
     │
     ▼
-┌─────────┐   Clerk session token (JWT)   ┌─────────────┐
-│  CLERK  │ ─────────────────────────────▶│  KIVO APP   │
-│         │                                │ (Next.js)   │
-│ Identity│                                └──────┬──────┘
-│ Sessions│                                       │ same JWT, passed as
-│ Email/X │                                       │ accessToken — no template,
-└─────────┘                                       │ no shared secret
-                                                   ▼
-                                          ┌──────────────────┐
-                                          │     SUPABASE      │
-                                          │  Postgres + RLS    │
-                                          │  authorized via     │
-                                          │  Clerk JWKS (native  │
-                                          │  third-party auth)   │
-                                          └─────────┬────────────┘
-                                                    │
-                                    ┌───────────────┼───────────────┐
-                                    ▼               ▼               ▼
-                              Football APIs   AI (Anthropic)     Resend
-                            (provider-agnostic)  (grounded)   (transactional, TBD)
+┌──────────────────────┐
+│      SUPABASE        │
+│                      │
+│  Auth  (email OTP)   │──── issues session JWT ──┐
+│  Postgres + RLS      │                          │
+│  Storage (avatars)   │◀── same JWT authorizes ──┤
+│  Realtime            │                          │
+└──────────┬───────────┘                          │
+           │                                 ┌────┴──────┐
+           │                                 │ KIVO APP  │
+           │                                 │ (Next.js) │
+           │                                 └───────────┘
+           │
+     ┌─────┴─────────┬───────────────┐
+     ▼               ▼               ▼
+Football APIs   AI (Anthropic)     Resend
+(provider-agnostic)  (grounded)   (transactional, TBD)
 ```
 
-Clerk answers "who are you." Supabase answers "what does KIVO know about you and what can you do." RLS policies key off `auth.jwt() ->> 'sub'` (the Clerk user id) — never Supabase Auth, which is not used anywhere in this codebase. Every user-owned table traces back to `profiles.clerk_user_id`, and Clerk's own identity fields (email, name) are deliberately not duplicated into Supabase — see `DECISIONS.md`.
+Supabase answers both "who are you" and "what does KIVO know about you and what can you do." A single vendor issues the session JWT and verifies it — there is no cross-vendor trust relationship, no JWKS registration step, and no second identity system holding a copy of the user. RLS policies key off `auth.uid()`. See `DECISIONS.md` (2026-08-18) for why Clerk was removed and what that cost and bought.
+
+Sign-in is **email one-time code only**: the browser calls `signInWithOtp({ email })` to have Supabase mail a six-digit code, then `verifyOtp({ email, token, type: "email" })` to redeem it into a session. No password is ever collected, stored, reset, or leaked — there is no password in this system to compromise. Social sign-in (X/Google/Apple) is a provider toggle away but is not enabled.
 
 ## Request-time profile guarantee
 
-A Clerk webhook (`/api/webhooks/clerk`) creates/updates/deletes the matching `profiles` row on `user.created` / `user.updated` / `user.deleted`, idempotently (duplicate-key on retry is treated as success, not an error). As a resilience fallback — in case the webhook isn't configured yet in a given environment — `(app)/layout.tsx` and `admin/layout.tsx` call `getOrCreateProfile()` on every authenticated request, which creates a profile row on the spot if one is somehow missing. The app never depends on the webhook alone to function.
+Every authenticated request calls `getOrCreateProfile()` (`src/lib/profile.ts`), which creates the matching `profiles` row on the spot if one is missing. This is now the **only** profile-creation path — it used to be a resilience fallback behind a Clerk `user.created` webhook, and it absorbed that job unchanged when the webhook route was deleted on 2026-08-18. Being request-time rather than webhook-driven, it cannot be missed, retried out of order, or left unconfigured in an environment: a user who has a session has a profile by the end of their first authenticated request.
+
+Deletion is the direction that genuinely changed shape. It used to be event-driven — Clerk fired `user.deleted`, the webhook cascaded the Supabase side — and is now explicit: `deleteAccount()` (`src/app/(app)/settings/actions.ts`) deletes the `profiles` row and the `auth.users` row itself. A user deleted *upstream* (from the Supabase dashboard, or by an operator calling the admin API directly) no longer has an application-side listener to cascade off, so the FK from `profiles` to `auth.users` is what has to carry that case. See `DECISIONS.md` (2026-08-18).
 
 ## Football data: provider abstraction
 
@@ -96,7 +97,7 @@ Applying the same pattern elsewhere: check `hasAdminAccess` + `isPreviewModeActi
 
 ## What's real vs. architected-but-not-live
 
-**Live now**: auth (Clerk + Supabase), profiles, Social (posts, one-level comment threads, all six reaction types, in-feed polls, reports feeding the moderation queue), Match Rooms (fixture-scoped posts inside Match Centre's Room tab), fan match ratings and the shareable Match Verdict summary, saved posts/teams/players/competitions (watchlist) and follows, Fantasy (public + private league creation, public league discovery/browse, squad builder, admin-triggered gameweek scoring, roster carry-forward between gameweeks, leaderboard), Predictions (picks, admin-triggered scoring, leaderboard, cross-user consensus), AI Copilot (Anthropic Claude, streaming responses, grounded chat, persisted and resumable conversation history — live when `ANTHROPIC_API_KEY` is set), Notifications (in-app bell + full notifications page, typed notification registry, real producers on post likes, match kickoff/goal/red-card/full-time, and a followed player's own event, wired directly into the sync code paths that already write the row each fires on — no push notifications, that needs real push infra/service worker this pass didn't build), onboarding, Settings, public profiles (`/u/[username]`), team and player detail pages (head-to-head record, discipline table, goal-timing distribution, real transfer history, player photos), team/player comparison, manager pages, venue pages, admin (RBAC, overview, moderation queue, user list, data-health sync triggers with a quota/trend summary strip — all reading/writing real data).
+**Live now**: auth (Supabase Auth, email one-time code), profiles, Social (posts, one-level comment threads, all six reaction types, in-feed polls, reports feeding the moderation queue), Match Rooms (fixture-scoped posts inside Match Centre's Room tab), fan match ratings and the shareable Match Verdict summary, saved posts/teams/players/competitions (watchlist) and follows, Fantasy (public + private league creation, public league discovery/browse, squad builder, admin-triggered gameweek scoring, roster carry-forward between gameweeks, leaderboard), Predictions (picks, admin-triggered scoring, leaderboard, cross-user consensus), AI Copilot (Anthropic Claude, streaming responses, grounded chat, persisted and resumable conversation history — live when `ANTHROPIC_API_KEY` is set), Notifications (in-app bell + full notifications page, typed notification registry, real producers on post likes, match kickoff/goal/red-card/full-time, and a followed player's own event, wired directly into the sync code paths that already write the row each fires on — no push notifications, that needs real push infra/service worker this pass didn't build), onboarding, Settings, public profiles (`/u/[username]`), team and player detail pages (head-to-head record, discipline table, goal-timing distribution, real transfer history, player photos), team/player comparison, manager pages, venue pages, admin (RBAC, overview, moderation queue, user list, data-health sync triggers with a quota/trend summary strip — all reading/writing real data).
 
 **Architected, not yet connected**: live football data at scale (provider abstraction built and API-Football-backed, a second TheSportsDB provider now also implemented, but sync is admin-triggered on demand rather than continuously polled — `FOOTBALL_LIVE_POLLING_ENABLED` stays off until real API quota exists, and no live worker/Realtime distribution has been built — see `docs/DATA_ARCHITECTURE.md`), transactional email (Resend vars reserved, nothing sends yet), `notification_deliveries` (table and RLS exist, but no delivery pipeline writes to it — the in-app bell/page read `notifications` directly).
 
