@@ -58,8 +58,16 @@ export function ProfileUnavailable({ retryHref = "/home" }: { retryHref?: string
             </form>
           </div>
 
+          {/* KN-118: "get in touch" used to be an instruction with nowhere to
+              go — there was no contact surface anywhere in the product. There
+              is one now, and it is outside the (app) gate, which matters
+              because this screen is itself a gate failure. */}
           <p className="text-xs text-foreground-subtle">
-            If this keeps happening, get in touch and quote the time you saw it — the failure is logged server-side.
+            If this keeps happening,{" "}
+            <Link href="/support?topic=account" className="font-medium text-accent transition-colors hover:text-foreground">
+              tell us
+            </Link>{" "}
+            and quote the time you saw it — the failure is logged server-side.
           </p>
         </div>
       </div>

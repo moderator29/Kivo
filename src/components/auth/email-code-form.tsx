@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, Loader2, Mail } from "lucide-react";
 import { sendEmailCode, verifyEmailCode } from "@/lib/auth-actions";
@@ -206,16 +207,41 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
               </button>
             </div>
 
-            {/* The honest escape hatch. Which template Supabase sends depends on
-                whether this address has signed up before (see sendEmailCode),
-                and a template missing its code variable would otherwise leave
-                someone staring at this screen forever. Every KIVO auth email
-                also contains a sign-in link, and /auth/callback lands it in the
-                same place this form would. */}
-            <p className="border-t border-hairline-soft pt-4 text-center text-xs text-foreground-subtle">
-              No code in the email? Tap the <span className="text-foreground-muted">Sign in to KIVO</span> link in it
-              instead — that signs you in too.
-            </p>
+            {/* The honest escape hatches, in the order a stuck user needs them.
+                1. A template missing its code variable (see sendEmailCode) would
+                   otherwise leave someone staring at this screen forever — every
+                   KIVO auth email also carries a sign-in link, and /auth/callback
+                   lands it in the same place this form would.
+                2. KN-124: on /sign-in this screen is now shown whether or not the
+                   address has a KIVO account, because answering that question is
+                   a membership oracle. This line is the UX that replaces the
+                   answer — shown to everyone, so it reveals nothing, and it is
+                   the same next step the old "no account uses that email"
+                   message prompted.
+                3. KN-118: with no password and no social login, a code that never
+                   arrives at all is a locked-out user with nowhere to go. */}
+            <div className="flex flex-col gap-2 border-t border-hairline-soft pt-4 text-center text-xs text-foreground-subtle">
+              <p>
+                No code in the email? Tap the <span className="text-foreground-muted">Sign in to KIVO</span> link in it
+                instead — that signs you in too.
+              </p>
+              {mode === "sign-in" ? (
+                <p>
+                  Nothing arrived at all? You may not have a KIVO account yet.{" "}
+                  <Link href="/sign-up" className="font-medium text-accent transition-colors hover:text-foreground">
+                    Create one
+                  </Link>
+                  .
+                </p>
+              ) : null}
+              <p>
+                Still stuck?{" "}
+                <Link href="/support" className="font-medium text-accent transition-colors hover:text-foreground">
+                  Get help signing in
+                </Link>
+                .
+              </p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -21,6 +21,10 @@ const FOOTER_LINKS: { heading: string; links: { label: string; href: string }[] 
     heading: "Company",
     links: [
       { label: "About", href: "/about" },
+      // KN-118. A public, session-free route to a person. It belongs in the
+      // footer of every marketing page for the same reason it exists at all:
+      // the user who needs it is the one who cannot get past sign-in.
+      { label: "Get help", href: "/support" },
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
     ],
