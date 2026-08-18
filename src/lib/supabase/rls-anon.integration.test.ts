@@ -126,20 +126,62 @@ describe.skipIf(!reachable)("RLS via anon key (live PostgREST, no mocking)", () 
     });
   });
 
-  describe("public-read tables — anon really can read them", () => {
-    it("reads rows from `teams` (public reference data) with no error", async () => {
+  // INVERTED BY MIGRATION 0059 (KN-120). This block used to assert the
+  // opposite — that anon really could read `teams` and `badges` — which was
+  // correct for a guest-browsable KIVO and became a live data-exfiltration
+  // surface the moment the app was gated with no guest preview. Nineteen
+  // `to anon` SELECT policies were converted to `to authenticated`, so a
+  // caller holding nothing but the published anon key now sees an empty
+  // database. These tests are the regression guard on that: they fail if any
+  // of it is ever quietly re-granted.
+  describe("football and social tables — anon reads nothing after the app was gated", () => {
+    it("gets an empty array (not an error) reading `teams`", async () => {
       const { data, error } = await anon.from("teams").select("id, name").limit(5);
+      // Still `null` error, not 42501: the table-level grant survives, so this
+      // is RLS filtering rather than a privilege refusal. The distinction
+      // matters — a test asserting only "no rows" would also pass against an
+      // empty database, so the error shape is part of the assertion.
       expect(error).toBeNull();
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toEqual([]);
     });
 
-    it("reads rows from `badges` (public reference data, seeded by migration 0004) with no error", async () => {
+    it("gets an empty array (not an error) reading `badges`", async () => {
+      // badges is seeded by 0004_seed_starter_badges.sql and is definitely
+      // non-empty, which is exactly what makes this a real assertion: the
+      // rows are there, and anon cannot see them.
       const { data, error } = await anon.from("badges").select("id, code").limit(5);
       expect(error).toBeNull();
-      expect(Array.isArray(data)).toBe(true);
-      // badges is seeded by 0004_seed_starter_badges.sql — if this is ever
-      // empty, either that seed regressed or badges_select_public broke.
-      expect(data!.length).toBeGreaterThan(0);
+      expect(data).toEqual([]);
+    });
+
+    it("gets an empty array (not an error) reading `posts` — the social feed is not world-readable", async () => {
+      const { data, error } = await anon.from("posts").select("id").limit(5);
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
+    });
+
+    it("gets an empty array (not an error) reading `fixtures`", async () => {
+      const { data, error } = await anon.from("fixtures").select("id").limit(5);
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
+    });
+  });
+
+  // The other half of 0059: the RPCs. These fail differently to the tables
+  // above — EXECUTE was revoked outright rather than filtered by a policy — so
+  // PostgREST answers with an error rather than an empty result.
+  describe("public RPCs — anon can no longer execute them", () => {
+    it("is refused calling `get_predictions_leaderboard`", async () => {
+      const { error } = await anon.rpc("get_predictions_leaderboard", { p_limit: 5 });
+      expect(error).not.toBeNull();
+    });
+
+    it("is refused calling `is_username_available`", async () => {
+      const { error } = await anon.rpc("is_username_available", {
+        p_username: "zzrlstest_probe",
+        p_exclude_profile_id: undefined,
+      });
+      expect(error).not.toBeNull();
     });
   });
 

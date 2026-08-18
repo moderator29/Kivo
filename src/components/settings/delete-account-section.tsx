@@ -52,7 +52,7 @@ export function DeleteAccountSection() {
           onClick={() => setExpanded(true)}
           className="flex w-fit items-center gap-2 rounded-xl border border-critical/30 bg-critical/10 px-5 py-2.5 text-sm font-semibold text-critical transition-colors hover:bg-critical/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
-          <Trash2 className="h-4 w-4" strokeWidth={2} />
+          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
           Delete account
         </button>
       ) : (

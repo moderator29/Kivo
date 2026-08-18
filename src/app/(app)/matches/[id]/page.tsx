@@ -7,6 +7,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
@@ -22,6 +23,8 @@ import { getHeadToHead } from "@/lib/football/head-to-head";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
 import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
+import { absoluteUrl } from "@/lib/site-url";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -62,7 +65,7 @@ export default async function MatchCentrePage({
   const { data: fixture } = await supabase
     .from("fixtures")
     .select(
-      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
+      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
        competition:competitions(name, short_name),
@@ -220,6 +223,10 @@ export default async function MatchCentrePage({
     viewerReaction: post.viewerReaction,
     commentCount: post.commentCount,
     isSystem: post.isSystem,
+    // KN-29: fetchPostsPage has always loaded this; the Room mapping used to
+    // drop it on the floor, which is half of why a match-scoped poll had
+    // nowhere to render.
+    poll: post.poll,
   }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
@@ -259,7 +266,7 @@ export default async function MatchCentrePage({
           player_name: e.player?.known_as ?? e.player?.full_name ?? null,
         })))
       : null;
-  const matchUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/matches/${fixture.id}`;
+  const matchUrl = absoluteUrl(`/matches/${fixture.id}`);
 
   return (
     // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
@@ -304,7 +311,18 @@ export default async function MatchCentrePage({
         `}</style>
 
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
-          <span>{fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}</span>
+          <span>
+            {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+            {/* KIVO_NEXT_GEN KN-84. `matchday` has existed as a column since
+                migration 0001 and, until now, nothing ever wrote to it. It is
+                rendered only when the provider actually reported a numbered
+                round: a cup quarter-final has no matchday, and parseMatchday
+                returns null rather than inventing one, so this simply does not
+                appear for those fixtures. */}
+            {fixture.matchday !== null && (
+              <span className="text-foreground-subtle"> · Matchday {fixture.matchday}</span>
+            )}
+          </span>
           {fixture.venue?.name && (
             <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-accent">
               <MapPin className="h-3 w-3" strokeWidth={2} />
@@ -381,7 +399,7 @@ export default async function MatchCentrePage({
         <FadeIn delay={0.1}>
           <FanRatingCard
             fixtureId={fixture.id}
-            signedIn={Boolean(profile)}
+            signedIn={viewerIsSignedIn(profile)}
             initialRating={ownFanRating.data?.rating ?? null}
             ratingCount={fanRatingCount}
             avgRating={fanRatingAvg}
@@ -433,55 +451,68 @@ export default async function MatchCentrePage({
       )}
 
       <FadeIn delay={0.14}>
-        <MatchCentreTabs
-          fixtureId={fixture.id}
-          homeTeamId={fixture.home_team?.id ?? ""}
-          awayTeamId={fixture.away_team?.id ?? ""}
-          homeTeamName={fixture.home_team?.name ?? "Home team"}
-          awayTeamName={fixture.away_team?.name ?? "Away team"}
-          roomPosts={roomPostsForTab}
-          scrollToPostId={targetPostId ?? null}
-          stats={statsForTab}
-          signedIn={Boolean(profile)}
-          canSyncDetails={canManageFootballData(profile?.role)}
-          syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
-          detailsLastSyncedAt={detailsLastSyncedAt}
-          viewerFantasyRoster={viewerFantasyRosterForTab}
-          events={(events ?? []).map((e) => ({
-            id: e.id,
-            eventType: e.event_type,
-            minute: e.minute,
-            addedTime: e.added_time,
-            detail: e.detail,
-            teamId: e.team_id,
-            playerId: e.player?.id ?? null,
-            playerName: e.player?.known_as ?? e.player?.full_name ?? null,
-            relatedPlayerId: e.related_player?.id ?? null,
-            relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
-          }))}
-          lineups={(lineups ?? []).map((l) => ({
-            teamId: l.team_id,
-            isStarting: l.is_starting,
-            shirtNumber: l.shirt_number,
-            position: l.position,
-            formation: l.formation,
-            playerId: l.player?.id ?? "",
-            playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
-          }))}
-          standings={(standings ?? []).map((s) => ({
-            teamId: s.team_id,
-            teamName: s.team?.name ?? "Unknown team",
-            crestUrl: s.team?.crest_url ?? null,
-            played: s.played,
-            won: s.won,
-            drawn: s.drawn,
-            lost: s.lost,
-            goalsFor: s.goals_for,
-            goalsAgainst: s.goals_against,
-            points: s.points,
-            position: s.position,
-          }))}
-        />
+        <WidgetErrorBoundary context="matchCentreTabs" label="Match detail">
+          <MatchCentreTabs
+            fixtureId={fixture.id}
+            homeTeamId={fixture.home_team?.id ?? ""}
+            awayTeamId={fixture.away_team?.id ?? ""}
+            homeTeamName={fixture.home_team?.name ?? "Home team"}
+            awayTeamName={fixture.away_team?.name ?? "Away team"}
+            roomPosts={roomPostsForTab}
+            scrollToPostId={targetPostId ?? null}
+            stats={statsForTab}
+            signedIn={viewerIsSignedIn(profile)}
+            viewer={profile ? { id: profile.id, name: profile.display_name || profile.username } : null}
+            canSyncDetails={canManageFootballData(profile?.role)}
+            syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
+            detailsLastSyncedAt={detailsLastSyncedAt}
+            // KN-53: all already fetched above for this page's own header —
+            // passed down so the collapsed-tab Overview can be worth opening
+            // rather than four copies of "nothing synced yet".
+            preMatch={{
+              kickoffAt: fixture.kickoff_at,
+              status: fixture.status,
+              competitionName: fixture.competition?.short_name ?? fixture.competition?.name ?? null,
+              venueName: fixture.venue?.name ?? null,
+              venueCity: fixture.venue?.city ?? null,
+            }}
+            viewerFantasyRoster={viewerFantasyRosterForTab}
+            events={(events ?? []).map((e) => ({
+              id: e.id,
+              eventType: e.event_type,
+              minute: e.minute,
+              addedTime: e.added_time,
+              detail: e.detail,
+              teamId: e.team_id,
+              playerId: e.player?.id ?? null,
+              playerName: e.player?.known_as ?? e.player?.full_name ?? null,
+              relatedPlayerId: e.related_player?.id ?? null,
+              relatedPlayerName: e.related_player?.known_as ?? e.related_player?.full_name ?? null,
+            }))}
+            lineups={(lineups ?? []).map((l) => ({
+              teamId: l.team_id,
+              isStarting: l.is_starting,
+              shirtNumber: l.shirt_number,
+              position: l.position,
+              formation: l.formation,
+              playerId: l.player?.id ?? "",
+              playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
+            }))}
+            standings={(standings ?? []).map((s) => ({
+              teamId: s.team_id,
+              teamName: s.team?.name ?? "Unknown team",
+              crestUrl: s.team?.crest_url ?? null,
+              played: s.played,
+              won: s.won,
+              drawn: s.drawn,
+              lost: s.lost,
+              goalsFor: s.goals_for,
+              goalsAgainst: s.goals_against,
+              points: s.points,
+              position: s.position,
+            }))}
+          />
+        </WidgetErrorBoundary>
       </FadeIn>
 
       <Link

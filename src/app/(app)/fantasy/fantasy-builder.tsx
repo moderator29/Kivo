@@ -11,6 +11,7 @@ import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard
 import { HowScoringWorks } from "./how-scoring-works";
 import { StatTile, PitchLines, PlayerToken } from "./pitch";
 import { PlayerActionSheet } from "./player-action-sheet";
+import { RetryableError } from "@/components/ui/retryable-error";
 import { PlayerPicker } from "./player-picker";
 import { DeadlineCountdown } from "./deadline-countdown";
 import {
@@ -319,7 +320,7 @@ export function FantasyBuilder({
               onClick={copyInviteCode}
               className="flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 text-xs font-semibold tracking-wide text-foreground-muted transition hover:bg-surface-2 active:scale-95"
             >
-              {copied ? <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />}
+              {copied ? <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={2} />}
               {league.inviteCode}
               <span className="sr-only" role="status" aria-live="polite">
                 {copied ? "Invite code copied" : ""}
@@ -349,7 +350,7 @@ export function FantasyBuilder({
           href="/fantasy/browse"
           className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-accent"
         >
-          <Compass className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <Compass className="h-3.5 w-3.5" strokeWidth={2} />
           Browse public leagues
         </Link>
       </FadeIn>
@@ -419,7 +420,7 @@ export function FantasyBuilder({
               delay={0.02}
               className="flex w-fit items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-3 py-1.5 text-[11px] text-foreground-subtle"
             >
-              <History className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              <History className="h-3 w-3 shrink-0" strokeWidth={2} />
               Carried forward from GW{carriedForwardFromGameweek}
             </FadeIn>
           )}
@@ -466,7 +467,7 @@ export function FantasyBuilder({
               className="flex items-center gap-2 rounded-2xl border border-achievement/30 bg-achievement/10 px-3.5 py-2.5 text-xs text-achievement"
               role="status"
             >
-              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               {saveNotice}
             </FadeIn>
           )}
@@ -476,7 +477,7 @@ export function FantasyBuilder({
               delay={0.12}
               className="flex items-center gap-2 rounded-2xl border border-achievement/30 bg-achievement/10 px-3.5 py-2.5 text-xs text-achievement"
             >
-              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               No captain selected — their points won&apos;t be doubled this gameweek.
             </FadeIn>
           )}
@@ -595,11 +596,18 @@ export function FantasyBuilder({
                 transition={{ type: "spring", stiffness: 420, damping: 36 }}
                 className="kivo-glass fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+16px)] z-20 mx-auto flex max-w-2xl flex-col gap-2 rounded-2xl p-4 lg:inset-x-auto lg:left-1/2 lg:w-full lg:max-w-2xl lg:-translate-x-1/2"
               >
-                {(saveError ?? validationError) && (
+                {/* KN-56: a failed save gets a retry; a validation error does
+                    not, and that distinction is the point. "Try again" on a
+                    squad that is two defenders short would fail identically
+                    every time — the user has to change something first, so
+                    offering a retry there would be a button that lies. */}
+                {saveError ? (
+                  <RetryableError message={saveError} retrying={saving} onRetry={handleSave} />
+                ) : validationError ? (
                   <p className="text-xs text-critical" role="status" aria-live="polite">
-                    {saveError ?? validationError}
+                    {validationError}
                   </p>
-                )}
+                ) : null}
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-foreground-subtle">
                     {locked ? "The deadline has passed. This gameweek is locked." : "You have unsaved squad changes."}

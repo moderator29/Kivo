@@ -8,6 +8,18 @@ import { NewPostsWatcher } from "@/components/social/new-posts-watcher";
 import { SoftErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { loadMorePosts } from "@/app/(app)/social/actions";
 import type { PostListItem } from "@/app/(app)/social/posts";
+import type { SocialFilter } from "@/lib/social-filters";
+
+/** What an empty feed means depends entirely on which feed it is — "nobody
+ * has posted" and "nobody who supports your club has posted" are different
+ * facts, and telling someone the first when the second is true is how an
+ * honest empty state turns into a misleading one. */
+const EMPTY_COPY: Record<SocialFilter, string> = {
+  all: "Nobody's posted yet. Be the first to share your take on the game.",
+  following: "Nobody you follow has posted yet. Follow someone from their profile to see their posts here.",
+  clubmates: "No other fan of your club has posted yet. Yours would be the first.",
+  rivals: "Nobody who supports your rival has posted yet.",
+};
 
 /** `/social`'s post list plus a "Load more" button that appends the next page
  * via `loadMorePosts` — same offset-based shape as `LeaguesList`/`TeamsGrid`
@@ -17,17 +29,23 @@ export function SocialFeed({
   initialPosts,
   initialHasMore,
   signedIn,
-  followingOnly = false,
+  filter = "all",
+  emptyLabel,
   scrollToPostId = null,
   initialOffset,
 }: {
   initialPosts: PostListItem[];
   initialHasMore: boolean;
   signedIn: boolean;
-  /** RECOMMENDATIONS item 175: threaded through to loadMorePosts so "Load
-   * more" keeps respecting the All/Following tab the page was rendered
-   * with. */
-  followingOnly?: boolean;
+  /** RECOMMENDATIONS item 175, extended for Club mates and Rivals: threaded
+   * through to loadMorePosts so "Load more" keeps respecting the tab the page
+   * was rendered with. Only the filter *name* travels — the team id behind
+   * Club mates/Rivals is re-derived server-side from the viewer's own profile,
+   * so a hand-edited request cannot page through another club's feed. */
+  filter?: SocialFilter;
+  /** The active tab's own label, for the empty state — "Nothing in Rivals yet"
+   * is a different sentence from "Nothing here yet". */
+  emptyLabel?: string;
   /** RECOMMENDATIONS item 237: a post id to scroll to and briefly highlight
    * on mount — the page.tsx server component has already guaranteed this id
    * is present in `initialPosts` (prepending it if it wasn't on the normal
@@ -84,10 +102,16 @@ export function SocialFeed({
   // wrong" — server 200, client throw during hydration — because that client
   // was constructed unconditionally in *this* component, so a feed full of
   // perfectly readable posts died with it. Now the worst case is no pill.
-  const realtimeWatcher = (
+  //
+  // Only mounted for All and Following. The watcher decides relevance from an
+  // INSERT payload plus the viewer's follow list, and it cannot answer "does
+  // this author support my club" from that — so on Club mates and Rivals it
+  // would either stay silent or, worse, raise a "new posts" pill for a post
+  // those feeds will not contain. No pill is the honest option.
+  const realtimeWatcher = (filter === "all" || filter === "following") && (
     <SoftErrorBoundary context="social.newPostsWatcher">
       <NewPostsWatcher
-        followingOnly={followingOnly}
+        followingOnly={filter === "following"}
         latestCreatedAt={posts[0]?.createdAt ?? null}
         onNewPosts={handleNewPosts}
       />
@@ -97,7 +121,7 @@ export function SocialFeed({
   function handleLoadMore() {
     setError(null);
     startLoading(async () => {
-      const result = await loadMorePosts(serverOffset, { followingOnly });
+      const result = await loadMorePosts(serverOffset, { filter });
       if (result.error) {
         setError(result.error);
         return;
@@ -124,7 +148,7 @@ export function SocialFeed({
   function handleShowNewPosts() {
     setError(null);
     startRefresh(async () => {
-      const result = await loadMorePosts(0, { followingOnly });
+      const result = await loadMorePosts(0, { filter });
       if (result.error) {
         setError(result.error);
         return;
@@ -157,11 +181,10 @@ export function SocialFeed({
         {realtimeWatcher}
         {newPostsPill}
         <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          <p className="text-sm text-foreground-muted">
-            {followingOnly
-              ? "Nobody you follow has posted yet. Follow a user from their profile to see their posts here."
-              : "Nobody's posted yet. Be the first to share your take on the game."}
-          </p>
+          <p className="text-sm text-foreground-muted">{EMPTY_COPY[filter]}</p>
+          {emptyLabel && filter !== "all" && (
+            <p className="text-xs text-foreground-subtle">You&rsquo;re reading the {emptyLabel} feed.</p>
+          )}
         </FadeIn>
       </div>
     );

@@ -32,11 +32,17 @@ export function UsernameEditor({ username }: { username: string }) {
   // Driving it from the event handler keeps every setAvailability call
   // inside a callback (this handler, the debounce timer, or the check's
   // response), never synchronously inside an effect body.
-  function handleDraftChange(value: string) {
+  function handleDraftChange(rawValue: string) {
+    // Same normalise-on-input fix as onboarding-flow.tsx: the server and the
+    // availability check both lowercase, but `pattern="[a-z0-9_]+"` on the
+    // input rejects the raw uppercase, so a handle could read "Available"
+    // and still refuse to submit. Fold case on the way in so what's shown is
+    // what's stored.
+    const value = rawValue.toLowerCase();
     setDraft(value);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
-    const candidate = value.trim().toLowerCase();
+    const candidate = value.trim();
     if (!USERNAME_PATTERN.test(candidate)) {
       setAvailability("idle");
       return;
@@ -77,7 +83,7 @@ export function UsernameEditor({ username }: { username: string }) {
           className="flex items-center gap-1.5 text-sm text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           @{username}
-          <Pencil className="h-3 w-3" strokeWidth={1.75} />
+          <Pencil className="h-3 w-3" strokeWidth={2} />
         </button>
         <AnimatePresence>
           {justSaved && (
@@ -88,7 +94,7 @@ export function UsernameEditor({ username }: { username: string }) {
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="flex items-center gap-1 text-xs font-medium text-live"
             >
-              <Check className="h-3 w-3" strokeWidth={2.5} />
+              <Check className="h-3 w-3" strokeWidth={2} />
               Saved
             </motion.span>
           )}
@@ -128,8 +134,8 @@ export function UsernameEditor({ username }: { username: string }) {
             {availability === "checking" && (
               <span className="block h-3 w-3 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
             )}
-            {availability === "available" && <Check className="h-3 w-3 text-live" strokeWidth={2.5} />}
-            {availability === "taken" && <X className="h-3 w-3 text-critical" strokeWidth={2.5} />}
+            {availability === "available" && <Check className="h-3 w-3 text-live" strokeWidth={2} />}
+            {availability === "taken" && <X className="h-3 w-3 text-critical" strokeWidth={2} />}
           </span>
         </div>
         <button
@@ -139,7 +145,7 @@ export function UsernameEditor({ username }: { username: string }) {
           className="text-live disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label="Save"
         >
-          <Check className="h-4 w-4" strokeWidth={2} />
+          <Check className="h-4 w-4" strokeWidth={1.75} />
         </button>
         <button
           type="button"
@@ -150,7 +156,7 @@ export function UsernameEditor({ username }: { username: string }) {
           className="text-foreground-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label="Cancel"
         >
-          <X className="h-4 w-4" strokeWidth={2} />
+          <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
       </div>
       <span role="status" aria-live="polite">

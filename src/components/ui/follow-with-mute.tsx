@@ -3,9 +3,10 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Star, Bell, BellOff, Check } from "lucide-react";
+import { Star, Bell, BellOff, Check, Undo2 } from "lucide-react";
 import { toggleFollow, toggleFollowMute } from "@/app/(app)/follow-actions";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+import { FOLLOW_MEANING, FOLLOW_MUTED_MEANING } from "@/lib/follow-meaning";
 
 type MutableFollowTargetType = "team" | "player";
 
@@ -52,9 +53,12 @@ export function FollowWithMute({
   const [mutePending, startMuteTransition] = useTransition();
   const [flash, setFlash] = useState<"followed" | "unfollowed" | "muted" | "unmuted" | null>(null);
 
+  // KN-51: long enough to actually read a sentence. The old 1600ms was sized
+  // for the single word ("Following") this used to show; the point of the item
+  // is that one word never explained what the gesture did.
   useEffect(() => {
     if (!flash) return;
-    const timeout = setTimeout(() => setFlash(null), 1600);
+    const timeout = setTimeout(() => setFlash(null), 6000);
     return () => clearTimeout(timeout);
   }, [flash]);
 
@@ -149,22 +153,62 @@ export function FollowWithMute({
         </button>
       )}
 
+      {/* KN-51: this used to be a one-word pill ("Following"), which is exactly
+          the problem the item names — the single most load-bearing
+          personalisation gesture in the product explained itself with a star
+          changing colour. The confirmation now says what actually changed, in
+          the words of the real consumers (see src/lib/follow-meaning.ts), at
+          the one moment the user is guaranteed to be looking: immediately
+          after they tapped. Absolutely positioned so it never reflows the
+          header it sits in. */}
       <AnimatePresence>
         {flash && (
-          <motion.span
+          <motion.div
             role="status"
-            initial={{ opacity: 0, y: 4, scale: 0.9 }}
+            aria-live="polite"
+            initial={{ opacity: 0, y: 4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.9 }}
+            exit={{ opacity: 0, y: 4, scale: 0.98 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
+            className="absolute top-full right-0 z-20 mt-2 w-60 rounded-xl border border-hairline bg-surface-raised p-3 text-left shadow-lg"
           >
-            <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
-            {flash === "followed" && "Following"}
-            {flash === "unfollowed" && "Unfollowed"}
-            {flash === "muted" && "Muted"}
-            {flash === "unmuted" && "Unmuted"}
-          </motion.span>
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-live">
+              <Check className="h-3 w-3 shrink-0" strokeWidth={2} />
+              {flash === "followed" && "Following"}
+              {flash === "unfollowed" && "Unfollowed"}
+              {flash === "muted" && "Muted"}
+              {flash === "unmuted" && "Unmuted"}
+            </p>
+            <p className="mt-1 text-[11px] leading-snug text-foreground-muted">
+              {flash === "followed" && FOLLOW_MEANING[targetType]}
+              {flash === "muted" && FOLLOW_MUTED_MEANING[targetType]}
+              {flash === "unmuted" && "Match alerts for this one are back on."}
+              {flash === "unfollowed" && "They're off your Following list, and no alerts will reach you."}
+            </p>
+            {/* KN-59: undo, not a confirmation dialog. Unfollowing is one tap
+                with no warning and no way back, and the item proposed
+                confirming it — but a modal in front of a *reversible* action
+                taxes the 99 correct taps to protect the one mistake. Undo
+                inverts that: the common case stays instant, and the mistake
+                costs one more tap. (The two genuinely irreversible actions in
+                the product — deleting your account and deleting an AI
+                conversation — both already confirm, and still do.)
+
+                What undo restores is the follow itself. A mute flag lived on
+                the row that was deleted, so it does not come back — which is
+                why the button says "Follow again" rather than pretending to
+                rewind time. */}
+            {flash === "unfollowed" && (
+              <button
+                type="button"
+                onClick={handleFollowClick}
+                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-accent transition-colors hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              >
+                <Undo2 className="h-3 w-3" strokeWidth={2} />
+                Follow again
+              </button>
+            )}
+          </motion.div>
         )}
       </AnimatePresence>
     </span>

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { motion } from "motion/react";
+import { useFirstEntrance } from "@/lib/entrance";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -39,22 +40,30 @@ export function StaggeredList<T>({
   renderItem,
   delay,
   className,
+  entranceId = "list",
 }: {
   items: T[];
   keyExtractor: (item: T, index: number) => string;
   renderItem: (item: T, index: number) => ReactNode;
   delay: (index: number) => number;
   className?: string;
+  /** Distinguishes two staggered lists rendered on the same route. */
+  entranceId?: string;
 }) {
+  const firstEntrance = useFirstEntrance(entranceId);
+
   return (
     <div className={className}>
       {items.map((item, index) => (
         <motion.div
           key={keyExtractor(item, index)}
           layout
-          initial={{ opacity: 0, y: 12 }}
+          // `initial={false}` tells motion to start at the animate state with
+          // no transition — the row is simply there, which is what a revisit
+          // should look like.
+          initial={firstEntrance ? { opacity: 0, y: 12 } : false}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: delay(index), ease: EASE }}
+          transition={{ duration: 0.35, delay: firstEntrance ? delay(index) : 0, ease: EASE }}
         >
           {renderItem(item, index)}
         </motion.div>

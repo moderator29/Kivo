@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -86,7 +87,7 @@ export async function syncPlayerTransfers(playerId: string): Promise<SyncResult>
     .single();
 
   if (startError || !syncRun) {
-    console.error("Failed to start transfer sync run", startError);
+    logError("football.sync-transfers.startTransferSyncRun", startError);
     return {
       status: "failed",
       recordsProcessed: 0,
@@ -121,7 +122,7 @@ export async function syncPlayerTransfers(playerId: string): Promise<SyncResult>
     transfers = await provider.getPlayerTransfers(playerProviderId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Transfer sync: getPlayerTransfers failed", err);
+    logError("football.sync-transfers.transferSyncGetplayertransfers", err);
     return fail(message);
   }
 
@@ -134,7 +135,7 @@ export async function syncPlayerTransfers(playerId: string): Promise<SyncResult>
       processed += 1;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Transfer sync: failed to upsert transfer ${provider.name}:${transfer.providerId}`, err);
+      logError("football.sync-transfers.transferSyncUpsertTransfer", err, { detail: `Transfer sync: failed to upsert transfer ${provider.name}:${transfer.providerId}` });
       errors.push(`transfer ${provider.name}:${transfer.providerId} (${transfer.transferDate}): ${message}`);
     }
   }
@@ -210,7 +211,7 @@ export async function reconcileUnresolvedTransferTeams(): Promise<{ error: strin
     .limit(RECONCILE_BATCH_LIMIT);
 
   if (selectError) {
-    console.error("Transfer team reconciliation: failed to load unresolved rows", selectError);
+    logError("football.sync-transfers.transferTeamReconciliationLoad", selectError);
     return { error: "Couldn't load unresolved transfers. Try again.", recordsProcessed: 0 };
   }
   if (!rows || rows.length === 0) {
@@ -234,7 +235,7 @@ export async function reconcileUnresolvedTransferTeams(): Promise<{ error: strin
 
     const { error: updateError } = await supabase.from("transfers").update(update).eq("id", row.id);
     if (updateError) {
-      console.error(`Transfer team reconciliation: failed to update transfer ${row.id}`, updateError);
+      logError("football.sync-transfers.transferTeamReconciliationUpdate", updateError, { detail: `Transfer team reconciliation: failed to update transfer ${row.id}` });
       continue;
     }
     resolvedCount += 1;

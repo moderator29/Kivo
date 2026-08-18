@@ -389,6 +389,49 @@ h3 {
   }
 
   /* ---------------------------------------------------------------------------
+     PAGE CONTAINER
+
+     One rhythm for every screen under (app). Before this, each page picked its
+     own max-width, its own horizontal padding and its own vertical gap, so
+     moving between two screens shifted the content column sideways and changed
+     how tightly things stacked — the "not really slick / jammed packed"
+     complaint this pass is answering, and mostly a container problem rather
+     than a decoration one.
+
+     Max width is a custom property rather than a hard value so a genuinely
+     wide screen (a dashboard grid, a table) opts in with `.kivo-page--wide`
+     instead of dropping the class and re-deriving the padding by hand.
+  --------------------------------------------------------------------------- */
+
+  .kivo-page {
+    --kivo-page-max: 42rem;
+    margin-inline: auto;
+    display: flex;
+    width: 100%;
+    max-width: var(--kivo-page-max);
+    flex-direction: column;
+    gap: 1.25rem;
+    padding-inline: 1rem;
+    padding-block: 1.5rem 2.5rem;
+  }
+
+  .kivo-page--wide {
+    --kivo-page-max: 72rem;
+  }
+
+  .kivo-page--narrow {
+    --kivo-page-max: 34rem;
+  }
+
+  @media (min-width: 1024px) {
+    .kivo-page {
+      gap: 1.5rem;
+      padding-inline: 2rem;
+      padding-block: 2rem 4rem;
+    }
+  }
+
+  /* ---------------------------------------------------------------------------
      SURFACES
   --------------------------------------------------------------------------- */
 
@@ -1120,21 +1163,6 @@ h3 {
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
-  }
-
-  /* Backs <KivoProfileBackground> (src/components/profile/kivo-profile-background.tsx):
-     a dark scrim over a user's chosen KIVO background image so foreground
-     .kivo-glass cards/text stay readable on top of it, reusing this file's own
-     obsidian/glass tokens rather than a new colour. Two layers: a flat wash for
-     overall contrast everywhere, plus a bottom-heavy gradient (most profile
-     content sits toward the lower/middle of the hero) for extra depth where
-     text actually lives. */
-  .kivo-profile-background-overlay {
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(to bottom, rgba(5, 6, 10, 0.55) 0%, rgba(5, 6, 10, 0.72) 65%, rgba(5, 6, 10, 0.88) 100%),
-      rgba(5, 6, 10, 0.25);
   }
 
   .kivo-aurora-blob {

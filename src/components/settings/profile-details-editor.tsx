@@ -36,7 +36,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
             aria-label="Edit profile details"
             className="shrink-0 text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         </div>
         <div className="flex flex-col gap-1 border-t border-hairline-soft pt-3">
@@ -54,7 +54,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="flex w-fit items-center gap-1 text-xs font-medium text-live"
             >
-              <Check className="h-3 w-3" strokeWidth={2.5} />
+              <Check className="h-3 w-3" strokeWidth={2} />
               Saved
             </motion.span>
           )}
@@ -130,7 +130,7 @@ export function ProfileDetailsEditor({ bio, country }: { bio: string | null; cou
           aria-busy={pending}
           className="kivo-gradient-prime flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-on-accent kivo-raise disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
-          <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+          <Check className="h-3.5 w-3.5" strokeWidth={2} />
           {pending ? "Saving…" : "Save"}
         </button>
         <button

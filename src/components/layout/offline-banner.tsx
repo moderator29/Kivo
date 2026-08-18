@@ -1,47 +1,36 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { WifiOff } from "lucide-react";
+import { WifiOff, CloudOff } from "lucide-react";
+import { useNetworkState } from "@/lib/network-state";
 
 /**
- * Global "you're offline" banner (RECOMMENDATIONS.md item 100). Previously
- * only the AI chat (src/components/ai/chat.tsx) told a user their connection
- * dropped, and only after a failed fetch. This is ambient instead: driven by
- * `navigator.onLine` plus the `online`/`offline` window events, no polling,
- * so it appears the instant the browser notices the connection is gone and
- * disappears the instant it's back.
+ * Ambient network state (RECOMMENDATIONS item 100, extended by KN-79).
  *
- * `useSyncExternalStore` (rather than `useState` + `useEffect`) is the
- * React-recommended way to subscribe a component to a value that lives
- * outside React's own state — exactly what `navigator.onLine` is here — and
- * it has a dedicated server-snapshot argument for the SSR case, where
- * `navigator` doesn't exist at all: assume online there, exactly matching
- * this component's client-side value until the browser reports otherwise.
+ * The original reflected `navigator.onLine` and nothing else, which covers the
+ * least common of the three real cases. It now also surfaces the one that
+ * actually happens on a variable mobile connection: the browser believes it is
+ * online, and a request KIVO genuinely made did not complete.
+ *
+ * That second state is never inferred — `src/lib/network-state.ts` only sets it
+ * when a real server action failed at the transport layer, and clears it the
+ * moment anything succeeds. A banner that guessed at connection quality would
+ * be exactly the kind of unearned claim this product does not make.
+ *
+ * The two states get different words and different icons on purpose. "You're
+ * offline" is a statement about the user's connection; "we couldn't reach
+ * KIVO" is a statement about ours, and honestly might be our fault.
+ *
+ * The filename and the exported name are unchanged on purpose: `app-shell.tsx`
+ * is owned by another workstream right now, and a behaviour upgrade should not
+ * require a rename in a file someone else is restructuring.
  */
-function subscribe(callback: () => void) {
-  window.addEventListener("online", callback);
-  window.addEventListener("offline", callback);
-  return () => {
-    window.removeEventListener("online", callback);
-    window.removeEventListener("offline", callback);
-  };
-}
-
-function getSnapshot() {
-  return navigator.onLine;
-}
-
-function getServerSnapshot() {
-  return true;
-}
-
 export function OfflineBanner() {
-  const online = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const state = useNetworkState();
 
   return (
     <AnimatePresence initial={false}>
-      {!online && (
+      {state !== "online" && (
         <motion.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
@@ -52,10 +41,19 @@ export function OfflineBanner() {
           <div
             role="status"
             aria-live="polite"
-            className="kivo-glass flex items-center justify-center gap-2 rounded-none border-x-0 border-t-0 px-4 py-2 text-xs font-medium text-foreground-muted"
+            className="kivo-glass flex items-center justify-center gap-2 rounded-none border-x-0 border-t-0 px-4 py-2 text-center text-xs font-medium text-foreground-muted"
           >
-            <WifiOff className="h-3.5 w-3.5 shrink-0 text-critical" strokeWidth={2} />
-            You&apos;re offline. Some things won&apos;t load until your connection comes back.
+            {state === "offline" ? (
+              <>
+                <WifiOff className="h-3.5 w-3.5 shrink-0 text-critical" strokeWidth={2} aria-hidden="true" />
+                You&apos;re offline. Some things won&apos;t load until your connection comes back.
+              </>
+            ) : (
+              <>
+                <CloudOff className="h-3.5 w-3.5 shrink-0 text-warning" strokeWidth={2} aria-hidden="true" />
+                We couldn&apos;t reach KIVO. Your last action didn&apos;t go through - try it again.
+              </>
+            )}
           </div>
         </motion.div>
       )}

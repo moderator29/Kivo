@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { positionGroup, type PositionGroup } from "@/app/(app)/fantasy/fantasy-rules";
 import { escapeLikePattern } from "@/lib/text";
@@ -69,7 +70,7 @@ export async function searchPlayers(
 
   const { data: players, error } = await request.limit(RESULTS_LIMIT);
   if (error) {
-    console.error("Failed to search players", error);
+    logError("players.search", error);
     return { error: "Couldn't load players. Try again.", players: [], truncated: false };
   }
 

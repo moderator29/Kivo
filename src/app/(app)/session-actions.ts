@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -55,7 +56,7 @@ export async function signOutOtherDevices(): Promise<{ error: string | null }> {
 
   const { error } = await supabase.auth.signOut({ scope: "others" });
   if (error) {
-    console.error("Failed to sign out other devices", error);
+    logError("session-actions.signOutOtherDevices", error);
     return { error: "Something went wrong. Try again." };
   }
 

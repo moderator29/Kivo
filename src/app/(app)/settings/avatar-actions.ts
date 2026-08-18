@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -45,7 +46,7 @@ export async function selectKivoAvatar(kivoId: string) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to select KIVO avatar", error);
+    logError("settings.avatar-actions.selectKivoAvatar", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -101,7 +102,7 @@ export async function uploadAvatar(formData: FormData) {
     upsert: false,
   });
   if (uploadError) {
-    console.error("Failed to upload avatar", uploadError);
+    logError("settings.avatar-actions.uploadAvatar", uploadError);
     return { error: "Upload failed. Try again." };
   }
 
@@ -115,7 +116,7 @@ export async function uploadAvatar(formData: FormData) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to save uploaded avatar", error);
+    logError("settings.avatar-actions.saveUploadedAvatar", error);
     return { error: "Something went wrong. Try again." };
   }
 

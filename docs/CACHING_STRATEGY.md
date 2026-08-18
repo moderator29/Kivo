@@ -42,3 +42,21 @@ Concretely, this means:
 - The two providers' cache windows aren't shared/unified — API-Football's and TheSportsDB's constants are defined independently, even for conceptually the same data type (fixtures, squads, standings), because each was tuned against that provider's own quota limit rather than a shared abstraction.
 
 Building a formal system (a `VOLATILITY_TIER` enum, a lookup table, enforced at the type level) is real, scoped future work — not attempted this pass, and not currently blocking anything, since the ad hoc constants do correctly protect quota today. Flagging honestly rather than describing the current constants as more systematic than they are.
+
+## `revalidatePath` under `force-dynamic` — measured, because it was about to be deleted
+
+`KIVO_NEXT_GEN.md` KN-28 raised a good question and reached the wrong conclusion, and the difference matters because its suggested remedy was to remove dozens of `revalidatePath` calls.
+
+**The question**: `src/app/(app)/layout.tsx` sets `export const dynamic = "force-dynamic"` for the whole app group. If no route in the group has a cached RSC payload, there is nothing for `revalidatePath` to invalidate, and every call in every Server Action under `(app)` is inert.
+
+**What was measured**, against a real production build on 2026-08-18: every single route in the `(app)` group is emitted as `ƒ (Dynamic) server-rendered on demand`. Not one is `○ (Static)` or `● (SSG)`. So the first half of the premise is **confirmed**: there is no server-side cache entry for any of these routes, and item 80 (pushing the dynamic boundary down so public list pages can be cached) is still genuinely open.
+
+**But the calls are not inert**, and this is the half the item missed. `revalidatePath` called from a Server Function does two different things, and only one of them is about the server cache. From Next 16's own API reference (`node_modules/next/dist/docs/01-app/03-api-reference/04-functions/revalidatePath.md`), verbatim:
+
+> **Server Functions**: Updates the UI immediately (if viewing the affected path). Currently, it also causes all previously visited pages to refresh when navigated to again.
+
+That second behaviour is client-side and has nothing to do with whether the route had a server cache entry. It is what makes the ordinary product loop work: post something, navigate to `/social`, and see your post — rather than being handed the copy of `/social` the client already had in memory from before the mutation. Removing these calls would not be tidying up dead code; it would ship a product where mutations do not appear until a hard reload.
+
+**Therefore**: leave them. Item 80 remains worth doing on its own merits (a cacheable public list page is faster and cheaper), and if it ever lands, these calls become load-bearing on the server side too rather than newly necessary. The narrowing pass `RECOMMENDATIONS.md` item 81 did — from `revalidatePath("/", "layout")` to specific paths — was and remains correct: with the client-refresh behaviour above, an over-broad path invalidates more of the user's client-side navigation history than the mutation actually touched.
+
+**What is genuinely not verifiable from here**: whether the client-refresh behaviour survives a future Next release. The doc says "Currently … This behavior is temporary and will be updated in the future to apply only to the specific path." That is a narrowing of scope, not a removal, so the calls stay correct either way — but it is the sentence to re-read on the next major upgrade.

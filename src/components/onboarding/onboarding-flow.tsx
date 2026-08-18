@@ -10,11 +10,13 @@ import kivoIntroArtwork from "../../../public/brand/kivo-artwork-hero.webp";
 import kivoUsernameArtwork from "../../../public/brand/kivo-artwork-social.webp";
 import kivoTeamArtwork from "../../../public/brand/kivo-artwork-action.webp";
 import { saveUsernameStep, finishOnboarding, skipOnboarding, checkUsername } from "@/app/onboarding/actions";
-import type { OnboardingCompletion } from "@/app/onboarding/actions";
+import type { AlertPreset, OnboardingCompletion } from "@/app/onboarding/actions";
 import type { AwardedBadge } from "@/lib/rewards";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
+import { CountUp } from "@/components/ui/count-up";
+import { useDeviceTimeZone } from "@/lib/use-device-timezone";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 const AVAILABILITY_DEBOUNCE_MS = 450;
@@ -31,7 +33,7 @@ type Team = {
 // after a real server round trip, not something a dot represents or you can
 // page back into (there's nothing to "go back" to once the badge/XP are
 // actually on the ledger).
-type Step = "intro" | "username" | "team";
+type Step = "intro" | "username" | "team" | "clubs" | "alerts";
 type FlowStep = Step | "success";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -56,14 +58,33 @@ export function OnboardingFlow({
 }) {
   const router = useRouter();
   const hasTeams = availableTeams.length > 0;
-  const steps: Step[] = hasTeams ? ["intro", "username", "team"] : ["intro", "username"];
+  // KN-40: two optional steps on the end. A gated app gets exactly one
+  // guaranteed moment of a user's attention, and this flow was spending it on
+  // two questions while every other personalisation signal KIVO holds sat
+  // undiscovered in Settings. The club-picking steps only exist when there are
+  // real clubs to pick — an unsynced database gets the short flow, not an empty
+  // grid.
+  const steps: Step[] = hasTeams
+    ? ["intro", "username", "team", "clubs", "alerts"]
+    : ["intro", "username", "alerts"];
 
   const [step, setStep] = useState<FlowStep>("intro");
   const [direction, setDirection] = useState<1 | -1>(1);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  // KN-40: clubs to follow beyond the favourite. The favourite is added to the
+  // follow set server-side, so it is deliberately not tracked here.
+  const [followTeamIds, setFollowTeamIds] = useState<string[]>([]);
   const [award, setAward] = useState<OnboardingCompletion | null>(null);
+
+  // KN-89. The device's own zone, read from the platform rather than during
+  // render: the server has no device zone to resolve, so reading it during
+  // render would make the first paint disagree with hydration for every
+  // visitor outside UTC. Shown to the user below before it is saved (see the
+  // disclosure line under the carousel) — KIVO is told a timezone, it never
+  // works one out from an IP address.
+  const deviceTimezone = useDeviceTimeZone();
 
   const [usernameValue, setUsernameValue] = useState(
     defaultUsername.startsWith("user_") ? "" : defaultUsername,
@@ -79,11 +100,20 @@ export function OnboardingFlow({
   // Driving it from the event handler keeps every setAvailability call
   // inside a callback (this handler, the debounce timer, or the check's
   // response), never synchronously inside an effect body.
-  function handleUsernameChange(value: string) {
+  function handleUsernameChange(rawValue: string) {
+    // Normalise as the user types rather than validating after the fact.
+    // The server stores `username.trim().toLowerCase()` and the availability
+    // check lowercases too — so typing "Puffnutz_" reported "Available"
+    // (correctly, "puffnutz_" was free) while the input's own
+    // `pattern="[a-z0-9_]+"` silently blocked submit with the browser's
+    // useless "Match the requested format". Showing the user the exact
+    // string that will be saved removes the contradiction entirely: there is
+    // no invalid state to report, because uppercase is folded on the way in.
+    const value = rawValue.toLowerCase();
     setUsernameValue(value);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
-    const candidate = value.trim().toLowerCase();
+    const candidate = value.trim();
     if (!USERNAME_PATTERN.test(candidate)) {
       setAvailability("idle");
       return;
@@ -119,6 +149,8 @@ export function OnboardingFlow({
   function handleBack() {
     if (step === "username") goTo("intro", -1);
     else if (step === "team") goTo("username", -1);
+    else if (step === "clubs") goTo("team", -1);
+    else if (step === "alerts") goTo(hasTeams ? "clubs" : "username", -1);
   }
 
   function handleUsernameSubmit(formData: FormData) {
@@ -129,11 +161,9 @@ export function OnboardingFlow({
         setError(result.error);
         return;
       }
-      if (hasTeams) {
-        goTo("team", 1);
-      } else {
-        await complete(null);
-      }
+      // With no clubs synced there is nothing to follow and no favourite to
+      // pick, but the alert question still applies.
+      goTo(hasTeams ? "team" : "alerts", 1);
     });
   }
 
@@ -141,8 +171,8 @@ export function OnboardingFlow({
   // would still be `onboarding_completed: false`, so /home would bounce the
   // user straight back here. Surface the real error on the step they're on
   // and let them retry instead.
-  async function complete(teamId: string | null) {
-    const result = await finishOnboarding(teamId);
+  async function complete(teamId: string | null, clubsToFollow: string[], alertPreset: AlertPreset | null) {
+    const result = await finishOnboarding(teamId, deviceTimezone, clubsToFollow, alertPreset);
     if (result.error) {
       setError(result.error);
       return;
@@ -151,8 +181,12 @@ export function OnboardingFlow({
     goTo("success", 1);
   }
 
-  function handleTeamContinue(teamId: string | null) {
-    startTransition(() => complete(teamId));
+  function handleAlertsContinue(preset: AlertPreset | null) {
+    startTransition(() => complete(selectedTeamId, followTeamIds, preset));
+  }
+
+  function toggleFollowTeam(id: string) {
+    setFollowTeamIds((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]));
   }
 
   function handleSkipAll() {
@@ -176,7 +210,7 @@ export function OnboardingFlow({
             aria-label="Back"
             className="kivo-glass kivo-glass-interactive flex h-10 w-10 items-center justify-center rounded-full transition-colors"
           >
-            <ArrowLeft className="h-4 w-4 text-foreground" strokeWidth={2} />
+            <ArrowLeft className="h-4 w-4 text-foreground" strokeWidth={1.75} />
           </button>
         ) : null}
       </div>
@@ -210,8 +244,35 @@ export function OnboardingFlow({
               selectedTeamId={selectedTeamId}
               onSelect={setSelectedTeamId}
               pending={pending}
-              onContinue={() => handleTeamContinue(selectedTeamId)}
-              onSkip={() => handleTeamContinue(null)}
+              onContinue={() => goTo("clubs", 1)}
+              onSkip={() => {
+                setSelectedTeamId(null);
+                goTo("clubs", 1);
+              }}
+            />
+          )}
+
+          {step === "clubs" && (
+            <ClubsPanel
+              teams={availableTeams}
+              favouriteTeamId={selectedTeamId}
+              selectedIds={followTeamIds}
+              onToggle={toggleFollowTeam}
+              pending={pending}
+              onContinue={() => goTo("alerts", 1)}
+              onSkip={() => {
+                setFollowTeamIds([]);
+                goTo("alerts", 1);
+              }}
+            />
+          )}
+
+          {step === "alerts" && (
+            <AlertsPanel
+              pending={pending}
+              error={error}
+              onChoose={handleAlertsContinue}
+              onSkip={() => handleAlertsContinue(null)}
             />
           )}
 
@@ -227,6 +288,16 @@ export function OnboardingFlow({
           )}
         </motion.div>
       </AnimatePresence>
+
+      {/* KN-89. Stated, not silent: the user sees which zone is about to be
+          saved before the step that saves it, and is told where to change it.
+          Absent entirely when the browser will not report one, rather than
+          claiming a zone we do not have. */}
+      {(step === "username" || step === "team" || step === "clubs" || step === "alerts") && deviceTimezone && (
+        <p className="text-center text-[11px] text-foreground-subtle">
+          Times will show in {deviceTimezone}. Change it any time in Settings.
+        </p>
+      )}
 
       {step !== "success" && <StepDots count={steps.length} activeIndex={activeIndex} />}
     </div>
@@ -316,7 +387,11 @@ function PillButton({
   );
 }
 
-function SkipLink({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+/** `label` exists for the one skip that is also the final submit (KN-40's
+ * alerts step): skipping there still writes the profile and completes
+ * onboarding, so it needs to be able to say "Finishing…" rather than sitting
+ * inert while a real round trip runs. */
+function SkipLink({ onClick, disabled, label = "Skip for now" }: { onClick: () => void; disabled?: boolean; label?: string }) {
   return (
     <button
       type="button"
@@ -324,7 +399,7 @@ function SkipLink({ onClick, disabled }: { onClick: () => void; disabled?: boole
       onClick={onClick}
       className="mx-auto text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50"
     >
-      Skip for now
+      {label}
     </button>
   );
 }
@@ -345,7 +420,7 @@ export function IntroPanel({ onNext }: { onNext: () => void }) {
       </div>
       <PillButton onClick={onNext}>
         Get started
-        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
       </PillButton>
     </div>
   );
@@ -400,8 +475,8 @@ export function UsernamePanel({
             {availability === "checking" && (
               <span className="block h-4 w-4 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
             )}
-            {availability === "available" && <Check className="h-4 w-4 text-live" strokeWidth={2.5} />}
-            {availability === "taken" && <X className="h-4 w-4 text-critical" strokeWidth={2.5} />}
+            {availability === "available" && <Check className="h-4 w-4 text-live" strokeWidth={1.75} />}
+            {availability === "taken" && <X className="h-4 w-4 text-critical" strokeWidth={1.75} />}
           </span>
         </div>
 
@@ -441,7 +516,7 @@ export function UsernamePanel({
 
         <PillButton type="submit" disabled={pending || availability === "taken"} pending={pending}>
           {pending ? "Saving…" : "Continue"}
-          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={2.5} />}
+          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={1.75} />}
         </PillButton>
       </form>
 
@@ -495,7 +570,7 @@ export function TeamPanel({
             >
               <TeamCrest crestUrl={team.crest_url} name={team.name} size={22} />
               <span className="truncate">{team.short_name ?? team.name}</span>
-              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.5} />}
+              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />}
             </button>
           );
         })}
@@ -504,10 +579,189 @@ export function TeamPanel({
       <div className="flex w-full flex-col gap-3">
         <PillButton onClick={onContinue} disabled={pending || !selectedTeamId} pending={pending}>
           {pending ? "Saving…" : "Continue"}
-          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={2.5} />}
+          {!pending && <ArrowRight className="h-4 w-4" strokeWidth={1.75} />}
         </PillButton>
         <SkipLink onClick={onSkip} disabled={pending} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * KN-40, step one of two: follow a few clubs.
+ *
+ * This is the step that fixes KN-36's underlying cause rather than its
+ * symptom. `/home` builds itself around the clubs you follow, so a brand-new
+ * account that follows nothing lands on a page with nothing personal on it and
+ * an empty state to explain why. Asking here — at the one moment attention is
+ * guaranteed — is the difference between a first screen that is about the user
+ * and one that apologises.
+ *
+ * The favourite club picked on the previous step is shown as already-followed
+ * and is not togglable: it is added to the follow set server-side, because
+ * choosing a club as your favourite and then not following it is a distinction
+ * nobody intends. Everything here writes real `follows` rows and awards
+ * nothing extra — item 107's XP-parity problem is not reproduced.
+ */
+export function ClubsPanel({
+  teams,
+  favouriteTeamId,
+  selectedIds,
+  onToggle,
+  pending,
+  onContinue,
+  onSkip,
+}: {
+  teams: Team[];
+  favouriteTeamId: string | null;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  pending: boolean;
+  onContinue: () => void;
+  onSkip: () => void;
+}) {
+  const followCount = selectedIds.length + (favouriteTeamId ? 1 : 0);
+
+  return (
+    <div className="flex flex-col items-center gap-6 text-center">
+      <HeroArt src={kivoTeamArtwork} />
+      <div className="flex flex-col items-center gap-3">
+        <Kicker>Your football</Kicker>
+        <h1 className="max-w-xs text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          Follow a few more.
+        </h1>
+        <p className="max-w-xs text-sm text-foreground-muted">
+          Their fixtures lead your home screen and their goals reach your notifications. Optional, and changeable any
+          time.
+        </p>
+      </div>
+
+      <div className="grid max-h-56 w-full grid-cols-2 gap-2 overflow-y-auto pr-1">
+        {teams.map((team) => {
+          const isFavourite = team.id === favouriteTeamId;
+          const isSelected = isFavourite || selectedIds.includes(team.id);
+          return (
+            <button
+              key={team.id}
+              type="button"
+              disabled={pending || isFavourite}
+              aria-pressed={isSelected}
+              onClick={() => onToggle(team.id)}
+              className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-left text-xs font-medium transition-colors disabled:opacity-70 ${
+                isSelected
+                  ? "border-accent bg-accent-soft text-foreground"
+                  : "border-hairline bg-surface-1 text-foreground-muted hover:border-hairline-strong hover:bg-surface-2"
+              }`}
+            >
+              <TeamCrest crestUrl={team.crest_url} name={team.name} size={22} />
+              <span className="truncate">{team.short_name ?? team.name}</span>
+              {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex w-full flex-col gap-3">
+        <PillButton onClick={onContinue} disabled={pending} pending={pending}>
+          {followCount > 0 ? `Follow ${followCount} ${followCount === 1 ? "club" : "clubs"}` : "Continue"}
+          <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+        </PillButton>
+        <SkipLink onClick={onSkip} disabled={pending} />
+      </div>
+    </div>
+  );
+}
+
+/** The three alert presets, in the words a person reads. Each maps to a real
+ * set of `notification_preferences` columns in ALERT_PRESETS
+ * (src/app/onboarding/actions.ts) — nothing here promises a channel KIVO
+ * cannot deliver on, which is why email and push are not offered at all. */
+const ALERT_CHOICES: { preset: AlertPreset; label: string; detail: string }[] = [
+  {
+    preset: "everything",
+    label: "Everything",
+    detail: "Goals, kick-offs and full time, plus replies, predictions and fantasy.",
+  },
+  {
+    preset: "football_only",
+    label: "Just the football",
+    detail: "Match events, prediction results and fantasy. Nothing social.",
+  },
+  {
+    preset: "matches_only",
+    label: "Only my matches",
+    detail: "Kick-off, goals, red cards and full time for the clubs you follow.",
+  },
+];
+
+/**
+ * KN-40, step two of two: how much should we tell you.
+ *
+ * `notification_preferences` is eight real booleans that only somebody who
+ * went looking in Settings would ever have set. This asks the question once,
+ * as three choices rather than eight switches, and writes the four *category*
+ * columns.
+ *
+ * It deliberately does not offer email or push. KIVO has neither transactional
+ * email nor push infrastructure yet, and offering a delivery channel that does
+ * not exist during signup would be selling something the product cannot ship.
+ * Skipping writes nothing and leaves the table defaults, so it is genuinely
+ * skippable rather than a fourth answer in disguise.
+ */
+export function AlertsPanel({
+  pending,
+  error,
+  onChoose,
+  onSkip,
+}: {
+  pending: boolean;
+  error: string | null;
+  onChoose: (preset: AlertPreset) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-6 text-center">
+      <HeroArt src={kivoIntroArtwork} />
+      <div className="flex flex-col items-center gap-3">
+        <Kicker>Your alerts</Kicker>
+        <h1 className="max-w-xs text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          How much should we tell you?
+        </h1>
+        <p className="max-w-xs text-sm text-foreground-muted">
+          In-app notifications only for now — KIVO doesn&apos;t send email or push yet. Change any of it in Settings.
+        </p>
+      </div>
+
+      <div className="flex w-full flex-col gap-2">
+        {ALERT_CHOICES.map((choice) => (
+          <button
+            key={choice.preset}
+            type="button"
+            disabled={pending}
+            onClick={() => onChoose(choice.preset)}
+            className="flex flex-col gap-1 rounded-2xl border border-hairline bg-surface-1 px-4 py-3 text-left transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          >
+            <span className="text-sm font-semibold text-foreground">{choice.label}</span>
+            <span className="text-xs text-foreground-muted">{choice.detail}</span>
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {error && (
+          <motion.span
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2 }}
+            className="text-xs text-critical"
+          >
+            {error}
+          </motion.span>
+        )}
+      </AnimatePresence>
+
+      <SkipLink onClick={onSkip} disabled={pending} label={pending ? "Finishing…" : "Skip for now"} />
     </div>
   );
 }
@@ -586,7 +840,7 @@ export function SuccessPanel({
 
         {xpAwarded > 0 && (
           <SummaryRow label="Experience">
-            <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
+            <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             <span className="font-semibold text-foreground">+{xpAwarded} XP</span>
           </SummaryRow>
         )}
@@ -594,7 +848,7 @@ export function SuccessPanel({
 
       <PillButton onClick={onContinue}>
         Enter KIVO
-        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
       </PillButton>
     </div>
   );
@@ -629,24 +883,6 @@ function BadgeIcon({ badge, size }: { badge: AwardedBadge; size: number }) {
   );
 }
 
-// Discrete count-up keyframes for the XP badge, identical technique to
-// /rewards/page.tsx's own xpCountKeyframes (kept here rather than shared,
-// since that one is a Server Component computing it inline and this is a
-// Client Component — same output, different rendering context): each step
-// resets the `kivo-xp-count` counter to the real running value, landing
-// exactly on `xp` at 100% every time. RECOMMENDATIONS.md item 18 (item 317):
-// this was the one screen already built to celebrate a reward whose XP
-// number still just appeared fully-formed with no count.
-function xpCountUpKeyframes(xp: number): string {
-  const steps = xp > 0 ? Math.min(xp, 40) : 0;
-  if (steps === 0) return "";
-  return Array.from({ length: steps + 1 }, (_, i) => {
-    const percent = ((i / steps) * 100).toFixed(2);
-    const value = Math.round((xp * i) / steps);
-    return `${percent}% { counter-reset: kivo-xp-count ${value}; }`;
-  }).join("\n");
-}
-
 /**
  * The hero of the completion screen: the real badge this user just earned,
  * lit and floating, with the real XP counting up beside it. The badge art is
@@ -678,21 +914,9 @@ function BadgeReveal({ xp, badge }: { xp: number; badge: AwardedBadge | null }) 
 
           {xp > 0 && (
             <span className="absolute -bottom-2 right-0 whitespace-nowrap rounded-full border border-hairline bg-surface-3 px-3 py-1 text-xs font-bold text-live shadow-lg">
-              {/* Real value always in the DOM, correct even if the counter
-                  animation doesn't render (no CSS support, reduced motion). */}
-              <style>{`
-                @keyframes kivo-xp-count-up {
-                  ${xpCountUpKeyframes(xp)}
-                }
-                .kivo-xp-count-up::before {
-                  content: "+" counter(kivo-xp-count);
-                }
-              `}</style>
-              <span
-                aria-hidden="true"
-                className="kivo-xp-count-up inline-block animate-[kivo-xp-count-up_1.2s_cubic-bezier(0.22,1,0.36,1)_0.3s_forwards]"
-              />
-              <span className="sr-only">+{xp}</span> XP
+              {/* KN-75: was a second, near-identical copy of /rewards's own
+                  hand-rolled count-up. Both are <CountUp> now. */}
+              <CountUp value={xp} id="onboarding-xp" prefix="+" delaySeconds={0.3} /> XP
             </span>
           )}
         </div>

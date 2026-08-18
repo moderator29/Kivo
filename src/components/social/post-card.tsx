@@ -13,7 +13,9 @@ import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { usePopoverPlacement } from "@/hooks/use-popover-placement";
+import { useIsClamped } from "@/hooks/use-clamped";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+import { RetryableError } from "@/components/ui/retryable-error";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
@@ -62,21 +64,10 @@ function linkifyBody(body: string) {
 
 function PostBody({ body }: { body: string }) {
   const [expanded, setExpanded] = useState(false);
-  const [isOverflowing, setIsOverflowing] = useState(false);
   const bodyRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    function measure() {
-      if (!el) return;
-      setIsOverflowing(el.scrollHeight - el.clientHeight > 1);
-    }
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [body]);
+  // KN-70: one ResizeObserver for every clamped body in the app, not one per
+  // post. See src/hooks/use-clamped.ts.
+  const isOverflowing = useIsClamped(bodyRef, body);
 
   return (
     <div className="flex flex-col items-start gap-1">
@@ -119,6 +110,11 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // KN-56: remembering which option failed is what makes "Try again" possible
+  // at all — the rollback puts the poll back the way it was, so without this
+  // there is nothing left on screen saying what the user had picked.
+  const [failedOptionId, setFailedOptionId] = useState<string | null>(null);
+
   function handleVote(optionId: string) {
     if (!signedIn) {
       router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
@@ -126,6 +122,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
     }
     if (pending || optionId === localPoll.viewerOptionId) return;
     setError(null);
+    setFailedOptionId(null);
     const previous = localPoll;
     const previousOptionId = localPoll.viewerOptionId;
     setLocalPoll((current) => ({
@@ -143,6 +140,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
       if (result.error) {
         setLocalPoll(previous);
         setError(result.error);
+        setFailedOptionId(optionId);
       }
     });
   }
@@ -174,7 +172,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             <span className="absolute inset-y-0 left-0 bg-accent-soft" style={{ width: `${pct}%` }} aria-hidden="true" />
             <span className="relative flex items-center justify-between gap-2">
               <span className={cn("flex min-w-0 items-center gap-1 truncate", isOwn ? "font-semibold text-foreground" : "text-foreground-muted")}>
-                {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
+                {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2} />}
                 <span className="truncate">{option.label}</span>
               </span>
               <span className="flex shrink-0 items-center gap-1 text-xs text-foreground-subtle">
@@ -191,9 +189,12 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
           {localPoll.resultsUnavailable ? "Couldn't load results" : `${total} vote${total === 1 ? "" : "s"}`}
         </p>
         {error && (
-          <p className="text-[11px] text-critical" role="status" aria-live="polite">
-            {error}
-          </p>
+          <RetryableError
+            size="xs"
+            message={error}
+            retrying={pending}
+            onRetry={failedOptionId ? () => handleVote(failedOptionId) : undefined}
+          />
         )}
       </div>
     </div>
@@ -428,12 +429,12 @@ export function PostCard({
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                   className="flex items-center gap-1 text-live"
                 >
-                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  <Check className="h-3.5 w-3.5" strokeWidth={2} />
                   Reported
                 </motion.span>
               ) : (
                 <motion.span key="flag" className="flex items-center gap-1.5">
-                  <Flag className="h-3.5 w-3.5" strokeWidth={1.75} fill={reported ? "currentColor" : "none"} />
+                  <Flag className="h-3.5 w-3.5" strokeWidth={2} fill={reported ? "currentColor" : "none"} />
                   {reported ? "Reported" : "Report"}
                   {/* RECOMMENDATIONS item 235 */}
                   <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0 text-foreground-subtle" />

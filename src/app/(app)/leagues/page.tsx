@@ -4,37 +4,37 @@ import { NoDataYet } from "@/components/ui/no-data-yet";
 import { EntityListPage } from "@/components/ui/entity-list-page";
 import { LeaguesList } from "@/components/leagues/leagues-list";
 import { getNavItem } from "@/lib/navigation";
-import { LEAGUES_PAGE_SIZE } from "./constants";
+import { LEAGUES_PAGE_SIZE, LEAGUE_LIST_SELECT, mapCompetitionRow } from "./constants";
+import { resolveListPage } from "@/lib/params";
 
 const item = getNavItem("leagues");
 
 export const metadata: Metadata = { title: item.label };
 
-export default async function LeaguesPage() {
+export default async function LeaguesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
   const supabase = createServerSupabaseClient();
 
-  // Fetches one extra row beyond the page size so "hasMore" can be read
-  // directly off the response, matching the same trick `loadMoreLeagues` uses
-  // for every subsequent page.
+  // KN-47: pages loaded live in the URL, so Back from a competition page
+  // returns to the same list rather than to page one. See resolveListPage.
+  const { page: pageParam } = await searchParams;
+  const page = resolveListPage(pageParam);
+  const loadedCount = page * LEAGUES_PAGE_SIZE;
+
+  // One extra row beyond what's asked for, so "hasMore" reads straight off the
+  // response instead of costing a second count query.
   const { data } = await supabase
     .from("competitions")
-    .select("id, name, country, logo_url, seasons(id, name, is_current)")
+    .select(LEAGUE_LIST_SELECT)
     .order("name", { ascending: true })
-    .range(0, LEAGUES_PAGE_SIZE);
+    .range(0, loadedCount);
 
   const rows = data ?? [];
-  const leagues = rows.slice(0, LEAGUES_PAGE_SIZE).map((competition) => {
-    const currentSeason = competition.seasons?.find((s) => s.is_current) ?? competition.seasons?.[0] ?? null;
-    return {
-      id: competition.id,
-      name: competition.name,
-      country: competition.country,
-      logoUrl: competition.logo_url,
-      currentSeasonName: currentSeason?.name ?? null,
-      hasSeason: currentSeason !== null,
-    };
-  });
-  const hasMore = rows.length > LEAGUES_PAGE_SIZE;
+  const leagues = rows.slice(0, loadedCount).map(mapCompetitionRow);
+  const hasMore = rows.length > loadedCount;
 
   if (leagues.length === 0) {
     return (
@@ -44,7 +44,7 @@ export default async function LeaguesPage() {
 
   return (
     <EntityListPage title="Leagues" description="Competitions synced from today's fixtures.">
-      <LeaguesList initialLeagues={leagues} initialHasMore={hasMore} />
+      <LeaguesList leagues={leagues} hasMore={hasMore} page={page} />
     </EntityListPage>
   );
 }

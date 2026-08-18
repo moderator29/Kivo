@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured, getAnthropicClient, AI_MODEL } from "@/lib/ai/client";
 import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 
 // RECOMMENDATIONS.md items 184/185: the three entity types Match Centre/team
 // pages/player pages can deep-link in with (see ask-ai-link.tsx). Validated
@@ -50,13 +51,19 @@ Grounding rules — these override any instinct to be maximally helpful:
 - Distinguish explicitly between: verified KIVO data, general football knowledge, and your own inference/opinion — don't blur these together.
 - Be concise. This is a chat interface, not an essay generator.
 
-Provenance tagging (RECOMMENDATIONS.md items 188/300) — the KIVO CONTEXT block below is split into three labelled sections: "VERIFIED KIVO DATA" (raw facts synced from the football data provider), "KIVO-CALCULATED" (real stats KIVO's own Form Engine / Match Intelligence derived from that verified data — genuine, not fabricated, but computed rather than a raw provider fact), and "KIVO-LIMITED" (an explicit statement that KIVO doesn't have enough synced matches to compute something reliably — a real, known gap, not a fabricated stat). When a sentence you write states a specific fact drawn from the VERIFIED section, prefix that sentence with the literal tag [[KIVO-VERIFIED]]. When a sentence states a specific fact drawn from the KIVO-CALCULATED section (a form trend, a goal-timing split, an H2H aggregate), prefix that sentence with the literal tag [[KIVO-CALCULATED]]. When you tell the user KIVO doesn't have enough data to answer something reliably, and that specific gap is named in the KIVO-LIMITED section, prefix that sentence with the literal tag [[KIVO-LIMITED]] instead of guessing anyway. Use the tags inline, immediately before the sentence they apply to — never as a separate list, never around general football knowledge, and never around your own inference or opinion.`;
+Provenance tagging (RECOMMENDATIONS.md items 188/300) — the KIVO CONTEXT block below is split into three labelled sections: "VERIFIED KIVO DATA" (raw facts synced from the football data provider), "KIVO-CALCULATED" (real stats KIVO's own Form Engine / Match Intelligence derived from that verified data — genuine, not fabricated, but computed rather than a raw provider fact), and "KIVO-LIMITED" (an explicit statement that KIVO doesn't have enough synced matches to compute something reliably — a real, known gap, not a fabricated stat). When a sentence you write states a specific fact drawn from the VERIFIED section, prefix that sentence with the literal tag [[KIVO-VERIFIED]]. When a sentence states a specific fact drawn from the KIVO-CALCULATED section (a form trend, a goal-timing split, an H2H aggregate), prefix that sentence with the literal tag [[KIVO-CALCULATED]]. When you tell the user KIVO doesn't have enough data to answer something reliably, and that specific gap is named in the KIVO-LIMITED section, prefix that sentence with the literal tag [[KIVO-LIMITED]] instead of guessing anyway. Use the tags inline, immediately before the sentence they apply to — never as a separate list, never around general football knowledge, and never around your own inference or opinion.
+
+Match Room posts (KIVO_NEXT_GEN KN-109) — when the user has opened the Copilot from a specific match, the KIVO CONTEXT may also contain a "KIVO-COMMUNITY" section holding real posts KIVO users wrote in that match's Match Room. Treat it as categorically different from every other section: it is what people SAID, never what happened. Rules, in order of importance: (1) never state anything from that section as a fact about the match, and never let it contradict, qualify or override the VERIFIED section — if a post claims a score or an incident that the verified data does not support, the verified data is what is true and the post is simply what someone believes; (2) summarise the mood and the recurring themes rather than listing posts back; (3) if you quote or closely paraphrase one person, name their @username, because attributing one person's opinion to "fans" is a fabricated consensus; (4) never infer a sentiment split, a percentage, or "most people think" from these posts — you are reading at most a couple of dozen of them and KIVO does not measure sentiment; (5) prefix any sentence describing what people in the Room are saying with the literal tag [[KIVO-COMMUNITY]]. If the section is empty or absent, say the Room has nothing in it yet rather than characterising a conversation that has not happened.`;
 
 /** One line per NDJSON frame written to the response body. See the streaming
  * contract note above the POST handler for what each `type` means. */
 type StreamEvent =
   | { type: "meta"; conversationId: string }
   | { type: "delta"; text: string }
+  /** KN-24: the model hit `max_tokens` and the reply stops mid-thought. A
+   * distinct frame rather than a flag on `done`, so the client can render the
+   * honest affordance the moment the answer ends rather than inferring it. */
+  | { type: "truncated" }
   | { type: "done" }
   | { type: "error"; error: string };
 
@@ -142,7 +149,7 @@ export async function POST(req: Request) {
       .select("id")
       .single();
     if (error || !created) {
-      console.error("Failed to create AI conversation", error);
+      logError("api.ai.chat.createConversation", error);
       return NextResponse.json({ error: "Couldn't start a conversation." }, { status: 500 });
     }
     conversationId = created.id;
@@ -185,11 +192,16 @@ export async function POST(req: Request) {
       .from("ai_messages")
       .insert({ conversation_id: conversationId, role: "user", content: message });
     if (insertUserError) {
-      console.error("Failed to persist user message", insertUserError);
+      logError("api.ai.chat.persistUserMessage", insertUserError);
     }
   }
 
-  const grounding = await buildGroundingContext(profile, focus);
+  // KIVO_NEXT_GEN KN-108: the message itself is part of the retrieval now. The
+  // football entities the user named are resolved deterministically against
+  // KIVO's own tables before the model runs, so asking about a real club the
+  // viewer happens not to follow no longer produces a confident "KIVO doesn't
+  // have that" about a row KIVO is holding.
+  const grounding = await buildGroundingContext(profile, focus, message);
   const anthropic = getAnthropicClient();
   const finalConversationId = conversationId;
 
@@ -249,6 +261,19 @@ export async function POST(req: Request) {
           .join("\n")
           .trim();
 
+        // KN-24. A reply that hit the 1024-token ceiling stops mid-sentence and
+        // is otherwise indistinguishable from a finished one — persisted as if
+        // complete, rendered without comment, offered for regenerate with no
+        // explanation of why it reads oddly. KIVO's whole discipline is not
+        // presenting something as more complete or more certain than it is;
+        // items 188/189 applied that to provenance, this applies it to
+        // completeness. Told twice, deliberately: once live over the stream for
+        // whoever is watching, and once in the row, so reopening the
+        // conversation from history says the same thing (migration 0069).
+        if (finalMessage.stop_reason === "max_tokens") {
+          send({ type: "truncated" });
+        }
+
         const { error: insertAssistantError } = await supabase.from("ai_messages").insert({
           conversation_id: finalConversationId,
           role: "assistant",
@@ -258,9 +283,12 @@ export async function POST(req: Request) {
           // message-count cap rather than a token sum.
           input_tokens: finalMessage.usage.input_tokens,
           output_tokens: finalMessage.usage.output_tokens,
+          // Verbatim from the API, never normalised or defaulted — a null here
+          // means "the API reported none", not "it finished normally".
+          stop_reason: finalMessage.stop_reason,
         });
         if (insertAssistantError) {
-          console.error("Failed to persist assistant message", insertAssistantError);
+          logError("api.ai.chat.persistAssistantMessage", insertAssistantError);
         }
 
         // ai_conversations.updated_at only moves on an update to that row
@@ -273,12 +301,12 @@ export async function POST(req: Request) {
           .update({ updated_at: new Date().toISOString() })
           .eq("id", finalConversationId);
         if (touchError) {
-          console.error("Failed to bump AI conversation updated_at", touchError);
+          logError("api.ai.chat.bumpConversationUpdated", touchError);
         }
 
         send({ type: "done" });
       } catch (err) {
-        console.error("Anthropic streaming request failed", err);
+        logError("api.ai.chat.anthropicStreamingRequest", err);
         send({ type: "error", error: "AI Copilot is temporarily unavailable. Try again in a moment." });
       } finally {
         controller.close();

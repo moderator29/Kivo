@@ -18,6 +18,8 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { YourTeamConnection } from "@/components/football/your-connection-card";
+import { getViewerTeamConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
@@ -36,6 +38,7 @@ import { parseUuidParam } from "@/lib/params";
 import { calculateAge, formatDate, formatNumber } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
@@ -285,6 +288,14 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const isFollowing = followRow !== null;
   const isMuted = followRow?.muted ?? false;
 
+  // KN-46: this page rendered identically for somebody who follows this club
+  // and somebody who has never heard of it — the only difference anywhere on
+  // it was whether a star was filled. Now that every render knows who is
+  // reading, it can say what the two of them actually have between them, from
+  // the reader's own rows only. Renders nothing at all when there is nothing
+  // real to report.
+  const viewerConnection = profile ? await getViewerTeamConnection(supabase, profile.id, team.id) : null;
+
   const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
   const manager = managers?.[0] ?? null;
 
@@ -380,13 +391,13 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>}
           </FadeIn>
           <FadeIn delay={0.1} className="flex items-center gap-2">
-            <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={!!profile} />
+            <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={viewerIsSignedIn(profile)} />
             <FollowWithMute
               targetType="team"
               targetId={team.id}
               initialFollowing={isFollowing}
               initialMuted={isMuted}
-              signedIn={!!profile}
+              signedIn={viewerIsSignedIn(profile)}
             />
           </FadeIn>
         </div>
@@ -396,7 +407,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
               href={`/venues/${team.venue_id}`}
               className="mt-4 flex items-start gap-2 text-xs text-foreground-muted transition hover:text-accent"
             >
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.75} />
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />
               <span>
                 {team.venue.name}
                 {team.venue.city ? `, ${team.venue.city}` : ""}
@@ -405,7 +416,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             </Link>
           ) : (
             <div className="mt-4 flex items-center gap-2 text-xs text-foreground-subtle">
-              <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               <span>Venue not yet synced</span>
             </div>
           )}
@@ -415,7 +426,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             href={`/teams/compare?a=${team.id}`}
             className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
           >
-            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
             Compare with another team
           </Link>
         </FadeIn>
@@ -425,6 +436,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <AskAiLink ctx="team" id={team.id} label={`Ask AI about ${team.name}`} />
         </FadeIn>
       </div>
+
+      {viewerConnection && (
+        <FadeIn delay={0.22}>
+          <YourTeamConnection connection={viewerConnection} />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">

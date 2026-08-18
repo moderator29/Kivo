@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info, AlertTriangle } from "lucide-react";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info, AlertTriangle, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { ThinkingLine } from "@/components/ui/thinking-orb";
@@ -24,7 +24,14 @@ type ChatFocus = { type: "fixture" | "team" | "player"; id: string } | null;
 const PROVENANCE_VERIFIED = "[[KIVO-VERIFIED]]";
 const PROVENANCE_CALCULATED = "[[KIVO-CALCULATED]]";
 const PROVENANCE_LIMITED = "[[KIVO-LIMITED]]";
-const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\]|\[\[KIVO-LIMITED\]\])/g;
+/** KIVO_NEXT_GEN KN-109: the fourth category, and the only one that is not a
+ * fact. A Match Room post is what somebody said, not what happened — it needed
+ * its own chip rather than sharing one with verified data, or "KIVO users think
+ * that was a foul" and "the referee gave a penalty" would reach the reader
+ * looking equally authoritative. */
+const PROVENANCE_COMMUNITY = "[[KIVO-COMMUNITY]]";
+const PROVENANCE_SPLIT_RE =
+  /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\]|\[\[KIVO-LIMITED\]\]|\[\[KIVO-COMMUNITY\]\])/g;
 
 /** Turns an assistant reply's inline provenance tags into small visible
  * chips instead of raw bracket text — degrades honestly if the model never
@@ -54,6 +61,17 @@ function renderMessageContent(content: string) {
         </span>
       );
     }
+    if (part === PROVENANCE_COMMUNITY) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-surface-2 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-foreground-muted"
+        >
+          <MessageCircle className="h-2.5 w-2.5" strokeWidth={2} />
+          From the Room
+        </span>
+      );
+    }
     if (part === PROVENANCE_LIMITED) {
       return (
         <span
@@ -73,6 +91,12 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** KN-24: the model's own reason for stopping, verbatim (`max_tokens`,
+   * `end_turn`, …). `max_tokens` is the one the UI acts on — that reply ended
+   * because it ran out of room, not because it was finished, and saying so is
+   * the same honesty rule items 188/189 applied to provenance, applied to
+   * completeness. Undefined while a reply is still streaming. */
+  stopReason?: string | null;
   /** Only set once a message is "final" — a live user send, a completed
    * assistant reply, or one loaded from history. Absent while an assistant
    * reply is still streaming in. */
@@ -84,6 +108,7 @@ interface ChatMessage {
 type StreamFrame =
   | { type: "meta"; conversationId: string }
   | { type: "delta"; text: string }
+  | { type: "truncated" }
   | { type: "done" }
   | { type: "error"; error: string };
 
@@ -203,6 +228,7 @@ export function AiChat({
     let assistantStarted = false;
     let returnedId: string | undefined = activeConversationId;
     let streamError: string | null = null;
+    let truncated = false;
 
     function appendAssistantDelta(delta: string) {
       assistantText += delta;
@@ -254,6 +280,8 @@ export function AiChat({
             setActiveConversationId(frame.conversationId);
           } else if (frame.type === "delta") {
             appendAssistantDelta(frame.text);
+          } else if (frame.type === "truncated") {
+            truncated = true;
           } else if (frame.type === "error") {
             streamError = frame.error;
           }
@@ -262,7 +290,13 @@ export function AiChat({
 
       if (assistantStarted) {
         const finishedAt = new Date().toISOString();
-        setMessages((prev) => prev.map((m) => (m.id === assistantMessageId ? { ...m, createdAt: finishedAt } : m)));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, createdAt: finishedAt, stopReason: truncated ? "max_tokens" : null }
+              : m,
+          ),
+        );
       }
 
       if (streamError) {
@@ -360,7 +394,13 @@ export function AiChat({
     } else {
       setActiveConversationId(id);
       setMessages(
-        result.messages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content, createdAt: m.created_at })),
+        result.messages.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          createdAt: m.created_at,
+          stopReason: m.stop_reason,
+        })),
       );
     }
     setLoadingConversation(false);
@@ -400,7 +440,13 @@ export function AiChat({
         const reloaded = await loadConversationMessages(id);
         if (reloaded.error === null) {
           setMessages(
-            reloaded.messages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content, createdAt: m.created_at })),
+            reloaded.messages.map((m) => ({
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              createdAt: m.created_at,
+              stopReason: m.stop_reason,
+            })),
           );
         }
       }
@@ -598,6 +644,27 @@ export function AiChat({
               {m.role === "assistant" ? renderMessageContent(m.content) : m.content}
             </div>
 
+            {/* KN-24. A reply that hit the token ceiling stops mid-thought and
+                otherwise looks exactly like a finished one. Said plainly, next
+                to the answer rather than buried in a tooltip, and with the one
+                action that actually helps — asking it to continue, which is a
+                normal next turn rather than a regenerate (regenerate would
+                throw away the part that did arrive). */}
+            {m.role === "assistant" && m.stopReason === "max_tokens" && (
+              <div className="flex max-w-[85%] flex-wrap items-center gap-2 rounded-xl border border-hairline bg-surface-inset px-3 py-2 text-xs text-foreground-muted">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" strokeWidth={2} aria-hidden="true" />
+                <span>This answer was cut short — it reached KIVO&apos;s length limit before finishing.</span>
+                <button
+                  type="button"
+                  onClick={() => send("Continue from where you stopped.")}
+                  disabled={pending}
+                  className="font-medium text-accent transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  Ask it to continue
+                </button>
+              </div>
+            )}
+
             {m.role === "assistant" && m.content && (
               <div className="flex items-center gap-2 px-1 text-foreground-subtle">
                 <button
@@ -609,7 +676,7 @@ export function AiChat({
                   {copiedMessageId === m.id ? (
                     <Check className="h-3 w-3" strokeWidth={2} />
                   ) : (
-                    <Copy className="h-3 w-3" strokeWidth={1.75} />
+                    <Copy className="h-3 w-3" strokeWidth={2} />
                   )}
                 </button>
                 {/* Item 194: regenerate only ever applies to the single most
@@ -625,7 +692,7 @@ export function AiChat({
                     title="Regenerate response"
                     className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
-                    <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
+                    <RotateCcw className="h-3 w-3" strokeWidth={2} />
                   </button>
                 )}
                 {m.createdAt && <LocalDateTime iso={m.createdAt} format="clock" className="text-[11px]" />}
@@ -696,7 +763,7 @@ export function AiChat({
           className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
           aria-label="Send"
         >
-          <ArrowUp className="h-4 w-4" strokeWidth={2} />
+          <ArrowUp className="h-4 w-4" strokeWidth={1.75} />
         </motion.button>
       </form>
     </div>

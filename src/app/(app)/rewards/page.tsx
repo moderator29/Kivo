@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Flame, Zap, Award, History, Trophy } from "lucide-react";
+import { ArrowUpRight, Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
+import { CountUp } from "@/components/ui/count-up";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { DISPLAY_LOCALE, timeAgo } from "@/lib/format";
 import { buildWeekStrip, getStreakTier, mondayOfWeekUtc } from "@/lib/streak";
+import { xpReasonLink } from "@/lib/xp-reason-links";
 
 const item = getNavItem("rewards");
 
@@ -138,23 +140,6 @@ export default async function RewardsPage() {
         ? "Nice start — come back tomorrow to keep it going."
         : `${currentStreak} days strong. Keep the streak alive.`;
 
-  // Discrete count-up keyframes for the XP number: each step resets the
-  // `kivo-xp-count` counter to the real running value, landing exactly on
-  // totalXp at 100% every time. Capped step count keeps the generated CSS
-  // small for large totals without changing the true final value. Pure CSS
-  // (no client component needed) so this page can stay a Server Component
-  // and fetch its own data directly, same reasoning as the transfers page's
-  // inline keyframes and the landing page's kivo-aurora.
-  const xpCountSteps = totalXp > 0 ? Math.min(totalXp, 40) : 0;
-  const xpCountKeyframes =
-    xpCountSteps > 0
-      ? Array.from({ length: xpCountSteps + 1 }, (_, i) => {
-          const percent = ((i / xpCountSteps) * 100).toFixed(2);
-          const value = Math.round((totalXp * i) / xpCountSteps);
-          return `${percent}% { counter-reset: kivo-xp-count ${value}; }`;
-        }).join("\n")
-      : "";
-
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
@@ -167,28 +152,11 @@ export default async function RewardsPage() {
           <Zap className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
         </div>
         <div>
-          {totalXp > 0 ? (
-            <span className="text-3xl font-bold tracking-tight text-foreground">
-              {/* Real value, always in the DOM and correct even if the
-                  counter animation below doesn't render for some reason
-                  (no CSS support, reduced motion, etc). */}
-              <style>{`
-                @keyframes kivo-xp-count-up {
-                  ${xpCountKeyframes}
-                }
-                .kivo-xp-count-up::before {
-                  content: counter(kivo-xp-count);
-                }
-              `}</style>
-              <span
-                aria-hidden="true"
-                className="kivo-xp-count-up inline-block animate-[kivo-xp-count-up_1.2s_cubic-bezier(0.22,1,0.36,1)_0.25s_forwards]"
-              />
-              <span className="sr-only">{totalXp}</span> XP
-            </span>
-          ) : (
-            <span className="text-3xl font-bold tracking-tight text-foreground">0 XP</span>
-          )}
+          {/* KN-75: the count-up used to be generated inline here and, near
+              identically, in onboarding-flow.tsx. One <CountUp> now. */}
+          <span className="text-3xl font-bold tracking-tight text-foreground">
+            <CountUp value={totalXp} id="rewards-xp" /> XP
+          </span>
           <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, community posts and correct predictions</p>
         </div>
       </FadeIn>
@@ -242,14 +210,14 @@ export default async function RewardsPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="kivo-glass rounded-2xl p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={1.75} />
+              <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={2} />
               Tier
             </span>
             <p className="mt-1.5 text-lg font-bold text-foreground">{tier.tierName}</p>
           </div>
           <div className="kivo-glass rounded-2xl p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
+              <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
               Longest streak
             </span>
             <p className="mt-1.5 text-lg font-bold text-foreground">
@@ -343,10 +311,30 @@ export default async function RewardsPage() {
                   {group.label}
                 </p>
                 <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-3xl">
-                  {collapseConsecutiveXpEntries(group.entries).map((line) => (
+                  {collapseConsecutiveXpEntries(group.entries).map((line) => {
+                    // KN-44: XP had no route back to what earned it. The ledger
+                    // has no target column, so a per-row deep link would mean
+                    // inventing a relationship the schema doesn't hold — this
+                    // links the reason *category* to its surface instead, and
+                    // renders plain text for any reason it doesn't recognise.
+                    const link = xpReasonLink(line.reason);
+                    return (
                     <div key={line.key} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div>
-                        <p className="text-xs font-medium text-foreground">{line.reason}</p>
+                      <div className="min-w-0">
+                        {link ? (
+                          <Link
+                            href={link.href}
+                            className="group flex items-center gap-1 text-xs font-medium text-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                          >
+                            <span className="truncate">{line.reason}</span>
+                            <ArrowUpRight
+                              className="h-3 w-3 shrink-0 text-foreground-subtle transition-colors group-hover:text-accent"
+                              strokeWidth={2}
+                            />
+                          </Link>
+                        ) : (
+                          <p className="text-xs font-medium text-foreground">{line.reason}</p>
+                        )}
                         <p className="text-[11px] text-foreground-subtle">{timeAgo(line.created_at)}</p>
                       </div>
                       <span className="shrink-0 text-xs font-semibold text-live">
@@ -355,7 +343,8 @@ export default async function RewardsPage() {
                         {line.count > 1 && <span className="text-foreground-subtle"> &times; {line.count}</span>}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -120,7 +121,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
     .single();
 
   if (startError || !syncRun) {
-    console.error("Failed to start squad sync run", startError);
+    logError("football.sync-squads.startSquadSyncRun", startError);
     return {
       status: "failed",
       recordsProcessed: 0,
@@ -155,7 +156,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
     squad = await provider.getSquad(teamProviderId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Squad sync: getSquad failed", err);
+    logError("football.sync-squads.squadSyncGetsquad", err);
     return fail(message);
   }
 
@@ -165,7 +166,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
     manager = await provider.getManager(teamProviderId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Squad sync: getManager failed (continuing without manager)", err);
+    logError("football.sync-squads.squadSyncGetmanagerContinuing", err);
     errors.push(`manager fetch: ${message}`);
   }
 
@@ -177,7 +178,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
       processed += 1;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Squad sync: failed to upsert player ${provider.name}:${player.providerId}`, err);
+      logError("football.sync-squads.squadSyncUpsertPlayer", err, { detail: `Squad sync: failed to upsert player ${provider.name}:${player.providerId}` });
       errors.push(`player ${provider.name}:${player.providerId} (${player.fullName}): ${message}`);
     }
   }
@@ -188,7 +189,7 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
       processed += 1;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Squad sync: failed to upsert manager ${provider.name}:${manager.providerId}`, err);
+      logError("football.sync-squads.squadSyncUpsertManager", err, { detail: `Squad sync: failed to upsert manager ${provider.name}:${manager.providerId}` });
       errors.push(`manager ${provider.name}:${manager.providerId} (${manager.fullName}): ${message}`);
     }
   }

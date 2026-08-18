@@ -66,7 +66,16 @@ export type PostListItem = {
 export async function fetchPostsPage(
   offset: number,
   viewerProfileId: string | null,
-  options?: { fixtureId?: string; limit?: number; followingOnly?: boolean; postIds?: string[] },
+  options?: {
+    fixtureId?: string;
+    limit?: number;
+    followingOnly?: boolean;
+    /** Club mates / Rivals: posts by profiles whose favourite_team_id is this
+     * club. Both filters are the same question about a different team id, so
+     * they share one code path — see src/lib/social-filters.ts. */
+    teamId?: string;
+    postIds?: string[];
+  },
 ): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
   const limit = options?.limit ?? SOCIAL_PAGE_SIZE;
   const supabase = createServerSupabaseClient();
@@ -90,13 +99,52 @@ export async function fetchPostsPage(
       .select("id, body, created_at, author_profile_id, is_system")
       .in("id", options.postIds);
     if (error) {
-      console.error("Failed to load posts", error);
+      logError("social.posts.load", error);
       return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
     }
     const rowById = new Map((data ?? []).map((p) => [p.id, p]));
     // .in() doesn't guarantee the result order matches the input array, so
     // the caller's real ordering (by save recency) is restored here.
     pageRows = options.postIds.map((id) => rowById.get(id)).filter((p): p is PostRow => !!p);
+  } else if (options?.teamId) {
+    // Club mates / Rivals. The join this needs — posts to profiles, filtered
+    // on someone else's favourite_team_id — crosses an RLS boundary:
+    // profiles_select_own_or_admin restricts a plain select on `profiles` to
+    // the caller's own row, so doing this client-side would silently return
+    // zero rows forever rather than error. get_team_feed_post_ids (migration
+    // 0068) is the narrow SECURITY DEFINER read for it, and restates
+    // posts_select_public's shadow-mute predicate by hand, since a definer
+    // function bypasses the policy that would otherwise apply it.
+    //
+    // It returns ids only, hydrated below by exactly the same joins every
+    // other post on this page gets — so a Club mates card and an All card are
+    // the same card.
+    const { data: idRows, error: idError } = await supabase.rpc("get_team_feed_post_ids", {
+      p_team_id: options.teamId,
+      p_offset: offset,
+      p_limit: limit + 1,
+    });
+    if (idError) {
+      logError("social.posts.teamFeed", idError);
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+    }
+    const orderedIds = (idRows ?? []).map((row) => row.post_id);
+    hasMore = orderedIds.length > limit;
+    const pageIds = orderedIds.slice(0, limit);
+    if (pageIds.length === 0) return { error: null, posts: [], hasMore: false };
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("id, body, created_at, author_profile_id, is_system")
+      .in("id", pageIds);
+    if (error) {
+      logError("social.posts.teamFeedHydrate", error);
+      return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
+    }
+    // .in() does not preserve the input order, and the RPC's ordering (newest
+    // first) is the whole point of asking it.
+    const rowById = new Map((data ?? []).map((row) => [row.id, row]));
+    pageRows = pageIds.map((id) => rowById.get(id)).filter((row): row is PostRow => Boolean(row));
   } else {
     // RECOMMENDATIONS item 175: `followed_type = 'user'` (the
     // follow_target_type enum already supports it — see 0001) filtered to
@@ -144,7 +192,7 @@ export async function fetchPostsPage(
 
     const { data: rows, error } = await query;
     if (error) {
-      console.error("Failed to load posts", error);
+      logError("social.posts.load", error);
       return { error: "Couldn't load posts. Try again.", posts: [], hasMore: false };
     }
 
@@ -161,19 +209,34 @@ export async function fetchPostsPage(
   // fabricated placeholder.
   const authorIds = [...new Set(pageRows.map((p) => p.author_profile_id))];
 
-  const [{ data: reactions }, { data: authors }, { data: comments }, { data: pollOptionRows }, { data: saveRows }] = await Promise.all([
-    postIds.length
+  const [{ data: viewerReactions }, { data: authors }, { data: engagement }, { data: pollOptionRows }, { data: saveRows }] = await Promise.all([
+    // KIVO_NEXT_GEN KN-13: only the *viewer's own* reaction rows now. The
+    // totals come from get_post_engagement below — this query used to fetch
+    // every reaction row on the page purely so both could be derived from it,
+    // which meant a genuinely popular post transferred thousands of rows to
+    // produce one integer. Scoped to the viewer, the row count is bounded by
+    // the page size no matter how popular anything on it is. A signed-out
+    // viewer has no reactions at all, so the query is skipped entirely.
+    postIds.length && viewerProfileId
       ? supabase
           .from("reactions")
           .select("target_id, profile_id, reaction_type")
           .eq("target_type", "post")
+          .eq("profile_id", viewerProfileId)
           .in("target_id", postIds)
       : Promise.resolve({ data: [] }),
     authorIds.length ? supabase.rpc("get_public_profiles", { p_ids: authorIds }) : Promise.resolve({ data: [] }),
-    // Just the post_id column to keep this a cheap count, not a full thread
-    // fetch — full comment bodies are lazy-loaded per post on expand (see
-    // comment-actions.ts / comment-thread.tsx).
-    postIds.length ? supabase.from("comments").select("post_id").in("post_id", postIds) : Promise.resolve({ data: [] }),
+    // KIVO_NEXT_GEN KN-13: reaction and comment totals as two integers per
+    // post, counted in Postgres against real indexes (idx_reactions_target,
+    // idx_comments_post_id), instead of shipping one row per reaction and one
+    // row per comment across the wire to be counted in JavaScript. The RPC is
+    // deliberately SECURITY INVOKER — comments/reactions are public selects
+    // that migration 0045 narrowed to hide shadow-muted authors, and a
+    // definer function would have quietly counted those rows back in. See
+    // migration 0060 for the full reasoning.
+    postIds.length
+      ? supabase.rpc("get_post_engagement", { p_post_ids: postIds })
+      : Promise.resolve({ data: [] as { post_id: string; reaction_count: number; comment_count: number }[] }),
     // poll_options_select_public (0032) makes every post's options readable
     // regardless of whether it's a poll at all — an ordinary post simply has
     // none, so `pollOptionsByPost` below is empty for it.
@@ -189,11 +252,16 @@ export async function fetchPostsPage(
   ]);
 
   const authorById = new Map((authors ?? []).map((a) => [a.id, a]));
-  const reactionsByPost = aggregateReactions(reactions ?? [], viewerProfileId);
+  // aggregateReactions still owns "which reaction did the viewer pick", which
+  // is what the viewer-scoped query above is for; the counts it would also
+  // have derived now come from the RPC instead.
+  const viewerReactionByPost = aggregateReactions(viewerReactions ?? [], viewerProfileId);
 
+  const reactionCountByPost = new Map<string, number>();
   const commentCountByPost = new Map<string, number>();
-  for (const comment of comments ?? []) {
-    commentCountByPost.set(comment.post_id, (commentCountByPost.get(comment.post_id) ?? 0) + 1);
+  for (const row of engagement ?? []) {
+    reactionCountByPost.set(row.post_id, row.reaction_count);
+    commentCountByPost.set(row.post_id, row.comment_count);
   }
 
   const pollOptionsByPost = new Map<string, { id: string; position: number; label: string }[]>();
@@ -206,30 +274,40 @@ export async function fetchPostsPage(
 
   // Real vote counts via get_poll_results — poll_votes_select_own means a
   // plain client query can never see another user's individual pick, same
-  // reasoning as predictions/get_prediction_consensus above it. One RPC call
-  // per poll on this page rather than a single batched call (unlike
-  // get_prediction_consensus's array parameter): feed pages mix poll and
-  // non-poll posts, and polls are expected to be a small minority of any
-  // given page, so N is small in practice — a batched
-  // get_poll_results(post_ids[]) would be the natural follow-up if that
-  // assumption stops holding.
-  const [pollResultsEntries, viewerVoteRows] = await Promise.all([
-    Promise.all(
-      pollPostIds.map(async (postId) => {
-        const { data, error } = await supabase.rpc("get_poll_results", { p_post_id: postId });
-        // null (not []) distinguishes "the RPC failed" from "nobody has voted".
-        if (error) {
-          logError("social.getPollResults", error, { postId });
-          return [postId, null] as const;
-        }
-        return [postId, data ?? []] as const;
-      }),
-    ),
+  // reasoning as predictions/get_prediction_consensus above it.
+  //
+  // KIVO_NEXT_GEN KN-14: one RPC for the whole page, not one per poll. The
+  // per-poll loop this replaces argued polls would be a small minority of any
+  // page — true for /social, and not true for a Match Room during a live
+  // match, which is exactly where RECOMMENDATIONS.md item 306 wants polls to
+  // live. The assumption was fair when it was written and stops being fair
+  // precisely when the feature starts working. Migration 0060 adds the
+  // single-signature array RPC (see migration 0063 for why it is not an
+  // overload of the scalar one), matching get_prediction_consensus's shape.
+  const [pollResults, viewerVoteRows] = await Promise.all([
+    pollPostIds.length
+      ? supabase.rpc("get_poll_results_for_posts", { p_post_ids: pollPostIds })
+      : Promise.resolve({ data: [] as { post_id: string; option_id: string; vote_count: number }[], error: null }),
     pollPostIds.length && viewerProfileId
       ? supabase.from("poll_votes").select("post_id, option_id").eq("profile_id", viewerProfileId).in("post_id", pollPostIds)
       : Promise.resolve({ data: [] as { post_id: string; option_id: string }[] }),
   ]);
-  const pollResultsByPost = new Map(pollResultsEntries);
+
+  // null (not []) still distinguishes "the RPC failed" from "nobody has voted"
+  // — the distinction docs/BUG_AUDIT_2026-08-18.md S5 exists to protect, now
+  // applied to the whole page at once rather than per poll. One failure means
+  // no poll on the page can be shown as a real result, which is the honest
+  // read of what just happened.
+  const pollResultsByPost = new Map<string, { option_id: string; vote_count: number }[] | null>();
+  if (pollResults.error) {
+    logError("social.getPollResults", pollResults.error, { postIds: pollPostIds.join(",") });
+    for (const postId of pollPostIds) pollResultsByPost.set(postId, null);
+  } else {
+    for (const postId of pollPostIds) pollResultsByPost.set(postId, []);
+    for (const row of pollResults.data ?? []) {
+      pollResultsByPost.get(row.post_id)?.push({ option_id: row.option_id, vote_count: row.vote_count });
+    }
+  }
   const viewerVoteByPost = new Map((viewerVoteRows.data ?? []).map((v) => [v.post_id, v.option_id]));
   const savedPostIds = new Set((saveRows ?? []).map((s) => s.target_id));
 
@@ -237,7 +315,7 @@ export async function fetchPostsPage(
     error: null,
     hasMore,
     posts: pageRows.map((post) => {
-      const reactionSummary = reactionsByPost.get(post.id) ?? { count: 0, viewerReaction: null };
+      const viewerReactionSummary = viewerReactionByPost.get(post.id) ?? { count: 0, viewerReaction: null };
       const author = authorById.get(post.author_profile_id);
       const options = pollOptionsByPost.get(post.id);
       const results = pollResultsByPost.get(post.id) ?? null;
@@ -262,8 +340,8 @@ export async function fetchPostsPage(
         authorName: author?.display_name || author?.username || "KIVO fan",
         authorUsername: author?.username ?? null,
         authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
-        reactionCount: reactionSummary.count,
-        viewerReaction: reactionSummary.viewerReaction,
+        reactionCount: reactionCountByPost.get(post.id) ?? 0,
+        viewerReaction: viewerReactionSummary.viewerReaction,
         commentCount: commentCountByPost.get(post.id) ?? 0,
         poll,
         viewerSaved: savedPostIds.has(post.id),

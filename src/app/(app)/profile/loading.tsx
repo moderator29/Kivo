@@ -1,26 +1,36 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+/** Mirrors the real page's shape: cover band, overlapping avatar, identity
+ * lines, the three-cell rail, then the tab bar and its first rows. A skeleton
+ * that doesn't match what arrives is worse than none — it moves everything
+ * once the data lands. */
 export default function ProfileLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <div className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
-        <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <Skeleton className="h-4.5 w-32" />
-          <Skeleton className="h-3.5 w-24" />
+    <div className="kivo-page">
+      <div className="kivo-glass overflow-hidden rounded-3xl">
+        <Skeleton className="h-32 w-full rounded-none sm:h-44" />
+        <div className="px-4 pb-5 sm:px-6">
+          <div className="flex items-end justify-between gap-3">
+            <div className="-mt-12 rounded-full bg-background p-1">
+              <Skeleton className="h-[92px] w-[92px] rounded-full" />
+            </div>
+            <Skeleton className="mb-1 h-9 w-28 rounded-full" />
+          </div>
+          <div className="mt-3 flex flex-col gap-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <Skeleton className="mt-3 h-8 w-44 rounded-full" />
+          <Skeleton className="mt-3.5 h-4 w-56" />
         </div>
-        <Skeleton className="h-8 w-24 shrink-0 rounded-xl" />
       </div>
 
-      <Skeleton className="h-24 w-full rounded-3xl" />
+      <Skeleton className="h-[74px] w-full rounded-2xl" />
 
-      <div className="grid grid-cols-3 gap-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-2xl" />
-        ))}
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-11 w-full rounded-none" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
       </div>
-
-      <Skeleton className="h-32 w-full rounded-3xl" />
     </div>
   );
 }

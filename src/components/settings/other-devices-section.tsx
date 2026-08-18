@@ -63,7 +63,7 @@ export function OtherDevicesSection() {
 
       {done && !error && (
         <p className="flex items-center gap-1.5 text-xs text-live" role="status" aria-live="polite">
-          <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+          <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
           Signed out of all other devices.
         </p>
       )}
@@ -75,7 +75,7 @@ export function OtherDevicesSection() {
         onClick={handleSignOutOthers}
         className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <LogOut className="h-4 w-4" strokeWidth={2} />
+        <LogOut className="h-4 w-4" strokeWidth={1.75} />
         {pending ? "Signing out…" : "Sign out other devices"}
       </button>
     </div>

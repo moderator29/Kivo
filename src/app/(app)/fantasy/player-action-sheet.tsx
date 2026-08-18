@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import { Crown, Star, X, ArrowUpFromLine, ArrowDownToLine, Trash2 } from "lucide-react";
+import { Crown, Star, X, ArrowUpFromLine, ArrowDownToLine, SquareArrowOutUpRight, Trash2 } from "lucide-react";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { formatFantasyPrice } from "./fantasy-rules";
@@ -106,6 +107,24 @@ export function PlayerActionSheet({
                 hint={!isSaved ? "Save your squad first" : player.isCaptain ? "Already captain — change that first" : undefined}
                 onClick={onMakeViceCaptain}
               />
+              {/* KN-43: the builder renders real `players.id` values throughout
+                  and /players/[id] is a rich page (form, transfers, photo, and
+                  that player's real fantasy price and ownership), but a manager
+                  picking a squad had no way to check who they were picking
+                  without abandoning the flow. This sheet is already the "tell me
+                  about this player" surface, so the route belongs here.
+
+                  Opens in a new tab deliberately: an unsaved squad lives
+                  entirely in FantasyBuilder's client state, so navigating away
+                  in-place would silently discard every pick made since the last
+                  save. A new tab is the only version of this link that cannot
+                  cost the user their work. */}
+              <ActionRow
+                icon={SquareArrowOutUpRight}
+                label="View player profile"
+                hint="Opens in a new tab"
+                href={`/players/${player.playerId}`}
+              />
               <ActionRow icon={Trash2} label="Remove from squad" tone="critical" disabled={locked} onClick={onRemove} />
             </div>
           </motion.div>
@@ -115,6 +134,10 @@ export function PlayerActionSheet({
   );
 }
 
+/** One row of the sheet. Renders a real `<a>` when given an `href` and a
+ * `<button>` otherwise, so a navigation and an action look identical without a
+ * button pretending to be a link (which would lose middle-click, open-in-new-tab
+ * and the browser's own affordances). */
 function ActionRow({
   icon: Icon,
   label,
@@ -122,25 +145,22 @@ function ActionRow({
   disabled,
   tone = "default",
   onClick,
+  href,
 }: {
   icon: typeof Crown;
   label: string;
   hint?: string;
   disabled?: boolean;
   tone?: "default" | "critical";
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
 }) {
-  return (
-    <motion.button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      whileTap={disabled ? undefined : { scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 disabled:opacity-40 ${
-        tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-surface-2"
-      }`}
-    >
+  const className = `flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 disabled:opacity-40 ${
+    tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-surface-2"
+  }`;
+
+  const content = (
+    <>
       <span className="flex items-center gap-2.5">
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -152,6 +172,27 @@ function ActionRow({
         {label}
       </span>
       {hint && <span className="text-[11px] text-foreground-subtle">{hint}</span>}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} target="_blank" rel="noopener noreferrer" className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <motion.button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      whileTap={disabled ? undefined : { scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      className={className}
+    >
+      {content}
     </motion.button>
   );
 }

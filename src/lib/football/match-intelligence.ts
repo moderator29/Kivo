@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
@@ -112,7 +113,7 @@ export async function buildMatchInsights(
     .maybeSingle();
 
   if (error || !fixture || !fixture.home_team || !fixture.away_team) {
-    if (error) console.error("buildMatchInsights: fixture query failed", error);
+    if (error) logError("football.match-intelligence.buildmatchinsightsFixtureQuery", error);
     return null;
   }
 

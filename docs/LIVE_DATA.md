@@ -25,7 +25,45 @@ This document describes what's **real today** versus what's still deliberately u
 | Upstream fetch + normalize | REAL | `syncTodayFixtures` fetches, normalizes, and writes to `fixtures`/`fixture_events`. Callable by an admin (Data Health's "Sync now", `triggerLiveScoresRefresh`) or, since 2026-08-18, by the automated cron worker below — same function either way, `triggerSource` just tags which. |
 | Automated live worker (cron/scheduled) | **Route built and real; NOT currently scheduled** — `vercel.json`'s cron entry removed 2026-08-18 (Hobby plan blocks a sub-daily schedule; see below) | `src/app/api/cron/sync-live/route.ts`. See "The automated worker, in detail" below for exactly what it checks before spending a provider call. **What's verified**: the route's own logic (auth check, each guard, the real DB queries, `syncTodayFixtures` integration) — read and reasoned through directly, and it type-checks/lints/builds clean. **What's NOT verified, and can't be from here**: whether Vercel's real Cron infrastructure actually invokes this route on schedule once deployed *and once re-added to `vercel.json` on a paid plan*. This sandbox has no way to trigger a real scheduled Vercel Cron firing or observe one happening — that can only be confirmed after a real deployment, by checking the Cron Jobs tab in the Vercel dashboard and/or watching Data Health's new "Automated worker" section for check-ins. |
 
-**2026-08-18 update**: the `crons` array was pulled from `vercel.json` entirely. Vercel's Hobby (free) plan rejects any deployment with a cron schedule more frequent than once a day — this route's `* * * * *` (once-a-minute) entry made every deploy fail outright on a free account. The route and everything it does internally are unchanged and unaffected; it simply isn't invoked by anything until the `crons` array is re-added to `vercel.json` (see `ENVIRONMENT.md`'s "Automated live-sync worker" section for the exact JSON) once the project is on a paid plan.
+**2026-08-18 update (superseded the same evening — see the next section).** The `crons` array was pulled from `vercel.json` entirely. Vercel's Hobby (free) plan rejects any deployment with a cron schedule more frequent than once a day — this route's `* * * * *` (once-a-minute) entry made every deploy fail outright on a free account.
+
+---
+
+## How football data actually arrives now (2026-08-18, founder instruction)
+
+The founder's instruction was "Make it automatic — no need for triggering now". Until that evening, the only thing that had ever asked a provider for data was an admin clicking a button, which is why the database was empty and every football surface rendered its honest empty state.
+
+There are now **three** ways data arrives, and they are genuinely different. Read the last column before describing any of this to anyone.
+
+| Layer | Cadence | Needs from the founder | What it actually keeps fresh |
+|---|---|---|---|
+| **On-demand freshness** — `src/lib/football/auto-sync.ts` | Whenever somebody loads `/home`, `/matches` or `/live` and the data is already stale | **Nothing.** Runs on the deployment that already exists, with the `API_FOOTBALL_KEY` already set | Everything, eventually. But only for the *next* visitor after a gap — and on a quiet site, nothing at all |
+| **Daily baseline** — `/api/cron/sync-daily` | Once a day | Six lines pasted into `vercel.json` — the route is built and deployed, only the schedule is missing. See `ENVIRONMENT.md` | Today's fixtures, and the clubs/competitions/venues they create. Plus up to five league tables, least-recently-refreshed first. **Never a live scoreline** |
+| **Once-a-minute worker** — `/api/cron/sync-live` | Every minute | Two Supabase Vault secrets **and** `FOOTBALL_LIVE_POLLING_ENABLED=true` | Live scores, properly. This is the only row that is live scores |
+
+### The thing not to over-hear
+
+**On-demand freshness is not live scores.** It refreshes when somebody looks at a page whose data is already stale, which means the person who triggers the refresh sees the old data and the next person sees the new data. Nobody watching a single match page gets a ticking scoreline from it. That needs the third row.
+
+### Why on-demand is bounded the way it is
+
+Four guards, each preventing a failure that is real on a 100-request-a-day free tier:
+
+- **`after()`, never inline.** The provider call happens once the response has been sent, so a slow or dead vendor can never delay a render or break a page.
+- **A staleness threshold per surface** — 3 minutes for `/live`, 15 for `/matches` and `/home`, 180 for reference pages. A league table is not worth what a live scoreline is worth.
+- **A three-minute cooldown counted on *attempts*, not successes.** This is the guard that actually protects the quota: without it, a *failing* sync leaves the data exactly as stale as it found it, so every subsequent page view would try again and a hundred page views would spend the entire daily budget on the same failure.
+- **The sync lease** (migration `0056`) and **the quota floor** — ten simultaneous page loads produce one sync, and automation stops spending at the same threshold that turns Data Health's "requests left today" pill amber, so a human debugging with "Sync now" always has room.
+
+### Why the daily cron only refreshes five league tables
+
+Standings are a separate provider call per competition-season. With `FOOTBALL_SYNC_COMPETITION_IDS` unset, a day's fixtures can span fifty competitions, and one call each would spend half the daily budget before lunch. Five a day, least-recently-refreshed first, fills every table in within days and then keeps them all rolling — the right trade for data that changes at most once a matchday.
+
+### Two rules that were not bent
+
+- **`FOOTBALL_LIVE_POLLING_ENABLED` is only ever read, never written from code.** It is the founder's protection against a once-a-minute worker draining a free tier. The daily route skips consulting it because one request a day cannot drain anything — a different question from the one the flag asks — and the on-demand path never touches it either.
+- **`vercel.json` was deliberately not edited by this session.** Deployment configuration is the founder's, and a `vercel.json` that fails validation blocks every deploy — which cost hours earlier the same day. The exact block to paste is in `ENVIRONMENT.md`: `0 5 * * *` (daily, which Hobby accepts) against the bare path `/api/cron/sync-daily` (no query string, because Vercel's cron documentation only ever shows a bare path — which is why the daily behaviour has its own route rather than a `?mode=` parameter).
+
+`sync_runs.trigger_source` now records `manual` / `cron` / `auto` / `daily` (migration `0070`), so Data Health can tell four very different quota profiles apart.
 | Supabase Realtime distribution | REAL, shipped 2026-08-15 | Migration `0038_realtime_fixture_distribution` adds `fixtures` and `fixture_events` to the `supabase_realtime` publication. `src/hooks/use-realtime-fixtures.ts` subscribes to `postgres_changes` UPDATE events on `fixtures`, filtered client-side to the ids currently on screen. Wired into `/live` (`LiveFixtureList`) and Match Centre's score header (`MatchScoreDisplay`). |
 | Match Room live chat | REAL, shipped 2026-08-18 | A second, differently-behaved Realtime consumer of the same `posts` publication `0042_realtime_posts` already added for `/social`'s "new posts" pill. `src/hooks/use-realtime-room-posts.ts` subscribes to `postgres_changes` INSERT on `posts`, server-side filtered to one fixture (`fixture_id=eq.<id>`), and auto-prepends every arrival — a real user's post or a system goal/red-card announcement (RECOMMENDATIONS item 254, `src/lib/football/match-room-system-posts.ts`) — with no click required, unlike `/social`'s deliberate click-to-reveal pill. See the hook's own doc comment, and the 2026-08-18 DECISIONS.md entry, for why that divergence from the feed's pattern was checked against Room specifically rather than assumed. |
 | Quota protection / retry-backoff | REAL, predates this doc | `src/lib/football/providers/api-football-request.ts` — parses `x-ratelimit-requests-remaining`, one jittered retry on 5xx only, never retries 4xx. See `docs/API_QUOTA.md`. |

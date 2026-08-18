@@ -4,41 +4,103 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { ADMIN_NAV_ITEM, NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
+import { Search, UserRound } from "lucide-react";
+import { NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
+import { buildNavGroups, NAV_GROUPS } from "@/lib/nav-groups";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { PreviewModeToggle } from "@/components/admin/preview-mode-toggle";
 import { cn } from "@/lib/utils";
+import type { ViewerProfileSummary } from "./app-shell";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
-/** Purely a presentation grouping for the desktop sidebar — doesn't touch
- * NAV_ITEMS or routing. "home" is rendered standalone above these as the
- * dashboard entry point; every other id must appear in exactly one group
- * below so the sidebar still surfaces the full nav set. */
-export const SIDEBAR_GROUPS: { label: string; ids: string[] }[] = [
-  { label: "Watch", ids: ["live", "matches", "news"] },
-  { label: "Play", ids: ["fantasy", "predictions"] },
-  { label: "Explore", ids: ["discover", "teams", "players", "leagues", "transfers"] },
-  { label: "Community", ids: ["social"] },
-  { label: "You", ids: ["ai", "rewards", "settings", "profile"] },
-];
+/** Kept as a named export because other modules have imported it from here
+ * since before the grouping moved to src/lib/nav-groups.ts. The array itself
+ * now lives there, shared with the mobile drawer. */
+export const SIDEBAR_GROUPS = NAV_GROUPS;
 
-export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolean; isAdmin: boolean }) {
+/**
+ * The desktop sidebar — deliberately the same product as the mobile drawer,
+ * not a second one.
+ *
+ * Both carry the identical thing in the identical order: brand, account,
+ * search, the same grouped nav, and a footer holding appearance. The only
+ * difference is that a 1440px screen can leave it open permanently while a
+ * 390px one opens it from the top-left menu button. That is what "one product"
+ * has to mean here — the same map, presented at two widths, rather than two
+ * navigations that happen to reach the same routes.
+ */
+export function DesktopSidebar({
+  aiConfigured,
+  isAdmin,
+  viewerProfile,
+  previewMode = false,
+}: {
+  aiConfigured: boolean;
+  isAdmin: boolean;
+  viewerProfile: ViewerProfileSummary | null;
+  previewMode?: boolean;
+}) {
   const pathname = usePathname();
   const homeItem = NAV_ITEMS.find((item) => item.id === "home");
-  const groups = SIDEBAR_GROUPS.map((group) => ({
-    label: group.label,
-    items: group.ids
-      .map((id) => NAV_ITEMS.find((item) => item.id === id))
-      .filter((item): item is NavItem => Boolean(item)),
-  })).filter((group) => group.items.length > 0);
+  const searchItem = NAV_ITEMS.find((item) => item.id === "search");
+  const groups = buildNavGroups({ isAdmin });
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-hairline-soft bg-surface-3/60 px-3 py-6 lg:flex">
       <Link
         href="/home"
-        className="flex items-center gap-2 rounded-lg px-3 pb-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="kivo-focus flex items-center gap-2 rounded-lg px-3 pb-5"
       >
         <Image src={kivoLogo} alt="" width={36} height={36} className="kivo-ink h-9 w-9 shrink-0" priority />
         <span className="text-lg font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
+
+      {viewerProfile && (
+        <Link
+          href="/profile"
+          className="kivo-glass kivo-focus mb-3 flex items-center gap-2.5 rounded-2xl p-2 transition-colors hover:bg-surface-2"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-1">
+            {viewerProfile.avatarUrl ? (
+              <Image
+                src={viewerProfile.avatarUrl}
+                alt=""
+                width={32}
+                height={32}
+                className="h-full w-full object-cover"
+                unoptimized
+              />
+            ) : (
+              <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-semibold text-foreground">
+              {viewerProfile.displayName || `@${viewerProfile.username}`}
+            </span>
+            <span className="block truncate text-[11px] text-foreground-subtle">@{viewerProfile.username}</span>
+          </span>
+        </Link>
+      )}
+
+      {/* A link to /search, not a button that opens a modal — same destination
+          as the drawer's field and the same one ⌘K lands on, so there is one
+          search in this product rather than a desktop one and a mobile one.
+          The shortcut is advertised here rather than hidden, since this is the
+          surface where a keyboard is actually present. */}
+      {searchItem && (
+        <Link
+          href={searchItem.href}
+          aria-current={isActiveRoute(pathname, searchItem.href) ? "page" : undefined}
+          className="kivo-glass kivo-focus mb-3 flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-foreground-subtle transition-colors hover:bg-surface-2 hover:text-foreground-muted"
+        >
+          <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+          <span className="min-w-0 flex-1 truncate">Search</span>
+          <kbd className="shrink-0 rounded border border-hairline px-1.5 py-0.5 text-[11px] text-foreground-subtle">
+            ⌘K
+          </kbd>
+        </Link>
+      )}
 
       <nav className="flex flex-1 flex-col overflow-y-auto">
         {homeItem && (
@@ -46,14 +108,13 @@ export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolea
             <SidebarLink item={homeItem} pathname={pathname} aiConfigured={aiConfigured} />
           </div>
         )}
-        {/* One grouped card with hairline dividers between sections (same
-            pattern as the settings page's grouped list) instead of a
-            per-row hover/active box — depth comes from the active item's
+        {/* One grouped card with hairline dividers between sections instead of
+            a per-row hover/active box — depth comes from the active item's
             slim accent bar + icon/text color, not a filled pill. */}
         <div className="kivo-glass flex flex-col rounded-2xl">
           {groups.map((group, index) => (
             <div key={group.label} className={cn("flex flex-col py-1.5", index > 0 && "border-t border-hairline-soft")}>
-              <span className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
+              <span className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
                 {group.label}
               </span>
               {group.items.map((item) => (
@@ -61,20 +122,15 @@ export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolea
               ))}
             </div>
           ))}
-          {/* Item 134: no link to /admin anywhere in the app shell — shown only
-              for roles hasAdminAccess() actually grants /admin to (computed
-              server-side in (app)/layout.tsx), same as ADMIN_NAV_ITEM's own
-              reasoning for staying out of NAV_ITEMS/SIDEBAR_GROUPS above. */}
-          {isAdmin && (
-            <div className="flex flex-col border-t border-hairline-soft py-1.5">
-              <span className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
-                Admin
-              </span>
-              <SidebarLink item={ADMIN_NAV_ITEM} pathname={pathname} aiConfigured={aiConfigured} />
-            </div>
-          )}
         </div>
       </nav>
+
+      {/* Footer, mirroring the drawer's: appearance lives with the rest of the
+          navigation now, not in the top bar. */}
+      <div className="mt-3 flex flex-col gap-2 border-t border-hairline-soft pt-3">
+        {isAdmin && <PreviewModeToggle active={previewMode} />}
+        <ThemeToggle className="max-w-none" />
+      </div>
     </aside>
   );
 }
@@ -96,7 +152,7 @@ function SidebarLink({
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
+        "kivo-focus group relative flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium transition-colors focus-visible:ring-inset",
         active ? "font-semibold text-foreground" : "text-foreground-muted hover:text-foreground",
       )}
     >
@@ -104,7 +160,7 @@ function SidebarLink({
         <motion.span
           aria-hidden="true"
           layoutId="desktop-nav-active"
-          className="kivo-gradient-prime absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
+          className="kivo-gradient-prime absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-full"
           transition={{ type: "spring", stiffness: 500, damping: 40 }}
         />
       )}

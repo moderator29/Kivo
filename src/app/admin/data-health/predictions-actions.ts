@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -42,7 +43,7 @@ export async function scorePredictions(): Promise<{ error: string | null; record
     .not("away_score", "is", null);
 
   if (fixturesError) {
-    console.error("Failed to load finished fixtures for scoring", fixturesError);
+    logError("admin.data-health.predictions-actions.loadFinishedFixturesScoring", fixturesError);
     return { error: "Couldn't load finished fixtures. Try again." };
   }
 
@@ -64,7 +65,7 @@ export async function scorePredictions(): Promise<{ error: string | null; record
     .is("points_awarded", null);
 
   if (predictionsError) {
-    console.error("Failed to load unscored predictions", predictionsError);
+    logError("admin.data-health.predictions-actions.loadUnscoredPredictions", predictionsError);
     return { error: "Couldn't load predictions to score. Try again." };
   }
 
@@ -89,13 +90,16 @@ export async function scorePredictions(): Promise<{ error: string | null; record
       .eq("id", row.id);
 
     if (updateError) {
-      console.error(`Failed to score prediction ${row.id}`, updateError);
+      logError("admin.data-health.predictions-actions.scorePrediction", updateError, { detail: `Failed to score prediction ${row.id}` });
       continue;
     }
 
     processed += 1;
     if (correct) {
-      await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction");
+      // KN-91: keyed on the prediction, so re-running this scoring pass — which
+      // an admin can do at any time, and which a partial failure invites —
+      // cannot credit the same correct prediction twice.
+      await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction", `prediction:${row.id}`);
       await awardBadge(row.profile_id, "first_prediction_correct");
 
       // Real running total, not a guessed streak — counts this user's

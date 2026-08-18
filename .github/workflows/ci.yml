@@ -32,6 +32,13 @@ jobs:
       - name: Test
         run: npm test
 
+      # KN-137. A renamed or deleted asset breaks a page at runtime with no
+      # build-time signal at all — `next build` never resolves a string path
+      # into public/, so /assets/icons/navigation/teams.webp is just a string
+      # until a user's browser asks for it and gets a 404.
+      - name: Assets
+        run: npm run check:assets
+
       - name: Build
         run: npm run build
         env:
@@ -41,3 +48,9 @@ jobs:
           # statically prerendered against live Supabase data at build time.
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
+
+      # KN-134. Reads .next/build-manifest.json, so it must follow the build.
+      # Every individual import looks cheap and none of them is ever the one
+      # that made the app slow; this is what notices the total.
+      - name: Bundle size
+        run: npm run check:bundle

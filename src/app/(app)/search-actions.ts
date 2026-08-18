@@ -5,8 +5,10 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { escapeLikePattern } from "@/lib/text";
 
+export type SearchResultType = "team" | "player" | "competition" | "manager" | "venue";
+
 export type SearchResult = {
-  type: "team" | "player" | "competition";
+  type: SearchResultType;
   id: string;
   label: string;
   sublabel: string | null;
@@ -62,11 +64,18 @@ export async function getPopularTeams(): Promise<PopularTeam[]> {
 }
 
 /**
- * Powers the global command palette (⌘K). Searches the three entity tables
- * that already have real synced data and their own detail pages — fixtures
- * aren't included since "search for a match" is better served by browsing
- * /matches, and a name-based fixture search would mostly just re-surface
- * team results anyway.
+ * Powers the global command palette (⌘K) and the /search page. Searches the
+ * five entity tables that already have real synced data and their own detail
+ * pages — fixtures aren't included since "search for a match" is better served
+ * by browsing /matches, and a name-based fixture search would mostly just
+ * re-surface team results anyway.
+ *
+ * KIVO_NEXT_GEN KN-58: managers and venues were added because /managers and
+ * /venues are otherwise unreachable from anywhere in the app shell (KN-30) —
+ * two more ilike queries against tables that already carry the pg_trgm indexes
+ * migration 0021 created. `venues.name` is nullable (see migration 0020), so a
+ * nameless venue row simply never matches a name search rather than rendering
+ * as an untitled result.
  *
  * Guest-callable (no auth required), so it's rate-limited by profile when
  * signed in and by IP otherwise — same reasoning as getClientIp's own
@@ -89,8 +98,14 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
   const pattern = `%${escapeLikePattern(trimmed)}%`;
 
   const playerColumns = "id, full_name, known_as, position, current_team:teams(name)";
-  const [{ data: teams }, { data: playersByFullName }, { data: playersByKnownAs }, { data: competitions }] =
-    await Promise.all([
+  const [
+    { data: teams },
+    { data: playersByFullName },
+    { data: playersByKnownAs },
+    { data: competitions },
+    { data: managers },
+    { data: venues },
+  ] = await Promise.all([
       supabase.from("teams").select("id, name, country, crest_url").ilike("name", pattern).limit(RESULTS_PER_CATEGORY),
       // Two plain single-column ilike() calls instead of one .or("full_name.ilike.X,known_as.ilike.X") —
       // .or() takes a raw PostgREST filter string built by string interpolation, and escapeLikePattern
@@ -102,6 +117,16 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
       supabase
         .from("competitions")
         .select("id, name, country, logo_url")
+        .ilike("name", pattern)
+        .limit(RESULTS_PER_CATEGORY),
+      supabase
+        .from("managers")
+        .select("id, full_name, nationality, current_team:teams(name)")
+        .ilike("full_name", pattern)
+        .limit(RESULTS_PER_CATEGORY),
+      supabase
+        .from("venues")
+        .select("id, name, city, country")
         .ilike("name", pattern)
         .limit(RESULTS_PER_CATEGORY),
     ]);
@@ -130,6 +155,27 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
       label: competition.name,
       sublabel: competition.country,
       imageUrl: competition.logo_url,
+    });
+  }
+  for (const manager of managers ?? []) {
+    results.push({
+      type: "manager",
+      id: manager.id,
+      label: manager.full_name,
+      sublabel: [manager.current_team?.name, manager.nationality].filter(Boolean).join(" · ") || null,
+      imageUrl: null,
+    });
+  }
+  for (const venue of venues ?? []) {
+    // venues.name is nullable in the schema; a row without one has nothing to
+    // show and could not have matched the name filter anyway.
+    if (!venue.name) continue;
+    results.push({
+      type: "venue",
+      id: venue.id,
+      label: venue.name,
+      sublabel: [venue.city, venue.country].filter(Boolean).join(", ") || null,
+      imageUrl: null,
     });
   }
 

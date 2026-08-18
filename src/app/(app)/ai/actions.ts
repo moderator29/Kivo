@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 export type ConversationSummary = Pick<
   Database["public"]["Tables"]["ai_conversations"]["Row"],
@@ -12,7 +13,10 @@ export type ConversationSummary = Pick<
 >;
 export type ConversationMessage = Pick<
   Database["public"]["Tables"]["ai_messages"]["Row"],
-  "id" | "role" | "content" | "created_at"
+  // KN-24: stop_reason travels with the message so a conversation reopened
+  // from history says the same thing about a cut-short reply that the live
+  // stream said. Without it the honesty lasts exactly one page view.
+  "id" | "role" | "content" | "created_at" | "stop_reason"
 >;
 
 const MAX_TITLE_LENGTH = 80;
@@ -44,12 +48,12 @@ export async function loadConversationMessages(
 
   const { data, error } = await supabase
     .from("ai_messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, created_at, stop_reason")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("Failed to load conversation messages", error);
+    logError("ai.loadConversationMessages", error);
     return { messages: null, error: "Couldn't load that conversation." };
   }
 
@@ -77,7 +81,7 @@ export async function renameConversation(
     .eq("profile_id", profile.id);
 
   if (error) {
-    console.error("Failed to rename AI conversation", error);
+    logError("ai.renameConversation", error);
     return { error: "Couldn't rename that conversation." };
   }
 
@@ -105,7 +109,7 @@ export async function deleteConversation(conversationId: string): Promise<{ erro
     .eq("profile_id", profile.id);
 
   if (error) {
-    console.error("Failed to delete AI conversation", error);
+    logError("ai.deleteConversation", error);
     return { error: "Couldn't delete that conversation." };
   }
 

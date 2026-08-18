@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:assets": "node scripts/check-assets.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "calibrate:ratings": "tsx scripts/calibrate-rating-engine.ts"
   },
   "dependencies": {

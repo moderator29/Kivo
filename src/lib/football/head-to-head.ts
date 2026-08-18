@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
@@ -65,7 +66,7 @@ export async function getHeadToHead(
 
   const { data, error } = await request;
   if (error) {
-    console.error("getHeadToHead: fixtures query failed", error);
+    logError("football.head-to-head.getheadtoheadFixturesQuery", error);
     return null;
   }
 

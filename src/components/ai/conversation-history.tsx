@@ -145,7 +145,7 @@ function ConversationRow({
             aria-label="Rename conversation"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         )}
         <button
@@ -161,7 +161,7 @@ function ConversationRow({
               : "text-foreground-subtle hover:bg-surface-2 hover:text-critical",
           )}
         >
-          {confirmingDelete ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
+          {confirmingDelete ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
         </button>
       </div>
     </div>

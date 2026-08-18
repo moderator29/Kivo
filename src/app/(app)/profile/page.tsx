@@ -1,20 +1,34 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark, Pencil, MapPin } from "lucide-react";
+import Image from "next/image";
+import { CircleUserRound, Pencil, MessageSquare, Target, Award, ArrowRight } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { UsernameEditor } from "@/components/profile/username-editor";
-import { KivoAvatar } from "@/components/ui/kivo-avatar";
-import { KivoProfileBackground } from "@/components/profile/kivo-profile-background";
-import { BackgroundPicker } from "@/components/profile/background-picker";
-import { resolveAvatarSrc } from "@/lib/kivo-assets";
-import { getCountryName } from "@/lib/countries";
+import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
+import { ProfileStatRail } from "@/components/profile/profile-stat-rail";
+import { ProfileTabs, isProfileTab, type ProfileTab } from "@/components/profile/profile-tabs";
+import { PostCard } from "@/components/social/post-card";
+import { fetchPostsPage } from "@/app/(app)/social/posts";
+import { TeamCrest } from "@/components/ui/team-crest";
 import { FadeIn } from "@/components/ui/fade-in";
-import { StatTile } from "@/components/home/stat-tile";
+import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
+import { PREDICTION_OUTCOME_LABEL, predictionResultInfo } from "@/lib/predictions";
+import { formatDateTime, timeAgo } from "@/lib/format";
+import { staggerDelay } from "@/lib/stagger";
 
 export const metadata: Metadata = { title: "Profile" };
 
-export default async function ProfilePage() {
+/** How much of each tab's content the profile itself carries before handing
+ * off to the dedicated page that owns it in full. A profile is a summary of a
+ * person, not a second copy of `/social`, `/predictions/mine` or `/rewards`. */
+const PROFILE_POST_LIMIT = 10;
+const PROFILE_PREDICTION_LIMIT = 6;
+
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const profile = await getOrCreateProfile();
 
   if (!profile) {
@@ -32,159 +46,348 @@ export default async function ProfilePage() {
     );
   }
 
+  const { tab: tabParam } = await searchParams;
+  const tab: ProfileTab = isProfileTab(tabParam) ? tabParam : "posts";
+
   const supabase = createServerSupabaseClient();
-  // Item 136: real content instead of a stub — XP total, badge progress and
-  // prediction record, reusing the same RPC/queries /rewards and
-  // /predictions/mine already use rather than rebuilding either page here.
-  // Plain counts (head: true) since this is a summary tile, not a full list.
+
+  // One round of everything the header and rail need, regardless of tab —
+  // these are the numbers that stay on screen while the tabs change under
+  // them, so they are never re-fetched per tab.
   const [
     { data: follows },
+    { data: followerRows },
     { data: xpTotal },
     { count: totalBadgeCount },
     { count: earnedBadgeCount },
-    { count: totalPredictionCount },
-    { count: correctPredictionCount },
     { count: savedCount },
+    { data: club },
   ] = await Promise.all([
-    supabase
-      .from("follows")
-      .select("followed_type")
-      .eq("follower_profile_id", profile.id)
-      .in("followed_type", ["team", "player", "competition"]),
-    // Single aggregate round trip, same reasoning as /rewards and /home (see
-    // get_xp_total in supabase/migrations/0023_xp_total_and_sync_run_pruning.sql).
+    supabase.from("follows").select("followed_type").eq("follower_profile_id", profile.id),
+    // `follows` has no cross-user SELECT policy — the reverse direction goes
+    // through get_my_followers() (migration 0048), which is scoped to the
+    // caller's own incoming follows only. Same call /profile/following makes.
+    supabase.rpc("get_my_followers"),
+    // Single aggregate round trip, same as /rewards and /home (get_xp_total,
+    // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql).
     supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
     supabase.from("badges").select("id", { count: "exact", head: true }),
     supabase.from("user_badges").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
-    supabase.from("predictions").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
-    // points_awarded is only set by the admin scoring pass — same "real
-    // columns only" rule predictionResultInfo() (src/lib/predictions.ts)
-    // follows, not a guessed outcome from the fixture score.
-    supabase
-      .from("predictions")
-      .select("id", { count: "exact", head: true })
-      .eq("profile_id", profile.id)
-      .gt("points_awarded", 0),
-    // RECOMMENDATIONS item 173: saves_select_own already scopes this to the
-    // caller's own row.
+    // saves_select_own already scopes this to the caller's own rows.
     supabase.from("saves").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
+    // The one club this profile supports. Read back by id rather than trusted
+    // from the column alone, so a club deleted since it was picked renders as
+    // "no club yet" instead of a dangling crest.
+    profile.favourite_team_id
+      ? supabase
+          .from("teams")
+          .select("id, name, short_name, crest_url")
+          .eq("id", profile.favourite_team_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
-  const teamCount = (follows ?? []).filter((f) => f.followed_type === "team").length;
-  const playerCount = (follows ?? []).filter((f) => f.followed_type === "player").length;
-  const competitionCount = (follows ?? []).filter((f) => f.followed_type === "competition").length;
-  const totalFollows = teamCount + playerCount + competitionCount;
-
-  const totalXp = xpTotal ?? 0;
-  const totalPredictions = totalPredictionCount ?? 0;
-  const correctPredictions = correctPredictionCount ?? 0;
+  const followingCount = (follows ?? []).length;
+  const followerCount = (followerRows ?? []).length;
+  const headerClub: ProfileHeaderClub | null = club
+    ? { id: club.id, name: club.name, shortName: club.short_name, crestUrl: club.crest_url }
+    : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <KivoProfileBackground backgroundId={profile.background_id}>
-        <FadeIn className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
-          <KivoAvatar src={resolveAvatarSrc(profile)} name={profile.display_name} size={64} />
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <h1 className="truncate text-lg font-semibold text-foreground">{profile.display_name || "Your profile"}</h1>
-            <UsernameEditor username={profile.username} />
-          </div>
-          <Link
-            href="/settings"
-            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-hairline px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-surface-2"
-          >
-            <Pencil className="h-3 w-3" strokeWidth={2} />
-            Edit avatar
-          </Link>
-        </FadeIn>
-      </KivoProfileBackground>
+    <div className="kivo-page">
+      <FadeIn>
+        <ProfileHeader
+          owner
+          displayName={profile.display_name}
+          username={profile.username}
+          avatarSrc={resolveAvatarSrc(profile)}
+          coverSrc={resolveBackgroundSrc(profile)}
+          bio={profile.bio}
+          country={profile.country}
+          joinedAt={profile.created_at}
+          club={headerClub}
+          connections={{
+            following: followingCount,
+            followers: followerCount,
+            followingHref: "/profile/following",
+          }}
+          action={
+            <Link
+              href="/profile/edit"
+              className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-foreground"
+            >
+              <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+              Edit profile
+            </Link>
+          }
+        />
+      </FadeIn>
 
-      {(profile.bio || profile.country) && (
-        <FadeIn delay={0.02} className="kivo-glass flex flex-col gap-2 rounded-3xl p-6">
-          {profile.bio && <p className="whitespace-pre-wrap text-sm text-foreground">{profile.bio}</p>}
-          {profile.country && (
-            <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
-              <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
-              {getCountryName(profile.country)}
+      <FadeIn delay={0.04}>
+        <ProfileStatRail
+          stats={[
+            { href: "/rewards", value: `${xpTotal ?? 0}`, label: "XP" },
+            { href: "/rewards", value: `${earnedBadgeCount ?? 0}/${totalBadgeCount ?? 0}`, label: "Badges" },
+            { href: "/saved", value: `${savedCount ?? 0}`, label: "Saved" },
+          ]}
+        />
+      </FadeIn>
+
+      {/* KIVO_NEXT_GEN KN-98. The profile is a summary of a person; "Your
+          season" is the narrative version of the same rows, and it needs a way
+          in from here or it is a page nobody finds. */}
+      <FadeIn delay={0.05}>
+        <Link
+          href="/profile/season"
+          className="kivo-glass flex items-center justify-between gap-3 rounded-2xl px-4 py-3 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold text-foreground">Your season</span>
+            <span className="text-xs text-foreground-subtle">
+              Your record, streak, fantasy arc and badges — counted from your own activity only.
             </span>
-          )}
-        </FadeIn>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+        </Link>
+      </FadeIn>
+
+      <FadeIn delay={0.06} className="flex flex-col gap-4">
+        <ProfileTabs active={tab} />
+        {tab === "posts" && <PostsPanel profileId={profile.id} />}
+        {tab === "predictions" && <PredictionsPanel profileId={profile.id} />}
+        {tab === "badges" && <BadgesPanel profileId={profile.id} />}
+      </FadeIn>
+    </div>
+  );
+}
+
+/** Shared shape for a tab with nothing in it yet. Every one of these is a
+ * genuine empty state — KIVO has no seeded content and never invents any — so
+ * each says what would put something here rather than apologising. */
+function EmptyPanel({
+  icon,
+  title,
+  body,
+  cta,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  cta?: { href: string; label: string };
+}) {
+  return (
+    <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-10 text-center">
+      <span className="text-foreground-subtle">{icon}</span>
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="max-w-xs text-xs leading-relaxed text-foreground-muted">{body}</p>
+      {cta && (
+        <Link
+          href={cta.href}
+          className="kivo-focus mt-1 flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-strong"
+        >
+          {cta.label}
+          <ArrowRight className="h-3 w-3" strokeWidth={2} />
+        </Link>
       )}
+    </div>
+  );
+}
 
-      <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-4 rounded-3xl p-6">
-        <BackgroundPicker backgroundId={profile.background_id} />
-      </FadeIn>
+async function PostsPanel({ profileId }: { profileId: string }) {
+  const supabase = createServerSupabaseClient();
+  // Two steps rather than a new option on fetchPostsPage: `posts_select_public`
+  // already scopes what this viewer may read, so the id list below is a real
+  // authorization result, and hydrating it through the shared loader is what
+  // keeps reactions, comment counts, polls and save state identical to how the
+  // same post renders in /social.
+  const { data: rows } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("author_profile_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(PROFILE_POST_LIMIT);
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile
-          href="/rewards"
-          icon={<Flame className="h-4 w-4" strokeWidth={1.75} />}
-          value={`${totalXp}`}
-          label="XP"
-          brand
-          delay={0.05}
-        />
-        <StatTile
-          href="/rewards"
-          icon={<Award className="h-4 w-4" strokeWidth={1.75} />}
-          value={`${earnedBadgeCount ?? 0}/${totalBadgeCount ?? 0}`}
-          label="Badges"
-          brand={false}
-          delay={0.1}
-        />
-        <StatTile
-          href="/predictions/mine"
-          icon={<Target className="h-4 w-4" strokeWidth={1.75} />}
-          value={totalPredictions > 0 ? `${correctPredictions}/${totalPredictions}` : "-"}
-          label="Predictions"
-          brand={false}
-          delay={0.15}
-        />
-      </div>
+  const postIds = (rows ?? []).map((row) => row.id);
+  const { posts } = await fetchPostsPage(0, profileId, { postIds });
 
-      <FadeIn delay={0.2} className="kivo-glass rounded-3xl p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Star className="h-4 w-4 text-accent" strokeWidth={1.75} />
-            Following
-          </h2>
-          <Link
-            href="/profile/following"
-            className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80"
+  if (posts.length === 0) {
+    return (
+      <EmptyPanel
+        icon={<MessageSquare className="h-6 w-6" strokeWidth={1.75} />}
+        title="No posts yet"
+        body="Anything you post in the feed or in a Match Room shows up here, newest first."
+        cta={{ href: "/social", label: "Go to the feed" }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {posts.map((post, index) => (
+        <PostCard key={post.id} {...post} signedIn index={index} />
+      ))}
+      {posts.length === PROFILE_POST_LIMIT && (
+        <Link
+          href="/social"
+          className="kivo-focus flex items-center justify-center gap-1 py-1 text-xs font-semibold text-accent hover:text-accent-strong"
+        >
+          See more in the feed
+          <ArrowRight className="h-3 w-3" strokeWidth={2} />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+async function PredictionsPanel({ profileId }: { profileId: string }) {
+  const supabase = createServerSupabaseClient();
+  // `predictions_select_own` restricts this to the caller's own rows, so a
+  // plain query is enough. The full record, streaks and per-competition
+  // accuracy live on /predictions/mine — this is the recent slice plus a way
+  // through to it, not a second copy of that page.
+  const { data: rows, count } = await supabase
+    .from("predictions")
+    .select(
+      `id, predicted_outcome, points_awarded, created_at,
+       fixture:fixtures(
+         id, kickoff_at, status, home_score, away_score,
+         home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+         away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url)
+       )`,
+      { count: "exact" },
+    )
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(PROFILE_PREDICTION_LIMIT);
+
+  // fixture_id cascades on fixture delete, so this should not happen —
+  // filtered defensively rather than rendering half a row.
+  const predictions = (rows ?? []).filter((row) => row.fixture !== null);
+
+  if (predictions.length === 0) {
+    return (
+      <EmptyPanel
+        icon={<Target className="h-6 w-6" strokeWidth={1.75} />}
+        title="No predictions yet"
+        body="Call a result before kickoff and it lands here with what it earned once the match is scored."
+        cta={{ href: "/predictions", label: "Make a prediction" }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {predictions.map((prediction, index) => {
+        const fixture = prediction.fixture!;
+        const result = predictionResultInfo(fixture.status, prediction.points_awarded);
+        const ResultIcon = result.icon;
+        return (
+          <FadeIn
+            key={prediction.id}
+            delay={staggerDelay(index, 0.04)}
+            className="kivo-glass flex items-center gap-3 rounded-2xl p-3.5"
           >
-            View all
-            <ArrowRight className="h-3 w-3" strokeWidth={2} />
-          </Link>
-        </div>
-        {totalFollows > 0 ? (
-          <p className="mt-2 text-sm text-foreground-muted">
-            {teamCount} {teamCount === 1 ? "team" : "teams"}, {playerCount} {playerCount === 1 ? "player" : "players"},{" "}
-            {competitionCount} {competitionCount === 1 ? "competition" : "competitions"}.
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-foreground-muted">
-            You&apos;re not following any teams, players or competitions yet. Follow one from its page to see it
-            here.
-          </p>
-        )}
-      </FadeIn>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? null} size={20} />
+                <span className="truncate text-xs font-medium text-foreground">
+                  {fixture.home_team?.short_name || fixture.home_team?.name}
+                </span>
+                <span className="text-[11px] text-foreground-subtle">v</span>
+                <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? null} size={20} />
+                <span className="truncate text-xs font-medium text-foreground">
+                  {fixture.away_team?.short_name || fixture.away_team?.name}
+                </span>
+              </div>
+              <span className="text-[11px] text-foreground-subtle">
+                Called {PREDICTION_OUTCOME_LABEL[prediction.predicted_outcome]} ·{" "}
+                {formatDateTime(fixture.kickoff_at, "dayTime", "UTC")}
+              </span>
+            </div>
+            <span
+              className={`flex shrink-0 items-center gap-1.5 rounded-full border border-hairline px-2.5 py-1 text-[11px] font-semibold ${result.className}`}
+            >
+              <ResultIcon className="h-3 w-3" strokeWidth={2} />
+              {result.label}
+            </span>
+          </FadeIn>
+        );
+      })}
+      {(count ?? 0) > predictions.length && (
+        <Link
+          href="/predictions/mine"
+          className="kivo-focus flex items-center justify-center gap-1 py-1 text-xs font-semibold text-accent hover:text-accent-strong"
+        >
+          See your full record
+          <ArrowRight className="h-3 w-3" strokeWidth={2} />
+        </Link>
+      )}
+    </div>
+  );
+}
 
-      <FadeIn delay={0.25} className="kivo-glass rounded-3xl p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Bookmark className="h-4 w-4 text-accent" strokeWidth={1.75} />
-            Saved
-          </h2>
-          <Link href="/saved" className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80">
-            View all
-            <ArrowRight className="h-3 w-3" strokeWidth={2} />
-          </Link>
-        </div>
-        <p className="mt-2 text-sm text-foreground-muted">
-          {savedCount && savedCount > 0
-            ? `${savedCount} saved ${savedCount === 1 ? "item" : "items"}.`
-            : "Nothing saved yet. Bookmark a post, team or player to find it here."}
-        </p>
-      </FadeIn>
+async function BadgesPanel({ profileId }: { profileId: string }) {
+  const supabase = createServerSupabaseClient();
+  const { data: earned } = await supabase
+    .from("user_badges")
+    .select("badge_id, awarded_at")
+    .eq("profile_id", profileId)
+    .order("awarded_at", { ascending: false });
+
+  const badgeIds = (earned ?? []).map((row) => row.badge_id);
+  // Same two-step lookup as exportUserData: resolve the small reference table
+  // in a second query rather than relying on PostgREST's FK-embed syntax.
+  const { data: badges } = badgeIds.length
+    ? await supabase.from("badges").select("id, name, description, icon_url").in("id", badgeIds)
+    : { data: [] as { id: string; name: string; description: string | null; icon_url: string | null }[] };
+  const badgeById = new Map((badges ?? []).map((badge) => [badge.id, badge]));
+
+  if (badgeIds.length === 0) {
+    return (
+      <EmptyPanel
+        icon={<Award className="h-6 w-6" strokeWidth={1.75} />}
+        title="No badges yet"
+        body="Badges are earned, never bought — for streaks, predictions and taking part. The full list shows what each one takes."
+        cta={{ href: "/rewards", label: "See every badge" }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {(earned ?? []).map((row, index) => {
+          const badge = badgeById.get(row.badge_id);
+          if (!badge) return null;
+          return (
+            <FadeIn
+              key={row.badge_id}
+              delay={staggerDelay(index, 0.03)}
+              className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ring-1 ring-inset ring-accent/25"
+            >
+              {badge.icon_url && (
+                <Image
+                  src={badge.icon_url}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 drop-shadow-[0_0_10px_var(--accent-hairline)]"
+                />
+              )}
+              <span className="text-xs font-semibold text-foreground">{badge.name}</span>
+              <span className="text-[11px] leading-relaxed text-foreground-subtle">{badge.description}</span>
+              <span className="text-[10px] font-medium text-accent">Earned {timeAgo(row.awarded_at)}</span>
+            </FadeIn>
+          );
+        })}
+      </div>
+      <Link
+        href="/rewards"
+        className="kivo-focus flex items-center justify-center gap-1 py-1 text-xs font-semibold text-accent hover:text-accent-strong"
+      >
+        See every badge and what it takes
+        <ArrowRight className="h-3 w-3" strokeWidth={2} />
+      </Link>
     </div>
   );
 }

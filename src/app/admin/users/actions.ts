@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile, type Profile } from "@/lib/profile";
 import { canViewUserData } from "@/lib/admin";
@@ -86,7 +87,7 @@ export async function suspendUser(targetProfileId: string, durationDays: Suspend
     .maybeSingle();
 
   if (error || !target) {
-    console.error("Failed to suspend user", error);
+    logError("admin.users.suspendUser", error);
     return { error: "Couldn't suspend that user. Try again." };
   }
 
@@ -126,7 +127,7 @@ export async function banUser(targetProfileId: string, reasonRaw: string): Promi
     .maybeSingle();
 
   if (error || !target) {
-    console.error("Failed to ban user", error);
+    logError("admin.users.banUser", error);
     return { error: "Couldn't ban that user. Try again." };
   }
 
@@ -162,7 +163,7 @@ export async function shadowMuteUser(targetProfileId: string): Promise<ActionRes
     .maybeSingle();
 
   if (error || !target) {
-    console.error("Failed to shadow-mute user", error);
+    logError("admin.users.shadowMuteUser", error);
     return { error: "Couldn't shadow-mute that user. Try again." };
   }
 
@@ -199,7 +200,7 @@ export async function reinstateUser(targetProfileId: string): Promise<ActionResu
     .maybeSingle();
 
   if (error || !target) {
-    console.error("Failed to reinstate user", error);
+    logError("admin.users.reinstateUser", error);
     return { error: "Couldn't reinstate that user. Try again." };
   }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { COUNTRY_CODES } from "@/lib/countries";
+import { isSupportedTimeZone } from "@/lib/timezone";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   NOTIFICATION_PREFERENCE_COLUMNS,
@@ -11,6 +12,7 @@ import {
   type NotificationPreferenceColumn,
 } from "@/lib/notification-preferences";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 // Matches the `profiles_bio_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length(bio) <= 500).
@@ -92,7 +94,7 @@ export async function updateNotificationPreference(column: NotificationPreferenc
     .upsert(buildPreferencePayload(column, value, profile.id), { onConflict: "profile_id" });
 
   if (error) {
-    console.error("Failed to update notification preference", error);
+    logError("settings.updateNotificationPreference", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -122,7 +124,7 @@ export async function updateProfileDetails(formData: FormData) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to update profile details", error);
+    logError("settings.updateProfileDetails", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -149,7 +151,49 @@ export async function updateActivityVisibility(showActivityPublicly: boolean) {
     .eq("id", profile.id);
 
   if (error) {
-    console.error("Failed to update activity visibility", error);
+    logError("settings.updateActivityVisibility", error);
+    return { error: "Something went wrong. Try again." };
+  }
+
+  revalidatePath("/settings");
+  return { error: null };
+}
+
+/**
+ * KN-89. The only writer of `profiles.timezone` (migration 0054), and
+ * deliberately the only one there will ever be: the value comes from the user
+ * confirming their own device's zone, never from IP geolocation.
+ *
+ * Three validation layers, none redundant. This action rejects anything the
+ * runtime's own ICU data does not know (`isSupportedTimeZone`), so a typo or a
+ * hand-crafted request never reaches Postgres. Migration 0054's trigger checks
+ * the same thing against `pg_timezone_names`, which is the copy that actually
+ * matters for anything the database computes. And the column's shape
+ * constraint means the field cannot become free text even if the trigger were
+ * dropped.
+ *
+ * `null` is a first-class value, not a failure: "clear my timezone" is a real
+ * choice, and every consumer falls back to UTC and says so (see
+ * src/lib/timezone.ts) rather than pretending to know.
+ */
+export async function updateTimezone(timezone: string | null) {
+  const value = typeof timezone === "string" ? timezone.trim() : null;
+
+  if (value !== null && value.length > 0 && !isSupportedTimeZone(value)) {
+    return { error: "That isn't a time zone we recognise." };
+  }
+
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in." };
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ timezone: value && value.length > 0 ? value : null })
+    .eq("id", profile.id);
+
+  if (error) {
+    logError("settings.updateTimezone", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -169,8 +213,9 @@ export async function updateActivityVisibility(showActivityPublicly: boolean) {
  * The storage sweep is not optional bookkeeping. Supabase refuses to delete an
  * auth user who still owns objects in Storage
  * (https://supabase.com/docs/guides/auth/managing-user-data), and any user who
- * has ever uploaded their own avatar owns objects in the `avatars` bucket at
- * `<auth_user_id>/<timestamp>.<ext>` (see avatar-actions.ts). Without this,
+ * has ever uploaded their own avatar or cover owns objects in the `avatars` /
+ * `backgrounds` buckets at `<auth_user_id>/<timestamp>.<ext>` (see
+ * avatar-actions.ts and profile/background-actions.ts). Without this,
  * deleteUser() would fail for exactly those users — the ones most likely to
  * have real data worth deleting — and the error would look like an unrelated
  * server fault. Objects are removed with the service-role client because the
@@ -191,24 +236,30 @@ export async function deleteAccount() {
   const admin = createServiceRoleSupabaseClient();
 
   try {
-    const { data: objects } = await admin.storage.from("avatars").list(user.id);
-    if (objects && objects.length > 0) {
-      const { error: removeError } = await admin.storage
-        .from("avatars")
-        .remove(objects.map((object) => `${user.id}/${object.name}`));
-      if (removeError) {
-        console.error("Failed to remove avatar objects before account deletion", removeError);
-        return { error: "Something went wrong. Try again." };
+    // Every bucket this product writes user-owned objects into, at the same
+    // `<auth_user_id>/<filename>` layout. `backgrounds` joined `avatars` in
+    // migration 0065; missing it here would make the users who had customised
+    // their profile the most the ones who could not delete their account.
+    for (const bucket of ["avatars", "backgrounds"] as const) {
+      const { data: objects } = await admin.storage.from(bucket).list(user.id);
+      if (objects && objects.length > 0) {
+        const { error: removeError } = await admin.storage
+          .from(bucket)
+          .remove(objects.map((object) => `${user.id}/${object.name}`));
+        if (removeError) {
+          logError("settings.removeBucketObjectsAccount", removeError);
+          return { error: "Something went wrong. Try again." };
+        }
       }
     }
 
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) {
-      console.error("Failed to delete Supabase Auth user", error);
+      logError("settings.deleteSupabaseAuthUser", error);
       return { error: "Something went wrong. Try again." };
     }
   } catch (error) {
-    console.error("Failed to delete account", error);
+    logError("settings.deleteAccount", error);
     return { error: "Something went wrong. Try again." };
   }
 
@@ -245,6 +296,18 @@ export type UserDataExport = {
   saves: Database["public"]["Tables"]["saves"]["Row"][];
   badges: { badgeId: string; code: string; name: string; description: string | null; awardedAt: string }[];
   xpLedger: Database["public"]["Tables"]["xp_ledger"]["Row"][];
+  // KIVO_NEXT_GEN KN-112: eight categories of real user data were missing from
+  // a feature whose button says "Download my data". Every user-owned table is
+  // now covered, and USER_DATA_CATEGORIES (src/lib/user-data.ts) is the shared
+  // list that keeps this and the on-screen summary describing the same set.
+  reactions: Database["public"]["Tables"]["reactions"]["Row"][];
+  pollVotes: Database["public"]["Tables"]["poll_votes"]["Row"][];
+  fanRatings: Database["public"]["Tables"]["fan_ratings"]["Row"][];
+  aiConversations: Database["public"]["Tables"]["ai_conversations"]["Row"][];
+  aiMessages: Database["public"]["Tables"]["ai_messages"]["Row"][];
+  notifications: Database["public"]["Tables"]["notifications"]["Row"][];
+  notificationPreferences: Database["public"]["Tables"]["notification_preferences"]["Row"] | null;
+  supportRequests: Database["public"]["Tables"]["support_requests"]["Row"][];
 };
 
 export async function exportUserData(): Promise<{ error: string | null; data: UserDataExport | null }> {
@@ -269,6 +332,13 @@ export async function exportUserData(): Promise<{ error: string | null; data: Us
     { data: saves },
     { data: userBadgeRows },
     { data: xpLedger },
+    { data: reactions },
+    { data: pollVotes },
+    { data: fanRatings },
+    { data: aiConversations },
+    { data: notifications },
+    { data: notificationPreferences },
+    { data: supportRequests },
   ] = await Promise.all([
     supabase.from("posts").select("*").eq("author_profile_id", profile.id).order("created_at", { ascending: false }),
     supabase.from("comments").select("*").eq("author_profile_id", profile.id).order("created_at", { ascending: false }),
@@ -278,12 +348,31 @@ export async function exportUserData(): Promise<{ error: string | null; data: Us
     supabase.from("saves").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
     supabase.from("user_badges").select("badge_id, awarded_at").eq("profile_id", profile.id).order("awarded_at", { ascending: false }),
     supabase.from("xp_ledger").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("reactions").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("poll_votes").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("fan_ratings").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("ai_conversations").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("notifications").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("notification_preferences").select("*").eq("profile_id", profile.id).maybeSingle(),
+    supabase.from("support_requests").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
   ]);
 
   // fantasy_rosters has no profile_id of its own (see migration
   // 0001_kivo_core_schema.sql) — it's keyed on fantasy_team_id, so this
   // scopes to the team ids just fetched above rather than a fifth
   // independent query with nothing to filter on.
+  // ai_messages hangs off ai_conversations the same way fantasy_rosters hangs
+  // off fantasy_teams — no owner column of its own, so it is scoped to the
+  // conversation ids just fetched rather than left out for lack of one.
+  const conversationIds = (aiConversations ?? []).map((c) => c.id);
+  const { data: aiMessages } = conversationIds.length
+    ? await supabase
+        .from("ai_messages")
+        .select("*")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as Database["public"]["Tables"]["ai_messages"]["Row"][] };
+
   const fantasyTeamIds = (fantasyTeams ?? []).map((team) => team.id);
   const { data: fantasyRosters } = fantasyTeamIds.length
     ? await supabase
@@ -327,6 +416,14 @@ export async function exportUserData(): Promise<{ error: string | null; data: Us
       saves: saves ?? [],
       badges,
       xpLedger: xpLedger ?? [],
+      reactions: reactions ?? [],
+      pollVotes: pollVotes ?? [],
+      fanRatings: fanRatings ?? [],
+      aiConversations: aiConversations ?? [],
+      aiMessages: aiMessages ?? [],
+      notifications: notifications ?? [],
+      notificationPreferences: notificationPreferences ?? null,
+      supportRequests: supportRequests ?? [],
     },
   };
 }

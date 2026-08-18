@@ -17,6 +17,11 @@ import {
   CircleUserRound,
   Settings,
   ShieldCheck,
+  Search,
+  Bell,
+  LifeBuoy,
+  ClipboardList,
+  MapPin,
 } from "lucide-react";
 
 export type NavStatus = "live" | "coming-soon";
@@ -71,6 +76,11 @@ export const NAV_ITEMS: NavItem[] = [
     comingSoonDescription: "Nothing synced yet across leagues, teams, players or transfers. Check back soon.",
   },
   { id: "social", label: "Social", href: "/social", icon: Users, status: "live" },
+  // Search stopped being a field wedged into the top bar and became a real
+  // destination (src/app/(app)/search/page.tsx), so it needs a real nav entry
+  // in both shells rather than only existing as a ⌘K shortcut a phone can
+  // never press.
+  { id: "search", label: "Search", href: "/search", icon: Search, status: "live" },
   { id: "fantasy", label: "Fantasy", href: "/fantasy", icon: Trophy, status: "live" },
   {
     id: "predictions",
@@ -126,6 +136,30 @@ export const NAV_ITEMS: NavItem[] = [
     comingSoonDescription: "No competitions synced yet. Check back soon.",
     comingSoonImage: "/assets/icons/navigation/leagues.webp",
   },
+  // KN-30: both of these routes were fully built — list page, detail page,
+  // loading skeleton — and reachable from nowhere. Grepping every href in src/
+  // returned only `/managers/[id]` and `/venues/[id]` links, from team and
+  // match pages and from the lists themselves; neither list appeared in
+  // NAV_ITEMS, in any nav group, or in the body of any page. A user could
+  // arrive at a manager's page by tapping through a squad and had no way to
+  // find the list they were on. Same class as item 267's `/saved` finding,
+  // which named only `/saved`.
+  {
+    id: "managers",
+    label: "Managers",
+    href: "/managers",
+    icon: ClipboardList,
+    status: "live",
+    comingSoonDescription: "No managers synced yet. Check back soon.",
+  },
+  {
+    id: "venues",
+    label: "Venues",
+    href: "/venues",
+    icon: MapPin,
+    status: "live",
+    comingSoonDescription: "No venues synced yet. Check back soon.",
+  },
   {
     id: "ai",
     label: "AI Copilot",
@@ -139,6 +173,13 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "rewards", label: "Rewards", href: "/rewards", icon: Award, status: "live" },
   { id: "settings", label: "Settings", href: "/settings", icon: Settings, status: "live" },
   { id: "profile", label: "Profile", href: "/profile", icon: CircleUserRound, status: "live" },
+  // Both are real, already-built routes that the nav never listed: /notifications
+  // was reachable only by opening the bell and clicking through, and /support
+  // (migration 0055) only from the sign-in screen and the marketing footer —
+  // the two places a signed-in user never looks. They sit in the nav shells'
+  // "Shortcuts" group.
+  { id: "notifications", label: "Notifications", href: "/notifications", icon: Bell, status: "live" },
+  { id: "support", label: "Help & support", href: "/support", icon: LifeBuoy, status: "live" },
 ];
 
 /**

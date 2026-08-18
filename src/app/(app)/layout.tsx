@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { resolveViewerProfile } from "@/lib/profile";
+import { signInHref } from "@/lib/auth";
 import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import { hasAdminAccess } from "@/lib/admin";
 import { isPreviewModeActive } from "@/lib/preview-mode";
@@ -31,7 +32,10 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
   // this job.
   const viewer = await resolveViewerProfile();
   if (viewer.status === "anonymous") {
-    redirect("/sign-in");
+    // KN-123: carry the destination through the gate. Without this every deep
+    // link into the product — a shared match, a notification, a bookmark —
+    // silently becomes a link to /home.
+    redirect(await signInHref());
   }
 
   // Signed in, but the profile row could not be read or created. Deliberately
@@ -78,6 +82,7 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
         username: profile.username,
         displayName: profile.display_name,
         avatarUrl: resolveAvatarSrc(profile),
+        bio: profile.bio,
       }}
       moderationBanner={moderationBanner}
     >

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
-import { Download, Share2, MessageCircle } from "lucide-react";
+import { Check, Copy, Download, Share2, MessageCircle } from "lucide-react";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { MATCH_CARD_CANVAS, MATCH_CARD_LAYOUT, type MatchShareCardData } from "@/lib/football/match-share-card";
 import { KIVO_MATCH_CARD_BACKGROUND_PATH } from "@/lib/kivo-assets";
@@ -45,6 +45,10 @@ export function MatchShareCard({ fixtureId, data, matchUrl }: { fixtureId: strin
   const [pending, startTransition] = useTransition();
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // KN-54: the share flow ended at a downloaded PNG. A picture of a scoreline
+  // with no way to send the link alongside it is a dead end on desktop, where
+  // navigator.share often isn't available at all.
+  const [copied, setCopied] = useState(false);
 
   const shareText =
     data.state === "upcoming"
@@ -98,6 +102,19 @@ export function MatchShareCard({ fixtureId, data, matchUrl }: { fixtureId: strin
       }
     }
     setShareMenuOpen(true);
+  }
+
+  async function handleCopyLink() {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(matchUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard access can be denied outright (insecure context, permission
+      // policy). Saying so beats a button that silently does nothing.
+      setError("Couldn't copy the link. Long-press the address bar instead.");
+    }
   }
 
   const encodedText = encodeURIComponent(shareText);
@@ -233,7 +250,29 @@ export function MatchShareCard({ fixtureId, data, matchUrl }: { fixtureId: strin
           <Share2 className="h-3.5 w-3.5" strokeWidth={2} />
           Share
         </button>
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className="kivo-glass-sharp flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} />
+          ) : (
+            <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+          )}
+          {copied ? "Link copied" : "Copy link"}
+        </button>
       </div>
+
+      {/* KN-54: the card is a picture; the link is the product. With the whole
+          app behind the door, whoever receives this link needs an account —
+          saying so here means the sharer knows what they are sending rather
+          than finding out from a confused reply. The link itself does now
+          survive the gate: the sign-in page carries the destination through
+          and lands them on this exact match afterwards (KN-123). */}
+      <p className="text-[11px] leading-snug text-foreground-subtle">
+        The link opens this match on KIVO. Anyone without an account signs in first, then lands right here.
+      </p>
 
       {shareMenuOpen && (
         <div className="kivo-glass flex flex-wrap items-center gap-2 rounded-xl p-3">

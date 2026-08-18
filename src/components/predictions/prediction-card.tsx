@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Check, Lock } from "lucide-react";
+import { ArrowRight, Check, Lock } from "lucide-react";
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
@@ -11,6 +11,7 @@ import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome as Outcome } from "@/l
 import { formatDeadlineCountdown } from "@/app/(app)/fantasy/fantasy-rules";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+import { RetryableError } from "@/components/ui/retryable-error";
 import { cn } from "@/lib/utils";
 
 const NEAR_LOCK_MS = 60 * 60_000;
@@ -131,6 +132,9 @@ export function PredictionCard({
   const pathname = usePathname();
   const [prediction, setPrediction] = useState<Outcome | null>(initialPrediction);
   const [error, setError] = useState<string | null>(null);
+  // KN-56: which pick failed, so the retry repeats the user's actual choice
+  // rather than asking them to remember it after the rollback.
+  const [failedOutcome, setFailedOutcome] = useState<Outcome | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const [pending, startTransition] = useTransition();
   const { now, locked, nearLock } = useLockState(kickoffAt);
@@ -152,6 +156,7 @@ export function PredictionCard({
     }
     if (pending || locked || outcome === prediction) return;
     setError(null);
+    setFailedOutcome(null);
     setJustSaved(false);
     const previous = prediction;
     setPrediction(outcome);
@@ -160,6 +165,7 @@ export function PredictionCard({
       if (result.error) {
         setPrediction(previous);
         setError(result.error);
+        setFailedOutcome(outcome);
       } else {
         setJustSaved(true);
       }
@@ -218,7 +224,7 @@ export function PredictionCard({
                 }`}
               >
                 {active && <span className="kivo-gradient-victory absolute inset-0" />}
-                {active && <Lock className="relative h-3 w-3 shrink-0 text-on-accent" strokeWidth={2.5} />}
+                {active && <Lock className="relative h-3 w-3 shrink-0 text-on-accent" strokeWidth={2} />}
                 <span className={`relative ${active ? "text-on-accent" : "text-foreground-muted"}`}>
                   {PREDICTION_OUTCOME_LABEL[outcome]}
                 </span>
@@ -269,18 +275,19 @@ export function PredictionCard({
 
       <AnimatePresence>
         {error ? (
-          <motion.p
+          <motion.div
             key="error"
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
-            className="text-xs text-critical"
-            role="status"
-            aria-live="polite"
           >
-            {error}
-          </motion.p>
+            <RetryableError
+              message={error}
+              retrying={pending}
+              onRetry={failedOutcome ? () => handlePick(failedOutcome) : undefined}
+            />
+          </motion.div>
         ) : justSaved ? (
           <motion.p
             key="saved"
@@ -292,13 +299,26 @@ export function PredictionCard({
             role="status"
             aria-live="polite"
           >
-            <Check className="h-3 w-3" strokeWidth={2.5} />
+            <Check className="h-3 w-3" strokeWidth={2} />
             Prediction saved
           </motion.p>
         ) : null}
       </AnimatePresence>
 
       {consensus && <ConsensusBar consensus={consensus} />}
+
+      {/* KN-42: the return trip. Item 293 put "You predicted: Home win" on
+          Match Centre, but /predictions linked nowhere — a user who had just
+          called a match could not get from their pick to the match it was
+          about without going back to /matches and finding it again. The two
+          surfaces share `fixtureId`; this is the missing half of that pair. */}
+      <Link
+        href={`/matches/${fixtureId}`}
+        className="flex items-center justify-between border-t border-hairline-soft pt-3 text-xs font-medium text-foreground-muted transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      >
+        Match Centre
+        <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+      </Link>
     </div>
   );
 }

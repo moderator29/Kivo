@@ -2,6 +2,43 @@
 
 Every variable KIVO reads, why it exists, and where to get it. Never commit real values — `.env.local` is gitignored; `.env.example` holds names only.
 
+---
+
+## ⚠️ Waiting on you right now (2026-08-18)
+
+Football data now arrives three different ways. **One of them needs nothing and is already live; two are built, deployed and waiting on a single action each.** They are listed here at the top rather than buried below because the same failure has happened twice on this project: something is built, documented and deployed, and then quietly never runs.
+
+**You do not have to take anything on trust.** Admin → Data Health now has an "Is data actually arriving?" panel that reads real sync rows and says, per layer, whether it has *ever actually run* and what the one remaining step is. If a layer says "Never run", it has never run — regardless of what any environment variable says.
+
+| | Needs from you | Effect |
+|---|---|---|
+| **On-demand freshness** | Nothing — live on the next deploy of the current code | A page load on stale data triggers a sync after the response. Not live scores |
+| **Daily baseline** | Paste the `crons` block below into `vercel.json` | Fixtures, clubs, competitions and five league tables, once a day |
+| **Once-a-minute worker** | Two Supabase Vault secrets + `FOOTBALL_LIVE_POLLING_ENABLED=true` | Real live scores |
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/sync-daily",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}
+```
+
+```sql
+-- Supabase dashboard → SQL editor. Arms the once-a-minute worker's scheduler,
+-- which is already running and deliberately doing nothing until these exist.
+select vault.create_secret('https://<your-kivo-domain>', 'kivo_app_base_url');
+select vault.create_secret('<the same value as CRON_SECRET in Vercel>', 'kivo_cron_secret');
+```
+
+`0 5 * * *` is **once a day**, which is what the Hobby plan permits — the entry that previously blocked every deployment was `* * * * *`. Full detail in "How football data arrives" below, and in `docs/LIVE_DATA.md`.
+
+---
+
 ## Bringing real data online — what each key actually does the moment it's added
 
 This is the plain-language version, audited 2026-08-15 by tracing every code path each variable gates end to end (see `src/lib/football/index.ts`, `src/lib/football/sync*.ts`, `src/app/admin/data-health/actions.ts`, `src/lib/ai/client.ts`, `src/app/api/ai/chat/route.ts`). No further code changes are needed for the first two — they're genuinely plug-and-play.
@@ -52,7 +89,7 @@ Sign-in method: **email one-time code only** (see `DECISIONS.md`, 2026-08-18). N
 
 ### Sending the sign-in email in production
 
-Supabase's built-in email sender is intended for development and is heavily rate-limited (a handful of messages per hour per project, shared across every auth email). It is fine for local work and for testing, and it is **not** adequate for real signups. Before production traffic, configure custom SMTP under Dashboard → Project Settings → Authentication → SMTP Settings; `RESEND_API_KEY` below is the intended sender once that is wired. Nothing in the code changes when you do this — Supabase sends the mail either way.
+Supabase's built-in email sender is intended for development and is heavily rate-limited (a handful of messages per hour per project, shared across every auth email). It is fine for local work and for testing, and it is **not** adequate for real signups. Before production traffic, configure custom SMTP under Dashboard → Project Settings → Authentication → SMTP Settings; `RESEND_API_KEY` below is the intended sender once that is wired. Nothing in the code changes when you do this — Supabase sends the mail either way. **`docs/EMAIL_DELIVERABILITY.md` is the full runbook** (KN-117): which DNS records to publish and why, the rate-limit setting that stays in force even after custom SMTP is wired, what to test against which mailboxes, and the bounce/complaint path. With email OTP as the only sign-in method, an email that doesn't arrive is a user who cannot use KIVO at all — read that before launch, not after the first report.
 
 ## Football data — provider abstraction (see `DECISIONS.md`)
 
@@ -61,20 +98,73 @@ Supabase's built-in email sender is intended for development and is heavily rate
 | `API_FOOTBALL_KEY` | API-Football key (free tier for MVP — $0 budget, see DECISIONS.md). Read in `src/lib/football/index.ts` and `src/app/admin/data-health/*` | Optional | [dashboard.api-football.com](https://dashboard.api-football.com) — without this, a development-only mock provider is used automatically (never in production) |
 | `THE_SPORTS_DB_API_KEY` | TheSportsDB v1 API key, embedded in the request path (not a header) by `src/lib/football/providers/thesportsdb.ts`. Read only when `FOOTBALL_DATA_PROVIDER=thesportsdb` | Optional | [thesportsdb.com/free_sports_api](https://www.thesportsdb.com/free_sports_api) (Patreon key at [patreon.com/thesportsdb](https://www.patreon.com/thesportsdb) for the v2/premium tier — not used here) — see `docs/API_FOOTBALL.md` and `docs/PROVIDER_ABSTRACTION.md` for real free-tier coverage/limits |
 | `FOOTBALL_DATA_PROVIDER` | Selects which provider `getFootballDataProvider()` returns: `api-football` (default) or `thesportsdb`. Read in `src/lib/football/index.ts` | Optional, default `api-football` | Any other/unrecognized value falls back to `api-football` rather than failing the build |
+| `FOOTBALL_IMAGE_HOSTS` | Extra image CDN hostnames to allow, comma-separated bare hostnames (e.g. `r2.thesportsdb.com`). Read at build time in `next.config.ts` via `src/lib/football/image-hosts.ts`, which feeds **both** `images.remotePatterns` and the CSP `img-src` directive from one list so they cannot drift apart. | Optional | **Set this whenever you set `FOOTBALL_DATA_PROVIDER=thesportsdb`.** API-Football's host (`media.api-sports.io`) is built in and verified. TheSportsDB's image host is not, deliberately: thesportsdb.com is unreachable from every sandbox this repo has been built in, so the hostname its badge URLs resolve to has never been read off a real response, and hardcoding a guess would be an unverified claim (and a wrong one degrades to a broken crest on every row). Read the host off one real `strBadge`/`strTeamBadge` URL and set it here. Scheme, port, path and wildcard entries are rejected with a build-log warning and ignored — this value lands verbatim in a security header. **`next.config.ts` is read at build time, so a change needs a fresh deployment, not just a saved env var.** |
 | `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts` — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
 | `FOOTBALL_SYNC_COMPETITION_IDS` | RECOMMENDATIONS.md item 28: comma-separated **provider-native** competition/league ids (API-Football's numeric league ids, or TheSportsDB's `idLeague` when that provider is selected) to scope `syncTodayFixtures` to. Read in `src/lib/football/competitions-config.ts` | Optional | Unset = no filter, every league the provider reports for the day still syncs (unchanged from before this item). Filters the already-fetched response rather than issuing one provider request per league — costs zero extra quota. |
 
-## Automated live-sync worker (Vercel Cron) — added 2026-08-18
+## How football data arrives — three layers, only one of them is live scores
 
-`src/app/api/cron/sync-live/route.ts` — the route itself is real and unconditionally ready to be scheduled. **Not currently wired to a schedule**: `vercel.json`'s `crons` array was removed 2026-08-18 because Vercel's Hobby (free) plan only permits daily cron jobs, and this route's design (fire every minute, decide internally whether anything's worth a provider call) needs the Pro plan's every-minute interval to work as intended — a Hobby deployment fails outright with the `* * * * *` entry present ("Hobby accounts are limited to daily cron jobs"). To reactivate once on a paid plan, add back to `vercel.json`:
+Founder instruction, 2026-08-18: "Make it automatic — no need for triggering now." Nothing needs pressing any more, but the three mechanisms are genuinely different and it matters which is which.
+
+| Layer | Cadence | What you need to do | Keeps fresh |
+|---|---|---|---|
+| **On-demand** (`src/lib/football/auto-sync.ts`) | When somebody loads `/home`, `/matches` or `/live` and the data is stale | **Nothing** — already live | Everything, eventually. The visitor who triggers it sees the old data; the next one sees the new data. A quiet site refreshes nothing |
+| **Daily baseline** (`/api/cron/sync-daily`) | Once a day, 05:00 UTC | **Paste six lines into `vercel.json`** — see immediately below. The route is built and deployed; only the schedule is missing | Today's fixtures and the clubs/competitions they create, plus five league tables a day |
+| **Once-a-minute worker** (`/api/cron/sync-live`) | Every minute | Two Vault secrets **and** `FOOTBALL_LIVE_POLLING_ENABLED=true` (below) | Live scores. Only this row is live scores |
+
+### FOUNDER: the one paste that turns on the daily baseline
+
+`vercel.json` is deployment configuration, so this session deliberately did not edit it — that file is yours. The route it points at (`/api/cron/sync-daily`) is built, deployed and waiting. Add the `crons` array:
+
 ```json
-"crons": [{ "path": "/api/cron/sync-live", "schedule": "* * * * *" }]
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/sync-daily",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}
 ```
+
+Three things about that block, each one a thing that broke a deploy or could:
+
+- **`0 5 * * *` is once a day**, which is what the Hobby plan permits. The entry that previously blocked every deployment was `* * * * *` against `/api/cron/sync-live`. Do not point a sub-daily schedule at anything while on Hobby.
+- **The path has no query string.** Vercel's cron documentation only ever shows a bare path; that is why the daily behaviour lives at its own route rather than as `?mode=daily` on the live one.
+- **`CRON_SECRET` must be set in Vercel** or the route answers 500 rather than accepting unauthenticated requests. Vercel sends it back as a Bearer token on every cron invocation.
+
+Nothing about this starts spending live-polling quota: this route makes one fixtures call plus at most five standings calls, once a day, against a 100-a-day free tier.
+
+Full reasoning: `docs/LIVE_DATA.md` and `DECISIONS.md` ("Automated sync trigger").
+
+## Automated live-sync worker — scheduled from Supabase since 2026-08-18
+
+`src/app/api/cron/sync-live/route.ts` is the worker. It now has a real caller: **Supabase `pg_cron`**, firing once a minute (migration `0067_scheduled_live_sync_trigger.sql`). Vercel Cron is not it — the Hobby plan permits daily crons only and a more frequent expression fails the deployment outright, so `vercel.json`'s `crons` array was removed. See `DECISIONS.md` (2026-08-18, "Automated sync trigger") for why `pg_cron` beat GitHub Actions and an external pinger.
+
+**The schedule is live and doing nothing, on purpose.** `private.trigger_live_sync()` reads two secrets from Supabase Vault on every fire and returns immediately if either is missing. Adding them is the whole activation step — no code change, no deployment:
+
+```sql
+-- Supabase dashboard -> SQL editor (or Project Settings -> Vault)
+select vault.create_secret('https://<your-kivo-domain>', 'kivo_app_base_url');
+select vault.create_secret('<the same value as CRON_SECRET in Vercel>', 'kivo_cron_secret');
+```
+
+`kivo_cron_secret` must match Vercel's `CRON_SECRET` exactly, or the route answers 401 and nothing syncs.
+
+**Adding these does not start spending provider quota.** `FOOTBALL_LIVE_POLLING_ENABLED` and `API_FOOTBALL_KEY` are still the gates that decide whether the worker may make a provider call at all; these two secrets only change it from *never asked* to *asked once a minute*.
+
+- Watch it: `select * from cron.job_run_details order by start_time desc limit 20;`
+- Pause it: `select cron.unschedule('kivo-live-sync');`
+- Rotate the secret: edit the Vault entry and the Vercel env var. No migration, no redeploy — the function reads it fresh on every fire.
+
 The route decides on every firing whether anything is actually worth a provider call (live/halftime fixtures, or one kicking off within ~10 minutes) before it spends any quota. See `docs/LIVE_DATA.md` for the full checklist of what's real vs. still unverifiable about this worker.
+
+If KIVO ever moves to a paid Vercel plan, prefer unscheduling this rather than running both — two schedulers calling the same worker would depend entirely on the sync lease to stay correct.
 
 | Variable | Purpose | Required | Notes |
 |---|---|---|---|
-| `CRON_SECRET` | Authorizes `/api/cron/sync-live` — the route rejects any request whose `Authorization: Bearer <value>` header doesn't match. Read in `src/app/api/cron/sync-live/route.ts` | **Required** for the cron route to ever do anything other than 500 | Vercel sets this automatically and sends it back as the Bearer token on every real Cron Jobs invocation once you add a Cron Job in the Vercel dashboard/`vercel.json` — see [vercel.com/docs/cron-jobs/manage-cron-jobs](https://vercel.com/docs/cron-jobs/manage-cron-jobs). Without it set, the route always returns 500 rather than silently accepting unauthenticated requests. |
+| `CRON_SECRET` | Authorizes `/api/cron/sync-live` — the route rejects any request whose `Authorization: Bearer <value>` header doesn't match. Read in `src/app/api/cron/sync-live/route.ts` | **Required** for the cron route to ever do anything other than 500 | Set it yourself in Vercel to any long random string, and put the **same** value in Supabase Vault as `kivo_cron_secret` (above). Vercel also populates this automatically for its own Cron Jobs, but KIVO's scheduler is Supabase's, so the value has to be one you chose and can copy into both places. Without it set, the route always returns 500 rather than silently accepting unauthenticated requests. |
 
 This is genuinely new, real infrastructure — not just an env var read. `FOOTBALL_LIVE_POLLING_ENABLED` (above) is still the gate that decides whether the worker is allowed to spend any provider quota once it does run; `CRON_SECRET` only decides who's allowed to trigger the route at all. Setting `CRON_SECRET` alone does not turn on live polling.
 
@@ -99,6 +189,36 @@ These are declared in `.env.example` for a feature that's designed but not built
 | `WEBHOOK_SECRET` | Reserved for a future inbound webhook consumer | Not used. `CLERK_WEBHOOK_SECRET` used to be the one webhook secret actually read; the Clerk webhook route was deleted 2026-08-18 along with the rest of Clerk, so the app reads no webhook secret at all today |
 
 `CRON_SECRET` **used to be listed here** ("reserved, not used") — as of 2026-08-18 it's real; see the "Automated live-sync worker" section above, not this table.
+
+---
+
+## Uptime monitoring — `/api/health` (founder step, five minutes)
+
+`src/app/api/health/route.ts` exists and answers honestly: `200` with
+`{"status":"healthy","checks":{"database":"ok"}}` when the app can actually
+reach Supabase, `503` with `"database":"unreachable"` when it cannot — including
+when `SUPABASE_SERVICE_ROLE_KEY` is missing, because an app that cannot reach
+its database is unhealthy whatever the reason.
+
+**Nothing calls it.** (KIVO_NEXT_GEN.md KN-135.) That is not a code gap — it
+needs an account somewhere, which no Claude Code session can create. Until a
+monitor is pointed at it, KIVO finds out it is down the same way it does today:
+somebody opens the app.
+
+To close it, point any HTTP monitor at `https://<your-domain>/api/health`:
+
+- **Interval**: 1–5 minutes. The check is a single indexed `select id ... limit
+  1`, so it is cheap enough to run often and expensive enough to be meaningful.
+- **Alert on**: any non-`200`. Do *not* alert on response body text — alert on
+  the status code, and read the body for the reason.
+- **Suggested services**: Better Stack, Checkly, UptimeRobot, or Vercel's own
+  Monitoring. Any of them works; none of them is wired here, and this document
+  will not pretend otherwise.
+
+The response shape is a contract a monitor depends on, so it is covered by a
+test (`src/app/api/health/route.test.ts`) rather than left to be quietly
+renamed — a monitor that silently stops understanding the body is worse than no
+monitor, because it reports success.
 
 ---
 

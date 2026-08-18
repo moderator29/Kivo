@@ -78,13 +78,13 @@ function PlayerSlot({
             aria-label={`Clear ${label}`}
             className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         </div>
       ) : (
         <>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={2} />
             <input
               value={query}
               onChange={(e) => {

@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Star, Shield, UserRound, ArrowLeft, Users } from "lucide-react";
+import { Star, Shield, UserRound, ArrowLeft, BellOff, Users } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
+import { FollowWithMute } from "@/components/ui/follow-with-mute";
+import { FOLLOW_MEANING } from "@/lib/follow-meaning";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
@@ -46,7 +48,12 @@ export default async function FollowingPage() {
   const [{ data: follows }, { data: followerRows }] = await Promise.all([
     supabase
       .from("follows")
-      .select("followed_type, followed_id, created_at")
+      // KN-52: `muted` comes back with the row now. The mute control has
+      // existed since migration 0049 and been honoured by teamAudience()/
+      // playerAudience() ever since, but nothing in the product ever showed a
+      // user *what* they had muted — so a club muted three weeks ago was
+      // indistinguishable from a club KIVO simply had no news about.
+      .select("followed_type, followed_id, created_at, muted")
       .eq("follower_profile_id", profile.id)
       .order("created_at", { ascending: false }),
     // follows_select_own only covers `follower_profile_id = caller` — the
@@ -55,6 +62,9 @@ export default async function FollowingPage() {
     // SECURITY DEFINER read scoped to the caller's own incoming follows only.
     supabase.rpc("get_my_followers"),
   ]);
+
+  // id -> muted, for the two types a mute means anything for (team/player).
+  const mutedFollowIds = new Set((follows ?? []).filter((f) => f.muted).map((f) => f.followed_id));
 
   const teamIds = (follows ?? []).filter((f) => f.followed_type === "team").map((f) => f.followed_id);
   const playerIds = (follows ?? []).filter((f) => f.followed_type === "player").map((f) => f.followed_id);
@@ -112,6 +122,12 @@ export default async function FollowingPage() {
   const followingPeopleIds = new Set(followingPeople.map((p) => p.id));
   const followerPeople = followerUserIds.map((id) => personMap.get(id)).filter((p): p is PersonRow => !!p);
 
+  // Only team/player follows can be muted (migration 0049) — a competition or
+  // user follow has no audience for a mute to exclude you from.
+  const mutedCount =
+    followedTeams.filter((t) => mutedFollowIds.has(t.id)).length +
+    followedPlayers.filter((p) => mutedFollowIds.has(p.id)).length;
+
   const isEmpty =
     followedTeams.length === 0 &&
     followedPlayers.length === 0 &&
@@ -135,9 +151,40 @@ export default async function FollowingPage() {
         </p>
       </FadeIn>
 
+      {/* KN-51: the permanent home for "what does following actually do".
+          The transient confirmation on the star says it at the moment of the
+          decision; this is where a user comes back to when they have already
+          followed a dozen things and want to know what they signed up for.
+          Both read from the same sentences (src/lib/follow-meaning.ts). */}
+      {!isEmpty && (
+        <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-2 rounded-2xl p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">What following does</h2>
+          <p className="text-xs leading-relaxed text-foreground-muted">
+            <span className="font-medium text-foreground">Clubs:</span> {FOLLOW_MEANING.team}
+          </p>
+          <p className="text-xs leading-relaxed text-foreground-muted">
+            <span className="font-medium text-foreground">Players:</span> {FOLLOW_MEANING.player}
+          </p>
+          <p className="text-xs leading-relaxed text-foreground-muted">
+            <span className="font-medium text-foreground">Competitions:</span> {FOLLOW_MEANING.competition}
+          </p>
+          {mutedCount > 0 ? (
+            <p className="flex items-center gap-1.5 border-t border-hairline-soft pt-2 text-xs text-foreground-muted">
+              <BellOff className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
+              {mutedCount === 1 ? "1 of these is muted" : `${mutedCount} of these are muted`} — marked below, and no
+              match alerts reach you for them.
+            </p>
+          ) : (
+            <p className="border-t border-hairline-soft pt-2 text-xs text-foreground-subtle">
+              Use the bell on any club or player to mute its alerts without unfollowing.
+            </p>
+          )}
+        </FadeIn>
+      )}
+
       {isEmpty ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
-          <Star className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Star className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">
             You&apos;re not following anything yet. Tap the star on a team, player or competition page to follow it.
           </p>
@@ -224,9 +271,20 @@ export default async function FollowingPage() {
                       className="flex min-w-0 flex-1 items-center gap-3 transition-all hover:translate-x-1"
                     >
                       <TeamCrest crestUrl={team.crest_url} name={team.name} />
-                      <span className="truncate text-sm text-foreground">{team.name}</span>
+                      <span className="min-w-0 truncate text-sm text-foreground">{team.name}</span>
+                      {mutedFollowIds.has(team.id) && <MutedChip />}
                     </Link>
-                    <FollowButton targetType="team" targetId={team.id} initialFollowing size="sm" signedIn />
+                    {/* KN-52: the mute toggle itself, not just the star — a
+                        list that shows you what you muted but makes you open
+                        each club's page to undo it is half a fix. */}
+                    <FollowWithMute
+                      targetType="team"
+                      targetId={team.id}
+                      initialFollowing
+                      initialMuted={mutedFollowIds.has(team.id)}
+                      size="sm"
+                      signedIn
+                    />
                   </div>
                 ))}
               </div>
@@ -249,13 +307,23 @@ export default async function FollowingPage() {
                         <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm text-foreground">{player.known_as ?? player.full_name}</p>
+                        <p className="flex items-center gap-2 truncate text-sm text-foreground">
+                          <span className="truncate">{player.known_as ?? player.full_name}</span>
+                          {mutedFollowIds.has(player.id) && <MutedChip />}
+                        </p>
                         <p className="truncate text-[11px] text-foreground-subtle">
                           {[player.position, player.current_team?.name].filter(Boolean).join(" · ") || "-"}
                         </p>
                       </div>
                     </Link>
-                    <FollowButton targetType="player" targetId={player.id} initialFollowing size="sm" signedIn />
+                    <FollowWithMute
+                      targetType="player"
+                      targetId={player.id}
+                      initialFollowing
+                      initialMuted={mutedFollowIds.has(player.id)}
+                      size="sm"
+                      signedIn
+                    />
                   </div>
                 ))}
               </div>
@@ -299,5 +367,16 @@ export default async function FollowingPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** The one visual mark for a muted follow, so the teams list and the players
+ * list can never describe the same state two different ways. */
+function MutedChip() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-hairline px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+      <BellOff className="h-2.5 w-2.5" strokeWidth={2} />
+      Muted
+    </span>
   );
 }

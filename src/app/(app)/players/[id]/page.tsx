@@ -7,6 +7,8 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { YourPlayerConnection } from "@/components/football/your-connection-card";
+import { getViewerPlayerConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
@@ -22,6 +24,7 @@ import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { calculateAge, formatDate } from "@/lib/format";
 import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { DEFAULT_FANTASY_PRICE, formatFantasyPrice } from "@/app/(app)/fantasy/fantasy-rules";
 
 // RECOMMENDATIONS.md item 296: same minimum-sample suppression convention as
@@ -155,6 +158,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const isFollowing = followRow !== null;
   const isMuted = followRow?.muted ?? false;
 
+  // KN-46: the same page for a stranger and for the manager who has this
+  // player as their captain this gameweek. One targeted, owner-scoped read
+  // fixes that; it renders nothing when the player isn't in the viewer's squad.
+  const viewerConnection = profile ? await getViewerPlayerConnection(supabase, profile.id, player.id) : null;
+
   const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
   const hasMatchData = stats.appearances > 0;
 
@@ -207,13 +215,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             )}
           </FadeIn>
           <FadeIn delay={0.1} className="flex items-center gap-2">
-            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={!!profile} />
+            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={viewerIsSignedIn(profile)} />
             <FollowWithMute
               targetType="player"
               targetId={player.id}
               initialFollowing={isFollowing}
               initialMuted={isMuted}
-              signedIn={!!profile}
+              signedIn={viewerIsSignedIn(profile)}
             />
           </FadeIn>
         </div>
@@ -235,7 +243,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             href={`/players/compare?a=${player.id}`}
             className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
           >
-            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
             Compare with another player
           </Link>
         </FadeIn>
@@ -245,6 +253,12 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           <AskAiLink ctx="player" id={player.id} label={`Ask AI about ${displayName}`} />
         </FadeIn>
       </div>
+
+      {viewerConnection && (
+        <FadeIn delay={0.18}>
+          <YourPlayerConnection connection={viewerConnection} />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
@@ -304,7 +318,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               href="/fantasy"
               className="flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
             >
-              <Trophy className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              <Trophy className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               Build your fantasy squad
             </Link>
           </div>
@@ -392,7 +406,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                       Club not synced
                     </span>
                   )}
-                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
                   {transfer.to_team ? (
                     <Link
                       href={`/teams/${transfer.to_team.id}`}

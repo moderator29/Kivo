@@ -4,6 +4,49 @@ Log of decisions with real consequences (irreversible, costly, or scope-defining
 
 ---
 
+### 2026-08-18 — Automated sync trigger: Supabase `pg_cron` + `pg_net`, not Vercel Cron, GitHub Actions or an external pinger
+
+**Decision**: Schedule `/api/cron/sync-live` from inside Supabase, with `pg_cron` firing `private.trigger_live_sync()` every minute and `pg_net` making the HTTP call. Both credentials it needs — the app's base URL and the value of `CRON_SECRET` — live in Supabase Vault, so the job is **inert until the founder adds them** and requires no code change or deployment to switch on. Migration `0067_scheduled_live_sync_trigger.sql`.
+
+**Rationale**: The worker route has been built, adaptive, quota-floored and unit-tested since 2026-08-18 with nothing calling it, because `vercel.json` no longer schedules it. Vercel Cron cannot be that caller: the Hobby plan permits **daily** crons only, and any more frequent expression fails the deployment outright. A live-scores product cannot run on one request a day, and moving off Hobby is a spend decision that belongs to the founder, not something to design around silently.
+
+Three real alternatives were considered against that constraint:
+
+| Option | Granularity | Why not / why yes |
+|---|---|---|
+| **Vercel Cron** | Daily on Hobby | Ruled out by the plan. Would need a paid upgrade — the founder's call, not an engineering workaround. |
+| **GitHub Actions `schedule`** | 5 min minimum | **Rejected.** Documented five-minute floor; delays of 5-30 minutes are ordinary at peak and unavoidable (the queue is on GitHub's side, so a self-hosted runner does not help); scheduled workflows are auto-disabled after 60 days of repository inactivity. "Sometimes half an hour late, and silently off after a quiet two months" disqualifies it for live scores specifically. On a private repo the included minutes also do not survive a 5-minute cadence. |
+| **External pinger** (cron-job.org, UptimeRobot) | 1 min, free | **Rejected as primary, kept as the documented fallback.** It works and needs nothing from this repository — but it puts `CRON_SECRET` in a third party's settings page with no SLA and no audit trail, and adds a vendor whose failure mode is silence. |
+| **Supabase `pg_cron` + `pg_net`** | 1 min | **Chosen.** Available on every Supabase plan including free. Runs inside the infrastructure that already holds the data the worker reads and writes, so it is one fewer vendor rather than one more. The secret lives in Vault, not in a third party's dashboard and not in a migration file that lives in git forever. `cron.job_run_details` gives a real execution history neither alternative offers. |
+
+**Consequences**:
+- The worker route itself is unchanged. This is purely a caller — the six gates that decide whether a provider call is actually warranted still live in the route.
+- **Nothing starts spending provider quota because of this.** `FOOTBALL_LIVE_POLLING_ENABLED` and `API_FOOTBALL_KEY` remain the founder's switches; the Vault secrets only change the worker from *never asked* to *asked once a minute*.
+- Rotating `CRON_SECRET` is now a Vault edit and a Vercel edit, with no migration and no redeploy, because the function reads the secret on every fire rather than baking it in.
+- `pg_cron` and `pg_net` are now installed on the live project. Additive and reversible (`cron.unschedule`, `drop function`), and the extensions are deliberately left installed on a reversal since other things may come to depend on them.
+- pg_net stores every response in `net._http_response` and nothing prunes it, so a second hourly job does — six hours of retention, which is long enough to debug an overnight failure. `sync_runs` remains the durable record.
+- The cron route's own no-op logging changed with it. Recording a row for every no-op was right when nothing called the route; at one call a minute the two steady-state conditions ("polling is off", "nothing is live") would each write 1,440 identical rows a day. A no-op describing a *standing condition* is now recorded once and suppressed for 30 minutes; a no-op describing something going *wrong* is still recorded every time. Nothing is lost — `cron.job_run_details` answers "did it even run" independently.
+
+**What this does not decide**: whether KIVO should eventually move to a paid Vercel plan and use Vercel Cron. If that happens, this becomes redundant and should be unscheduled rather than left running alongside it — two schedulers calling the same worker would rely entirely on the sync lease (KN-82) to stay correct, which works, but is not a design anyone chose.
+
+**Amended the same day, after the founder's instruction "Make it automatic — no need for triggering now" and a correction to the premise.** Vercel Cron is not entirely off the table: the Hobby plan rejects *sub-daily* schedules only, and a **daily** cron is permitted. The `crons` array had been removed because a once-a-minute entry blocked every deployment, not because crons were unavailable. That reopens a design space this entry had closed, so the answer is now three layers rather than one, each honest about what it does and does not keep fresh:
+
+| Layer | Cadence | Needs from the founder | Keeps fresh |
+|---|---|---|---|
+| **On-demand freshness** (`src/lib/football/auto-sync.ts`) | Whenever somebody loads a football page and the data is already stale | **Nothing.** Runs on the deployment that exists, with the key already set | Everything, eventually — but only for the *next* visitor after a gap, and not at all on a quiet site |
+| **Daily baseline** (`/api/cron/sync-daily`) | Once a day | Six lines pasted into `vercel.json` (the exact block is in `ENVIRONMENT.md`) — the route is built and deployed | Fixtures, clubs, competitions — the reference data, plus five league tables a day. Never a live scoreline |
+| **Once-a-minute worker** (`/api/cron/sync-live`, pg_cron) | Every minute | Two Vault secrets **and** `FOOTBALL_LIVE_POLLING_ENABLED=true` | Live scores, properly |
+
+The one that actually answers the founder's instruction is the first, because it is the only one that needs nothing. It uses `after()` (Next.js) so the provider call happens once the response has been sent — a slow or dead vendor can never delay a render — and it is bounded by four things, each preventing a failure that is real on 100 requests a day: a per-surface staleness threshold, a three-minute cooldown counted on *attempts* rather than successes (without which one failing sync would be retried by every page view and drain the day's quota in a minute), the sync lease from KN-82 so ten simultaneous page loads produce one sync, and the same quota floor the cron worker and Data Health's amber pill use.
+
+**Stated plainly, because "automatic sync" is easy to over-hear**: none of this is live scores except the third row, and the third row is still the founder's switch. On-demand freshness means the first visitor after a gap sees stale data and the next one sees fresh data. A quiet site refreshes nothing.
+
+Two rules held throughout: `FOOTBALL_LIVE_POLLING_ENABLED` is only ever *read*, never written from code — it is the founder's protection against per-minute quota burn, and the daily route skips it only because one request a day cannot burn anything, which is a different question from the one the flag asks. And `vercel.json` was deliberately left untouched by this session: deployment configuration is the founder's, and a `vercel.json` that fails validation blocks every deploy — which cost hours earlier the same day. The exact block to paste is documented in `ENVIRONMENT.md`, and it is `0 5 * * *` (daily, which Hobby accepts) against a bare path with no query string, because Vercel's cron documentation only ever shows a bare path — which is also why the daily behaviour is its own route rather than a `?mode=` parameter on the live one.
+
+`sync_runs.trigger_source` gained `'auto'` and `'daily'` (migration `0070`) so Data Health can tell four very different quota profiles apart rather than collapsing them into "cron".
+
+---
+
 ### 2026-08-14 — Football data provider: API-Football, free tier, provider abstraction mandatory
 
 **Decision**: Build the `FootballDataProvider` interface now and implement it first against API-Football's free tier. Zero budget for paid football data during MVP development — do not require or assume a paid subscription anywhere in the code.
@@ -160,3 +203,48 @@ Email-OTP-only is not just what shipped — it is a real security simplification
 **What was deliberately NOT done**: `profiles.clerk_user_id` is not dropped, existing rows are not relinked or deleted, and no data migration of any kind rides along with the auth swap. Those are destructive and reversible-only-with-backups; they get their own decision.
 
 **Consequence for `deleteAccount()`**: it now deletes the Supabase Auth user directly, but must first remove that user's objects from the `avatars` bucket — Supabase refuses to delete an auth user who still owns Storage objects. Without that sweep, deletion would fail for exactly the users most likely to have real data worth deleting, and the error would surface as an unrelated server fault.
+
+
+---
+
+### 2026-08-18 — Gating the app: KIVO stops publishing 11,000 URLs it no longer serves
+
+**Decision**: `sitemap.ts` and `robots.ts` now describe only the four genuinely public pages (`/`, `/about`, `/terms`, `/privacy`). Everything else is `disallow`ed. The read-only public preview of match and entity pages is **not** built, and is left as an open question for the founder rather than assumed either way.
+
+**Context**: the same-day move to Supabase Auth put the entire `(app)` group behind a sign-in wall with no guest preview. The SEO and sharing surface was not part of that change and kept running as built: `sitemap.ts` published nine app routes plus up to 5,000 teams, 5,000 players and 1,000 leagues; `robots.ts` explicitly allowed all of them; `generateMetadata` and `matches/[id]/opengraph-image.tsx` still existed to make shared links look good. Every one of those URLs answered a crawler — and the friend somebody sent a match link to — with a login form.
+
+**Rationale**: continuing to advertise 11,000 URLs that all return a login wall is the same category of untruth as a fabricated statistic, just told to a search engine instead of a user. It is also actively harmful rather than merely useless: a large set of URLs that all resolve to one gate is a textbook soft-404/thin-content signal, and the cost lands on the whole domain, including the four pages that *are* real. Cutting the sitemap to the truth costs nothing today, because none of those 11,000 URLs can currently be crawled successfully anyway.
+
+**What was deliberately NOT decided here**: whether KIVO should carve out a genuine read-only public preview for `/matches/[id]` and the team/player/league pages. That is the growth-loop question, not a correctness question, and it is a **product** call with a real trade-off on both sides:
+
+- **For a preview**: KIVO's own stated growth loop is fans sharing match links. A shared link that opens a login form converts far worse than one that opens the match and asks for sign-in at the point of participation (reacting, posting, predicting). Every major competitor is publicly crawlable. The entity pages carry no personal data — they are public football facts — so a preview is not a privacy trade.
+- **Against**: the founder's decision hours earlier was explicit that there is no guest preview of the product at all, and reintroducing one through the side door would be inventing a policy rather than implementing one.
+
+The recommendation, stated as a recommendation and not acted on: build the preview, scoped to `/matches/[id]`, `/teams/[id]`, `/players/[id]` and `/leagues/[id]` only, read-only, with every interactive affordance routed through the existing sign-in gate (which now preserves the destination — see the same day's KN-123 work, so a preview visitor who signs in lands back on the match they were reading). That is a strictly additive change to `src/app/(app)/layout.tsx` plus these two files. Until that call is made, the honest state is the one now shipped.
+
+---
+
+### 2026-08-18 — Sign-in no longer confirms whether an email address has a KIVO account
+
+**Decision**: `/sign-in` responds identically whether or not the submitted address has an account. Supabase's `otp_disabled` error (which, with `shouldCreateUser: false`, means "no such user") is swallowed on the sign-in path and the form advances to the code step either way. The message it replaced — *"No KIVO account uses that email yet. Create one instead."* — is gone.
+
+**Rationale**: that message was a membership oracle. Anyone could feed addresses in one at a time and learn, definitively, who is on KIVO. Server-side rate limiting now exists on both auth endpoints (three sends per address and ten per IP per fifteen minutes), which makes the probe slow — but a slow leak of a user list is still a leak, and rate limiting is not the right tool for a question that should not be answerable at all. This matches the standard treatment of account enumeration on any passwordless sign-in flow.
+
+**What the UX cost is, and what pays for it**: a user who mistypes their address now waits for an email that will never arrive, instead of being told immediately. That is a real regression and it is paid for on the code screen, which now carries a permanent, unconditional line: *"Nothing arrived at all? You may not have a KIVO account yet — create one."* Shown to everybody, so it reveals nothing, and it prompts exactly the action the old message prompted. `/sign-up` is unchanged; it creates the account or signs the existing one in, and has always answered identically either way.
+
+**Consequence for support**: the reporter can no longer tell these cases apart, but an operator can. `docs/ACCOUNT_RECOVERY.md` §2 makes checking `auth.users` for the address the second triage step, precisely because the product deliberately will not.
+
+---
+
+### 2026-08-18 — The guest-affordance layer is kept behind one flag, not deleted
+
+**Context**: KIVO used to be fully browsable signed out. Gating the whole `(app)` group (founder's call, same day) made that state structurally unreachable, and left behind a layer built for it: roughly twenty components still take a `signedIn` prop, render `<GuestLockHint>`'s padlock when it is false, and `router.push("/sign-up?redirect_url=…")` on tap. `KIVO_NEXT_GEN.md` KN-39 asked for one deliberate call — keep it behind a flag so un-gating is a config change, or delete it.
+
+**Decision**: keep it, behind `GUEST_PREVIEW_ENABLED` in `src/lib/guest-preview.ts` (currently `false`).
+
+**Rationale**: deleting is the tidier answer and the wrong one here for two reasons. Un-gating is a live possibility, not a hypothetical — a public read-only match page for shared links is already an open item (KN-119), and an invite-shaped preview is the obvious first growth lever for a pre-launch product. And the layer costs nothing while it sits: the components are correct, tested by use in their signed-in path, and the props are inert. What it *did* cost was legibility — twenty independent `signedIn={Boolean(profile)}` expressions with no statement anywhere of whether a guest can exist. One flag says it once.
+
+**What was actually unacceptable, and is now fixed**: the padlock could *lie*. Inside the gate, a page whose own `getOrCreateProfile()` read transiently failed would render every control as locked and offer a signed-in user a sign-up button — an app telling a paying-attention user they do not have the account they are signed in with. `GuestLockHint` now checks the flag itself, so no call site can produce that, and `viewerIsSignedIn()` is the single derivation for the prop: while the app is gated it is unconditionally `true`, because the group's layout has already handled both the signed-out case (redirect) and the unreadable-profile case (`<ProfileUnavailable>`). A `null` profile below that is a transient failure, and the honest response to it is a control that works and reports a real error.
+
+**Not yet done, deliberately**: the page-level call sites route through `viewerIsSignedIn` (`/ai`, `/teams/[id]`, `/players/[id]`, `/leagues/[id]`, `/matches/[id]`, `/predictions`), but `/social`, `/saved` and `/u/[username]` were being rewritten by other agents at the time and were left alone rather than merged into a conflict. Until those three are converted, flipping the flag is *almost* the whole of re-enabling a guest preview rather than all of it. The remaining edit is mechanical and named here so it is not rediscovered as a mystery.
+

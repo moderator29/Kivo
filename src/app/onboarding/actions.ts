@@ -5,6 +5,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp, type AwardedBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { isSupportedTimeZone } from "@/lib/timezone";
+import { logError } from "@/lib/log";
 
 const ONBOARDING_COMPLETE_XP = 10;
 
@@ -68,7 +70,7 @@ export async function checkUsername(username: string): Promise<{ available: bool
   });
 
   if (error) {
-    console.error("Failed to check username availability", error);
+    logError("onboarding.checkUsernameAvailability", error);
     return { available: null };
   }
 
@@ -102,11 +104,59 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
     if (error.code === "23505") {
       return { error: "That username is taken. Try another." };
     }
-    console.error("Failed to save username", error);
+    logError("onboarding.saveUsername", error);
     return { error: "Something went wrong. Try again." };
   }
 
   return { error: null };
+}
+
+/**
+ * KN-40: the four alert categories, as three choices instead of eight
+ * switches.
+ *
+ * Onboarding is the one guaranteed moment of a user's attention this product
+ * gets, and until now it spent that moment on two questions. Every other
+ * personalisation signal KIVO holds — follows, these preferences, activity
+ * privacy, theme — was discoverable only by someone who went looking in
+ * Settings.
+ *
+ * Deliberately only the four *category* columns. `email_enabled` and
+ * `push_enabled` are left at their table defaults and are not offered here,
+ * because KIVO has neither transactional email nor push infrastructure yet
+ * (see ENVIRONMENT.md): asking somebody to choose email alerts during signup
+ * would be selling a delivery channel that does not exist. `marketing_emails_enabled`
+ * is untouched for the same reason plus a consent one — an opt-in buried in a
+ * signup flow is not consent.
+ *
+ * Skipping writes nothing at all, which leaves the table's own defaults in
+ * place; it is not a fourth preset.
+ */
+export const ALERT_PRESETS = {
+  everything: {
+    match_alerts_enabled: true,
+    social_alerts_enabled: true,
+    prediction_alerts_enabled: true,
+    fantasy_alerts_enabled: true,
+  },
+  football_only: {
+    match_alerts_enabled: true,
+    social_alerts_enabled: false,
+    prediction_alerts_enabled: true,
+    fantasy_alerts_enabled: true,
+  },
+  matches_only: {
+    match_alerts_enabled: true,
+    social_alerts_enabled: false,
+    prediction_alerts_enabled: false,
+    fantasy_alerts_enabled: false,
+  },
+} as const;
+
+export type AlertPreset = keyof typeof ALERT_PRESETS;
+
+function isAlertPreset(value: string | null): value is AlertPreset {
+  return value !== null && Object.prototype.hasOwnProperty.call(ALERT_PRESETS, value);
 }
 
 /**
@@ -128,23 +178,55 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
  * awards nothing — previously it logged and carried on, handing the user a
  * congratulations screen for a profile whose `onboarding_completed` was still
  * false, which would bounce them straight back here from /home.
+ *
+ * `deviceTimezone` (KN-89) is the browser's own
+ * `Intl.DateTimeFormat().resolvedOptions().timeZone`, which the flow displays
+ * to the user on the step before this fires — see the note inside on why it is
+ * best-effort and can never fail a signup.
  */
-export async function finishOnboarding(teamId: string | null): Promise<OnboardingCompletion> {
+export async function finishOnboarding(
+  teamId: string | null,
+  deviceTimezone: string | null = null,
+  /** KN-40: clubs the user chose to follow on the optional step. The favourite
+   * club is added to this set server-side — picking a club as your favourite
+   * and then not following it is a distinction nobody intends. */
+  followTeamIds: string[] = [],
+  /** KN-40: which alert preset they picked, or null for "skipped", which
+   * writes nothing and leaves the table defaults alone. */
+  alertPreset: string | null = null,
+): Promise<OnboardingCompletion> {
   const profile = await getOrCreateProfile();
   if (!profile) {
     redirect("/sign-in");
   }
 
+  // KN-89. The browser proposes its own `Intl` zone and the flow shows the
+  // user which zone that is before this runs, so storing it here is a
+  // confirmation rather than an inference — the rule is that KIVO is *told* a
+  // timezone, never that it works one out from an IP address.
+  //
+  // Validated, then dropped on the floor if it doesn't validate. A zone this
+  // runtime does not recognise must not be the reason a signup cannot
+  // complete: the column stays null, every consumer falls back to UTC and says
+  // so, and Settings offers the same choice again later.
+  const timezone = deviceTimezone !== null && isSupportedTimeZone(deviceTimezone) ? deviceTimezone : null;
+
   const supabase = createServerSupabaseClient();
   const { data: updated, error } = await supabase
     .from("profiles")
-    .update({ favourite_team_id: teamId, onboarding_completed: true })
+    .update({
+      favourite_team_id: teamId,
+      onboarding_completed: true,
+      // Never overwrite a zone the user has already stated with a device
+      // reading — the stated one is the more deliberate signal of the two.
+      ...(timezone !== null && profile.timezone === null ? { timezone } : {}),
+    })
     .eq("id", profile.id)
     .select("username, favourite_team_id, avatar_type, avatar_kivo_id, avatar_uploaded_url, avatar_url")
     .single();
 
   if (error || !updated) {
-    console.error("Failed to finish onboarding", error);
+    logError("onboarding.finish", error);
     return {
       error: "We couldn't save that. Check your connection and try again.",
       xpAwarded: 0,
@@ -153,6 +235,39 @@ export async function finishOnboarding(teamId: string | null): Promise<Onboardin
       team: null,
       avatarSrc: null,
     };
+  }
+
+  // KN-40: the two optional steps, written after the profile update has
+  // already succeeded and deliberately best-effort. Neither can fail a signup:
+  // a user who has just completed onboarding must never be bounced back into it
+  // because a *preference* insert failed. Both are re-offerable — the follows
+  // from any club page, the alerts from Settings — so the cost of a silent miss
+  // is small and the cost of a hard failure here is somebody stuck outside the
+  // product.
+  const clubsToFollow = [...new Set([...(teamId ? [teamId] : []), ...followTeamIds])].filter(
+    (id) => typeof id === "string" && id.length > 0,
+  );
+
+  if (clubsToFollow.length > 0) {
+    // `follows` has a unique constraint per (follower, type, id) — ignoring
+    // duplicates makes a double-submitted final step a no-op rather than an
+    // error, the same shape the fantasy carry-forward upserts use.
+    const { error: followError } = await supabase.from("follows").upsert(
+      clubsToFollow.map((followedId) => ({
+        follower_profile_id: profile.id,
+        followed_type: "team" as const,
+        followed_id: followedId,
+      })),
+      { onConflict: "follower_profile_id,followed_type,followed_id", ignoreDuplicates: true },
+    );
+    if (followError) logError("onboarding.followClubs", followError);
+  }
+
+  if (isAlertPreset(alertPreset)) {
+    const { error: preferenceError } = await supabase
+      .from("notification_preferences")
+      .upsert({ profile_id: profile.id, ...ALERT_PRESETS[alertPreset] }, { onConflict: "profile_id" });
+    if (preferenceError) logError("onboarding.alertPreset", preferenceError);
   }
 
   // The rewards run on the service-role client (xp_ledger/user_badges have no
@@ -166,11 +281,14 @@ export async function finishOnboarding(teamId: string | null): Promise<Onboardin
   let badge: AwardedBadge | null = null;
   try {
     [xpWritten, badge] = await Promise.all([
-      awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding"),
+      // KN-91: onboarding completes once per profile, so the profile id *is*
+      // the award's identity. A double-submitted final step now returns the
+      // existing award instead of writing a second one.
+      awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding", `onboarding:${profile.id}`),
       awardBadge(profile.id, "welcome"),
     ]);
   } catch (rewardError) {
-    console.error("Failed to award onboarding rewards", rewardError);
+    logError("onboarding.awardRewards", rewardError);
   }
 
   // Read the club back by the id the row actually ended up with, so a team

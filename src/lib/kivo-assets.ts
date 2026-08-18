@@ -88,3 +88,79 @@ export function resolveAvatarSrc(profile: {
   }
   return profile.avatar_url ?? null;
 }
+
+/**
+ * Resolves the REAL active cover image for any profile shape carrying the two
+ * background columns — a full `profiles` row, or the narrower shape
+ * get_public_profile_by_username returns (migration 0065 added
+ * `background_uploaded_url` to both the column set and that RPC, so /profile
+ * and /u/[username] resolve covers identically).
+ *
+ * Mirrors resolveAvatarSrc() above, with one deliberate difference: there is
+ * no `background_type` discriminator, because "no cover at all" is a real and
+ * common state (no default is ever forced — see clearBackground in
+ * src/app/(app)/profile/background-actions.ts) and two nullable columns can
+ * say that where an enum cannot. `profiles_background_source_exclusive`
+ * (migration 0065) guarantees at most one of them is set, so the order of the
+ * two branches below is a formality rather than a precedence rule.
+ */
+export function resolveBackgroundSrc(profile: {
+  background_id: string | null;
+  background_uploaded_url: string | null;
+}): string | null {
+  if (profile.background_uploaded_url) return profile.background_uploaded_url;
+  if (isKivoBackgroundId(profile.background_id)) return kivoBackgroundPath(profile.background_id);
+  return null;
+}
+
+/**
+ * Where the person actually is inside each KIVO avatar, as a square crop box
+ * in the source image's own pixels.
+ *
+ * These are full-body hero renders, not head-and-shoulders portraits, and the
+ * asset's own internal number is printed on the shirt — `kivo-avatar-08` wears
+ * an 08. Rendered the obvious way (`object-fit: cover`, centred) the circle
+ * lands squarely on that shirt, so the product showed a KIVO asset id to the
+ * user at every size from the 40px nav avatar upward. That is the exact thing
+ * the asset rules forbid, and it is why an earlier pass had to keep shrinking
+ * an avatar rather than let it be seen properly.
+ *
+ * The fix is a crop, which is the only asset operation permitted here — no
+ * redraw, no regeneration, no recolour. Each box was measured against the real
+ * file and frames the head above the shirt number; the KIVO wordmark and
+ * shoulder mark are brand, not an id, and are allowed to stay. Two of the five
+ * (06, 17) are rear-facing renders with no face to frame, so their boxes are
+ * the best available head crop rather than a good portrait — see the profile
+ * recommendations in KIVO_NEXT_GEN.md for the remaster that would fix that
+ * properly.
+ *
+ * `width`/`height` are the file's real intrinsic dimensions, needed to scale
+ * the crop without distorting it. Verified against the committed files, not
+ * assumed.
+ */
+type KivoAvatarFraming = { width: number; height: number; x: number; y: number; side: number };
+
+const KIVO_AVATAR_FRAMING: Record<KivoAvatarId, KivoAvatarFraming> = {
+  "kivo-avatar-06": { width: 360, height: 512, x: 169, y: 0, side: 82 },
+  "kivo-avatar-08": { width: 250, height: 512, x: 50, y: 0, side: 130 },
+  "kivo-avatar-11": { width: 250, height: 512, x: 55, y: 5, side: 135 },
+  "kivo-avatar-12": { width: 250, height: 512, x: 75, y: 10, side: 125 },
+  "kivo-avatar-17": { width: 380, height: 512, x: 205, y: 0, side: 129 },
+};
+
+/**
+ * The framing for whatever `resolveAvatarSrc` produced, or null when the src
+ * is a user's own upload / the legacy avatar_url / nothing.
+ *
+ * Deliberately derived from the path rather than from a second `kivoId` prop
+ * threaded through every call site: `kivoAvatarPath` is the only thing that
+ * ever produces these URLs, so the path IS the id, and reading it back here
+ * means every avatar in the app — nav, posts, comments, follow lists — gets
+ * the corrected framing without any of those files changing.
+ */
+export function kivoAvatarFramingForSrc(src: string | null | undefined) {
+  if (!src) return null;
+  const match = /\/assets\/kivo\/avatars\/([a-z0-9-]+)\.webp$/.exec(src);
+  const id = match?.[1];
+  return isKivoAvatarId(id) ? KIVO_AVATAR_FRAMING[id] : null;
+}

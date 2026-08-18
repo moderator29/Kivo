@@ -1,55 +1,105 @@
 import type { Metadata } from "next";
-import { Radio } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
+import { getActiveProviderStatus } from "@/lib/football";
 import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
-import { LiveFixtureList } from "@/components/matches/live-fixture-list";
+import { LiveCentreSections } from "@/components/matches/live-centre-sections";
+import type { LiveListFixture } from "@/components/matches/live-fixture-list";
 import { getViewerFantasyRosterBySeasons } from "@/lib/football/fantasy-lineup-crossref";
 import { getNavItem } from "@/lib/navigation";
+import { scheduleAutoSyncIfStale } from "@/lib/football/auto-sync";
+import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
+
+/** The list rows this page works with: everything LiveCentreSections renders,
+ * plus the season the fantasy cross-reference below needs. */
+type LivePageFixture = LiveListFixture & { season_id: string };
 
 const item = getNavItem("live");
 
 export const metadata: Metadata = { title: item.label };
 
+/**
+ * KIVO_NEXT_GEN KN-16: neither of this page's fixture queries had a `LIMIT`,
+ * against a table that grows with every synced competition-day — every other
+ * list surface in the app is bounded (RECOMMENDATIONS.md items 111-113
+ * established the convention) and these were the exceptions.
+ *
+ * 120 is not arbitrary: a genuinely busy football Saturday across every
+ * European league runs to well under a hundred fixtures, so this is a ceiling
+ * that a real day does not reach rather than a page size a user would notice.
+ * It also bounds what the Realtime subscription downstream has to watch
+ * (KN-6). Live fixtures are fetched under their own ceiling so a busy day of
+ * scheduled matches can never crowd an in-progress one out of the list.
+ */
+const LIVE_FIXTURES_LIMIT = 60;
+const TODAY_FIXTURES_LIMIT = 120;
+
 export default async function LivePage() {
+  // Founder instruction (2026-08-18): football data arrives without anybody
+  // pressing anything. This asks for a sync only if what this page is about
+  // to render is already stale, and the work runs *after* the response is
+  // sent — a provider outage cannot slow this page down or break it. Every
+  // guard (staleness threshold, attempt cooldown, the sync lease, the quota
+  // floor) lives in one place: src/lib/football/auto-sync.ts. It is not live
+  // scores, and that file says so in as many words.
+  scheduleAutoSyncIfStale("live");
+
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
   const canRefreshLive = canManageFootballData(profile?.role);
 
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+  // KN-32: "today's fixtures" means the viewer's today. Under the previous
+  // `setUTCHours(0,0,0,0)` a 00:30 kickoff in Lagos (UTC+1, the stated launch
+  // market) belonged to the previous UTC day and dropped off this page for
+  // exactly the audience it was nearest to. Falls back to UTC — explicitly, via
+  // resolveTimeZone — for anyone who has not stated a zone.
+  const { timeZone: viewerTimeZone } = resolveTimeZone(profile?.timezone);
+  const startOfDay = startOfDayInTimeZone(viewerTimeZone);
+  // Next local midnight, found by stepping well past it and re-flooring, so a
+  // DST transition inside the window cannot make the day 23 or 25 hours long.
+  const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
 
   const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
        competition:competitions(id, name, short_name)`;
 
-  const { data: liveFixtures } = await supabase
-    .from("fixtures")
-    .select(fixtureSelect)
-    .in("status", ["live", "halftime"])
-    .order("kickoff_at", { ascending: true });
+  // KIVO_NEXT_GEN KN-5: one list, not two mutually-exclusive ones. Both queries
+  // still exist because they answer different questions — "what is in play
+  // right now" is not date-bounded (a late kickoff is still live after
+  // midnight UTC) and "what is on today" is — but their results are merged and
+  // handed down as a single set. The client partitions it by current status, so
+  // a kickoff or a full-time whistle actually moves a row between sections
+  // instead of restyling it in place under the wrong heading.
+  const [{ data: liveFixtures }, { data: todayFixtures }] = await Promise.all([
+    supabase
+      .from("fixtures")
+      .select(fixtureSelect)
+      .in("status", ["live", "halftime"])
+      .order("kickoff_at", { ascending: true })
+      .limit(LIVE_FIXTURES_LIMIT),
+    supabase
+      .from("fixtures")
+      .select(fixtureSelect)
+      .gte("kickoff_at", startOfDay.toISOString())
+      .lt("kickoff_at", endOfDay.toISOString())
+      .order("kickoff_at", { ascending: true })
+      .limit(TODAY_FIXTURES_LIMIT),
+  ]);
 
-  const hasLiveFixtures = (liveFixtures?.length ?? 0) > 0;
+  const byId = new Map<string, LivePageFixture>();
+  for (const fixture of [...(liveFixtures ?? []), ...(todayFixtures ?? [])]) {
+    // A live fixture that kicked off today appears in both result sets; the
+    // first write wins and they carry identical rows either way.
+    if (!byId.has(fixture.id)) byId.set(fixture.id, fixture);
+  }
+  const displayedFixtures = [...byId.values()].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at));
 
-  const { data: todayFixtures } = hasLiveFixtures
-    ? { data: null }
-    : await supabase
-        .from("fixtures")
-        .select(fixtureSelect)
-        .gte("kickoff_at", startOfDay.toISOString())
-        .lt("kickoff_at", endOfDay.toISOString())
-        .order("kickoff_at", { ascending: true });
-
-  const hasTodayFixtures = (todayFixtures?.length ?? 0) > 0;
-
-  if (!hasLiveFixtures && !hasTodayFixtures) {
+  if (displayedFixtures.length === 0) {
     return (
       <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
@@ -61,9 +111,7 @@ export default async function LivePage() {
   // establishes for Match Centre (getViewerFantasyRosterBySeasons),
   // aggregated to a count per fixture instead of a per-player badge. Stays
   // empty for a guest, or a viewer with no fantasy team in any of these
-  // fixtures' seasons — LiveFixtureList's row then renders exactly as it
-  // does today.
-  const displayedFixtures = hasLiveFixtures ? liveFixtures ?? [] : todayFixtures ?? [];
+  // fixtures' seasons — the fixture row then renders exactly as it does today.
   const fantasyMatchCounts: Record<string, number> = {};
   if (profile) {
     const seasonIds = [...new Set(displayedFixtures.map((f) => f.season_id))];
@@ -97,14 +145,7 @@ export default async function LivePage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
-          <p className="text-sm text-foreground-muted">
-            {hasLiveFixtures
-              ? "Matches in progress right now, synced from API-Football."
-              : "Nothing in play right now. Here's what's on today."}
-          </p>
-        </div>
+        <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
         {/* RECOMMENDATIONS.md item 51: the real guard FOOTBALL_LIVE_POLLING_ENABLED
             sits in front of now — triggerLiveScoresRefresh (src/app/admin/data-health/
             actions.ts) checks the flag itself and returns a clear "disabled until a
@@ -113,26 +154,16 @@ export default async function LivePage() {
         {canRefreshLive && <InlineSyncButton label="Refresh live scores" action={triggerLiveScoresRefresh} />}
       </FadeIn>
 
-      {hasLiveFixtures && liveFixtures && (
-        <FadeIn delay={0.05} className="kivo-glass-brand rounded-2xl p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Radio className="h-4 w-4 text-live" strokeWidth={2} />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Live now</h2>
-          </div>
-          {/* No live dot here — redundant with this section's own Radio-icon
-              header, unlike "Today's fixtures" below where a fixture could
-              flip to live mid-session via Realtime with no other cue on the
-              page. */}
-          <LiveFixtureList fixtures={liveFixtures} showLiveDot={false} fantasyMatchCounts={fantasyMatchCounts} />
-        </FadeIn>
-      )}
-
-      {!hasLiveFixtures && hasTodayFixtures && todayFixtures && (
-        <FadeIn delay={0.05} className="kivo-glass rounded-2xl p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today&apos;s fixtures</h2>
-          <LiveFixtureList fixtures={todayFixtures} fantasyMatchCounts={fantasyMatchCounts} />
-        </FadeIn>
-      )}
+      <LiveCentreSections
+        fixtures={displayedFixtures}
+        fantasyMatchCounts={fantasyMatchCounts}
+        // KIVO_NEXT_GEN KN-8: read the provider actually in use rather than
+        // asserting one. getActiveProviderStatus() is the side-effect-free
+        // mirror of the real selection order (the cron route uses it for
+        // exactly this reason) and returns null when none is configured, in
+        // which case the copy simply doesn't name a source.
+        providerLabel={getActiveProviderStatus().label}
+      />
     </div>
   );
 }

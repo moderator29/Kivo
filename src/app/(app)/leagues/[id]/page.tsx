@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LocalDateTime } from "@/components/ui/relative-time";
@@ -11,10 +10,13 @@ import { triggerStandingsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { CompetitionLogo } from "@/components/ui/competition-logo";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
+import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -91,13 +93,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
       <TrackView type="league" id={competition.id} name={competition.name} imageUrl={competition.logo_url} />
       <div className="flex items-center gap-3">
         <FadeIn delay={0} className="shrink-0">
-          {competition.logo_url ? (
-            <Image src={competition.logo_url} alt={competition.name} width={36} height={36} className="h-9 w-9 shrink-0 object-contain" />
-          ) : (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
-              <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-            </div>
-          )}
+          <CompetitionLogo logoUrl={competition.logo_url} name={competition.name} size={36} />
         </FadeIn>
         <FadeIn delay={0.05} className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold text-foreground">{competition.name}</h1>
@@ -107,7 +103,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           </p>
         </FadeIn>
         <FadeIn delay={0.1}>
-          <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={!!profile} />
+          <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={viewerIsSignedIn(profile)} />
         </FadeIn>
       </div>
 
@@ -204,6 +200,11 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
       </FadeIn>
+
+      {/* KIVO_NEXT_GEN KN-103. Placed after the table and fixtures rather than
+          before them: it answers "why is that section empty", which is only a
+          question once you have seen the empty section. */}
+      <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
 
       <FadeIn delay={0.25} className="self-center">
         <Link

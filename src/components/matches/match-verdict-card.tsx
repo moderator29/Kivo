@@ -68,7 +68,7 @@ export function MatchVerdictCard({
           onClick={handleCopy}
           className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground-subtle transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
-          {copied ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
+          {copied ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : <Share2 className="h-3.5 w-3.5" strokeWidth={2} />}
           {copied ? "Copied" : "Copy"}
         </button>
       </div>

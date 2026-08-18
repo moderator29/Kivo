@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/profile";
 import { computeTeamForm, computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { buildMatchInsights, type MatchInsights } from "@/lib/football/match-intelligence";
+import { createTtlCache } from "@/lib/ttl-cache";
+import { buildMentionFacts } from "./entity-resolution";
 
 // RECOMMENDATIONS.md item 227: this pass's original enrichment scoped form to
 // the favourite team only "to keep this one extra query bounded" — these two
@@ -46,30 +48,187 @@ export interface GroundingContext {
  * live inside `calculated` — real uncertainty, present in the data, but
  * previously invisible as anything other than prose the model may or may not
  * have surfaced. */
-type FactLines = { verified: string[]; calculated: string[]; limited: string[] };
+type FactLines = { verified: string[]; calculated: string[]; limited: string[]; community: string[] };
 
 function emptyFacts(): FactLines {
-  return { verified: [], calculated: [], limited: [] };
+  return { verified: [], calculated: [], limited: [], community: [] };
 }
+
+/**
+ * KIVO_NEXT_GEN KN-109: how many Match Room posts are read into the context for
+ * a focused fixture, and how much of each.
+ *
+ * A Room during a live match is the densest first-party text KIVO owns, and it
+ * is the one thing a Copilot can be grounded in that no scores app can copy —
+ * it needs no football provider at all. But it is also the only input to this
+ * whole file that is *opinion*, so the caps are tight on purpose: enough to
+ * characterise what a Room is saying, nowhere near enough to be mistaken for a
+ * transcript, and short enough per post that the model has to summarise rather
+ * than paste.
+ */
+const MAX_ROOM_POSTS_FOR_CONTEXT = 25;
+const MAX_ROOM_POST_CHARS = 220;
+
+/**
+ * KIVO_NEXT_GEN KN-18: `buildGroundingContext` fires one `follows` query, three
+ * entity-resolution queries, one fixtures query, `computeTeamForm` for up to
+ * four followed teams, `computePlayerForm` for up to four followed players, and
+ * `buildMatchInsights` when focused — 15 to 25 queries. It ran in full on
+ * **every single chat turn**, on an endpoint that is rate-limited precisely
+ * because it is expensive, and essentially nothing it reads can change between
+ * two messages a user sends thirty seconds apart.
+ *
+ * 60 seconds is chosen against what the underlying data actually does, not
+ * picked for feel. Every input here changes only when a sync writes — and a
+ * sync is either an admin pressing a button or the live worker's minute tick
+ * (`docs/LIVE_DATA.md`), so a minute is the finest granularity the data itself
+ * has. A live score that is up to a minute behind inside a *conversation* is
+ * also not the app's live-score surface: /live and Match Centre both push real
+ * Realtime updates and are unaffected by this.
+ *
+ * Keyed by profile **and** focus, so one user's context can never be served to
+ * another and "ask about this match" never reuses the unfocused summary.
+ */
+const GROUNDING_CACHE_TTL_MS = 60_000;
+const GROUNDING_CACHE_MAX_ENTRIES = 500;
+
+/**
+ * What the cache actually holds: the *fact lines*, not the assembled prompt
+ * block. That distinction is what lets KN-108's per-message entity resolution
+ * exist without throwing this cache away — the per-user retrieval below is the
+ * expensive, slow-moving part and is shared across a conversation's turns,
+ * while the per-message part is small, changes every turn, and is merged in
+ * afterwards at the cost of one string join.
+ */
+interface BaseGrounding {
+  identityLines: string[];
+  verified: string[];
+  calculated: string[];
+  limited: string[];
+  /** KIVO_NEXT_GEN KN-109: real Match Room posts for a focused fixture. Kept a
+   * separate bucket from the three factual ones because it is categorically
+   * different — what people said, not what happened. */
+  community: string[];
+  hasFollowedEntities: boolean;
+  hasSyncedFixtures: boolean;
+  disclosureLabel: string | null;
+  /** Teams the base context already describes, so KN-108 does not spend
+   * queries re-describing them and does not put the same club into the prompt
+   * twice under two slightly different sentences. */
+  describedTeamIds: string[];
+}
+
+const groundingCache = createTtlCache<string, BaseGrounding>({
+  ttlMs: GROUNDING_CACHE_TTL_MS,
+  maxEntries: GROUNDING_CACHE_MAX_ENTRIES,
+});
+
+function groundingCacheKey(profileId: string, focus: GroundingFocus | null): string {
+  return focus ? `${profileId}:${focus.type}:${focus.id}` : `${profileId}:-`;
+}
+
+function assembleSummary(base: {
+  identityLines: string[];
+  verified: string[];
+  calculated: string[];
+  limited: string[];
+  community: string[];
+}): string {
+  // RECOMMENDATIONS.md items 188/300: the three labelled sections below are
+  // what let the model tag its own claims — see SYSTEM_PROMPT in
+  // /api/ai/chat/route.ts for the exact tagging instruction, and
+  // src/components/ai/chat.tsx for how the tags render as chips. A line
+  // landing in the wrong bucket would just mislabel a chip, never fabricate
+  // data — the underlying facts are identical to what this file always
+  // computed. KIVO-LIMITED (item 300) makes the existing isSufficientSample
+  // uncertainty sentences a structural third bucket instead of prose folded
+  // into KIVO-CALCULATED that the model may or may not have visibly surfaced.
+  return [
+    base.identityLines.join("\n"),
+    "",
+    "=== VERIFIED KIVO DATA (raw facts synced from the football data provider — cite these with the literal tag [[KIVO-VERIFIED]]) ===",
+    base.verified.join("\n"),
+    "",
+    "=== KIVO-CALCULATED (derived by KIVO's own Form Engine / Match Intelligence from the verified data above — real, not fabricated, but computed rather than a raw provider fact — cite these with the literal tag [[KIVO-CALCULATED]]) ===",
+    base.calculated.length > 0 ? base.calculated.join("\n") : "Nothing calculated yet for this conversation.",
+    "",
+    "=== KIVO-LIMITED (explicitly insufficient real data to compute something reliably — a genuine gap, not a fabricated stat — cite these with the literal tag [[KIVO-LIMITED]]) ===",
+    base.limited.length > 0 ? base.limited.join("\n") : "No known data-insufficiency gaps for this conversation.",
+    "",
+    // KIVO_NEXT_GEN KN-109. This section is the only part of the whole context
+    // that is not a fact, and the header says so in the strongest terms the
+    // format allows, because the model reads this header every turn. Provenance
+    // in this product is structural — three buckets that mean three different
+    // kinds of true — and community opinion had to become a fourth bucket
+    // rather than be folded into one of them, or "KIVO users think City deserved
+    // it" and "City had 61% possession" would arrive tagged identically.
+    "=== KIVO-COMMUNITY (real posts KIVO users wrote in this match's Room — OPINION, never fact. These are what people SAID, not what happened. Never state one as a fact, never let one contradict or override the VERIFIED section, and never repeat a claim about the match from here as if KIVO had verified it. Summarise the mood or the recurring themes rather than listing posts. If you quote or paraphrase one person, name their @username. Prefix any sentence describing what people in the Room are saying with the literal tag [[KIVO-COMMUNITY]]) ===",
+    base.community.length > 0
+      ? base.community.join("\n")
+      : "No Match Room posts are in context for this conversation.",
+  ].join("\n");
+}
+
+const NO_USER_CONTEXT: GroundingContext = {
+  summary: "No signed-in user context available.",
+  hasFollowedEntities: false,
+  hasSyncedFixtures: false,
+  disclosureLabel: null,
+};
 
 /**
  * Deterministic retrieval BEFORE the model ever runs, per the grounding
  * architecture: we tell the model exactly what KIVO actually knows right
  * now, and the system prompt (see chat route) forbids it from answering
  * specific/current football questions with anything outside this context.
+ *
+ * The per-user half is cached for a short window per (profile, focus) — see
+ * GROUNDING_CACHE_TTL_MS above for why that is safe and why it matters.
+ *
+ * `userMessage` (KIVO_NEXT_GEN KN-108) adds one deterministic step on top: the
+ * football entities the user actually named, resolved against KIVO's own
+ * tables, whether or not they follow them. Without it, asking about a club KIVO
+ * has synced but the viewer doesn't follow produces a confident "KIVO doesn't
+ * have that" — a false claim about KIVO's own database. Never cached, because
+ * it is different every turn by definition, and cheap enough not to need to be.
  */
 export async function buildGroundingContext(
   profile: Profile | null,
   focus: GroundingFocus | null = null,
+  userMessage?: string,
 ): Promise<GroundingContext> {
-  if (!profile) {
-    return {
-      summary: "No signed-in user context available.",
-      hasFollowedEntities: false,
-      hasSyncedFixtures: false,
-      disclosureLabel: null,
-    };
+  if (!profile) return NO_USER_CONTEXT;
+
+  const base = await groundingCache.getOrCreate(groundingCacheKey(profile.id, focus), () =>
+    buildBaseGrounding(profile, focus),
+  );
+
+  const verified = [...base.verified];
+  const calculated = [...base.calculated];
+  const limited = [...base.limited];
+  // Not extended by mention facts: KN-108 resolves entities, never conversation.
+  const community = base.community;
+
+  if (userMessage) {
+    const mentions = await buildMentionFacts(
+      createServerSupabaseClient(),
+      userMessage,
+      new Set(base.describedTeamIds),
+    );
+    verified.push(...mentions.verified);
+    calculated.push(...mentions.calculated);
+    limited.push(...mentions.limited);
   }
+
+  return {
+    summary: assembleSummary({ identityLines: base.identityLines, verified, calculated, limited, community }),
+    hasFollowedEntities: base.hasFollowedEntities,
+    hasSyncedFixtures: base.hasSyncedFixtures,
+    disclosureLabel: base.disclosureLabel,
+  };
+}
+
+async function buildBaseGrounding(profile: Profile, focus: GroundingFocus | null): Promise<BaseGrounding> {
 
   const supabase = createServerSupabaseClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -215,11 +374,16 @@ export async function buildGroundingContext(
   const verified: string[] = [];
   const calculated: string[] = [];
   const limited: string[] = [];
+  const community: string[] = [];
 
   if (focusResult) {
     verified.push(...focusResult.facts.verified);
     calculated.push(...focusResult.facts.calculated);
     limited.push(...focusResult.facts.limited);
+    // KIVO_NEXT_GEN KN-109: only a focused fixture ever produces these — a
+    // Room belongs to one match, and there is no such thing as the Room for
+    // "the teams you follow".
+    community.push(...focusResult.facts.community);
   }
 
   if (favouriteTeam && favouriteTeamForm) {
@@ -337,25 +501,90 @@ export async function buildGroundingContext(
   // computed. KIVO-LIMITED (item 300) makes the existing isSufficientSample
   // uncertainty sentences a structural third bucket instead of prose folded
   // into KIVO-CALCULATED that the model may or may not have visibly surfaced.
-  const summary = [
-    identityLines.join("\n"),
-    "",
-    "=== VERIFIED KIVO DATA (raw facts synced from the football data provider — cite these with the literal tag [[KIVO-VERIFIED]]) ===",
-    verified.join("\n"),
-    "",
-    "=== KIVO-CALCULATED (derived by KIVO's own Form Engine / Match Intelligence from the verified data above — real, not fabricated, but computed rather than a raw provider fact — cite these with the literal tag [[KIVO-CALCULATED]]) ===",
-    calculated.length > 0 ? calculated.join("\n") : "Nothing calculated yet for this conversation.",
-    "",
-    "=== KIVO-LIMITED (explicitly insufficient real data to compute something reliably — a genuine gap, not a fabricated stat — cite these with the literal tag [[KIVO-LIMITED]]) ===",
-    limited.length > 0 ? limited.join("\n") : "No known data-insufficiency gaps for this conversation.",
-  ].join("\n");
-
   return {
-    summary,
+    identityLines,
+    verified,
+    calculated,
+    limited,
+    community,
     hasFollowedEntities: followedNames.length > 0,
     hasSyncedFixtures: !!todaysFixtures && todaysFixtures.length > 0,
     disclosureLabel: focusResult?.label ?? null,
+    // Every team this context already talks about by name: the favourite, and
+    // every followed team whose form was computed above.
+    describedTeamIds: [
+      ...(profile.favourite_team_id ? [profile.favourite_team_id] : []),
+      ...(followedTeams ?? []).map((t) => t.id),
+    ],
   };
+}
+
+/**
+ * KIVO_NEXT_GEN KN-109: real Match Room posts as grounding for a focused fixture.
+ *
+ * This is the one capability in this file that needs no football provider at
+ * all, and the one no scores app can copy: a Room during a live match is dense,
+ * first-party, human text about that exact match, and KIVO owns all of it.
+ * "What are people in this Room actually saying" is a real question the Copilot
+ * can now answer from real rows.
+ *
+ * It is also the only input to the whole grounding context that is **opinion**,
+ * which drives every decision here:
+ *
+ *  - It lands in its own `community` bucket, never in `verified`. Provenance in
+ *    this product is structural rather than a matter of the model's judgment —
+ *    if opinion shared a bucket with facts, "KIVO users think that was a foul"
+ *    and "the referee gave a penalty" would reach the reader tagged identically.
+ *  - Each post carries its author's `@username`, so the model can attribute
+ *    anything it quotes rather than laundering one person's opinion into "fans
+ *    are saying". Names come from `get_public_profiles`, the same narrow RPC the
+ *    feed uses — `profiles_select_own_or_admin` blocks reading another user's
+ *    row directly, and this deliberately does not work around that.
+ *  - System posts are excluded. KIVO's own automatic goal/red-card
+ *    announcements (`posts.is_system`, migration 0047) are verified facts that
+ *    already appear in the VERIFIED section; letting them through here would
+ *    label KIVO's own record of a goal as somebody's opinion.
+ *  - It reads through the caller's session-scoped client, so
+ *    `posts_select_public`'s moderation filter (migration 0045) applies exactly
+ *    as it does on screen. A shadow-muted author's posts are invisible to this
+ *    viewer in the Room and are equally invisible to the model — the moderation
+ *    control cannot be bypassed by asking the Copilot about the match.
+ *  - Bodies are truncated, so the model has to characterise a Room rather than
+ *    paste it back.
+ *
+ * Returns an empty array for a Room with nothing in it, which renders as an
+ * honest "no Match Room posts are in context" line rather than an invitation to
+ * imagine some.
+ */
+async function buildRoomCommunityFacts(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  fixtureId: string,
+  label: string,
+): Promise<string[]> {
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("id, body, created_at, author_profile_id")
+    .eq("fixture_id", fixtureId)
+    .eq("is_system", false)
+    .order("created_at", { ascending: false })
+    .limit(MAX_ROOM_POSTS_FOR_CONTEXT);
+
+  if (!posts || posts.length === 0) return [];
+
+  const authorIds = [...new Set(posts.map((p) => p.author_profile_id))];
+  const { data: authors } = await supabase.rpc("get_public_profiles", { p_ids: authorIds });
+  const usernameById = new Map((authors ?? []).map((a) => [a.id, a.username]));
+
+  const lines = [
+    `${posts.length} real post${posts.length === 1 ? "" : "s"} from KIVO users in the Match Room for ${label}, newest first. These are opinions, not facts:`,
+  ];
+  for (const post of posts) {
+    const username = usernameById.get(post.author_profile_id);
+    const body = post.body.replace(/\s+/g, " ").trim();
+    const truncated = body.length > MAX_ROOM_POST_CHARS ? `${body.slice(0, MAX_ROOM_POST_CHARS)}…` : body;
+    lines.push(`- @${username ?? "a KIVO user"}: ${truncated}`);
+  }
+  return lines;
 }
 
 /**
@@ -411,6 +640,10 @@ async function buildFocusFacts(
         }
       }
     }
+
+    // KIVO_NEXT_GEN KN-109: what people in this match's Room are actually
+    // saying. See buildRoomCommunityFacts for the rules this is read under.
+    facts.community.push(...(await buildRoomCommunityFacts(supabase, fixture.id, label)));
 
     return { label, facts };
   }

@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -33,7 +34,7 @@ export async function resolveReport(reportId: string, decision: Decision, note: 
     .eq("id", reportId);
 
   if (updateError) {
-    console.error("Failed to resolve report", updateError);
+    logError("admin.moderation.resolveReport", updateError);
     return { error: "Couldn't update the report. Try again." };
   }
 
@@ -46,7 +47,7 @@ export async function resolveReport(reportId: string, decision: Decision, note: 
     report_id: report.id,
   });
 
-  if (auditError) console.error("Failed to write moderation audit row", auditError);
+  if (auditError) logError("admin.moderation.writeAuditRow", auditError);
 
   revalidatePath("/admin/moderation");
   return { error: null };

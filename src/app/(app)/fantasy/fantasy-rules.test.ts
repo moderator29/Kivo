@@ -386,3 +386,32 @@ describe("formatDeadlineCountdown", () => {
     expect(formatDeadlineCountdown(deadline, now)).toBe("0m");
   });
 });
+
+describe("positionGroup", () => {
+  it("classifies every position value API-Football actually reports", () => {
+    // These four strings are the vendor's whole vocabulary for players.position
+    // (src/lib/football/providers/api-football.ts passes it through verbatim).
+    // "Attacker" used to fall through to "Other", which validateRoster rejects
+    // — meaning no legal fantasy squad could contain a forward from a real
+    // synced squad. Regression test for exactly that.
+    expect(positionGroup("Goalkeeper")).toBe("Goalkeepers");
+    expect(positionGroup("Defender")).toBe("Defenders");
+    expect(positionGroup("Midfielder")).toBe("Midfielders");
+    expect(positionGroup("Attacker")).toBe("Forwards");
+  });
+
+  it("still classifies the other vocabularies it already supported", () => {
+    expect(positionGroup("Centre-Back")).toBe("Defenders");
+    expect(positionGroup("Striker")).toBe("Forwards");
+    expect(positionGroup("Left Winger")).toBe("Forwards");
+    expect(positionGroup("Forward")).toBe("Forwards");
+    expect(positionGroup("GK")).toBe("Goalkeepers");
+    expect(positionGroup("MF")).toBe("Midfielders");
+  });
+
+  it("returns Other rather than guessing at an unknown or missing position", () => {
+    expect(positionGroup(null)).toBe("Other");
+    expect(positionGroup("")).toBe("Other");
+    expect(positionGroup("Utility")).toBe("Other");
+  });
+});

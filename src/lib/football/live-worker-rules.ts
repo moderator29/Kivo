@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -63,8 +64,36 @@ export function isFixtureWorthSyncing(
  * a Bearer token on every request it makes to a scheduled path. A missing
  * `cronSecret` (not yet configured) always fails closed — never treated as
  * "no secret required."
+ *
+ * KN-26. The comparison is constant-time. `===` on strings short-circuits at
+ * the first differing byte, so how long the check takes leaks how many leading
+ * characters of the guess were right — the classic byte-at-a-time secret
+ * recovery. The practical risk over a network is low and the item says so; what
+ * makes it worth fixing anyway is that this was the one credential in the
+ * repository compared by hand rather than by a library, and "low risk" is a
+ * judgement that has to be re-made every time somebody reads the line, whereas
+ * `timingSafeEqual` needs no judgement at all.
+ *
+ * Two details that matter for it to actually be constant-time:
+ *
+ *   - `timingSafeEqual` THROWS if the two buffers differ in length, and the
+ *     throw itself is immediate, so calling it directly would leak the secret's
+ *     length. The length check below is therefore explicit and returns early —
+ *     length is not the secret, and leaking it is harmless.
+ *   - Both sides are compared as UTF-8 bytes, not characters, so a multi-byte
+ *     character in a secret cannot make the lengths disagree with the buffers.
+ *
+ * `node:crypto` is imported lazily rather than at module scope on purpose: this
+ * module is deliberately not `server-only` (see the doc comment at the top) so
+ * that the pure scheduling logic stays unit-testable, and a top-level Node
+ * builtin import would undo that.
  */
 export function isAuthorizedCronRequest(authorizationHeader: string | null, cronSecret: string | undefined | null): boolean {
-  if (!cronSecret) return false;
-  return authorizationHeader === `Bearer ${cronSecret}`;
+  if (!cronSecret || !authorizationHeader) return false;
+
+  const expected = Buffer.from(`Bearer ${cronSecret}`, "utf8");
+  const provided = Buffer.from(authorizationHeader, "utf8");
+  if (expected.length !== provided.length) return false;
+
+  return timingSafeEqual(expected, provided);
 }

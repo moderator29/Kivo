@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { updateSupabaseSession } from "@/lib/supabase/proxy";
+import { REQUEST_PATH_HEADER, updateSupabaseSession } from "@/lib/supabase/proxy";
 
 // This file is Next 16's Proxy (formerly middleware). Its ONE job is refreshing
 // the Supabase Auth session cookie — it is deliberately not an authorization
@@ -29,7 +29,11 @@ export default async function proxy(request: NextRequest) {
   // public marketing pages. Fall through instead; the resource-level guards
   // still redirect to /sign-in because there is no session to find.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return NextResponse.next();
+    // Still stamp the path (see REQUEST_PATH_HEADER): (app)/layout.tsx uses it
+    // to build the sign-in return link, and this is precisely the environment
+    // where every request ends up at the sign-in wall.
+    request.headers.set(REQUEST_PATH_HEADER, request.nextUrl.pathname + request.nextUrl.search);
+    return NextResponse.next({ request });
   }
 
   return updateSupabaseSession(request);

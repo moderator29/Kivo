@@ -9,6 +9,7 @@ import { PredictionCard, type PredictionConsensus } from "@/components/predictio
 import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/predictions/predictions-leaderboard";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 
 const item = getNavItem("predictions");
 
@@ -114,7 +115,7 @@ export default async function PredictionsPage() {
                 crest_url: fixture.away_team?.crest_url ?? null,
               }}
               initialPrediction={predictionByFixture.get(fixture.id) ?? null}
-              signedIn={Boolean(profile)}
+              signedIn={viewerIsSignedIn(profile)}
               consensus={consensusByFixture.get(fixture.id) ?? null}
             />
           </FadeIn>

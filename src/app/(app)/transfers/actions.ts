@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { TRANSFERS_PAGE_SIZE } from "./constants";
 import { TRANSFER_SELECT, parseTransferFilters, type TransferFilterParams, type TransferListItem } from "./shared";
@@ -32,7 +33,7 @@ export async function loadMoreTransfers(
   const { data, error } = await request.range(offset, offset + TRANSFERS_PAGE_SIZE);
 
   if (error) {
-    console.error("Failed to load more transfers", error);
+    logError("transfers.loadMore", error);
     return { error: "Couldn't load more transfers. Try again.", transfers: [], hasMore: false };
   }
 

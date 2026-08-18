@@ -24,6 +24,8 @@ import { computeGameweekPricingPoints, computePriceNudges, applyPriceNudge } fro
 import { DEFAULT_FANTASY_PRICE } from "@/app/(app)/fantasy/fantasy-rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { notifyFantasyGameweekOutcome } from "@/lib/fantasy-notifications";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -55,7 +57,7 @@ export async function generateFantasyGameweeks(
     .order("kickoff_at", { ascending: true });
 
   if (fixturesError) {
-    console.error("Failed to load fixtures for gameweek generation", fixturesError);
+    logError("admin.data-health.fantasy-actions.loadFixturesGameweekGeneration", fixturesError);
     return { error: "Couldn't load this season's fixtures. Try again." };
   }
 
@@ -71,7 +73,7 @@ export async function generateFantasyGameweeks(
     .eq("season_id", seasonId);
 
   if (existingError) {
-    console.error("Failed to load existing gameweeks", existingError);
+    logError("admin.data-health.fantasy-actions.loadExistingGameweeks", existingError);
     return { error: "Couldn't check existing gameweeks. Try again." };
   }
 
@@ -83,7 +85,7 @@ export async function generateFantasyGameweeks(
   if (toInsert.length > 0) {
     const { error: insertError } = await supabase.from("fantasy_gameweeks").insert(toInsert);
     if (insertError) {
-      console.error("Failed to insert fantasy gameweeks", insertError);
+      logError("admin.data-health.fantasy-actions.insertFantasyGameweeks", insertError);
       return { error: "Couldn't create gameweeks. Try again." };
     }
   }
@@ -175,7 +177,7 @@ async function applyFantasyPriceNudges(
     .in("fixture_id", finishedFixtureIds)
     .eq("is_starting", true);
   if (lineupsError) {
-    console.error("Failed to load lineups for fantasy price nudges", lineupsError);
+    logError("admin.data-health.fantasy-actions.loadLineupsFantasyPrice", lineupsError);
     return { playersRepriced: 0 };
   }
   if (!lineupRows || lineupRows.length === 0) return { playersRepriced: 0 };
@@ -191,7 +193,7 @@ async function applyFantasyPriceNudges(
     .select("id, position, current_team_id")
     .in("id", involvedPlayerIds);
   if (playersError || !players || players.length === 0) {
-    if (playersError) console.error("Failed to load players for fantasy price nudges", playersError);
+    if (playersError) logError("admin.data-health.fantasy-actions.loadPlayersFantasyPrice", playersError);
     return { playersRepriced: 0 };
   }
 
@@ -236,7 +238,7 @@ async function applyFantasyPriceNudges(
     .from("fantasy_player_prices")
     .upsert(priceUpdates, { onConflict: "player_id,season_id" });
   if (priceError) {
-    console.error("Failed to apply fantasy price nudges", priceError);
+    logError("admin.data-health.fantasy-actions.applyFantasyPriceNudges", priceError);
     return { playersRepriced: 0 };
   }
 
@@ -297,7 +299,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     .order("kickoff_at", { ascending: true });
 
   if (fixturesError) {
-    console.error("Failed to load fixtures for gameweek scoring", fixturesError);
+    logError("admin.data-health.fantasy-actions.loadFixturesGameweekScoring", fixturesError);
     return { error: "Couldn't load this season's fixtures. Try again." };
   }
   if (!seasonFixtures || seasonFixtures.length === 0) {
@@ -338,14 +340,14 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   // scoring treats "never touched this gameweek" the same way every real
   // fantasy game does: kept the same squad, not fielded no one. See
   // RECOMMENDATIONS.md item 17.
-  await carryForwardMissingFantasyRosters(service, gameweek.season_id, gameweekId, gameweek.number);
+  const { carried } = await carryForwardMissingFantasyRosters(service, gameweek.season_id, gameweekId, gameweek.number);
 
   const { data: events, error: eventsError } = await service
     .from("fixture_events")
     .select("fixture_id, player_id, related_player_id, event_type")
     .in("fixture_id", finishedFixtureIds);
   if (eventsError) {
-    console.error("Failed to load fixture events for gameweek scoring", eventsError);
+    logError("admin.data-health.fantasy-actions.loadFixtureEventsGameweek", eventsError);
     return { error: "Couldn't load match events. Try again." };
   }
 
@@ -369,7 +371,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     .select("fantasy_team_id, player_id, is_starting, is_captain, is_vice_captain")
     .eq("gameweek_id", gameweekId);
   if (rosterError) {
-    console.error("Failed to load fantasy rosters for gameweek scoring", rosterError);
+    logError("admin.data-health.fantasy-actions.loadFantasyRostersGameweek", rosterError);
     return { error: "Couldn't load fantasy squads. Try again." };
   }
 
@@ -390,7 +392,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     .select("id, position, current_team_id")
     .in("id", rosteredPlayerIds);
   if (playersError) {
-    console.error("Failed to load players for gameweek scoring", playersError);
+    logError("admin.data-health.fantasy-actions.loadPlayersGameweekScoring", playersError);
     return { error: "Couldn't load player data. Try again." };
   }
 
@@ -444,8 +446,39 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     .from("fantasy_points")
     .upsert(upsertRows, { onConflict: "fantasy_team_id,gameweek_id" });
   if (upsertError) {
-    console.error("Failed to write fantasy points", upsertError);
+    logError("admin.data-health.fantasy-actions.writeFantasyPoints", upsertError);
     return { error: "Couldn't save fantasy points. Try again." };
+  }
+
+  // KN-61: tell the managers. Until now a squad could be carried forward for
+  // somebody who never opened the app, scored, and land on a leaderboard with
+  // the owner none the wiser unless they thought to visit /fantasy and read a
+  // badge. One notification each, merging "we kept your squad" and "here's what
+  // it scored" into a single line when both are true — see
+  // notifyFantasyGameweekOutcome. Best-effort by design: the points are the
+  // work, this is the telling, and a failed insert must not fail the run.
+  const carriedFromByTeam = new Map(carried.map((entry) => [entry.fantasyTeamId, entry]));
+  const pointsByTeamId = new Map(upsertRows.map((row) => [row.fantasy_team_id, row.points]));
+  const notifiableTeamIds = [...new Set([...pointsByTeamId.keys(), ...carriedFromByTeam.keys()])];
+
+  if (notifiableTeamIds.length > 0) {
+    const { data: notifiableTeams, error: notifiableTeamsError } = await service
+      .from("fantasy_teams")
+      .select("id, owner_profile_id")
+      .in("id", notifiableTeamIds);
+    if (notifiableTeamsError) {
+      logError("admin.data-health.fantasy-actions.loadOwnersForGameweekNotices", notifiableTeamsError);
+    } else {
+      await notifyFantasyGameweekOutcome(
+        service,
+        (notifiableTeams ?? []).map((team) => ({
+          ownerProfileId: team.owner_profile_id,
+          gameweekNumber: gameweek.number,
+          points: pointsByTeamId.get(team.id) ?? null,
+          carriedFromGameweekNumber: carriedFromByTeam.get(team.id)?.fromGameweekNumber ?? null,
+        })),
+      );
+    }
   }
 
   // "Scored" means a real positive fantasy_points row just written above —
@@ -458,7 +491,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
       .select("id, owner_profile_id")
       .in("id", scoringTeamIds);
     if (scoringTeamsError) {
-      console.error("Failed to load fantasy team owners for badge awarding", scoringTeamsError);
+      logError("admin.data-health.fantasy-actions.loadFantasyTeamOwners", scoringTeamsError);
     } else {
       await Promise.all((scoringTeams ?? []).map((t) => awardBadge(t.owner_profile_id, "fantasy_gameweek_scored")));
     }

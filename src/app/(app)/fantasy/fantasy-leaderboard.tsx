@@ -75,7 +75,7 @@ export function FantasyLeaderboard({
     return (
       <div className="flex flex-col gap-3">
         <div className="kivo-glass-brand flex flex-col items-center gap-2 rounded-2xl p-8 text-center">
-          <Trophy className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
+          <Trophy className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">No gameweeks scored yet.</p>
           <p className="max-w-xs text-xs text-foreground-subtle">
             Standings will appear here once a gameweek finishes and points are calculated.

@@ -151,7 +151,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
                 isPrivate ? "border-transparent bg-accent/15 text-accent" : "border-hairline text-foreground-muted hover:bg-surface-2"
               }`}
             >
-              <Lock className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <Lock className="h-3.5 w-3.5" strokeWidth={2} />
               Private
             </button>
             <button
@@ -163,7 +163,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
                 !isPrivate ? "border-transparent bg-accent/15 text-accent" : "border-hairline text-foreground-muted hover:bg-surface-2"
               }`}
             >
-              <Globe className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <Globe className="h-3.5 w-3.5" strokeWidth={2} />
               Public
             </button>
           </div>

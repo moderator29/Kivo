@@ -49,7 +49,7 @@ export function PruneSyncRunsButton() {
             aria-label="Cancel prune"
             className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            <X className="h-4 w-4" strokeWidth={2} />
+            <X className="h-4 w-4" strokeWidth={1.75} />
           </button>
         )}
       </div>

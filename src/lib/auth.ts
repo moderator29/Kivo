@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
+import { headers } from "next/headers";
 import { createServerSupabaseClient } from "./supabase/server";
+import { REQUEST_PATH_HEADER } from "./supabase/proxy";
 
 /**
  * The signed-in Supabase Auth user, reduced to what KIVO actually needs.
@@ -64,4 +66,31 @@ export function sanitizeRedirectPath(value: string | string[] | undefined | null
   const path = Array.isArray(value) ? value[0] : value;
   if (!path || !/^\/(?!\/|\\)/.test(path)) return undefined;
   return path;
+}
+
+/**
+ * Where to send a visitor who hit a gated route without a session, with the
+ * route they were actually trying to open attached.
+ *
+ * KN-123. Gating the entire product turned a missing `redirect_url` from a
+ * papercut into a broken growth loop: a shared match link, a notification deep
+ * link, an emailed URL and a bookmark all used to dump the user on `/home`
+ * after signing in, never on the thing they opened. Every piece needed to fix
+ * it already existed (`sanitizeRedirectPath`, `redirect_url` on both auth
+ * pages, `verifyEmailCode`'s server-side re-validation) — the gate simply
+ * never passed the path along, because a Server Component cannot read its own
+ * URL. `src/proxy.ts` stamps it on the request instead.
+ *
+ * `/home` is deliberately not carried: it is already the post-sign-in default,
+ * so attaching it would only make the URL noisier. The value is sanitized here
+ * even though Proxy overwrites the header on every matched request, because
+ * "unreachable today" is not the same as "safe by construction".
+ */
+export async function signInHref(): Promise<string> {
+  const headerList = await headers();
+  const path = sanitizeRedirectPath(headerList.get(REQUEST_PATH_HEADER));
+  if (!path || path === "/home" || path.startsWith("/sign-in") || path.startsWith("/sign-up")) {
+    return "/sign-in";
+  }
+  return `/sign-in?redirect_url=${encodeURIComponent(path)}`;
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -107,7 +108,7 @@ export async function reportContent(targetType: ModerationTargetType, targetId: 
   });
 
   if (error) {
-    console.error("Failed to submit report", error);
+    logError("social.report-actions.submitReport", error);
     return { error: "Couldn't submit your report. Try again." };
   }
 
