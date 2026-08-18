@@ -1,26 +1,20 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon, Palette } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
 import { getAuthUser } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
 
+// The nav list lives in src/lib/admin-nav.ts and is imported by the two client
+// nav components directly. It must NOT come back here as a prop: a lucide icon
+// is a function component, and passing one from this Server Component into a
+// "use client" nav is a runtime serialization error that 500s every route under
+// /admin. See that module's header for the full account.
+
 // See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
 // the auth check alone.
 export const dynamic = "force-dynamic";
-
-const ADMIN_NAV = [
-  { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/moderation", label: "Moderation", icon: ShieldAlert },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/data-health", label: "Data health", icon: DatabaseIcon },
-  // KN-63. An internal reference, not an operational tool — last in the list
-  // for that reason, but in the list, because a design system nobody can find
-  // is the same as no design system.
-  { href: "/admin/design", label: "Design system", icon: Palette },
-];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   // Resource-level auth boundary — see src/proxy.ts for why this isn't a middleware
@@ -49,8 +43,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // item 74.
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      <AdminMobileNav items={ADMIN_NAV} />
-      <AdminSidebar items={ADMIN_NAV} />
+      <AdminMobileNav />
+      <AdminSidebar />
       <main className="flex-1 px-4 py-6 lg:px-10 lg:py-8">{children}</main>
     </div>
   );

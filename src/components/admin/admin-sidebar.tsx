@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
 import { isActiveRoute } from "@/lib/navigation";
+import { ADMIN_NAV as items } from "@/lib/admin-nav";
 import { cn } from "@/lib/utils";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
@@ -13,7 +13,7 @@ import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 // nothing said). Rebuilt on the same active-pill treatment already used by
 // the main app's desktop sidebar and mobile nav, refined to the current
 // glass-container tokens.
-export function AdminSidebar({ items }: { items: { href: string; label: string; icon: LucideIcon }[] }) {
+export function AdminSidebar() {
   const pathname = usePathname();
 
   return (

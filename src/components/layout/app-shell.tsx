@@ -4,6 +4,7 @@ import { MobileBottomNav } from "./mobile-bottom-nav";
 import { TopBar } from "./top-bar";
 import { OfflineBanner } from "./offline-banner";
 import { PageTransition } from "./page-transition";
+import { MAIN_CONTENT_ID, RouteFocus, SkipToContent } from "./route-focus";
 import { PreviewModeBanner } from "./preview-mode-banner";
 import { ModerationBanner, type ModerationBannerInfo } from "./moderation-banner";
 import { isAiConfigured } from "@/lib/ai/client";
@@ -56,6 +57,10 @@ export function AppShell({
 
   return (
     <div className="relative flex min-h-screen bg-background" style={previewMode ? { paddingTop: 36 } : undefined}>
+      {/* KN-78 / RECOMMENDATIONS item 275. First focusable thing in the shell,
+          so one Tab from the top of any page skips the whole nav. */}
+      <SkipToContent />
+      <RouteFocus />
       {previewMode && <PreviewModeBanner />}
       {/* Much quieter than the landing page's aurora — app pages are
           information-dense, so this is just enough breathing motion behind
@@ -71,7 +76,17 @@ export function AppShell({
         {moderationBanner && <ModerationBanner info={moderationBanner} />}
         <OfflineBanner />
         <TopBar viewer={viewerProfile} isAdmin={isAdmin} previewMode={previewMode} />
-        <main className="flex flex-1 flex-col pb-24 lg:pb-0">
+        {/* tabIndex={-1} makes <main> a programmatic focus target without
+            adding it to the tab order; RouteFocus moves focus here after every
+            client-side navigation, and the skip link points at it. The outline
+            is suppressed because the focus is programmatic — the user did not
+            tab to this container, and a full-page ring on every navigation
+            reads as a rendering fault rather than as guidance. */}
+        <main
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="flex flex-1 flex-col pb-24 focus:outline-none lg:pb-0"
+        >
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
