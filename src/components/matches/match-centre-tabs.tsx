@@ -300,14 +300,43 @@ function InYourXIBadge({ isCaptain }: { isCaptain: boolean }) {
   );
 }
 
+/**
+ * KIVO_NEXT_GEN KN-113: a real side-by-side lineup comparison.
+ *
+ * Three things were wrong with what this rendered before, all of them the kind
+ * that only show up once you look at the two halves as one comparison rather
+ * than as two independent lineups:
+ *
+ *  1. **Neither side was labelled.** Two glass cards, two Starting XIs, no team
+ *     name anywhere — on the tab whose entire job is telling you who is playing
+ *     for whom. The names were already props on this component (the Heatmap tab
+ *     uses them); they were simply never passed down here.
+ *  2. **The shapes were never actually compared.** `lineups.formation` is real
+ *     synced data (migration 0035) and each side rendered its own badge in
+ *     isolation. "4-3-3 vs 4-2-3-1" as one line is the thing a reader is
+ *     actually trying to work out, and it costs nothing — the data was already
+ *     on screen, just never put next to itself.
+ *  3. **The two sides could render in different formats.** `buildPitchRows`
+ *     honestly returns null when a side's data won't draw a real pitch, so one
+ *     team could appear as a positioned pitch and the other as a flat list. A
+ *     side-by-side where the halves aren't like-for-like invites exactly the
+ *     wrong read — that one team's shape is known and the other's is unusual,
+ *     rather than that KIVO's data for one side is incomplete. So the pitch is
+ *     drawn only when **both** sides can draw one, and the honest fallback is
+ *     symmetric.
+ */
 function LineupsTab({
   homeTeamId,
   awayTeamId,
+  homeTeamName,
+  awayTeamName,
   lineups,
   viewerFantasyRoster,
 }: {
   homeTeamId: string;
   awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
   lineups: LineupEntry[];
   viewerFantasyRoster: ViewerFantasyRosterEntry[];
 }) {
@@ -317,19 +346,39 @@ function LineupsTab({
 
   const rosterByPlayerId = new Map(viewerFantasyRoster.map((r) => [r.playerId, r.isCaptain]));
 
-  const renderTeam = (teamId: string) => {
+  const sideData = (teamId: string) => {
     const teamLineup = lineups.filter((l) => l.teamId === teamId);
     const starters = teamLineup.filter((l) => l.isStarting);
-    const bench = teamLineup.filter((l) => !l.isStarting);
-    // Real formation, positioned pitch view when the data is clean enough to
-    // draw one honestly (see buildPitchRows' doc comment) — otherwise the
-    // plain list below, never a guessed layout.
-    const pitchRows = buildPitchRows(starters);
-    const formation = starters[0]?.formation ?? null;
+    return {
+      starters,
+      bench: teamLineup.filter((l) => !l.isStarting),
+      // Real formation, positioned pitch view when the data is clean enough to
+      // draw one honestly (see buildPitchRows' doc comment) — otherwise the
+      // plain list, never a guessed layout.
+      pitchRows: buildPitchRows(starters),
+      formation: starters[0]?.formation ?? null,
+    };
+  };
+
+  const home = sideData(homeTeamId);
+  const away = sideData(awayTeamId);
+  // Like-for-like or not at all — see point 3 in this component's doc comment.
+  const drawPitches = home.pitchRows !== null && away.pitchRows !== null;
+
+  const renderTeam = (teamName: string, side: ReturnType<typeof sideData>) => {
+    const { starters, bench, pitchRows, formation } = side;
 
     return (
       <div className="flex flex-col gap-3">
-        {pitchRows ? (
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-foreground">{teamName}</span>
+          {formation && (
+            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+              {formation}
+            </span>
+          )}
+        </div>
+        {drawPitches && pitchRows ? (
           <LineupPitch formation={formation} rows={pitchRows} viewerFantasyRoster={rosterByPlayerId} />
         ) : (
           starters.length > 0 && (
@@ -378,10 +427,35 @@ function LineupsTab({
     );
   };
 
+  const bothFormations = home.formation && away.formation;
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <div className="kivo-glass rounded-2xl p-4">{renderTeam(homeTeamId)}</div>
-      <div className="kivo-glass rounded-2xl p-4">{renderTeam(awayTeamId)}</div>
+    <div className="flex flex-col gap-3">
+      {/* The shape comparison itself. Only rendered when both sides have a real
+          synced formation — one formation next to a blank is not a comparison,
+          and a dash in place of the missing one would read as a claim about
+          the team rather than about KIVO's data. When only one side has it,
+          that side's own badge (inside its card below) still shows it. */}
+      {bothFormations && (
+        <div className="kivo-glass-sharp flex items-center justify-center gap-3 rounded-xl px-4 py-2.5 text-sm">
+          <span className="font-semibold text-foreground">{home.formation}</span>
+          <span className="text-[11px] uppercase tracking-wide text-foreground-subtle">shape</span>
+          <span className="font-semibold text-foreground">{away.formation}</span>
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="kivo-glass rounded-2xl p-4">{renderTeam(homeTeamName, home)}</div>
+        <div className="kivo-glass rounded-2xl p-4">{renderTeam(awayTeamName, away)}</div>
+      </div>
+      {/* Said once, for the whole tab, rather than left for the reader to infer
+          from two lists where they expected two pitches. */}
+      {!drawPitches && (home.starters.length > 0 || away.starters.length > 0) && (
+        <p className="text-[11px] leading-relaxed text-foreground-subtle">
+          Both sides are shown as lists: a positioned pitch is only drawn when every starter on{" "}
+          <em>both</em> teams has a real synced position, and one of these lineups doesn&apos;t yet. Showing one pitch
+          and one list would suggest KIVO knows more about one team&apos;s shape than the other.
+        </p>
+      )}
     </div>
   );
 }
@@ -744,6 +818,8 @@ function MatchCentreTabsInner({
             <LineupsTab
               homeTeamId={homeTeamId}
               awayTeamId={awayTeamId}
+              homeTeamName={homeTeamName}
+              awayTeamName={awayTeamName}
               lineups={lineups}
               viewerFantasyRoster={viewerFantasyRoster}
             />
