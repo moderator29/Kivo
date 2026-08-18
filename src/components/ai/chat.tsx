@@ -7,7 +7,7 @@ import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, C
 import { cn } from "@/lib/utils";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { ThinkingLine } from "@/components/ui/thinking-orb";
-import { formatClockTime, timeAgo } from "@/lib/format";
+import { LocalDateTime, RelativeTime } from "@/components/ui/relative-time";
 import { ConversationHistoryPanel } from "@/components/ai/conversation-history";
 import { loadConversationMessages, renameConversation, deleteConversation, type ConversationSummary } from "@/app/(app)/ai/actions";
 
@@ -492,7 +492,12 @@ export function AiChat({
             <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">What KIVO knows right now</p>
               <p className="text-xs text-foreground-muted">
-                Last provider sync: <span className="text-foreground">{lastSyncedAt ? timeAgo(lastSyncedAt) : "nothing synced yet"}</span>
+                Last provider sync:{" "}
+                {lastSyncedAt ? (
+                  <RelativeTime iso={lastSyncedAt} className="text-foreground" />
+                ) : (
+                  <span className="text-foreground">nothing synced yet</span>
+                )}
                 {" · "}
                 Provider quota remaining today:{" "}
                 <span className="text-foreground">{quotaRemaining !== null ? quotaRemaining : "not yet reported"}</span>
@@ -623,7 +628,7 @@ export function AiChat({
                     <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
                   </button>
                 )}
-                {m.createdAt && <span className="text-[11px]">{formatClockTime(m.createdAt)}</span>}
+                {m.createdAt && <LocalDateTime iso={m.createdAt} format="clock" className="text-[11px]" />}
               </div>
             )}
           </motion.div>

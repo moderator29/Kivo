@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { MapPin, Search } from "lucide-react";
+import { formatNumber } from "@/lib/format";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { staggerDelay } from "@/lib/stagger";
 
@@ -68,7 +69,7 @@ export function VenuesList({ venues }: { venues: VenueListItem[] }) {
               </div>
               {venue.capacity && (
                 <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground-subtle">
-                  {venue.capacity.toLocaleString()}
+                  {formatNumber(venue.capacity)}
                 </span>
               )}
             </Link>

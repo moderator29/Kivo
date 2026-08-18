@@ -199,11 +199,37 @@ export async function setGameweekRoster(
     .eq("fantasy_team_id", fantasyTeamId)
     .eq("gameweek_id", gameweekId);
 
-  const captainId = existingRoster?.find((r) => r.is_captain)?.player_id;
-  const viceCaptainId = existingRoster?.find((r) => r.is_vice_captain)?.player_id;
   const existingIds = new Set((existingRoster ?? []).map((r) => r.player_id));
   const newIds = new Set(playerIds);
   const toRemove = [...existingIds].filter((id) => !newIds.has(id));
+
+  // docs/BUG_AUDIT_2026-08-18.md S4: both ids used to be read straight off the
+  // *old* roster and written back unconditionally. If the captain was one of
+  // the players being transferred out, that id matched nobody in the new
+  // squad, so every row got is_captain = false — validateRoster does not
+  // require a captain, so the save succeeded, said nothing, and the manager
+  // played the gameweek with nobody's points doubled
+  // (fantasy-scoring.ts:39-48 doubles purely on these two flags).
+  const previousCaptainId = existingRoster?.find((r) => r.is_captain)?.player_id;
+  const previousViceCaptainId = existingRoster?.find((r) => r.is_vice_captain)?.player_id;
+  let captainId = previousCaptainId && newIds.has(previousCaptainId) ? previousCaptainId : undefined;
+  let viceCaptainId = previousViceCaptainId && newIds.has(previousViceCaptainId) ? previousViceCaptainId : undefined;
+
+  // Losing the captain is precisely what a vice-captain exists for, so the
+  // armband passes rather than being dropped. If the vice went too, no
+  // captain is invented — picking one for the manager would be guessing at
+  // their intent — and the builder already renders "No captain selected —
+  // their points won't be doubled this gameweek."
+  let notice: string | null = null;
+  if (!captainId && viceCaptainId) {
+    captainId = viceCaptainId;
+    viceCaptainId = undefined;
+    const promoted = players?.find((pl) => pl.id === captainId);
+    const promotedName = promoted?.known_as ?? promoted?.full_name ?? "Your vice-captain";
+    notice = `${promotedName} is now your captain — the previous captain left your squad.`;
+  } else if (!captainId && previousCaptainId) {
+    notice = "Your captain left the squad. Pick a new one so their points get doubled.";
+  }
 
   if (toRemove.length > 0) {
     const { error: removeError } = await supabase
@@ -237,7 +263,15 @@ export async function setGameweekRoster(
   }
 
   revalidatePath("/fantasy");
-  return { error: null };
+  // The resolved armband goes back to the caller so the builder's client-side
+  // roster reflects a promotion immediately, instead of contradicting the
+  // notice above it with "No captain selected".
+  return {
+    error: null,
+    notice,
+    captainPlayerId: captainId ?? null,
+    viceCaptainPlayerId: viceCaptainId ?? null,
+  };
 }
 
 export async function setFantasyCaptain(

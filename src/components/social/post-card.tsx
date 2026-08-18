@@ -17,7 +17,7 @@ import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hi
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
-import { timeAgo } from "@/lib/format";
+import { RelativeTime } from "@/components/ui/relative-time";
 
 const REPORT_REASONS = ["Spam", "Harassment or abuse", "Misinformation", "Inappropriate content", "Other"] as const;
 
@@ -129,6 +129,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
     const previous = localPoll;
     const previousOptionId = localPoll.viewerOptionId;
     setLocalPoll((current) => ({
+      resultsUnavailable: current.resultsUnavailable,
       totalVotes: previousOptionId ? current.totalVotes : current.totalVotes + 1,
       viewerOptionId: optionId,
       options: current.options.map((option) => {
@@ -151,7 +152,10 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
   return (
     <div className="flex flex-col gap-2">
       {localPoll.options.map((option) => {
-        const pct = total > 0 ? Math.round((option.voteCount / total) * 100) : 0;
+        // A failed get_poll_results leaves every count at 0. Rendering "0%"
+        // from that would be inventing a number, so the bar stays empty and
+        // the percentage is simply not shown (see PollSummary.resultsUnavailable).
+        const pct = !localPoll.resultsUnavailable && total > 0 ? Math.round((option.voteCount / total) * 100) : 0;
         const isOwn = option.id === localPoll.viewerOptionId;
         return (
           <button
@@ -176,7 +180,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
               <span className="flex shrink-0 items-center gap-1 text-xs text-foreground-subtle">
                 {/* RECOMMENDATIONS item 235 */}
                 <GuestLockHint show={!signedIn} className="h-2.5 w-2.5 shrink-0" />
-                {pct}%
+                {localPoll.resultsUnavailable ? "" : `${pct}%`}
               </span>
             </span>
           </button>
@@ -184,7 +188,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
       })}
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-foreground-subtle">
-          {total} vote{total === 1 ? "" : "s"}
+          {localPoll.resultsUnavailable ? "Couldn't load results" : `${total} vote${total === 1 ? "" : "s"}`}
         </p>
         {error && (
           <p className="text-[11px] text-critical" role="status" aria-live="polite">
@@ -387,7 +391,7 @@ export function PostCard({
           ) : (
             <span className="truncate text-sm font-medium text-foreground">{authorName}</span>
           )}
-          <span className="text-xs text-foreground-subtle">{timeAgo(createdAt)}</span>
+          <RelativeTime iso={createdAt} className="text-xs text-foreground-subtle" />
         </div>
       </div>
       <PostBody body={body} />

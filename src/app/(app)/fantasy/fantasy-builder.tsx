@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { Copy, Check, Clock, Plus, History, Compass, Crown } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { setGameweekRoster, setFantasyCaptain, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
 import { HowScoringWorks } from "./how-scoring-works";
@@ -18,7 +19,6 @@ import {
   SQUAD_SIZE,
   FANTASY_BUDGET_CAP,
   formatFantasyPrice,
-  formatDeadlineAbsolute,
   validateRoster,
   type PositionGroup,
   type PositionGroupOrOther,
@@ -145,6 +145,10 @@ export function FantasyBuilder({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerFilter, setPickerFilter] = useState<PositionGroup | "All">("All");
   const [saveError, setSaveError] = useState<string | null>(null);
+  // A save can succeed and still need to tell the manager something — most
+  // importantly that the armband moved because their captain was transferred
+  // out (see setGameweekRoster).
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saving, startSaving] = useTransition();
@@ -226,6 +230,7 @@ export function FantasyBuilder({
     // definition ever changes.
     if (locked || saving || !validation.ok || !gameweek) return;
     setSaveError(null);
+    setSaveNotice(null);
     startSaving(async () => {
       const result = await setGameweekRoster(
         activeTeamId,
@@ -236,7 +241,18 @@ export function FantasyBuilder({
         setSaveError(result.error);
         return;
       }
-      setSavedRoster(pending);
+      setSaveNotice(result.notice ?? null);
+      // Apply the armband the server actually stored, not the flags this list
+      // was carrying: setGameweekRoster promotes the vice-captain when the
+      // captain is transferred out, and without this the pitch would keep
+      // showing no captain while the notice said otherwise.
+      const saved = pending.map((p) => ({
+        ...p,
+        isCaptain: p.playerId === result.captainPlayerId,
+        isViceCaptain: p.playerId === result.viceCaptainPlayerId,
+      }));
+      setPending(saved);
+      setSavedRoster(saved);
     });
   }
 
@@ -412,7 +428,7 @@ export function FantasyBuilder({
               label={`Gameweek ${gameweek.number}`}
               value={<DeadlineCountdown deadlineAt={gameweek.deadlineAt} />}
               valueClass={locked ? "text-critical" : "text-foreground"}
-              caption={formatDeadlineAbsolute(gameweek.deadlineAt)}
+              caption={<LocalDateTime iso={gameweek.deadlineAt} format="deadline" />}
             />
             <StatTile
               label="Budget left"
@@ -443,6 +459,17 @@ export function FantasyBuilder({
               </span>
             ))}
           </FadeIn>
+
+          {saveNotice && (
+            <FadeIn
+              delay={0.12}
+              className="flex items-center gap-2 rounded-2xl border border-achievement/30 bg-achievement/10 px-3.5 py-2.5 text-xs text-achievement"
+              role="status"
+            >
+              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              {saveNotice}
+            </FadeIn>
+          )}
 
           {pending.length > 0 && !pending.some((p) => p.isCaptain) && (
             <FadeIn

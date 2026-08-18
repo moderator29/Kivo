@@ -1,4 +1,5 @@
 import { Ban, ShieldAlert } from "lucide-react";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { effectiveModerationStatus, type ModerationStatus } from "@/lib/moderation";
 
 export type ModerationStatusPanelProps = {
@@ -68,7 +69,7 @@ export function ModerationStatusPanel({ status, reason, expiresAt }: ModerationS
         {isBanned
           ? "This is permanent. Contact support if you believe it's a mistake."
           : expiresAt
-            ? `Lifts automatically ${new Date(expiresAt).toLocaleString()}.`
+            ? <>Lifts automatically <LocalDateTime iso={expiresAt} format="full" />.</>
             : "Lifts automatically once the suspension period ends."}
       </p>
     </div>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { History, Pencil, Trash2, Check, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { timeAgo } from "@/lib/format";
+import { RelativeTime } from "@/components/ui/relative-time";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import type { ConversationSummary } from "@/app/(app)/ai/actions";
 
@@ -127,7 +127,7 @@ function ConversationRow({
             {displayTitle(conversation)}
           </p>
         )}
-        <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(conversation.updated_at)}</p>
+        <RelativeTime iso={conversation.updated_at} className="mt-0.5 block text-xs text-foreground-subtle" />
         {rowError && (
           <p className="mt-0.5 text-xs text-critical" role="status" aria-live="polite">
             {rowError}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STATUS_LABEL, isLiveStatus } from "@/lib/football/fixture-status";
 import { useRealtimeFixtures } from "@/hooks/use-realtime-fixtures";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import type { Database } from "@/lib/supabase/types";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
@@ -97,14 +98,11 @@ export function MatchScoreDisplay({
         {live && (
           <span className="h-1.5 w-1.5 shrink-0 motion-safe:animate-[kivo-live-ring_2s_ease-out_infinite] rounded-full bg-live" />
         )}
-        {fixture.status === "scheduled"
-          ? new Date(kickoffAt).toLocaleString(undefined, {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : STATUS_LABEL[fixture.status]}
+        {fixture.status === "scheduled" ? (
+          <LocalDateTime iso={kickoffAt} format="dayTime" />
+        ) : (
+          STATUS_LABEL[fixture.status]
+        )}
       </span>
     </div>
   );

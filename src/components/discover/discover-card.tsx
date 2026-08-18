@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
+import { formatNumber } from "@/lib/format";
 
 const MotionLink = motion.create(Link);
 
@@ -57,7 +58,7 @@ export function DiscoverCard({
         transition={{ duration: 0.3, delay: delay + 0.14, ease: [0.22, 1, 0.36, 1] }}
         className="text-xs font-medium text-accent"
       >
-        {count.toLocaleString()} {countLabel}
+        {formatNumber(count)} {countLabel}
       </motion.span>
     </MotionLink>
   );

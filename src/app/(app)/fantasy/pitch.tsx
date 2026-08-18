@@ -20,7 +20,9 @@ export function StatTile({
   // re-rendering, the parent on every tick.
   value: ReactNode;
   valueClass: string;
-  caption?: string;
+  // ReactNode for the same reason `value` is: a caption can be a <LocalDateTime>,
+  // which resolves the reader's own time zone after hydration.
+  caption?: ReactNode;
 }) {
   return (
     <div className="kivo-glass flex flex-col gap-1 rounded-2xl p-3">

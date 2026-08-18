@@ -1,4 +1,5 @@
 import type { Database } from "@/lib/supabase/types";
+import { DISPLAY_LOCALE } from "@/lib/format";
 
 export type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
@@ -25,7 +26,7 @@ export function isLiveStatus(status: FixtureStatus): boolean {
  * teams/[id] already showed before this was consolidated.
  */
 export function formatKickoff(kickoffAt: string, options: { includeWeekday?: boolean } = {}): string {
-  return new Date(kickoffAt).toLocaleString(undefined, {
+  return new Date(kickoffAt).toLocaleString(DISPLAY_LOCALE, {
     ...(options.includeWeekday ? { weekday: "short" as const } : {}),
     hour: "2-digit",
     minute: "2-digit",

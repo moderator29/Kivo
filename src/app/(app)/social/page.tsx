@@ -82,6 +82,7 @@ export default async function SocialPage({
         signedIn={Boolean(profile)}
         followingOnly={followingOnly}
         scrollToPostId={targetPostId ?? null}
+        initialOffset={pageOne.length}
       />
     </div>
   );

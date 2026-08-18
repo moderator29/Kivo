@@ -27,6 +27,20 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
   const [saved, setSaved] = useState(initialSaved);
   const [pending, startTransition] = useTransition();
   const [flash, setFlash] = useState<"saved" | "unsaved" | null>(null);
+  // docs/BUG_AUDIT_2026-08-18.md S1: `toggleSave`'s error was read and thrown
+  // away, so a rate limit ("You're doing that a bit too fast…") or an RLS
+  // rejection for a suspended account made the button flip and flip back with
+  // no explanation — the "buttons appear dead" report. Same error affordance
+  // as ReactionPicker, which had this fixed already.
+  const [error, setError] = useState<string | null>(null);
+
+  // Auto-dismiss rather than leaving the message stuck next to the button
+  // forever, matching ReactionPicker.
+  useEffect(() => {
+    if (!error) return;
+    const timeout = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(timeout);
+  }, [error]);
 
   useEffect(() => {
     if (!flash) return;
@@ -41,11 +55,13 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
     }
     if (pending) return;
     const previous = saved;
+    setError(null);
     setSaved(!previous);
     startTransition(async () => {
       const result = await toggleSave(targetType, targetId, previous);
       if (result.error) {
         setSaved(previous);
+        setError(result.error);
       } else {
         setSaved(result.saved);
         setFlash(result.saved ? "saved" : "unsaved");
@@ -88,6 +104,20 @@ export function SaveButton({ targetType, targetId, initialSaved, signedIn, size 
             <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
             {flash === "saved" ? "Saved" : "Removed"}
           </motion.span>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            role="alert"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 z-20 mt-1 w-max max-w-[14rem] text-[11px] text-critical"
+          >
+            {error}
+          </motion.p>
         )}
       </AnimatePresence>
     </span>

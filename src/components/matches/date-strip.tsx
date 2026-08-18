@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { DISPLAY_LOCALE } from "@/lib/format";
 
 /** UTC `YYYY-MM-DD` key — matches the `?date=` search param format and the
  * UTC day-boundary convention already used for fixture queries throughout
@@ -60,7 +61,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
               } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
             >
               <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">
-                {day.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}
+                {day.toLocaleDateString(DISPLAY_LOCALE, { weekday: "short", timeZone: "UTC" })}
               </span>
               <span className="text-sm font-semibold tabular-nums">{day.getUTCDate()}</span>
               <span

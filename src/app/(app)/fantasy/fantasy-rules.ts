@@ -189,17 +189,12 @@ export function formatDeadlineCountdown(deadlineAt: string, now: Date = new Date
   return `${minutes}m`;
 }
 
-/** Absolute kickoff-deadline time, shown alongside the relative countdown so
- * "45m" always has a concrete "what time is that" anchor next to it. */
-export function formatDeadlineAbsolute(deadlineAt: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(deadlineAt));
-}
+// The absolute kickoff-deadline time that used to be formatted here is now
+// rendered by <LocalDateTime format="deadline"> (src/components/ui/relative-time.tsx).
+// It was an `Intl.DateTimeFormat(undefined, …)` inside a Client Component,
+// which meant the server formatted the deadline in its own locale and zone and
+// the browser disagreed on both — a hydration mismatch, and a fantasy deadline
+// shown at the wrong hour for anyone outside UTC.
 
 export type DeadlineUrgency = "normal" | "soon" | "urgent" | "passed";
 

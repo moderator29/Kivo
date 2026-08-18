@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { logError } from "@/lib/log";
 
 /** `/social` had a flat `.limit(50)` with no way to page further
  * (RECOMMENDATIONS item 119). 20 per page, offset-based "Load more" — same
@@ -9,7 +10,21 @@ import { resolveAvatarSrc } from "@/lib/kivo-assets";
 export const SOCIAL_PAGE_SIZE = 20;
 
 export type PollOption = { id: string; label: string; position: number; voteCount: number };
-export type PollSummary = { options: PollOption[]; totalVotes: number; viewerOptionId: string | null };
+export type PollSummary = {
+  options: PollOption[];
+  totalVotes: number;
+  viewerOptionId: string | null;
+  /** True when `get_poll_results` failed for this post, as opposed to the
+   * poll genuinely having no votes yet.
+   *
+   * docs/BUG_AUDIT_2026-08-18.md S5: the RPC's error used to be destructured
+   * away, which made those two states identical — a poll with 400 real votes
+   * rendered as "0 votes" with 0% on every bar. On a platform whose stated
+   * promise is never presenting invented data, confidently showing zeros it
+   * does not have is the worst available failure mode. PollBlock says
+   * "couldn't load results" instead. */
+  resultsUnavailable: boolean;
+};
 
 export type PostListItem = {
   id: string;
@@ -201,7 +216,12 @@ export async function fetchPostsPage(
   const [pollResultsEntries, viewerVoteRows] = await Promise.all([
     Promise.all(
       pollPostIds.map(async (postId) => {
-        const { data } = await supabase.rpc("get_poll_results", { p_post_id: postId });
+        const { data, error } = await supabase.rpc("get_poll_results", { p_post_id: postId });
+        // null (not []) distinguishes "the RPC failed" from "nobody has voted".
+        if (error) {
+          logError("social.getPollResults", error, { postId });
+          return [postId, null] as const;
+        }
         return [postId, data ?? []] as const;
       }),
     ),
@@ -220,8 +240,8 @@ export async function fetchPostsPage(
       const reactionSummary = reactionsByPost.get(post.id) ?? { count: 0, viewerReaction: null };
       const author = authorById.get(post.author_profile_id);
       const options = pollOptionsByPost.get(post.id);
-      const results = pollResultsByPost.get(post.id) ?? [];
-      const voteCountByOption = new Map(results.map((r) => [r.option_id, r.vote_count]));
+      const results = pollResultsByPost.get(post.id) ?? null;
+      const voteCountByOption = new Map((results ?? []).map((r) => [r.option_id, r.vote_count]));
       const poll: PollSummary | null = options
         ? {
             options: options.map((option) => ({
@@ -230,8 +250,9 @@ export async function fetchPostsPage(
               position: option.position,
               voteCount: voteCountByOption.get(option.id) ?? 0,
             })),
-            totalVotes: results.reduce((sum, r) => sum + r.vote_count, 0),
+            totalVotes: (results ?? []).reduce((sum, r) => sum + r.vote_count, 0),
             viewerOptionId: viewerVoteByPost.get(post.id) ?? null,
+            resultsUnavailable: results === null,
           }
         : null;
       return {

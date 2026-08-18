@@ -1,4 +1,5 @@
 import { Ban, ShieldAlert } from "lucide-react";
+import { LocalDateTime } from "@/components/ui/relative-time";
 
 /**
  * RECOMMENDATIONS.md item 234: a suspended/banned user's own client must
@@ -33,7 +34,7 @@ export function ModerationBanner({ info }: { info: ModerationBannerInfo }) {
         ) : (
           <ShieldAlert className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
         )}
-        {isBanned ? "Your account has been banned." : `Your account is suspended until ${new Date(info.expiresAt).toLocaleString()}.`}
+        {isBanned ? "Your account has been banned." : <>Your account is suspended until <LocalDateTime iso={info.expiresAt} format="full" />.</>}
       </div>
       <p className="text-foreground-muted">
         {info.reason ? `Reason: ${info.reason}. ` : ""}

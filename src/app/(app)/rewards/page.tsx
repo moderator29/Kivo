@@ -7,7 +7,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
-import { timeAgo } from "@/lib/format";
+import { DISPLAY_LOCALE, timeAgo } from "@/lib/format";
 import { buildWeekStrip, getStreakTier, mondayOfWeekUtc } from "@/lib/streak";
 
 const item = getNavItem("rewards");
@@ -62,7 +62,7 @@ function groupXpHistoryByDay(
         ? "Today"
         : entryIso === yesterdayIso
           ? "Yesterday"
-          : entryDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+          : entryDate.toLocaleDateString(DISPLAY_LOCALE, { day: "numeric", month: "short" });
     const currentGroup = groups[groups.length - 1];
     if (currentGroup && currentGroup.label === label) {
       currentGroup.entries.push(entry);

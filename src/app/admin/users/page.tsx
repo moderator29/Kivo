@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import { formatDate } from "@/lib/format";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewUserData } from "@/lib/admin";
@@ -99,7 +100,7 @@ export default async function AdminUsersPage() {
                   <RoleCell role={user.role} />
                 </td>
                 <td className="px-4 py-3 text-foreground-muted">
-                  {new Date(user.created_at).toLocaleDateString()}
+                  {formatDate(user.created_at, { month: "short" })}
                 </td>
                 <td className="px-4 py-3">
                   <UserModerationControls
