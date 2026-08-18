@@ -6,13 +6,25 @@ import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { awardBadge } from "@/lib/rewards";
-import { groupFixturesByGameweek, carryForwardMissingFantasyRosters } from "@/lib/fantasy";
+import {
+  groupFixturesByGameweek,
+  carryForwardMissingFantasyRosters,
+  ensureFantasyPlayerPrices,
+  getFantasyPriceMap,
+} from "@/lib/fantasy";
 import {
   computePlayerMatchFacts,
   emptyPlayerMatchFacts,
   scoreRosterSlot,
   type FinishedFixtureFacts,
+  type FixtureEventType,
 } from "@/lib/fantasy-scoring";
+import { computeGameweekPricingPoints, computePriceNudges, applyPriceNudge } from "@/lib/fantasy-pricing";
+import { DEFAULT_FANTASY_PRICE } from "@/app/(app)/fantasy/fantasy-rules";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/types";
+
+type ServiceClient = SupabaseClient<Database>;
 
 /**
  * Derives fantasy_gameweeks rows from a season's real synced fixtures —
@@ -115,7 +127,128 @@ export type ScoreFantasyGameweekResult = {
   recordsProcessed?: number;
   fixturesFinished?: number;
   fixturesTotal?: number;
+  /** RECOMMENDATIONS.md item 251: how many real players had their
+   * fantasy_player_prices row nudged by this run — see
+   * applyFantasyPriceNudges below. Always 0 when no player in the gameweek's
+   * finished fixtures had a real synced lineups.is_starting row (e.g.
+   * lineups were never synced for these fixtures), same honest-zero
+   * convention as recordsProcessed above. */
+  playersRepriced?: number;
 };
+
+/**
+ * RECOMMENDATIONS.md item 251: real, bounded fantasy-price movement, run as
+ * the last step of scoreFantasyGameweek so a price only ever moves off the
+ * back of a gameweek whose real match data has actually landed. See
+ * src/lib/fantasy-pricing.ts for the pure formula this wraps; this function
+ * is purely the DB plumbing around it — load real lineups/events for the
+ * gameweek's finished fixtures, compute each involved player's real
+ * accumulated points, nudge their price relative to their position-group
+ * peers, and write only the prices that actually changed.
+ *
+ * Deliberately reads `lineups` (the real match XI), not `fantasy_rosters`
+ * (one manager's own pick) — pricing has to cover every real player who
+ * played, not only whichever ones happen to be in someone's fantasy squad
+ * today, the same reasoning LineupsTab's "In your XI" cross-reference (item
+ * 294) keeps the two tables separate for. Runs under the service-role client
+ * scoreFantasyGameweek already created, for the same reason the rest of that
+ * function does: this writes rows across every player in the gameweek, not
+ * just one caller's own.
+ */
+async function applyFantasyPriceNudges(
+  service: ServiceClient,
+  seasonId: string,
+  finishedFixtureIds: string[],
+  events: { fixture_id: string; player_id: string | null; related_player_id: string | null; event_type: FixtureEventType }[],
+  finishedFixtureFacts: FinishedFixtureFacts[],
+): Promise<{ playersRepriced: number }> {
+  if (finishedFixtureIds.length === 0) return { playersRepriced: 0 };
+
+  // Real starts only — a benched, unused substitute has no real evidence of
+  // having actually played (same "no minutes-played column" reasoning
+  // rating-engine.ts's hasEvidenceOfInvolvement already documents), so it
+  // isn't a fair signal to price a player up or down on.
+  const { data: lineupRows, error: lineupsError } = await service
+    .from("lineups")
+    .select("player_id")
+    .in("fixture_id", finishedFixtureIds)
+    .eq("is_starting", true);
+  if (lineupsError) {
+    console.error("Failed to load lineups for fantasy price nudges", lineupsError);
+    return { playersRepriced: 0 };
+  }
+  if (!lineupRows || lineupRows.length === 0) return { playersRepriced: 0 };
+
+  const startsByPlayer = new Map<string, number>();
+  for (const row of lineupRows) {
+    startsByPlayer.set(row.player_id, (startsByPlayer.get(row.player_id) ?? 0) + 1);
+  }
+
+  const involvedPlayerIds = [...startsByPlayer.keys()];
+  const { data: players, error: playersError } = await service
+    .from("players")
+    .select("id, position, current_team_id")
+    .in("id", involvedPlayerIds);
+  if (playersError || !players || players.length === 0) {
+    if (playersError) console.error("Failed to load players for fantasy price nudges", playersError);
+    return { playersRepriced: 0 };
+  }
+
+  const playerTeamId = new Map(
+    players.filter((p) => p.current_team_id).map((p) => [p.id, p.current_team_id as string]),
+  );
+  const facts = computePlayerMatchFacts(events, finishedFixtureFacts, playerTeamId);
+
+  const pricingInputs = players.map((p) => ({
+    playerId: p.id,
+    position: p.position,
+    points: computeGameweekPricingPoints(facts.get(p.id) ?? emptyPlayerMatchFacts(), startsByPlayer.get(p.id) ?? 0, p.position),
+  }));
+
+  const nudges = computePriceNudges(pricingInputs);
+  if (nudges.length === 0) return { playersRepriced: 0 };
+
+  // Lazily backfill the flat default for any of these players who don't yet
+  // have a fantasy_player_prices row for this season (mirrors every other
+  // caller of ensureFantasyPlayerPrices), then read whatever their real
+  // current price is — the nudge always applies on top of the real stored
+  // price, never a re-derivation from scratch, so price history compounds
+  // gameweek over gameweek the way a real fantasy game's prices do.
+  await ensureFantasyPlayerPrices(seasonId, involvedPlayerIds);
+  const currentPrices = await getFantasyPriceMap(seasonId, involvedPlayerIds);
+
+  const priceUpdates = nudges
+    .map((n) => {
+      const current = currentPrices.get(n.playerId) ?? DEFAULT_FANTASY_PRICE;
+      const next = applyPriceNudge(current, n.delta);
+      return { player_id: n.playerId, season_id: seasonId, price: next, current };
+    })
+    // Only write real, non-zero movement — a nudge that rounds to the same
+    // stored price (e.g. a lone player in their position group, or a delta
+    // too small to move the tenths digit) is a genuine no-op, not a write.
+    .filter((row) => Math.abs(row.price - row.current) > 1e-9)
+    .map(({ player_id, season_id, price }) => ({ player_id, season_id, price }));
+
+  if (priceUpdates.length === 0) return { playersRepriced: 0 };
+
+  const { error: priceError } = await service
+    .from("fantasy_player_prices")
+    .upsert(priceUpdates, { onConflict: "player_id,season_id" });
+  if (priceError) {
+    console.error("Failed to apply fantasy price nudges", priceError);
+    return { playersRepriced: 0 };
+  }
+
+  // Concrete per-page revalidation, same convention as every other admin
+  // action in this file (e.g. triggerPlayerTransfersSync's
+  // revalidatePath(`/players/${playerId}`) in ../data-health/actions.ts) —
+  // never the wildcard `/players/[id]` segment form, which would drop the
+  // cache for every player page regardless of whether its price moved.
+  // Bounded by this gameweek's real repriced-player count, typically small.
+  for (const row of priceUpdates) revalidatePath(`/players/${row.player_id}`);
+
+  return { playersRepriced: priceUpdates.length };
+}
 
 /**
  * On-demand admin pass, same shape as scorePredictions() in
@@ -215,6 +348,21 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     return { error: "Couldn't load match events. Try again." };
   }
 
+  // RECOMMENDATIONS.md item 251: deliberately run before the fantasy-rosters
+  // read below, and independent of it — real prices are about every real
+  // player who actually played this gameweek, not just the ones someone
+  // happens to have already rostered, so this must not be skipped by the
+  // "no fantasy_rosters rows yet" early return a few lines down (e.g. a
+  // season's very first gameweek, before anyone has built a squad). See
+  // applyFantasyPriceNudges' own doc comment.
+  const { playersRepriced } = await applyFantasyPriceNudges(
+    service,
+    gameweek.season_id,
+    finishedFixtureIds,
+    events ?? [],
+    finishedFixtureFacts,
+  );
+
   const { data: rosterRows, error: rosterError } = await service
     .from("fantasy_rosters")
     .select("fantasy_team_id, player_id, is_starting, is_captain, is_vice_captain")
@@ -226,7 +374,13 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
 
   const rosters = rosterRows ?? [];
   if (rosters.length === 0) {
-    return { error: null, recordsProcessed: 0, fixturesFinished: finishedFixtures.length, fixturesTotal: fixturesInGroup.length };
+    return {
+      error: null,
+      recordsProcessed: 0,
+      fixturesFinished: finishedFixtures.length,
+      fixturesTotal: fixturesInGroup.length,
+      playersRepriced,
+    };
   }
 
   const rosteredPlayerIds = [...new Set(rosters.map((r) => r.player_id))];
@@ -311,6 +465,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     fixturesConsidered: fixturesInGroup.length,
     fixturesFinished: finishedFixtures.length,
     recordsProcessed: upsertRows.length,
+    playersRepriced,
   });
 
   revalidatePath("/fantasy");
@@ -321,5 +476,6 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     recordsProcessed: upsertRows.length,
     fixturesFinished: finishedFixtures.length,
     fixturesTotal: fixturesInGroup.length,
+    playersRepriced,
   };
 }

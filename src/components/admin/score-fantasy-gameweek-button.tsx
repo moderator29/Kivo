@@ -49,6 +49,9 @@ export function ScoreFantasyGameweekButton({ gameweekId }: { gameweekId: string 
                 ? `Scored ${result.recordsProcessed} team${result.recordsProcessed === 1 ? "" : "s"}`
                 : "No fantasy teams to score"}{" "}
               ({result.fixturesFinished ?? 0}/{result.fixturesTotal ?? 0} fixtures finished)
+              {result.playersRepriced
+                ? ` · ${result.playersRepriced} player price${result.playersRepriced === 1 ? "" : "s"} updated`
+                : ""}
             </>
           )}
         </p>
