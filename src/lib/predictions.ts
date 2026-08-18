@@ -1,3 +1,6 @@
+import { CheckCircle2, Clock, MinusCircle, XCircle, type LucideIcon } from "lucide-react";
+import type { FixtureStatus } from "@/lib/football/fixture-status";
+
 // Shared between the admin scoring action and the Data Health page's copy —
 // a "use server" file may only export async functions, so these live here
 // rather than alongside scorePredictions() in predictions-actions.ts.
@@ -54,4 +57,35 @@ export function computeStreaks(scoredRows: { pointsAwarded: number; kickoffAt: s
   }
 
   return { current: running, best };
+}
+
+export type PredictionResultInfo = { label: string; className: string; icon: LucideIcon };
+
+/**
+ * A prediction's result, purely from real columns — `points_awarded` is null
+ * until the admin scoring pass (predictions-actions.ts's scorePredictions)
+ * resolves it, so "not scored yet" is shown honestly rather than as a 0 or a
+ * guessed outcome. Never derives correctness from the fixture score
+ * directly: `points_awarded` is the single source of truth for what was
+ * actually graded, same as the leaderboard.
+ *
+ * Shared between /predictions/mine (where this was originally defined) and
+ * Match Centre's "You predicted" card (RECOMMENDATIONS.md item 293) so the
+ * two can never disagree about what a given prediction row's result reads
+ * as — the exact "reuse /predictions/mine's existing result-formatting"
+ * item 293 itself calls for, rather than a second, possibly-drifting copy.
+ */
+export function predictionResultInfo(status: FixtureStatus, pointsAwarded: number | null): PredictionResultInfo {
+  if (pointsAwarded !== null) {
+    return pointsAwarded > 0
+      ? { label: `Correct · +${pointsAwarded} pts`, className: "text-live", icon: CheckCircle2 }
+      : { label: "Incorrect", className: "text-critical", icon: XCircle };
+  }
+  if (status === "finished") {
+    return { label: "Not scored yet", className: "text-foreground-subtle", icon: Clock };
+  }
+  if (status === "postponed" || status === "cancelled" || status === "abandoned") {
+    return { label: "No result", className: "text-foreground-subtle", icon: MinusCircle };
+  }
+  return { label: "Pending", className: "text-foreground-subtle", icon: Clock };
 }

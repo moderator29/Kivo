@@ -9,8 +9,8 @@ import { motion } from "motion/react";
 const REWARD_SPRING = { type: "spring" as const, stiffness: 600, damping: 12 };
 
 /**
- * Wraps a prediction's result badge (`resultInfo()` in
- * predictions/mine/page.tsx) with a brief glow + spring pop-in for a
+ * Wraps a prediction's result badge (`predictionResultInfo()` in
+ * src/lib/predictions.ts) with a brief glow + spring pop-in for a
  * genuinely correct result — "Pending"/"No result"/"Incorrect" render
  * exactly as before, no motion, no glow, so this stays a reward for a real
  * positive outcome rather than decoration applied to every row. Scoring is

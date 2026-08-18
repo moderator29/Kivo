@@ -43,6 +43,12 @@ type LineupEntry = {
   playerName: string;
 };
 
+/** RECOMMENDATIONS.md item 294: the viewer's own current-gameweek fantasy
+ * starting XI for this fixture's season (see getViewerFantasyRosterBySeasons
+ * in src/lib/football/fantasy-lineup-crossref.ts) — an empty array for a
+ * guest, or a signed-in viewer with no fantasy team in this season. */
+type ViewerFantasyRosterEntry = { playerId: string; isCaptain: boolean };
+
 type TeamStats = {
   teamId: string;
   shotsTotal: number | null;
@@ -94,6 +100,7 @@ type MatchCentreTabsProps = {
   awayTeamName: string;
   events: MatchEvent[];
   lineups: LineupEntry[];
+  viewerFantasyRoster: ViewerFantasyRosterEntry[];
   stats: TeamStats[];
   standings: StandingsRow[];
   roomPosts: RoomPost[];
@@ -188,18 +195,46 @@ function DetailsTab({ events }: { events: MatchEvent[] }) {
   );
 }
 
+/** RECOMMENDATIONS.md item 294: a small real "In your XI" pill (+ captain
+ * marker) next to a lineup row whose player is starting in the viewer's own
+ * current fantasy squad for this fixture's season — the captain badge reuses
+ * pitch.tsx's own circular "C" convention (kivo-gradient-victory) rather than
+ * inventing a second visual language for the same real fact. */
+function InYourXIBadge({ isCaptain }: { isCaptain: boolean }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1">
+      <span className="rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-kivo-cyan">
+        Your XI
+      </span>
+      {isCaptain && (
+        <span
+          title="Your captain"
+          aria-label="Your captain"
+          className="kivo-gradient-victory flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-kivo-white"
+        >
+          C
+        </span>
+      )}
+    </span>
+  );
+}
+
 function LineupsTab({
   homeTeamId,
   awayTeamId,
   lineups,
+  viewerFantasyRoster,
 }: {
   homeTeamId: string;
   awayTeamId: string;
   lineups: LineupEntry[];
+  viewerFantasyRoster: ViewerFantasyRosterEntry[];
 }) {
   if (lineups.length === 0) {
     return <EmptyState message="Lineups haven't been synced yet for this fixture." />;
   }
+
+  const rosterByPlayerId = new Map(viewerFantasyRoster.map((r) => [r.playerId, r.isCaptain]));
 
   const renderTeam = (teamId: string) => {
     const teamLineup = lineups.filter((l) => l.teamId === teamId);
@@ -214,7 +249,7 @@ function LineupsTab({
     return (
       <div className="flex flex-col gap-3">
         {pitchRows ? (
-          <LineupPitch formation={formation} rows={pitchRows} />
+          <LineupPitch formation={formation} rows={pitchRows} viewerFantasyRoster={rosterByPlayerId} />
         ) : (
           starters.length > 0 && (
             <div className="flex flex-col gap-1">
@@ -228,8 +263,11 @@ function LineupsTab({
                   className="flex items-center gap-2 text-sm text-foreground"
                 >
                   <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
-                  <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
-                  {p.position && <span className="text-xs text-foreground-subtle">{p.position}</span>}
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
+                    {rosterByPlayerId.has(p.playerId) && <InYourXIBadge isCaptain={rosterByPlayerId.get(p.playerId)!} />}
+                  </div>
+                  {p.position && <span className="shrink-0 text-xs text-foreground-subtle">{p.position}</span>}
                 </motion.div>
               ))}
             </div>
@@ -247,7 +285,10 @@ function LineupsTab({
                 className="flex items-center gap-2 text-sm text-foreground-muted"
               >
                 <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
-                <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
+                  {rosterByPlayerId.has(p.playerId) && <InYourXIBadge isCaptain={rosterByPlayerId.get(p.playerId)!} />}
+                </div>
               </motion.div>
             ))}
           </div>
@@ -467,6 +508,7 @@ function MatchCentreTabsInner({
   awayTeamName,
   events,
   lineups,
+  viewerFantasyRoster,
   stats,
   standings,
   roomPosts,
@@ -575,7 +617,14 @@ function MatchCentreTabsInner({
         >
           {active === "Details" && <DetailsTab events={events} />}
           {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
-          {active === "Lineups" && <LineupsTab homeTeamId={homeTeamId} awayTeamId={awayTeamId} lineups={lineups} />}
+          {active === "Lineups" && (
+            <LineupsTab
+              homeTeamId={homeTeamId}
+              awayTeamId={awayTeamId}
+              lineups={lineups}
+              viewerFantasyRoster={viewerFantasyRoster}
+            />
+          )}
           {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
           {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Room" && (

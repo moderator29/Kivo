@@ -16,9 +16,11 @@ import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { MatchShareCard } from "@/components/matches/match-share-card";
+import { YourPredictionCard } from "@/components/matches/your-prediction-card";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
+import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -89,6 +91,8 @@ export default async function MatchCentrePage({
     ownFanRating,
     fanRatingSummary,
     { data: managers },
+    { data: ownPrediction },
+    viewerFantasyRosterBySeason,
   ] = await Promise.all([
     supabase
       .from("fixture_events")
@@ -149,7 +153,30 @@ export default async function MatchCentrePage({
           .in("current_team_id", [fixture.home_team.id, fixture.away_team.id])
           .order("updated_at", { ascending: false })
       : Promise.resolve({ data: null }),
+    // RECOMMENDATIONS.md item 293: predictions_select_own already scopes this
+    // to the caller's own row — no RLS change, no RPC needed.
+    profile
+      ? supabase
+          .from("predictions")
+          .select("predicted_outcome, points_awarded")
+          .eq("fixture_id", id)
+          .eq("profile_id", profile.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // RECOMMENDATIONS.md item 294: real fantasy_rosters -> lineups player-id
+    // cross-reference for LineupsTab's "In your XI" pill — see
+    // getViewerFantasyRosterBySeasons' own doc comment for the full join
+    // chain. Scoped to just this one fixture's season.
+    profile
+      ? getViewerFantasyRosterBySeasons(supabase, profile.id, [fixture.season_id])
+      : Promise.resolve(new Map<string, ViewerFantasyRosterMap>()),
   ]);
+
+  const viewerFantasyRoster = viewerFantasyRosterBySeason.get(fixture.season_id) ?? new Map();
+  const viewerFantasyRosterForTab = [...viewerFantasyRoster.entries()].map(([playerId, flags]) => ({
+    playerId,
+    isCaptain: flags.isCaptain,
+  }));
 
   // RECOMMENDATIONS item 237: same fix as /social's — a notification's
   // `?post=<id>` link (postHref() in lib/notification-registry.ts) can name
@@ -332,6 +359,20 @@ export default async function MatchCentrePage({
         <AskAiLink ctx="fixture" id={fixture.id} label="Ask AI about this match" />
       </FadeIn>
 
+      {/* RECOMMENDATIONS.md item 293: the caller's own real prediction for
+          this exact fixture — renders nothing when they haven't made one
+          (ownPrediction is null in that case, predictions_select_own already
+          scoped this to their own row). */}
+      {ownPrediction && (
+        <FadeIn delay={0.09}>
+          <YourPredictionCard
+            predictedOutcome={ownPrediction.predicted_outcome}
+            pointsAwarded={ownPrediction.points_awarded}
+            status={fixture.status}
+          />
+        </FadeIn>
+      )}
+
       {/* RECOMMENDATIONS.md item 170: only shown once the match is actually
           over — "rate a performance after the whistle" is the item's own
           framing, and fan_ratings_insert_own's WITH CHECK would reject an
@@ -405,6 +446,7 @@ export default async function MatchCentrePage({
           canSyncDetails={canManageFootballData(profile?.role)}
           syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
           detailsLastSyncedAt={detailsLastSyncedAt}
+          viewerFantasyRoster={viewerFantasyRosterForTab}
           events={(events ?? []).map((e) => ({
             id: e.id,
             eventType: e.event_type,
