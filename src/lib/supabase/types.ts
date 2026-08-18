@@ -1343,6 +1343,11 @@ export type Database = {
           display_name: string | null
           favourite_team_id: string | null
           id: string
+          moderation_expires_at: string | null
+          moderation_reason: string | null
+          moderation_set_at: string | null
+          moderation_set_by: string | null
+          moderation_status: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed: boolean
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
@@ -1361,6 +1366,11 @@ export type Database = {
           display_name?: string | null
           favourite_team_id?: string | null
           id?: string
+          moderation_expires_at?: string | null
+          moderation_reason?: string | null
+          moderation_set_at?: string | null
+          moderation_set_by?: string | null
+          moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -1379,6 +1389,11 @@ export type Database = {
           display_name?: string | null
           favourite_team_id?: string | null
           id?: string
+          moderation_expires_at?: string | null
+          moderation_reason?: string | null
+          moderation_set_at?: string | null
+          moderation_set_by?: string | null
+          moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -1390,6 +1405,13 @@ export type Database = {
             columns: ["favourite_team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_moderation_set_by_fkey"
+            columns: ["moderation_set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2151,6 +2173,7 @@ export type Database = {
         | "abandoned"
         | "unknown"
       follow_target_type: "team" | "player" | "competition" | "user"
+      moderation_status: "active" | "shadow_muted" | "suspended" | "banned"
       moderation_target_type: "post" | "comment" | "profile"
       prediction_outcome: "home_win" | "draw" | "away_win"
       provider_entity_type:
@@ -2333,6 +2356,7 @@ export const Constants = {
         "unknown",
       ],
       follow_target_type: ["team", "player", "competition", "user"],
+      moderation_status: ["active", "shadow_muted", "suspended", "banned"],
       moderation_target_type: ["post", "comment", "profile"],
       prediction_outcome: ["home_win", "draw", "away_win"],
       provider_entity_type: [

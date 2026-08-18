@@ -53,9 +53,12 @@
 -- Two synthetic profiles ("zzrlstest_alice" / "zzrlstest_bob") plus minimal
 -- supporting rows (competition/season/teams/fixture/player/fantasy league)
 -- are inserted under the `zzrlstest_` / "ZZ RLS Test ..." prefix so they are
--- unambiguously test data. Section 0 deletes any leftovers from a prior
--- interrupted run before seeding; Section 7 deletes everything this script
--- created. The script is safe to re-run.
+-- unambiguously test data. Section 1 also seeds five more profiles for
+-- section 6i's moderation_status checks (item 234): an admin, plus one
+-- profile per non-default state (suspended, banned, shadow_muted, and a
+-- suspended-with-already-elapsed-expiry to exercise lazy revert). Section 0
+-- deletes any leftovers from a prior interrupted run before seeding; Section
+-- 7 deletes everything this script created. The script is safe to re-run.
 --
 -- READING THE OUTPUT
 -- -------------------
@@ -76,10 +79,11 @@
 -- each independent (own BEGIN block, own transaction-local id lookups —
 -- nothing carries over between sections or depends on call/section order),
 -- so run: (a) sections 0-1 together as one call to seed, (b) each of
--- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h as its own call — 6a/6b and several of the
--- individual statements inside 6e/6f/6g (each clearly marked "PASS = 42501")
--- are EXPECTED to come back as a tool error, that error is the pass signal —
--- then (c) section 7 as its own final call regardless of how section 6 went,
+-- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h/6i as its own call — 6a/6b, several of the
+-- individual statements inside 6e/6f/6g, and several inside 6i (each clearly
+-- marked "PASS = 42501" or "PASS = 23514") are EXPECTED to come back as a
+-- tool error, that error is the pass signal — then (c) section 7 as its own
+-- final call regardless of how section 6 went,
 -- so cleanup always happens.
 -- =============================================================================
 
@@ -144,6 +148,16 @@ where p.username = 'zzrlstest_bob'
 -- the profiles/fixtures/posts already deleted by section 0's preflight
 -- cleanup and section 7's teardown, so no extra cleanup statements are
 -- needed for these tables specifically.
+--
+-- IMPORTANT: this makes TWO fixtures share home_team_id = Team A (this one,
+-- plus the original scheduled one above). Every `rls_test.fixture_id`
+-- lookup elsewhere in this file that filters only by home_team_id (not also
+-- by status) would hit "more than one row returned by a subquery" the
+-- moment it runs, from here on — sections 2/3/4/6a/6i disambiguate with
+-- `status = 'scheduled'` (matching the original fixture predictions were
+-- actually seeded against, below) for exactly this reason; 6g/6h already
+-- disambiguated with `status = 'finished'`/`'scheduled'` when they were
+-- written. Add the same disambiguation to any new lookup here.
 insert into fixtures (competition_id, season_id, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
 select c.id, s.id, ta.id, tb.id, now() - interval '2 hours', 'finished', 2, 1
 from competitions c
@@ -203,6 +217,27 @@ select id, 100, 'zzrlstest xp' from profiles where username = 'zzrlstest_alice';
 insert into xp_ledger (profile_id, amount, reason)
 select id, 50, 'zzrlstest xp' from profiles where username = 'zzrlstest_bob';
 
+-- RECOMMENDATIONS.md item 234 (migration 0045_moderation_status): five more
+-- synthetic profiles for section 6i below -- an admin (to exercise the
+-- admin-visibility branch of posts_select_public/comments_select_public
+-- without touching alice/bob's role and risking section 2/3's existing
+-- "sees exactly her own row" counts), one per non-default moderation_status,
+-- plus a suspension whose expiry has already elapsed.
+insert into profiles (username, clerk_user_id, display_name, role) values
+  ('zzrlstest_admin', 'zzrlstest_clerk_admin', 'ZZ RLS Test Admin', 'admin'::user_role);
+
+insert into profiles (username, clerk_user_id, display_name, role, moderation_status, moderation_reason, moderation_expires_at, moderation_set_at)
+select 'zzrlstest_carol', 'zzrlstest_clerk_carol', 'ZZ RLS Test Carol', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest spam links', now() + interval '3 days', now()
+union all
+select 'zzrlstest_dave', 'zzrlstest_clerk_dave', 'ZZ RLS Test Dave', 'user'::user_role, 'banned'::moderation_status, 'zzrlstest harassment', null, now()
+union all
+select 'zzrlstest_erin', 'zzrlstest_clerk_erin', 'ZZ RLS Test Erin', 'user'::user_role, 'shadow_muted'::moderation_status, null, null, now()
+union all
+select 'zzrlstest_frank', 'zzrlstest_clerk_frank', 'ZZ RLS Test Frank', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest expired already', now() - interval '1 hour', now() - interval '2 days';
+
+update profiles set moderation_set_by = (select id from profiles where username = 'zzrlstest_admin')
+where username in ('zzrlstest_carol', 'zzrlstest_dave', 'zzrlstest_erin', 'zzrlstest_frank');
+
 
 -- -----------------------------------------------------------------------------
 -- 2. READ assertions as Alice (authenticated, sub = zzrlstest_clerk_alice)
@@ -230,7 +265,7 @@ begin;
 select
   set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
   set_config('rls_test.fixture_id',
-    (select id::text from fixtures where home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
+    (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
     true);
 
 set local role authenticated;
@@ -286,7 +321,7 @@ rollback;
 begin;
 
 select set_config('rls_test.fixture_id',
-  (select id::text from fixtures where home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
+  (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
   true);
 
 set local role authenticated;
@@ -328,7 +363,7 @@ rollback;
 begin;
 
 select set_config('rls_test.fixture_id',
-  (select id::text from fixtures where home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
+  (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
   true);
 
 set local role anon;
@@ -442,7 +477,7 @@ begin;
 select
   set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
   set_config('rls_test.fixture_id',
-    (select id::text from fixtures where home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
+    (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')),
     true);
 
 set local role authenticated;
@@ -820,6 +855,158 @@ select check_name, passed from (
       and (select pick_count from public.get_prediction_consensus(array[current_setting('rls_test.scheduled_fixture_id')::uuid]) where predicted_outcome = 'away_win') = 1
     ) as passed
 ) checks;
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6i. moderation_status enforcement (RECOMMENDATIONS.md item 234, migration
+-- 0045_moderation_status): proves suspended/banned writes are genuinely
+-- rejected by RLS (not merely hidden), shadow_muted content is genuinely
+-- invisible to everyone but its author and admins, a suspended/banned user
+-- cannot self-reinstate through an ordinary profile update, an unrelated
+-- self-edit (bio) by that same suspended user still succeeds (only the
+-- moderation columns are locked, not the whole row), and a suspension whose
+-- moderation_expires_at has already elapsed is lazily treated as active on
+-- next read/write with no cron or manual reinstate step. Live-verified by
+-- hand against project gkyjfihxxdynfwqhhpyn while authoring this section
+-- (each numbered check below, plus every "PASS = 42501/23514" statement).
+-- -----------------------------------------------------------------------------
+
+-- PASS = 42501 (carol is suspended; her own post insert is rejected, not
+-- merely hidden later).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+insert into posts (author_profile_id, body)
+select id, 'zzrlstest carol trying to post while suspended' from profiles where username = 'zzrlstest_carol';
+rollback;
+
+-- PASS = 42501 (carol is suspended; her own prediction insert is rejected).
+begin;
+select set_config('rls_test.fixture_id',
+  (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+insert into predictions (profile_id, fixture_id, predicted_outcome)
+select id, current_setting('rls_test.fixture_id')::uuid, 'home_win' from profiles where username = 'zzrlstest_carol';
+rollback;
+
+-- PASS = 42501 (dave is banned; his own reaction insert on alice's real
+-- public post is rejected).
+begin;
+select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest public post by alice'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_dave","role":"authenticated"}';
+insert into reactions (target_type, target_id, profile_id, reaction_type)
+select 'post', current_setting('rls_test.post_id')::uuid, id, 'like' from profiles where username = 'zzrlstest_dave';
+rollback;
+
+-- PASS = 42501 (carol cannot self-reinstate: profiles_update_own_or_admin's
+-- owner branch now also requires the moderation snapshot to stay unchanged,
+-- so this direct attempt to clear her own suspension is rejected outright —
+-- not just re-overwritten by the next lazy-expiry read).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+update profiles set moderation_status = 'active', moderation_reason = null, moderation_expires_at = null
+where username = 'zzrlstest_carol';
+rollback;
+
+-- Belt and suspenders on the check above: confirm from a neutral,
+-- RLS-bypassing connection that carol's suspension really is still there
+-- (the ROLLBACK already guarantees this; this re-checks independently, same
+-- reasoning as section 5's post-rollback re-checks).
+select 'moderation: carol''s suspension is unchanged after her rejected self-update attempt' as check_name,
+  (select moderation_status::text from profiles where username = 'zzrlstest_carol') = 'suspended' as passed;
+
+-- Contrast case: carol CAN still edit an unrelated field (bio) of her own
+-- row while suspended -- the self-tamper guard locks only the 5 moderation
+-- columns, not the whole row, so an ordinary profile edit isn't silently
+-- broken by being suspended.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+update profiles set bio = 'zzrlstest carol updated bio while suspended' where username = 'zzrlstest_carol';
+select 'moderation: carol can still edit her own bio while suspended' as check_name,
+  (select bio from profiles where username = 'zzrlstest_carol') = 'zzrlstest carol updated bio while suspended' as passed;
+rollback;
+
+-- shadow_muted: erin can post with zero visible friction to herself...
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+insert into posts (author_profile_id, body)
+select id, 'zzrlstest erin shadow muted post' from profiles where username = 'zzrlstest_erin';
+select 'moderation: erin (shadow_muted) can post with zero friction' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
+commit;
+
+-- ...but bob (an ordinary other user) genuinely cannot see it...
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+select 'moderation: bob cannot see erin (shadow_muted)''s post' as check_name,
+  not exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
+rollback;
+
+-- ...nor can a logged-out visitor...
+begin;
+set local role anon;
+select 'moderation: anon cannot see erin (shadow_muted)''s post' as check_name,
+  not exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
+rollback;
+
+-- ...while erin herself and an admin both still can (self and admin are the
+-- two carve-outs posts_select_public/comments_select_public grant).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+select 'moderation: erin can see her own shadow_muted post' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
+rollback;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_admin","role":"authenticated"}';
+select 'moderation: admin can see erin''s shadow_muted post' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
+rollback;
+
+-- Lazy expiry: frank's moderation_expires_at is already in the past. No cron
+-- job exists anywhere in this codebase (by design) to sweep this -- reading
+-- his effective status must resolve to 'active' purely from the comparison
+-- against now() happening at read time, and his write must actually succeed.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"zzrlstest_clerk_frank","role":"authenticated"}';
+
+select check_name, passed from (
+  select 'moderation: frank (expired suspension) effective status reads active' as check_name,
+    private.current_moderation_status() = 'active' as passed
+  union all
+  select 'moderation: frank (expired suspension) is not write-blocked',
+    private.is_moderation_write_blocked() = false
+) checks
+order by check_name;
+
+insert into posts (author_profile_id, body)
+select id, 'zzrlstest frank posting after lazy expiry' from profiles where username = 'zzrlstest_frank';
+
+select 'moderation: frank can actually post after lazy expiry, no cron/manual step involved' as check_name,
+  exists (select 1 from posts where body = 'zzrlstest frank posting after lazy expiry') as passed;
+rollback;
+
+-- Check constraints: suspend/ban without a reason, or a non-suspended row
+-- carrying an expiry, are rejected at the database itself (PASS = 23514),
+-- independent of the admin UI's own required-field validation.
+begin;
+update profiles set moderation_status = 'suspended', moderation_reason = null, moderation_expires_at = now() + interval '1 day'
+where username = 'zzrlstest_bob';
+rollback;
+
+begin;
+update profiles set moderation_status = 'banned', moderation_reason = 'zzrlstest test', moderation_expires_at = now() + interval '1 day'
+where username = 'zzrlstest_bob';
 rollback;
 
 

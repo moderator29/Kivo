@@ -1,8 +1,10 @@
-import { Lock, Info } from "lucide-react";
+import { Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewUserData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
+import { UserModerationControls } from "@/components/admin/user-moderation-controls";
+import { effectiveModerationStatus } from "@/lib/moderation";
 import type { Database } from "@/lib/supabase/types";
 
 type UserRole = Database["public"]["Enums"]["user_role"];
@@ -38,7 +40,7 @@ function RoleCell({ role }: { role: UserRole }) {
 export default async function AdminUsersPage() {
   const profile = await getOrCreateProfile();
 
-  if (!canViewUserData(profile?.role)) {
+  if (!profile || !canViewUserData(profile.role)) {
     return (
       <div className="flex flex-col gap-6">
         <h1 className="text-xl font-semibold text-foreground">Users</h1>
@@ -58,7 +60,7 @@ export default async function AdminUsersPage() {
   const [{ data: users }, { count: totalCount }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, username, display_name, role, created_at")
+      .select("id, username, display_name, role, created_at, moderation_status, moderation_reason, moderation_expires_at")
       .order("created_at", { ascending: false })
       .limit(USER_ROW_LIMIT),
     supabase.from("profiles").select("id", { count: "exact", head: true }),
@@ -77,14 +79,6 @@ export default async function AdminUsersPage() {
         </p>
       </FadeIn>
 
-      {/* Read-only by design, not by omission: there's no ban/suspend/role-change
-          column or RLS policy backing a mutation here yet, so this is a deliberate
-          "not yet implemented" note rather than a silent gap. */}
-      <FadeIn delay={0.05} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-xs text-foreground-subtle">
-        <Info className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-        This table is read-only. Ban, suspend and role-change actions aren&apos;t built yet.
-      </FadeIn>
-
       <FadeIn delay={0.08} className="kivo-glass-brand overflow-x-auto rounded-2xl">
         <table className="w-full text-left text-sm">
           <thead>
@@ -93,6 +87,7 @@ export default async function AdminUsersPage() {
               <th className="px-4 py-3 font-medium">Display name</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Joined</th>
+              <th className="px-4 py-3 font-medium">Moderation</th>
             </tr>
           </thead>
           <tbody>
@@ -106,11 +101,21 @@ export default async function AdminUsersPage() {
                 <td className="px-4 py-3 text-foreground-muted">
                   {new Date(user.created_at).toLocaleDateString()}
                 </td>
+                <td className="px-4 py-3">
+                  <UserModerationControls
+                    targetProfileId={user.id}
+                    targetUsername={user.username}
+                    status={effectiveModerationStatus(user.moderation_status, user.moderation_expires_at)}
+                    reason={user.moderation_reason}
+                    expiresAt={user.moderation_expires_at}
+                    isViewerOwnRow={user.id === profile.id}
+                  />
+                </td>
               </tr>
             ))}
             {(!users || users.length === 0) && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-foreground-muted">
+                <td colSpan={5} className="px-4 py-8 text-center text-foreground-muted">
                   No users yet.
                 </td>
               </tr>
