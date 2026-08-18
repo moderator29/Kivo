@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Flame, Award, History, Trophy } from "lucide-react";
+import { Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -13,6 +13,42 @@ import { buildWeekStrip, getStreakTier, mondayOfWeekUtc } from "@/lib/streak";
 const item = getNavItem("rewards");
 
 export const metadata: Metadata = { title: item.label };
+
+type XpHistoryEntry = { amount: number; reason: string; created_at: string };
+
+/** Groups XP history rows (already newest-first from the query) into
+ * same-day buckets labeled "Today"/"Yesterday"/a short date, using the same
+ * UTC day boundary as the streak section on this page so "Today" here always
+ * means the same calendar day as the week strip's today pill. */
+function groupXpHistoryByDay(
+  entries: XpHistoryEntry[],
+  todayUtc: Date,
+): { label: string; entries: XpHistoryEntry[] }[] {
+  const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
+  const todayIso = toIsoDate(todayUtc);
+  const yesterdayUtc = new Date(todayUtc);
+  yesterdayUtc.setUTCDate(yesterdayUtc.getUTCDate() - 1);
+  const yesterdayIso = toIsoDate(yesterdayUtc);
+
+  const groups: { label: string; entries: XpHistoryEntry[] }[] = [];
+  for (const entry of entries) {
+    const entryDate = new Date(entry.created_at);
+    const entryIso = toIsoDate(entryDate);
+    const label =
+      entryIso === todayIso
+        ? "Today"
+        : entryIso === yesterdayIso
+          ? "Yesterday"
+          : entryDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup.label === label) {
+      currentGroup.entries.push(entry);
+    } else {
+      groups.push({ label, entries: [entry] });
+    }
+  }
+  return groups;
+}
 
 export default async function RewardsPage() {
   const profile = await getOrCreateProfile();
@@ -48,7 +84,7 @@ export default async function RewardsPage() {
       // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
       // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
       supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
-      supabase.from("user_badges").select("badge_id, awarded_at, badge:badges(code, name, description, icon_url)"),
+      supabase.from("user_badges").select("badge_id, awarded_at"),
       supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
       supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
       // Real current/longest daily-activity streak, derived live from this
@@ -62,7 +98,7 @@ export default async function RewardsPage() {
     ]);
 
   const totalXp = xpTotal ?? 0;
-  const earnedBadgeIds = new Set((earnedBadges ?? []).map((b) => b.badge_id));
+  const earnedBadgeDates = new Map((earnedBadges ?? []).map((b) => [b.badge_id, b.awarded_at] as const));
 
   const currentStreak = streak?.current_streak ?? 0;
   const longestStreak = streak?.longest_streak ?? 0;
@@ -71,9 +107,10 @@ export default async function RewardsPage() {
     (weekXp ?? []).map((row) => new Date(row.created_at).toISOString().slice(0, 10)),
   );
   const weekStrip = buildWeekStrip(todayUtc, activeDatesThisWeek);
+  const xpHistoryGroups = xpHistory ? groupXpHistoryByDay(xpHistory, todayUtc) : [];
   const streakMessage =
     currentStreak === 0
-      ? "Submit a prediction, make a transfer, or post to start your streak today."
+      ? "Post in the community, or wait for your next correct prediction to be scored, to start your streak today."
       : currentStreak === 1
         ? "Nice start — come back tomorrow to keep it going."
         : `${currentStreak} days strong. Keep the streak alive.`;
@@ -104,7 +141,7 @@ export default async function RewardsPage() {
 
       <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-3xl p-6">
         <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-          <Flame className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
+          <Zap className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
         </div>
         <div>
           {totalXp > 0 ? (
@@ -129,7 +166,7 @@ export default async function RewardsPage() {
           ) : (
             <span className="text-3xl font-bold tracking-tight text-foreground">0 XP</span>
           )}
-          <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, posts and community activity</p>
+          <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, community posts and correct predictions</p>
         </div>
       </FadeIn>
 
@@ -142,9 +179,9 @@ export default async function RewardsPage() {
         {/* Big pill stat: flame + current streak. Driven entirely by
             get_activity_streak() — a profile with zero qualifying days
             genuinely shows 0, never a placeholder number. */}
-        <div className="kivo-glass-brand flex items-center gap-3 rounded-3xl p-5">
-          <div className="kivo-gradient-victory flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
-            <Flame className="h-5 w-5 text-kivo-white" strokeWidth={1.75} />
+        <div className="kivo-glass flex items-center gap-3 rounded-3xl p-5">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/5">
+            <Flame className="h-5 w-5 text-kivo-cyan" strokeWidth={1.75} />
           </div>
           <div>
             <span className="text-2xl font-bold tracking-tight text-foreground">{currentStreak}</span>
@@ -167,12 +204,10 @@ export default async function RewardsPage() {
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
                   day.isActive
                     ? "kivo-gradient-victory text-kivo-white"
-                    : day.isToday
-                      ? "ring-1 ring-inset ring-kivo-cyan/50 text-foreground"
-                      : day.isFuture
-                        ? "text-foreground-subtle/50"
-                        : "bg-white/5 text-foreground-subtle"
-                }`}
+                    : day.isFuture
+                      ? "bg-white/5 text-foreground-subtle/50"
+                      : "bg-white/5 text-foreground-subtle"
+                } ${day.isToday ? "ring-1 ring-inset ring-kivo-cyan/50" : ""}`}
               >
                 {day.dayNumber}
               </div>
@@ -230,14 +265,13 @@ export default async function RewardsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {allBadges.map((badge, index) => {
-              const earned = earnedBadgeIds.has(badge.id);
+              const earnedAt = earnedBadgeDates.get(badge.id);
+              const earned = earnedAt !== undefined;
               return (
-                <FadeIn key={badge.id} delay={0.12 + staggerDelay(index, 0.03)}>
+                <FadeIn key={badge.id} delay={0.12 + staggerDelay(index, 0.03, allBadges.length)}>
                   <div
                     className={`kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ${
-                      earned
-                        ? "transition ring-1 ring-inset ring-kivo-cyan/25 hover:-translate-y-0.5"
-                        : "opacity-40 grayscale"
+                      earned ? "ring-1 ring-inset ring-kivo-cyan/25" : "opacity-40 grayscale"
                     }`}
                   >
                     {badge.icon_url && (
@@ -251,7 +285,9 @@ export default async function RewardsPage() {
                     )}
                     <span className="text-xs font-semibold text-foreground">{badge.name}</span>
                     <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
-                    {!earned && (
+                    {earned ? (
+                      <span className="text-[10px] font-medium text-kivo-cyan">Earned {timeAgo(earnedAt)}</span>
+                    ) : (
                       <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                         Locked
                       </span>
@@ -275,14 +311,26 @@ export default async function RewardsPage() {
             No XP earned yet. Complete onboarding or post in the community to get started.
           </div>
         ) : (
-          <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-3xl">
-            {xpHistory.map((entry, index) => (
-              <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="text-xs font-medium text-foreground">{entry.reason}</p>
-                  <p className="text-[11px] text-foreground-subtle">{timeAgo(entry.created_at)}</p>
+          <div className="flex flex-col gap-4">
+            {xpHistoryGroups.map((group) => (
+              <div key={group.label} className="flex flex-col gap-1.5">
+                <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                  {group.label}
+                </p>
+                <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-3xl">
+                  {group.entries.map((entry, index) => (
+                    <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div>
+                        <p className="text-xs font-medium text-foreground">{entry.reason}</p>
+                        <p className="text-[11px] text-foreground-subtle">{timeAgo(entry.created_at)}</p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-live">
+                        {entry.amount > 0 ? "+" : ""}
+                        {entry.amount} XP
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <span className="shrink-0 text-xs font-semibold text-live">+{entry.amount} XP</span>
               </div>
             ))}
           </div>
