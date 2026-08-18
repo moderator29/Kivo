@@ -222,6 +222,10 @@ export default async function MatchCentrePage({
     viewerReaction: post.viewerReaction,
     commentCount: post.commentCount,
     isSystem: post.isSystem,
+    // KN-29: fetchPostsPage has always loaded this; the Room mapping used to
+    // drop it on the floor, which is half of why a match-scoped poll had
+    // nowhere to render.
+    poll: post.poll,
   }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
@@ -449,6 +453,16 @@ export default async function MatchCentrePage({
             canSyncDetails={canManageFootballData(profile?.role)}
             syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
             detailsLastSyncedAt={detailsLastSyncedAt}
+            // KN-53: all already fetched above for this page's own header —
+            // passed down so the collapsed-tab Overview can be worth opening
+            // rather than four copies of "nothing synced yet".
+            preMatch={{
+              kickoffAt: fixture.kickoff_at,
+              status: fixture.status,
+              competitionName: fixture.competition?.short_name ?? fixture.competition?.name ?? null,
+              venueName: fixture.venue?.name ?? null,
+              venueCity: fixture.venue?.city ?? null,
+            }}
             viewerFantasyRoster={viewerFantasyRosterForTab}
             events={(events ?? []).map((e) => ({
               id: e.id,

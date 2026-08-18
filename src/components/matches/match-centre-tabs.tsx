@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, type KeyboardEvent } from "react";
+import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
@@ -14,6 +14,8 @@ import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
 import { HeatmapView } from "@/components/matches/heatmap-view";
 import { HeatmapEngine } from "@/lib/football/heatmap-engine";
 import type { PositionalObservation } from "@/lib/football/positional-types";
+import type { FixtureStatus } from "@/lib/football/fixture-status";
+import { LocalDateTime } from "@/components/ui/relative-time";
 
 type MatchEvent = {
   id: string;
@@ -115,17 +117,50 @@ type MatchCentreTabsProps = {
    * lineups/events/stats (entity_type 'lineup') — see getLastSyncedAt() in
    * src/lib/football/last-synced.ts. RECOMMENDATIONS.md item 60. */
   detailsLastSyncedAt: string | null;
+  /** KN-53: everything the Overview tab needs to be worth opening on a fixture
+   * that has no synced detail yet. All of it is already fetched by
+   * matches/[id]/page.tsx for the header it renders above these tabs. */
+  preMatch: {
+    kickoffAt: string;
+    status: FixtureStatus;
+    competitionName: string | null;
+    venueName: string | null;
+    venueCity: string | null;
+  };
 };
 
-const TABS = ["Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"] as const;
-type Tab = (typeof TABS)[number];
+/**
+ * KN-53. Details, Stats, Lineups and Heatmap each rendered a near-identical
+ * "hasn't been synced yet" panel, so on a scheduled fixture — which is *every*
+ * fixture before kickoff — the user paid four taps to learn one fact, and the
+ * tab strip promised four things that were all the same nothing.
+ *
+ * The four data tabs are now only offered when they actually hold data. When
+ * none of them do, they collapse into a single "Overview" tab that says it
+ * once, and spends the space on what KIVO genuinely knows before a match
+ * instead: when it kicks off, where, and which competition it belongs to.
+ *
+ * This is deliberately the zero-schema interim RECOMMENDATIONS.md item 299's
+ * coverage registry will eventually supersede. The distinction it cannot make
+ * is "the provider does not support this for this competition" versus "nobody
+ * has synced it yet" — so the Overview panel says only the second, which is
+ * the one thing that is always true.
+ */
+const ALL_TABS = ["Overview", "Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"] as const;
+type Tab = (typeof ALL_TABS)[number];
+
+/** The tabs that hold provider-synced match detail — the ones that collapse. */
+const DATA_TABS = ["Details", "Stats", "Lineups", "Heatmap"] as const;
 
 function tabSlug(tab: Tab): string {
   return tab.toLowerCase();
 }
 
-function tabFromSlug(slug: string | null): Tab {
-  return TABS.find((tab) => tabSlug(tab) === slug) ?? TABS[0];
+/** Falls back to the *first visible* tab, not to a fixed one: with the data
+ * tabs collapsed, `?tab=stats` names a tab that isn't on screen, and landing
+ * on a tab the strip doesn't show would leave nothing highlighted. */
+function tabFromSlug(slug: string | null, visible: readonly Tab[]): Tab {
+  return visible.find((tab) => tabSlug(tab) === slug) ?? visible[0];
 }
 
 function PlayerNameLink({ playerId, playerName, className }: { playerId: string; playerName: string; className?: string }) {
@@ -141,6 +176,53 @@ function EmptyState({ message }: { message: string }) {
   return (
     <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
       {message}
+    </div>
+  );
+}
+
+/**
+ * KN-53. The one panel that replaces four identical "not synced yet" empty
+ * states.
+ *
+ * Two jobs, in this order. First, be useful: kickoff in the reader's own zone,
+ * the venue, the competition — all real columns already fetched for the header
+ * above these tabs, and all things a fan actually wants before a match. Second,
+ * be honest about the rest in a single sentence, once, instead of four times
+ * behind four taps.
+ *
+ * What it deliberately does not say is *why* the data is missing. KIVO cannot
+ * yet distinguish "this provider doesn't cover lineups for this competition"
+ * from "nobody has synced this fixture" — that is the coverage registry in
+ * RECOMMENDATIONS.md item 299 — so this claims only the part that is always
+ * true.
+ */
+function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] }) {
+  const started = preMatch.status !== "scheduled";
+  const venue = [preMatch.venueName, preMatch.venueCity].filter(Boolean).join(", ");
+
+  const facts: { label: string; value: ReactNode }[] = [
+    { label: "Kick-off", value: <LocalDateTime iso={preMatch.kickoffAt} format="deadline" /> },
+    ...(preMatch.competitionName ? [{ label: "Competition", value: preMatch.competitionName }] : []),
+    ...(venue ? [{ label: "Venue", value: venue }] : []),
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl px-4">
+        {facts.map((fact) => (
+          <div key={fact.label} className="flex items-baseline justify-between gap-3 py-3">
+            <span className="text-xs text-foreground-subtle">{fact.label}</span>
+            <span className="text-right text-sm font-medium text-foreground">{fact.value}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="px-1 text-xs leading-relaxed text-foreground-muted">
+        {started
+          ? "Timeline, stats and lineups for this match haven't been synced yet. They'll appear here as their own tabs the moment they land."
+          : "Timeline, stats and lineups appear here as their own tabs once this fixture has been synced — usually around kick-off."}{" "}
+        The Room is open now.
+      </p>
     </div>
   );
 }
@@ -506,7 +588,7 @@ function MatchCentreTabsFallback() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-1 overflow-x-auto border-b border-hairline">
-        {TABS.map((tab) => (
+        {ALL_TABS.filter((tab) => tab !== "Overview").map((tab) => (
           <div
             key={tab}
             className="relative min-w-fit flex-1 whitespace-nowrap px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted"
@@ -536,10 +618,31 @@ function MatchCentreTabsInner({
   canSyncDetails,
   syncDetailsAction,
   detailsLastSyncedAt,
+  preMatch,
 }: MatchCentreTabsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const active = tabFromSlug(searchParams.get("tab"));
+
+  // KN-53: a data tab earns its place by holding data. The Heatmap has no
+  // positional source wired up at all yet (see HeatmapTab), so today it is
+  // always in the collapsed group — which is more honest than a permanently
+  // empty tab that implies the feature is a sync away.
+  const dataTabAvailability: Record<(typeof DATA_TABS)[number], boolean> = {
+    Details: events.length > 0,
+    Stats: stats.length > 0,
+    Lineups: lineups.length > 0,
+    Heatmap: false,
+  };
+  const availableDataTabs = DATA_TABS.filter((tab) => dataTabAvailability[tab]);
+  const collapsed = availableDataTabs.length === 0;
+
+  const visibleTabs: Tab[] = [
+    ...(collapsed ? (["Overview"] as const) : availableDataTabs),
+    "Standings",
+    "Room",
+  ];
+
+  const active = tabFromSlug(searchParams.get("tab"), visibleTabs);
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
   // Shallow URL update (no server round-trip re-fetching this page's match
@@ -548,7 +651,7 @@ function MatchCentreTabsInner({
   // ("Shallow routing on the client").
   function setActive(tab: Tab) {
     const params = new URLSearchParams(searchParams.toString());
-    if (tab === TABS[0]) {
+    if (tab === visibleTabs[0]) {
       params.delete("tab");
     } else {
       params.set("tab", tabSlug(tab));
@@ -558,15 +661,15 @@ function MatchCentreTabsInner({
   }
 
   function handleTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    const currentIndex = TABS.indexOf(active);
+    const currentIndex = visibleTabs.indexOf(active);
     let nextIndex: number | null = null;
-    if (e.key === "ArrowRight") nextIndex = (currentIndex + 1) % TABS.length;
-    else if (e.key === "ArrowLeft") nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+    if (e.key === "ArrowRight") nextIndex = (currentIndex + 1) % visibleTabs.length;
+    else if (e.key === "ArrowLeft") nextIndex = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
     else if (e.key === "Home") nextIndex = 0;
-    else if (e.key === "End") nextIndex = TABS.length - 1;
+    else if (e.key === "End") nextIndex = visibleTabs.length - 1;
     if (nextIndex === null) return;
     e.preventDefault();
-    const nextTab = TABS[nextIndex];
+    const nextTab = visibleTabs[nextIndex];
     setActive(nextTab);
     tabRefs.current[nextTab]?.focus();
   }
@@ -579,7 +682,7 @@ function MatchCentreTabsInner({
         onKeyDown={handleTabKeyDown}
         className="flex gap-1 overflow-x-auto border-b border-hairline"
       >
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab}
             ref={(el) => {
@@ -615,7 +718,7 @@ function MatchCentreTabsInner({
           pull fresher stats), not just an entirely-unsynced one. Standings and
           Room aren't backed by this action, so the bar only shows for the
           other three. */}
-      {(active === "Details" || active === "Stats" || active === "Lineups") && (
+      {(active === "Overview" || active === "Details" || active === "Stats" || active === "Lineups") && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1">
           <LastSyncedNote timestamp={detailsLastSyncedAt} label="Match details synced" />
           {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
@@ -634,6 +737,7 @@ function MatchCentreTabsInner({
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
+          {active === "Overview" && <OverviewTab preMatch={preMatch} />}
           {active === "Details" && <DetailsTab events={events} />}
           {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
           {active === "Lineups" && (
