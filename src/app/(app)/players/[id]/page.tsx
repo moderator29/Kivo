@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, LineChart } from "lucide-react";
+import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, LineChart, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
-import { FollowButton } from "@/components/ui/follow-button";
+import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
@@ -21,6 +21,14 @@ import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { calculateAge, formatDate } from "@/lib/format";
+import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
+import { DEFAULT_FANTASY_PRICE, formatFantasyPrice } from "@/app/(app)/fantasy/fantasy-rules";
+
+// RECOMMENDATIONS.md item 296: same minimum-sample suppression convention as
+// this document's other real-but-thin aggregates (items 168/170/250) — a
+// gameweek with only a handful of total fantasy picks league-wide shouldn't
+// render a precise-looking ownership percentage.
+const MIN_FANTASY_OWNERSHIP_SAMPLE = 10;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -43,7 +51,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, isFollowing, isSaved, transfersLastSyncedAt] = await Promise.all([
+  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: transfers }, { data: followRow }, isSaved, transfersLastSyncedAt] = await Promise.all([
     supabase
       .from("players")
       .select(
@@ -72,15 +80,18 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       )
       .eq("player_id", id)
       .order("transfer_date", { ascending: false }),
+    // RECOMMENDATIONS.md item 287: selecting `muted` (not a head-count) so
+    // the same row also carries this viewer's per-player mute state for
+    // FollowWithMute — a plain existence check would lose it.
     profile
       ? supabase
           .from("follows")
-          .select("id", { count: "exact", head: true })
+          .select("muted")
           .eq("follower_profile_id", profile.id)
           .eq("followed_type", "player")
           .eq("followed_id", id)
-          .then(({ count }) => (count ?? 0) > 0)
-      : Promise.resolve(false),
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     // RECOMMENDATIONS.md item 173: player watchlist — real save state,
     // saves_select_own already scopes this to the caller's own row.
     profile
@@ -98,6 +109,51 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   ]);
 
   if (!player) notFound();
+
+  // RECOMMENDATIONS.md item 296: real fantasy price + ownership, only once a
+  // current season is resolvable for this player's current club — same
+  // team -> standings -> seasons(is_current) pattern teams/[id]/page.tsx
+  // already uses to find "the" current season for a team (a player has no
+  // season/standings row of its own to read this off directly).
+  let fantasySeasonId: string | null = null;
+  if (player.current_team_id) {
+    const { data: standingsRows } = await supabase
+      .from("standings")
+      .select("season:seasons(id, is_current)")
+      .eq("team_id", player.current_team_id);
+    fantasySeasonId = (standingsRows ?? []).find((s) => s.season?.is_current)?.season?.id ?? null;
+  }
+
+  let fantasyPrice: number | null = null;
+  let fantasyOwnership: { playerCount: number; totalCount: number } | null = null;
+  if (fantasySeasonId) {
+    // Lazily backfills the flat default if this player has never had a
+    // fantasy_player_prices row for this season (same convention every
+    // other real reader of this table already follows), then reads whatever
+    // its real current price is — dynamic since RECOMMENDATIONS.md item 251
+    // (see fantasy-pricing.ts), the flat default otherwise.
+    await ensureFantasyPlayerPrices(fantasySeasonId, [player.id]);
+    const [priceMap, { data: ownershipRows }] = await Promise.all([
+      getFantasyPriceMap(fantasySeasonId, [player.id]),
+      // Narrow SECURITY DEFINER RPC (migration 0051) over fantasy_rosters —
+      // fantasy_rosters_all_own is owner-only, so a plain cross-user query
+      // can't compute this, same reasoning get_prediction_consensus already
+      // established for a different table.
+      supabase.rpc("get_fantasy_ownership", { p_player_id: player.id, p_season_id: fantasySeasonId }),
+    ]);
+    fantasyPrice = priceMap.get(player.id) ?? DEFAULT_FANTASY_PRICE;
+    const ownershipRow = ownershipRows?.[0];
+    if (ownershipRow) {
+      fantasyOwnership = { playerCount: ownershipRow.player_count, totalCount: ownershipRow.total_count };
+    }
+  }
+  const hasMeaningfulOwnership = fantasyOwnership !== null && fantasyOwnership.totalCount >= MIN_FANTASY_OWNERSHIP_SAMPLE;
+  const ownershipPct = hasMeaningfulOwnership
+    ? Math.round((fantasyOwnership!.playerCount / fantasyOwnership!.totalCount) * 100)
+    : null;
+
+  const isFollowing = followRow !== null;
+  const isMuted = followRow?.muted ?? false;
 
   const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? []);
   const hasMatchData = stats.appearances > 0;
@@ -152,7 +208,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           </FadeIn>
           <FadeIn delay={0.1} className="flex items-center gap-2">
             <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={!!profile} />
-            <FollowButton targetType="player" targetId={player.id} initialFollowing={isFollowing} signedIn={!!profile} />
+            <FollowWithMute
+              targetType="player"
+              targetId={player.id}
+              initialFollowing={isFollowing}
+              initialMuted={isMuted}
+              signedIn={!!profile}
+            />
           </FadeIn>
         </div>
 
@@ -208,6 +270,46 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           </div>
         )}
       </FadeIn>
+
+      {/* RECOMMENDATIONS.md item 296: only rendered once a current season is
+          resolvable for this player's club — a player with no synced
+          current club (or a club not in any currently-running season) has
+          nothing real to price against. */}
+      {fantasySeasonId && fantasyPrice !== null && (
+        <FadeIn delay={0.22} className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Fantasy
+          </h2>
+          <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-2xl font-semibold tabular-nums text-foreground">{formatFantasyPrice(fantasyPrice)}</p>
+                <p className="text-[11px] text-foreground-subtle">Current KIVO fantasy price</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-semibold tabular-nums text-foreground">
+                  {ownershipPct !== null ? `${ownershipPct}%` : "-"}
+                </p>
+                <p className="text-[11px] text-foreground-subtle">
+                  {ownershipPct !== null ? "Rostered this gameweek" : "Not enough squads yet"}
+                </p>
+              </div>
+            </div>
+            <p className="border-t border-white/5 pt-3 text-xs text-foreground-subtle">
+              KIVO&apos;s own internal fantasy-game currency — not a real transfer-market value — moves in small,
+              capped steps based on this player&apos;s real recent match performance relative to their position group.
+            </p>
+            <Link
+              href="/fantasy"
+              className="flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+            >
+              <Trophy className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              Build your fantasy squad
+            </Link>
+          </div>
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">

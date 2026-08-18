@@ -2,6 +2,17 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { EVENT_LABEL, isGoalEventType, isRedCardEventType } from "./event-labels";
+import { shouldNotify, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
+
+// RECOMMENDATIONS.md item 285: every notification type this file produces
+// (match_kickoff, match_result, match_goal, match_red_card, player_event) is
+// still just "something happened in a match" from the settings page's own
+// point of view — match_alerts_enabled is the one column Settings exposes
+// for all of it ("Kickoff, goals and full-time for teams you follow", see
+// notification-preferences-panel.tsx), so every insertNotifications call
+// below gates on this same column rather than inventing a finer-grained one
+// nothing in Settings could actually control yet.
+const MATCH_NOTIFICATION_COLUMN = "match_alerts_enabled";
 
 /**
  * Real in-app notification producers, wired directly into the sync code
@@ -32,7 +43,17 @@ type DbFixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
 async function teamAudience(supabase: ServiceClient, teamId: string): Promise<Set<string>> {
   const [{ data: favourites }, { data: followers }] = await Promise.all([
     supabase.from("profiles").select("id").eq("favourite_team_id", teamId),
-    supabase.from("follows").select("follower_profile_id").eq("followed_type", "team").eq("followed_id", teamId),
+    // RECOMMENDATIONS.md item 287: muted=false excludes a follow the user has
+    // explicitly silenced for this one team via the mute toggle next to the
+    // follow star (teams/[id]/page.tsx) — profiles.favourite_team_id has no
+    // equivalent mute column, so that half of the audience is unaffected (a
+    // favourite team has no per-entity mute today).
+    supabase
+      .from("follows")
+      .select("follower_profile_id")
+      .eq("followed_type", "team")
+      .eq("followed_id", teamId)
+      .eq("muted", false),
   ]);
   const ids = new Set<string>();
   for (const row of favourites ?? []) ids.add(row.id);
@@ -45,17 +66,32 @@ async function playerAudience(supabase: ServiceClient, playerId: string): Promis
     .from("follows")
     .select("follower_profile_id")
     .eq("followed_type", "player")
-    .eq("followed_id", playerId);
+    .eq("followed_id", playerId)
+    .eq("muted", false);
   return new Set((followers ?? []).map((row) => row.follower_profile_id));
 }
 
+/**
+ * RECOMMENDATIONS.md item 285: the shared write path every producer below
+ * funnels through, so the shouldNotify gate only has to be wired in once.
+ * Checked per audience member — this codebase's real audiences are follower
+ * counts, not mass-marketing lists, so a per-id check (not a batched query)
+ * matches the same simplicity-over-scale trade-off already made throughout
+ * this file (teamAudience/playerAudience's own plain two-query shape).
+ */
 async function insertNotifications(
   supabase: ServiceClient,
   profileIds: Iterable<string>,
+  column: NotificationPreferenceColumn,
   build: (profileId: string) => NotificationInsert,
 ): Promise<void> {
-  const rows = Array.from(profileIds, build);
+  const ids = Array.from(new Set(profileIds));
+  if (ids.length === 0) return;
+
+  const allowed = await Promise.all(ids.map(async (id) => ((await shouldNotify(supabase, id, column)) ? id : null)));
+  const rows = allowed.filter((id): id is string => id !== null).map(build);
   if (rows.length === 0) return;
+
   const { error } = await supabase.from("notifications").insert(rows);
   if (error) console.error("match-notifications: failed to insert notification batch", error);
 }
@@ -110,7 +146,7 @@ export async function notifyFixtureStatusChange(
   const finalType = type;
   const finalSummary = summary;
 
-  await insertNotifications(supabase, audience, (profileId) => ({
+  await insertNotifications(supabase, audience, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
     profile_id: profileId,
     type: finalType,
     payload: { fixture_id: input.fixtureId, summary: finalSummary },
@@ -156,7 +192,7 @@ export async function notifyFixtureEvent(
 
     const teamFollowers = await teamAudience(supabase, input.teamId);
     for (const id of teamFollowers) notified.add(id);
-    await insertNotifications(supabase, teamFollowers, (profileId) => ({
+    await insertNotifications(supabase, teamFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
       profile_id: profileId,
       type,
       payload: { fixture_id: input.fixtureId, summary, player_id: input.playerId },
@@ -166,7 +202,7 @@ export async function notifyFixtureEvent(
       const playerFollowers = await playerAudience(supabase, input.playerId);
       const newOnes = [...playerFollowers].filter((id) => !notified.has(id));
       for (const id of newOnes) notified.add(id);
-      await insertNotifications(supabase, newOnes, (profileId) => ({
+      await insertNotifications(supabase, newOnes, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
         profile_id: profileId,
         type,
         payload: { fixture_id: input.fixtureId, summary, player_id: input.playerId },
@@ -178,7 +214,7 @@ export async function notifyFixtureEvent(
   if (!input.playerId) return;
   const playerFollowers = await playerAudience(supabase, input.playerId);
   const summary = `${input.playerName ?? "A player you follow"} — ${EVENT_LABEL[input.eventType]} (${input.minute}') in ${input.teamName} vs ${input.opponentName}`;
-  await insertNotifications(supabase, playerFollowers, (profileId) => ({
+  await insertNotifications(supabase, playerFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) => ({
     profile_id: profileId,
     type: "player_event",
     payload: { fixture_id: input.fixtureId, summary, player_id: input.playerId },

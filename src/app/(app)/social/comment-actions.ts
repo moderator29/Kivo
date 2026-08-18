@@ -7,6 +7,7 @@ import { awardBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { shouldNotify } from "@/lib/notification-preferences";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -130,6 +131,10 @@ async function notifyComment(
 
   const actorPrefix = type === "post_comment" ? "commenter" : "replier";
   const serviceClient = createServiceRoleSupabaseClient();
+
+  // RECOMMENDATIONS.md item 285: gate before writing, not after.
+  if (!(await shouldNotify(serviceClient, recipientId, "social_alerts_enabled"))) return;
+
   const { error } = await serviceClient.from("notifications").insert({
     profile_id: recipientId,
     type,

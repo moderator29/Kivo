@@ -1,0 +1,172 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
+import { Star, Bell, BellOff, Check } from "lucide-react";
+import { toggleFollow, toggleFollowMute } from "@/app/(app)/follow-actions";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
+
+type MutableFollowTargetType = "team" | "player";
+
+type FollowWithMuteProps = {
+  targetType: MutableFollowTargetType;
+  targetId: string;
+  initialFollowing: boolean;
+  initialMuted: boolean;
+  /** Whether the viewer is signed in. Guests still see the button (guest-CTA
+   * pattern, matching FollowButton/SaveButton) and are routed to sign-up on
+   * tap instead of the server action firing. */
+  signedIn: boolean;
+  size?: "sm" | "md";
+};
+
+/**
+ * RECOMMENDATIONS.md item 287: team/player pages need both the existing
+ * follow star (FollowButton) and a mute toggle that only makes sense once
+ * following — the two need to share live "am I following" state (mute must
+ * disappear the instant you unfollow, and never outlive the follow row it
+ * mutes), so this is a small dedicated composite for team/player specifically
+ * rather than complicating FollowButton's own shape for every target type.
+ * Competition and user follows keep plain FollowButton unchanged — there's no
+ * competition/user audience builder in match-notifications.ts for a mute to
+ * exclude rows from, so a mute control there would control nothing real.
+ *
+ * Duplicates FollowButton's own optimistic-update + flash-confirmation shape
+ * rather than generalizing it — the same trade-off SaveButton already makes
+ * (see its own comment) for a second, differently-shaped toggle button.
+ */
+export function FollowWithMute({
+  targetType,
+  targetId,
+  initialFollowing,
+  initialMuted,
+  signedIn,
+  size = "md",
+}: FollowWithMuteProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [following, setFollowing] = useState(initialFollowing);
+  const [muted, setMuted] = useState(initialMuted);
+  const [followPending, startFollowTransition] = useTransition();
+  const [mutePending, startMuteTransition] = useTransition();
+  const [flash, setFlash] = useState<"followed" | "unfollowed" | "muted" | "unmuted" | null>(null);
+
+  useEffect(() => {
+    if (!flash) return;
+    const timeout = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(timeout);
+  }, [flash]);
+
+  function handleFollowClick() {
+    if (!signedIn) {
+      router.push(`/sign-up?redirect_url=${encodeURIComponent(pathname)}`);
+      return;
+    }
+    if (followPending) return;
+    const previous = following;
+    setFollowing(!previous);
+    // Unfollowing deletes the follows row outright — its mute flag goes with
+    // it, so local state resets to unmuted rather than showing a mute toggle
+    // that would silently no-op if tapped (also hidden below while !following).
+    if (previous) setMuted(false);
+    startFollowTransition(async () => {
+      const result = await toggleFollow(targetType, targetId, previous);
+      if (result.error) {
+        setFollowing(previous);
+      } else {
+        setFollowing(result.following);
+        setFlash(result.following ? "followed" : "unfollowed");
+      }
+    });
+  }
+
+  function handleMuteClick() {
+    if (!signedIn || !following || mutePending) return;
+    const previous = muted;
+    setMuted(!previous);
+    startMuteTransition(async () => {
+      const result = await toggleFollowMute(targetType, targetId, previous);
+      if (result.error) {
+        setMuted(previous);
+      } else {
+        setMuted(result.muted);
+        setFlash(result.muted ? "muted" : "unmuted");
+      }
+    });
+  }
+
+  const dimension = size === "sm" ? "h-8 w-8" : "h-10 w-10";
+  const iconSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+
+  return (
+    <span className="relative flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        disabled={followPending}
+        aria-busy={followPending}
+        onClick={handleFollowClick}
+        aria-pressed={following}
+        aria-label={following ? "Unfollow" : "Follow"}
+        title={!signedIn ? GUEST_ACTION_TITLE : undefined}
+        className={`relative flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-60 ${dimension} ${
+          following ? "border-achievement/40 bg-achievement/10" : "border-white/10 hover:bg-white/5"
+        }`}
+      >
+        <Star
+          className={`${iconSize} transition ${following ? "fill-achievement text-achievement" : "text-foreground-subtle"}`}
+          strokeWidth={1.75}
+        />
+        {/* RECOMMENDATIONS item 235: pinned to the circle's corner rather than
+            inline — there's no room for an inline glyph next to a single icon
+            with no label. */}
+        <span className="absolute -top-0.5 -right-0.5">
+          <GuestLockHint
+            show={!signedIn}
+            className="h-3 w-3 rounded-full bg-surface text-foreground-subtle ring-1 ring-white/10"
+          />
+        </span>
+      </button>
+
+      {following && (
+        <button
+          type="button"
+          disabled={mutePending}
+          aria-busy={mutePending}
+          onClick={handleMuteClick}
+          aria-pressed={muted}
+          aria-label={muted ? "Unmute notifications" : "Mute notifications"}
+          title={muted ? "Notifications muted" : "Mute notifications"}
+          className={`flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-60 ${dimension} ${
+            muted ? "border-white/15 bg-white/[0.06]" : "border-white/10 hover:bg-white/5"
+          }`}
+        >
+          {muted ? (
+            <BellOff className={`${iconSize} text-foreground-subtle`} strokeWidth={1.75} />
+          ) : (
+            <Bell className={`${iconSize} text-foreground-muted`} strokeWidth={1.75} />
+          )}
+        </button>
+      )}
+
+      <AnimatePresence>
+        {flash && (
+          <motion.span
+            role="status"
+            initial={{ opacity: 0, y: 4, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.9 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
+          >
+            <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
+            {flash === "followed" && "Following"}
+            {flash === "unfollowed" && "Unfollowed"}
+            {flash === "muted" && "Muted"}
+            {flash === "unmuted" && "Unmuted"}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
+  );
+}

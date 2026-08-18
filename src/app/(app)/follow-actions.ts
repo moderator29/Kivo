@@ -5,6 +5,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
+import { shouldNotify } from "@/lib/notification-preferences";
 
 // RECOMMENDATIONS item 175: "user" was already in the follow_target_type
 // enum (0001) and follows_no_self_follow already guards it — nothing
@@ -39,6 +40,10 @@ const TARGET_DETAIL_PATH: Partial<Record<FollowTargetType, string>> = {
  */
 async function notifyNewFollower(followedProfileId: string, follower: { username: string; display_name: string | null }) {
   const serviceClient = createServiceRoleSupabaseClient();
+
+  // RECOMMENDATIONS.md item 285: gate before writing, not after.
+  if (!(await shouldNotify(serviceClient, followedProfileId, "social_alerts_enabled"))) return;
+
   const { error } = await serviceClient.from("notifications").insert({
     profile_id: followedProfileId,
     type: "new_follower",
@@ -107,4 +112,53 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
   revalidatePath("/profile");
   revalidatePath("/profile/following");
   return { error: null, following: !currentlyFollowing };
+}
+
+/**
+ * RECOMMENDATIONS.md item 287: per-team/per-player mute, modeled on `follows`
+ * itself rather than `notification_preferences` — see the migration's own
+ * comment for why the latter can't hold this (a flat one-row-per-profile
+ * table with no per-entity dimension). Only "team"/"player" carry a mute
+ * toggle in the UI (the follow star's new sibling on teams/[id]/page.tsx and
+ * players/[id]/page.tsx) because those are the only two audiences
+ * match-notifications.ts's teamAudience()/playerAudience() actually build —
+ * there's no competition or user audience builder for a mute to exclude rows
+ * from. Only meaningful once item 285 wires notification_preferences into
+ * the producers: muting one followed team/player silences exactly the same
+ * match notifications item 285 gates, on top of (not instead of) the global
+ * match_alerts_enabled toggle.
+ */
+export async function toggleFollowMute(targetType: "team" | "player", targetId: string, currentlyMuted: boolean) {
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in to mute.", muted: currentlyMuted };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "toggle_follow_mute", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error, muted: currentlyMuted };
+
+  const supabase = createServerSupabaseClient();
+  // Update, not delete+insert (unlike toggleFollow above) — muting must never
+  // disturb the follow row itself, only flip its one new column in place.
+  // .select().maybeSingle() doubles as the "were they actually following
+  // this?" check: zero rows matched the .eq()s below updates nothing and
+  // returns null, rather than erroring.
+  const { data, error } = await supabase
+    .from("follows")
+    .update({ muted: !currentlyMuted })
+    .eq("follower_profile_id", profile.id)
+    .eq("followed_type", targetType)
+    .eq("followed_id", targetId)
+    .select("muted")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to toggle follow mute", error);
+    return { error: "Couldn't update. Try again.", muted: currentlyMuted };
+  }
+  if (!data) {
+    return { error: "Follow this to mute its notifications.", muted: currentlyMuted };
+  }
+
+  const detailPath = TARGET_DETAIL_PATH[targetType];
+  if (detailPath) revalidatePath(`${detailPath}/${targetId}`);
+  return { error: null, muted: data.muted };
 }

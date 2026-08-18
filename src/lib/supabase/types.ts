@@ -810,6 +810,7 @@ export type Database = {
           followed_type: Database["public"]["Enums"]["follow_target_type"]
           follower_profile_id: string
           id: string
+          muted: boolean
         }
         Insert: {
           created_at?: string
@@ -817,6 +818,7 @@ export type Database = {
           followed_type: Database["public"]["Enums"]["follow_target_type"]
           follower_profile_id: string
           id?: string
+          muted?: boolean
         }
         Update: {
           created_at?: string
@@ -824,6 +826,7 @@ export type Database = {
           followed_type?: Database["public"]["Enums"]["follow_target_type"]
           follower_profile_id?: string
           id?: string
+          muted?: boolean
         }
         Relationships: [
           {
@@ -1353,6 +1356,7 @@ export type Database = {
           moderation_status: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed: boolean
           role: Database["public"]["Enums"]["user_role"]
+          show_activity_publicly: boolean
           updated_at: string
           username: string
         }
@@ -1376,6 +1380,7 @@ export type Database = {
           moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
+          show_activity_publicly?: boolean
           updated_at?: string
           username: string
         }
@@ -1399,6 +1404,7 @@ export type Database = {
           moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
+          show_activity_publicly?: boolean
           updated_at?: string
           username?: string
         }
@@ -1987,6 +1993,13 @@ export type Database = {
           total_points: number
         }[]
       }
+      get_fantasy_ownership: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: {
+          player_count: number
+          total_count: number
+        }[]
+      }
       get_fantasy_team_league: {
         Args: { p_team_id: string }
         Returns: {
@@ -2030,6 +2043,13 @@ export type Database = {
           username: string
         }[]
       }
+      get_my_followers: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          follower_profile_id: string
+        }[]
+      }
       get_public_profile_by_username: {
         Args: { p_username: string }
         Returns: {
@@ -2038,6 +2058,8 @@ export type Database = {
           avatar_uploaded_url: string
           avatar_url: string
           background_id: string
+          bio: string
+          country: string
           display_name: string
           id: string
           username: string
@@ -2047,6 +2069,7 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: {
           badges: Json
+          is_public: boolean
           total_xp: number
         }[]
       }

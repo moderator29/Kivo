@@ -18,7 +18,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
-import { FollowButton } from "@/components/ui/follow-button";
+import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
@@ -154,7 +154,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     { data: managers },
     { data: upcoming },
     { data: recent },
-    isFollowing,
+    { data: followRow },
     isSaved,
     squadLastSyncedAt,
     { data: goalEvents },
@@ -212,15 +212,18 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       .eq("status", "finished")
       .order("kickoff_at", { ascending: false })
       .limit(10),
+    // RECOMMENDATIONS.md item 287: selecting `muted` (not a head-count) so
+    // the same row also carries this viewer's per-team mute state for
+    // FollowWithMute — a plain existence check would lose it.
     profile
       ? supabase
           .from("follows")
-          .select("id", { count: "exact", head: true })
+          .select("muted")
           .eq("follower_profile_id", profile.id)
           .eq("followed_type", "team")
           .eq("followed_id", id)
-          .then(({ count }) => (count ?? 0) > 0)
-      : Promise.resolve(false),
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     // RECOMMENDATIONS.md item 173: team watchlist — real save state,
     // saves_select_own already scopes this to the caller's own row.
     profile
@@ -278,6 +281,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   ]);
 
   if (!team) notFound();
+
+  const isFollowing = followRow !== null;
+  const isMuted = followRow?.muted ?? false;
 
   const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
   const manager = managers?.[0] ?? null;
@@ -375,7 +381,13 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </FadeIn>
           <FadeIn delay={0.1} className="flex items-center gap-2">
             <SaveButton targetType="team" targetId={team.id} initialSaved={isSaved} signedIn={!!profile} />
-            <FollowButton targetType="team" targetId={team.id} initialFollowing={isFollowing} signedIn={!!profile} />
+            <FollowWithMute
+              targetType="team"
+              targetId={team.id}
+              initialFollowing={isFollowing}
+              initialMuted={isMuted}
+              signedIn={!!profile}
+            />
           </FadeIn>
         </div>
         <FadeIn delay={0.15}>
