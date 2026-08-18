@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, LifeBuoy } from "lucide-react";
 import kivoLogo from "../../public/brand/kivo-logo-transparent.webp";
 import { ErrorReference } from "@/components/ui/error-reference";
 
@@ -60,6 +60,17 @@ export default function GlobalError({
             Back to Home
           </Link>
         </div>
+
+        {/* KN-55: same route to a person as the (app) boundary offers. The
+            reference above is what makes a report actionable, so the two
+            belong next to each other. */}
+        <Link
+          href="/support?topic=bug"
+          className="flex items-center gap-1.5 text-xs font-medium text-foreground-subtle transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <LifeBuoy className="h-3.5 w-3.5" strokeWidth={2} />
+          Tell us what happened
+        </Link>
       </div>
     </div>
   );
