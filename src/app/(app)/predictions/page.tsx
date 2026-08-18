@@ -10,6 +10,12 @@ import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/pred
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
+import { PredictionLeaguesPanel } from "@/components/predictions/prediction-leagues-panel";
+import {
+  getMyPredictionLeagues,
+  getPredictionLeagueStandings,
+  type PredictionLeagueStanding,
+} from "@/lib/prediction-leagues";
 
 const item = getNavItem("predictions");
 
@@ -17,6 +23,15 @@ export const metadata: Metadata = { title: item.label };
 
 export default async function PredictionsPage() {
   const profile = await getOrCreateProfile();
+
+  // KN-104. Fetched here rather than inside the panel so the standings arrive
+  // with the first paint — a league table that pops in after the page has
+  // settled reads as a loading bug on a surface whose whole point is a table.
+  const myLeagues = profile ? await getMyPredictionLeagues(profile.id) : [];
+  const standingsByLeague: Record<string, PredictionLeagueStanding[]> = {};
+  for (const league of myLeagues) {
+    standingsByLeague[league.id] = await getPredictionLeagueStandings(league.id);
+  }
   const supabase = createServerSupabaseClient();
 
   const { data: fixtures } = await supabase
@@ -125,6 +140,16 @@ export default async function PredictionsPage() {
       <FadeIn delay={0.35}>
         <PredictionsLeaderboard entries={leaderboardEntries} viewerProfileId={profile?.id ?? null} />
       </FadeIn>
+
+      {/* KIVO_NEXT_GEN KN-104. The global leaderboard answers "how am I doing
+          against everyone"; a prediction league answers "how am I doing against
+          the six people I actually argue with", which is the one people come
+          back for. Signed-in only — there is no league to belong to otherwise. */}
+      {profile && (
+        <FadeIn delay={0.4}>
+          <PredictionLeaguesPanel leagues={myLeagues} standingsByLeague={standingsByLeague} />
+        </FadeIn>
+      )}
     </div>
   );
 }

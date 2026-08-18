@@ -1365,6 +1365,80 @@ export type Database = {
           },
         ]
       }
+      prediction_league_members: {
+        Row: {
+          id: string
+          joined_at: string
+          league_id: string
+          profile_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          league_id: string
+          profile_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          league_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_league_members_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prediction_league_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prediction_leagues: {
+        Row: {
+          created_at: string
+          creator_profile_id: string
+          id: string
+          invite_code: string | null
+          max_members: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_profile_id: string
+          id?: string
+          invite_code?: string | null
+          max_members?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_profile_id?: string
+          id?: string
+          invite_code?: string | null
+          max_members?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_leagues_creator_profile_id_fkey"
+            columns: ["creator_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       predictions: {
         Row: {
           created_at: string
@@ -2410,6 +2484,18 @@ export type Database = {
           predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
         }[]
       }
+      get_prediction_league_leaderboard: {
+        Args: { p_league_id: string }
+        Returns: {
+          correct: number
+          display_name: string
+          is_you: boolean
+          profile_id: string
+          settled: number
+          total_points: number
+          username: string
+        }[]
+      }
       get_predictions_leaderboard: {
         Args: { p_limit?: number }
         Returns: {
@@ -2592,6 +2678,14 @@ export type Database = {
           max_teams: number
           name: string
           season_id: string
+        }[]
+      }
+      redeem_prediction_invite_code: {
+        Args: { p_invite_code: string }
+        Returns: {
+          error_message: string
+          id: string
+          name: string
         }[]
       }
       release_sync_lock: {
