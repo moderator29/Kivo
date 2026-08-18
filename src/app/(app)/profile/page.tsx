@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark, Pencil } from "lucide-react";
+import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark, Pencil, MapPin } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { UsernameEditor } from "@/components/profile/username-editor";
@@ -8,6 +8,7 @@ import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoProfileBackground } from "@/components/profile/kivo-profile-background";
 import { BackgroundPicker } from "@/components/profile/background-picker";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { getCountryName } from "@/lib/countries";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 
@@ -57,8 +58,8 @@ export default async function ProfilePage() {
     supabase.from("user_badges").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
     supabase.from("predictions").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
     // points_awarded is only set by the admin scoring pass — same "real
-    // columns only" rule /predictions/mine's resultInfo() follows, not a
-    // guessed outcome from the fixture score.
+    // columns only" rule predictionResultInfo() (src/lib/predictions.ts)
+    // follows, not a guessed outcome from the fixture score.
     supabase
       .from("predictions")
       .select("id", { count: "exact", head: true })
@@ -96,6 +97,18 @@ export default async function ProfilePage() {
           </Link>
         </FadeIn>
       </KivoProfileBackground>
+
+      {(profile.bio || profile.country) && (
+        <FadeIn delay={0.02} className="kivo-glass flex flex-col gap-2 rounded-3xl p-6">
+          {profile.bio && <p className="whitespace-pre-wrap text-sm text-foreground">{profile.bio}</p>}
+          {profile.country && (
+            <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
+              <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              {getCountryName(profile.country)}
+            </span>
+          )}
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-4 rounded-3xl p-6">
         <BackgroundPicker backgroundId={profile.background_id} />
