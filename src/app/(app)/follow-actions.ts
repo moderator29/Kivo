@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
@@ -25,6 +25,30 @@ const TARGET_DETAIL_PATH: Partial<Record<FollowTargetType, string>> = {
   player: "/players",
   competition: "/leagues",
 };
+
+/**
+ * Audit item 9: `new_follower` was fully registered in notification-registry.ts
+ * (icon, copy, href) but had no producer anywhere — a repo-wide grep for
+ * `.from("notifications").insert` only ever found match-notifications.ts and
+ * social/actions.ts's notifyPostLiked. Mirrors notifyPostLiked's pattern
+ * exactly: notifications has no client-facing insert policy by design
+ * (system-generated only), so this goes through the service-role client
+ * deliberately, not as an RLS workaround. No self-notify guard needed —
+ * follows_no_self_follow (migration 0001) already makes self-follow
+ * impossible at the DB layer.
+ */
+async function notifyNewFollower(followedProfileId: string, follower: { username: string; display_name: string | null }) {
+  const serviceClient = createServiceRoleSupabaseClient();
+  const { error } = await serviceClient.from("notifications").insert({
+    profile_id: followedProfileId,
+    type: "new_follower",
+    payload: {
+      follower_username: follower.username,
+      follower_display_name: follower.display_name,
+    },
+  });
+  if (error) console.error("Failed to create new-follower notification", error);
+}
 
 export async function toggleFollow(targetType: FollowTargetType, targetId: string, currentlyFollowing: boolean) {
   const profile = await getOrCreateProfile();
@@ -63,6 +87,11 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
       .eq("follower_profile_id", profile.id);
     if ((followCount ?? 0) >= 5) {
       await awardBadge(profile.id, "five_follows");
+    }
+    // Only "user" follows have a person on the other end to notify — a team,
+    // player, or competition doesn't have a notifications row to receive one.
+    if (targetType === "user") {
+      await notifyNewFollower(targetId, profile);
     }
   }
 

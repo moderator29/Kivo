@@ -15,6 +15,7 @@ import { Search, Shield, UserRound, Trophy, CalendarDays, CornerDownLeft, Clock,
 import { searchPlatform, getPopularTeams, type SearchResult, type PopularTeam } from "@/app/(app)/search-actions";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 const TYPE_ICON = { team: Shield, player: UserRound, competition: Trophy } as const;
 const TYPE_LABEL = { team: "Teams", player: "Players", competition: "Competitions" } as const;
@@ -119,6 +120,31 @@ export function CommandPalette() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pending, startTransition] = useTransition();
+  // Bug 2 (audit): `pending` only flips true once `startTransition` actually
+  // runs, which doesn't happen until the 200ms debounce timer fires — so for
+  // the ~200ms after every keystroke, neither `pending` nor `results` reflect
+  // the query that's now in the input, and the render below would otherwise
+  // fall into the "No matches" branch. `searchScheduled` closes that window;
+  // the loading branch checks `pending || searchScheduled`.
+  const [searchScheduled, setSearchScheduled] = useState(false);
+  // Bug 6 (audit): distinguishes a real zero-result search from one that hit
+  // searchPlatform's rate limit, which otherwise silently returns `[]` and
+  // reads identically to "No matches".
+  const [searchError, setSearchError] = useState<string | null>(null);
+  // The query `searchScheduled`/`searchError` above currently reflect. React's
+  // documented "adjusting state when a prop changes" pattern (same idiom
+  // NotificationBell uses for focusSyncedUnreadCount) — comparing during
+  // render and resetting synchronously with the *first* render of a new
+  // query, rather than one tick later inside a useEffect, which is where
+  // this used to live before react-hooks/set-state-in-effect flagged the
+  // unconditional setState calls there as the derived-state anti-pattern
+  // they were.
+  const [scheduledForQuery, setScheduledForQuery] = useState(query);
+  if (query !== scheduledForQuery) {
+    setScheduledForQuery(query);
+    setSearchScheduled(query.trim().length >= 2);
+    setSearchError(null);
+  }
   // Item 128: recent (localStorage, this browser only) + popular (real
   // follower counts, see getPopularTeams) for the zero state. recentSearches'
   // lazy initializer runs once on mount (server snapshot is always `[]`,
@@ -186,46 +212,39 @@ export function CommandPalette() {
     activeOptionRef.current?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
 
-  // Real focus trap: aria-modal="true" is a lie without this (same pattern
-  // as the mobile "more" sheet) — without it, Tab past the last result lands
-  // on whatever's next in DOM order behind the backdrop, still visually
-  // covered by the overlay but now receiving keyboard interaction.
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Tab") return;
-      const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("input, button") ?? []);
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  // Real focus trap + document-wide Escape-to-close + focus restore, same
+  // shared hook every other dialog/sheet surface in the app uses (bug 1,
+  // audit: this used to hand-roll its own Tab-trap effect with no Escape
+  // handling at all, so Escape only closed the palette while focus was
+  // literally inside the `<input>`, via handleKeyDown below).
+  useFocusTrap(open, dialogRef, close, { restoreFocusRef: triggerRef });
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      if (query.trim().length < 2) {
+
+    if (query.trim().length < 2) {
+      debounceRef.current = setTimeout(() => {
         searchSeqRef.current += 1; // invalidate any still in-flight search
         setResults([]);
         setActiveIndex(0);
-        return;
-      }
+      }, 200);
+      return () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+      };
+    }
+
+    debounceRef.current = setTimeout(() => {
       const seq = ++searchSeqRef.current;
       startTransition(async () => {
-        const next = await searchPlatform(query);
+        const { error, results: next } = await searchPlatform(query);
         if (seq !== searchSeqRef.current) return; // superseded by a newer search
         setResults(next);
+        setSearchError(error);
         setActiveIndex(0);
+        // Bug 2/5 (audit): flips back off once this query's search has
+        // actually resolved — flipping *on* happens synchronously at render
+        // time above, the instant `query` changes, not here.
+        setSearchScheduled(false);
       });
     }, 200);
     return () => {
@@ -257,10 +276,9 @@ export function CommandPalette() {
   }
 
   function handleKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Escape") {
-      close();
-      return;
-    }
+    // Escape is handled document-wide by useFocusTrap above (bug 1, audit) —
+    // no longer needs its own case here, which only ever fired while focus
+    // was literally inside this input.
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, results.length - 1));
@@ -276,6 +294,15 @@ export function CommandPalette() {
       navigateTo(results[activeIndex]);
     }
   }
+
+  // Bugs 3/4/5 (audit): whether the real, roving-focus `role="option"` list is
+  // what's actually rendered right now — as opposed to the zero-state
+  // (Recent/Popular/Quick-links), the loading skeleton, the rate-limit error,
+  // or "No matches", none of which are options. Drives the listbox role, the
+  // input's aria-activedescendant, and nothing else — `aria-expanded` is kept
+  // separate (see the input below) since the popup itself is showing content
+  // in every one of those other states too.
+  const showingResults = query.trim().length >= 2 && !pending && !searchScheduled && !searchError && results.length > 0;
 
   return (
     <>
@@ -321,10 +348,10 @@ export function CommandPalette() {
                   ref={inputRef}
                   type="text"
                   role="combobox"
-                  aria-expanded={results.length > 0}
+                  aria-expanded={open}
                   aria-controls={LISTBOX_ID}
                   aria-autocomplete="list"
-                  aria-activedescendant={results[activeIndex] ? optionId(results[activeIndex]) : undefined}
+                  aria-activedescendant={showingResults && results[activeIndex] ? optionId(results[activeIndex]) : undefined}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -333,7 +360,12 @@ export function CommandPalette() {
                 />
               </div>
 
-              <div id={LISTBOX_ID} role="listbox" aria-label="Search results" className="max-h-80 overflow-y-auto p-2">
+              <div
+                id={LISTBOX_ID}
+                role={showingResults ? "listbox" : "group"}
+                aria-label={showingResults ? "Search results" : undefined}
+                className="max-h-80 overflow-y-auto p-2"
+              >
                 {query.trim().length < 2 ? (
                   <div className="flex flex-col gap-4 px-1 py-3">
                     {recentSearches.length > 0 && (
@@ -414,7 +446,7 @@ export function CommandPalette() {
                       })}
                     </div>
                   </div>
-                ) : pending ? (
+                ) : pending || searchScheduled ? (
                   <div className="flex flex-col gap-1 p-1" aria-label="Searching" role="status">
                     {Array.from({ length: 4 }).map((_, i) => (
                       <div key={i} className="flex items-center gap-3 px-3 py-2.5">
@@ -426,6 +458,10 @@ export function CommandPalette() {
                       </div>
                     ))}
                   </div>
+                ) : searchError ? (
+                  <p className="px-3 py-6 text-center text-xs text-critical" role="status" aria-live="polite">
+                    {searchError}
+                  </p>
                 ) : results.length === 0 ? (
                   <p className="px-3 py-6 text-center text-xs text-foreground-subtle">
                     No matches for &quot;{query}&quot;.

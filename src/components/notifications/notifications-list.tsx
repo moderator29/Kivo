@@ -72,7 +72,13 @@ export function NotificationsList({ notifications }: { notifications: Notificati
                 <Icon className="h-4 w-4 text-kivo-white" strokeWidth={2} />
               </div>
               <div className="flex-1">
-                <p className="text-sm text-foreground">{describeNotification(notification)}</p>
+                <p className="text-sm text-foreground">
+                  {/* Bug 7 (audit): same accessible-unread-marker fix as
+                      NotificationBell's renderItem — the visible dot below is
+                      aria-hidden, so this is the only signal AT users get. */}
+                  {!notification.read_at && <span className="sr-only">Unread. </span>}
+                  {describeNotification(notification)}
+                </p>
                 <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
               </div>
               {!notification.read_at && (

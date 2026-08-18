@@ -20,13 +20,14 @@ import type { NotificationRow } from "@/lib/notifications";
  * types will grow continuously as features ship"), not a Postgres enum — so
  * this union is KIVO's own registry of every type a producer emits or is
  * reasonably expected to emit next, not a mirror of a DB constraint.
- * "post_like" (src/app/(app)/social/actions.ts), "match_kickoff"/
- * "match_goal"/"match_red_card"/"match_result"/"player_event"
- * (src/lib/football/match-notifications.ts, wired into the real sync code
- * paths in sync.ts/sync-match-details.ts) are wired to real producers;
- * prediction/fantasy/badge/moderation types below are forward-covered so
- * describe()/icon()/href() never fall back to a raw snake_case string once
- * those ship a producer too. Add new types here first.
+ * "post_like"/"post_comment"/"comment_reply" (src/app/(app)/social/actions.ts
+ * and comment-actions.ts), "new_follower" (src/app/(app)/follow-actions.ts),
+ * and "match_kickoff"/"match_goal"/"match_red_card"/"match_result"/
+ * "player_event" (src/lib/football/match-notifications.ts, wired into the
+ * real sync code paths in sync.ts/sync-match-details.ts) are all wired to
+ * real producers; prediction/fantasy/badge/moderation types below are still
+ * forward-covered only, so describe()/icon()/href() never fall back to a raw
+ * snake_case string once those ship a producer too. Add new types here first.
  */
 export type NotificationType =
   | "post_like"

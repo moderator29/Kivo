@@ -161,7 +161,14 @@ export function NotificationBell({
           <Icon className="h-3.5 w-3.5 text-kivo-white" strokeWidth={2} />
         </div>
         <div className="flex-1">
-          <p className="text-sm text-foreground">{describeNotification(notification)}</p>
+          <p className="text-sm text-foreground">
+            {/* Bug 7 (audit): unread was only ever signalled by a faint 3%
+                background tint plus an aria-hidden dot — nothing a screen
+                reader could pick up. This is the accessible equivalent of
+                the visible dot below. */}
+            {!notification.read_at && <span className="sr-only">Unread. </span>}
+            {describeNotification(notification)}
+          </p>
           <p className="mt-0.5 text-xs text-foreground-subtle">{timeAgo(notification.created_at)}</p>
         </div>
         {!notification.read_at && (

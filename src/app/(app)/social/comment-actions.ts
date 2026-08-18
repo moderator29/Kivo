@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
@@ -69,6 +69,60 @@ export async function getComments(postId: string): Promise<{ comments: CommentDT
 }
 
 /**
+ * Audit item 9: `post_comment`/`comment_reply` were fully registered in
+ * notification-registry.ts (icon, copy, href) but had no producer anywhere —
+ * a repo-wide grep for `.from("notifications").insert` only ever found
+ * match-notifications.ts and social/actions.ts's notifyPostLiked; this file
+ * never inserted into `notifications` at all. Mirrors notifyPostLiked's
+ * pattern: a top-level comment notifies the post's author, a reply notifies
+ * the parent comment's author instead (never both), and never the commenter
+ * about their own comment/reply. Goes through the service-role client
+ * deliberately — notifications has no client-facing insert policy by design.
+ */
+async function notifyComment(
+  postId: string,
+  parentCommentId: string | null,
+  commenter: { id: string; username: string; display_name: string | null },
+) {
+  const supabase = createServerSupabaseClient();
+  const { data: post } = await supabase.from("posts").select("author_profile_id, fixture_id").eq("id", postId).maybeSingle();
+  if (!post) return;
+
+  let recipientId = post.author_profile_id;
+  let type: "post_comment" | "comment_reply" = "post_comment";
+
+  if (parentCommentId) {
+    const { data: parent } = await supabase
+      .from("comments")
+      .select("author_profile_id")
+      .eq("id", parentCommentId)
+      .maybeSingle();
+    if (!parent) return;
+    recipientId = parent.author_profile_id;
+    type = "comment_reply";
+  }
+
+  if (recipientId === commenter.id) return;
+
+  const actorPrefix = type === "post_comment" ? "commenter" : "replier";
+  const serviceClient = createServiceRoleSupabaseClient();
+  const { error } = await serviceClient.from("notifications").insert({
+    profile_id: recipientId,
+    type,
+    // fixture_id (nullable) lets the bell/notifications page route back to
+    // the fixture's Match Centre Room tab for a room post, vs. /social for a
+    // general one — see postHref() in lib/notification-registry.ts.
+    payload: {
+      post_id: postId,
+      fixture_id: post.fixture_id,
+      [`${actorPrefix}_username`]: commenter.username,
+      [`${actorPrefix}_display_name`]: commenter.display_name,
+    },
+  });
+  if (error) console.error("Failed to create comment notification", error);
+}
+
+/**
  * `parent_comment_id` self-references `comments` with no depth limit in the
  * schema, but the UI only ever sets it to a *top-level* comment's id (see
  * comment-thread.tsx) — one level of replies, not arbitrary nesting, matching
@@ -106,6 +160,7 @@ export async function createComment(postId: string, body: string, parentCommentI
   // awardBadge is a harmless no-op on repeat comments (unique constraint on
   // user_badges swallows the duplicate) — same pattern as first_post.
   await awardBadge(profile.id, "first_comment");
+  await notifyComment(postId, parentCommentId, profile);
 
   revalidatePath("/social");
 
