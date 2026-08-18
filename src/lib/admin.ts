@@ -47,3 +47,15 @@ const FOOTBALL_DATA_MANAGE_ROLES: UserRole[] = ["football_data_admin", "admin", 
 export function canManageFootballData(role: UserRole | undefined | null): boolean {
   return !!role && FOOTBALL_DATA_MANAGE_ROLES.includes(role);
 }
+
+/** Matches `support_requests_select_admin` / `support_requests_update_admin`
+ * in supabase/migrations/0055 — the roles that can read and triage inbound
+ * help requests. Deliberately excludes 'moderator': content moderation and
+ * account support are different jobs with different data, and a support
+ * request routinely contains an email address a content moderator has no
+ * reason to see. */
+const SUPPORT_ROLES: UserRole[] = ["support_admin", "admin", "super_admin"];
+
+export function canHandleSupport(role: UserRole | undefined | null): boolean {
+  return !!role && SUPPORT_ROLES.includes(role);
+}
