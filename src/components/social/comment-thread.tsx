@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
@@ -13,6 +13,21 @@ import { RelativeTime } from "@/components/ui/relative-time";
 
 const MAX_COMMENT_INPUT_LENGTH = 1000;
 
+/**
+ * KN-74. A comment used to appear only after the round trip, behind a
+ * "Posting…" label. On the variable connections this launch market runs on,
+ * that is the difference between responsive and broken — the user has already
+ * typed the thing, and the app spends a second implying it did not hear them.
+ *
+ * The optimistic row shows the user's own words immediately, and *only* their
+ * own words: KIVO has no client-side copy of the viewer's display name or
+ * avatar here, and inventing either to make the row look complete would be
+ * fabricating identity to smooth over a loading state. So the byline is an
+ * honest "Posting…" until the server returns the real comment, at which point
+ * React drops the optimistic entry and the real one takes its place.
+ */
+const PENDING_COMMENT_ID = "__kivo_pending_comment__";
+
 function CommentItem({
   comment,
   signedIn,
@@ -22,6 +37,23 @@ function CommentItem({
   signedIn: boolean;
   onReply?: () => void;
 }) {
+  const isPending = comment.id === PENDING_COMMENT_ID;
+
+  if (isPending) {
+    return (
+      <div className="flex items-start gap-2 opacity-60" aria-live="polite">
+        <span
+          aria-hidden="true"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded-full border border-dashed border-hairline-strong"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-[11px] font-medium text-foreground-subtle">Posting…</span>
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">{comment.body}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-start gap-2">
       <KivoAvatar src={comment.authorAvatarSrc} name={comment.authorName} size={20} />
@@ -90,6 +122,17 @@ export function CommentThread({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitPending, startSubmitTransition] = useTransition();
 
+  // KN-74. React drops the optimistic entry automatically when the transition
+  // that added it settles, so there is no rollback to write: on success the
+  // real comment is already in `comments`, and on failure the row simply
+  // disappears alongside the error message. That is the whole reason to use
+  // `useOptimistic` here rather than another `useState` pair — the failure
+  // path is the one that gets written wrong by hand.
+  const [optimisticComments, addOptimisticComment] = useOptimistic(
+    comments,
+    (current: CommentDTO[], pending: CommentDTO) => [...current, pending],
+  );
+
   function handleToggle() {
     if (!expanded && !loaded && !loadPending) {
       startLoadTransition(async () => {
@@ -122,6 +165,19 @@ export function CommentThread({
     setSubmitError(null);
     const parentId = replyTo?.id ?? null;
     startSubmitTransition(async () => {
+      addOptimisticComment({
+        id: PENDING_COMMENT_ID,
+        postId,
+        parentCommentId: parentId,
+        body,
+        createdAt: new Date().toISOString(),
+        // Deliberately empty rather than guessed — see PENDING_COMMENT_ID.
+        authorName: "",
+        authorUsername: null,
+        authorAvatarSrc: null,
+        reactionCount: 0,
+        viewerReaction: null,
+      });
       const result = await createComment(postId, body, parentId);
       if (result.error || !result.comment) {
         setSubmitError(result.error ?? "Couldn't post your comment.");
@@ -138,9 +194,9 @@ export function CommentThread({
   // arbitrarily deep, but the "Reply" affordance below only ever targets a
   // top-level comment, so this groups into top-level + their direct replies
   // rather than building a recursive tree the UI never produces.
-  const topLevel = comments.filter((c) => !c.parentCommentId);
+  const topLevel = optimisticComments.filter((c) => !c.parentCommentId);
   const repliesByParent = new Map<string, CommentDTO[]>();
-  for (const comment of comments) {
+  for (const comment of optimisticComments) {
     if (!comment.parentCommentId) continue;
     const list = repliesByParent.get(comment.parentCommentId) ?? [];
     list.push(comment);
