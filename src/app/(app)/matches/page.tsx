@@ -8,6 +8,8 @@ import { MatchesDateStrip, dateKey, todayUtc } from "@/components/matches/date-s
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
+import { getMatchRoomActivity } from "@/lib/football/match-room-activity";
+import { RoomActivityNote } from "@/components/matches/room-activity-note";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { DISPLAY_LOCALE } from "@/lib/format";
@@ -66,6 +68,14 @@ export default async function MatchesPage({
     day: "numeric",
     timeZone: "UTC",
   });
+
+  // KN-41: how many people are actually talking about each of these fixtures.
+  // One batched aggregate for the whole day (see getMatchRoomActivity) — a
+  // fixture nobody has posted in gets no entry and renders exactly as before.
+  const roomActivity = await getMatchRoomActivity(
+    supabase,
+    (fixtures ?? []).map((fixture) => fixture.id),
+  );
 
   // Real match counts per competition, grouping fixtures already fetched
   // above — no new provider/DB call. See groupFixturesByCompetition.
@@ -171,6 +181,11 @@ export default async function MatchesPage({
                           <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
                         </div>
                       </div>
+                      <RoomActivityNote
+                        fixtureId={fixture.id}
+                        activity={roomActivity.get(fixture.id)}
+                        className="mt-2"
+                      />
                     </FadeIn>
                   );
                 })}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Flame, Zap, Award, History, Trophy } from "lucide-react";
+import { ArrowUpRight, Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -9,6 +9,7 @@ import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { DISPLAY_LOCALE, timeAgo } from "@/lib/format";
 import { buildWeekStrip, getStreakTier, mondayOfWeekUtc } from "@/lib/streak";
+import { xpReasonLink } from "@/lib/xp-reason-links";
 
 const item = getNavItem("rewards");
 
@@ -343,10 +344,30 @@ export default async function RewardsPage() {
                   {group.label}
                 </p>
                 <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-3xl">
-                  {collapseConsecutiveXpEntries(group.entries).map((line) => (
+                  {collapseConsecutiveXpEntries(group.entries).map((line) => {
+                    // KN-44: XP had no route back to what earned it. The ledger
+                    // has no target column, so a per-row deep link would mean
+                    // inventing a relationship the schema doesn't hold — this
+                    // links the reason *category* to its surface instead, and
+                    // renders plain text for any reason it doesn't recognise.
+                    const link = xpReasonLink(line.reason);
+                    return (
                     <div key={line.key} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div>
-                        <p className="text-xs font-medium text-foreground">{line.reason}</p>
+                      <div className="min-w-0">
+                        {link ? (
+                          <Link
+                            href={link.href}
+                            className="group flex items-center gap-1 text-xs font-medium text-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                          >
+                            <span className="truncate">{line.reason}</span>
+                            <ArrowUpRight
+                              className="h-3 w-3 shrink-0 text-foreground-subtle transition-colors group-hover:text-accent"
+                              strokeWidth={2}
+                            />
+                          </Link>
+                        ) : (
+                          <p className="text-xs font-medium text-foreground">{line.reason}</p>
+                        )}
                         <p className="text-[11px] text-foreground-subtle">{timeAgo(line.created_at)}</p>
                       </div>
                       <span className="shrink-0 text-xs font-semibold text-live">
@@ -355,7 +376,8 @@ export default async function RewardsPage() {
                         {line.count > 1 && <span className="text-foreground-subtle"> &times; {line.count}</span>}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

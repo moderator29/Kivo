@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Check, Lock } from "lucide-react";
+import { ArrowRight, Check, Lock } from "lucide-react";
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { submitPrediction } from "@/app/(app)/predictions/actions";
@@ -299,6 +299,19 @@ export function PredictionCard({
       </AnimatePresence>
 
       {consensus && <ConsensusBar consensus={consensus} />}
+
+      {/* KN-42: the return trip. Item 293 put "You predicted: Home win" on
+          Match Centre, but /predictions linked nowhere — a user who had just
+          called a match could not get from their pick to the match it was
+          about without going back to /matches and finding it again. The two
+          surfaces share `fixtureId`; this is the missing half of that pair. */}
+      <Link
+        href={`/matches/${fixtureId}`}
+        className="flex items-center justify-between border-t border-hairline-soft pt-3 text-xs font-medium text-foreground-muted transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      >
+        Match Centre
+        <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+      </Link>
     </div>
   );
 }

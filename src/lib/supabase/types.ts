@@ -2262,6 +2262,14 @@ export type Database = {
           team_count: number
         }[]
       }
+      get_match_room_activity: {
+        Args: { p_fixture_ids: string[] }
+        Returns: {
+          fixture_id: string
+          participant_count: number
+          post_count: number
+        }[]
+      }
       get_most_followed_teams: {
         Args: { p_limit?: number }
         Returns: {
