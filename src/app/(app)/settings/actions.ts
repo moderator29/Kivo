@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { isClerkConfigured } from "@/lib/clerk";
 import { COUNTRY_CODES } from "@/lib/countries";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   NOTIFICATION_PREFERENCE_COLUMNS,
   NOTIFICATION_PREFERENCE_DEFAULTS,
@@ -153,4 +154,114 @@ export async function deleteAccount() {
   }
 
   return { error: null };
+}
+
+/**
+ * RECOMMENDATIONS.md item 135: settings had a delete-account flow but no
+ * data export, even though `DeleteAccountSection`'s own copy already lists
+ * exactly what a deleted account destroys ("your profile, posts, comments,
+ * predictions, fantasy teams and XP") — this exports that same real data
+ * (plus follows/saves/badges, also FK-cascaded away on deletion) as one
+ * JSON object, so a user can see or keep what they have before, or instead
+ * of, deleting it. Every table read here through the session-scoped client
+ * (never service-role) so RLS's own `_select_own` policies are the actual
+ * enforcement, same as every other read in this file — this function only
+ * narrows further with `.eq(ownerColumn, profile.id)`, it never widens.
+ */
+export type UserDataExport = {
+  exportedAt: string;
+  profile: Database["public"]["Tables"]["profiles"]["Row"];
+  posts: Database["public"]["Tables"]["posts"]["Row"][];
+  comments: Database["public"]["Tables"]["comments"]["Row"][];
+  predictions: Database["public"]["Tables"]["predictions"]["Row"][];
+  fantasyTeams: Database["public"]["Tables"]["fantasy_teams"]["Row"][];
+  fantasyRosters: Database["public"]["Tables"]["fantasy_rosters"]["Row"][];
+  follows: Database["public"]["Tables"]["follows"]["Row"][];
+  saves: Database["public"]["Tables"]["saves"]["Row"][];
+  badges: { badgeId: string; code: string; name: string; description: string | null; awardedAt: string }[];
+  xpLedger: Database["public"]["Tables"]["xp_ledger"]["Row"][];
+};
+
+export async function exportUserData(): Promise<{ error: string | null; data: UserDataExport | null }> {
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in.", data: null };
+
+  // Modest cap — this is a handful of read queries, not a write path, but
+  // every user-triggered action in this codebase gets a rate limit (item
+  // 198) and an export is still real DB load an unthrottled script could
+  // hammer.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "export_user_data", 3, 300);
+  if (!rateLimit.ok) return { error: rateLimit.error, data: null };
+
+  const supabase = createServerSupabaseClient();
+
+  const [
+    { data: posts },
+    { data: comments },
+    { data: predictions },
+    { data: fantasyTeams },
+    { data: follows },
+    { data: saves },
+    { data: userBadgeRows },
+    { data: xpLedger },
+  ] = await Promise.all([
+    supabase.from("posts").select("*").eq("author_profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("comments").select("*").eq("author_profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("predictions").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("fantasy_teams").select("*").eq("owner_profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("follows").select("*").eq("follower_profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("saves").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("user_badges").select("badge_id, awarded_at").eq("profile_id", profile.id).order("awarded_at", { ascending: false }),
+    supabase.from("xp_ledger").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+  ]);
+
+  // fantasy_rosters has no profile_id of its own (see migration
+  // 0001_kivo_core_schema.sql) — it's keyed on fantasy_team_id, so this
+  // scopes to the team ids just fetched above rather than a fifth
+  // independent query with nothing to filter on.
+  const fantasyTeamIds = (fantasyTeams ?? []).map((team) => team.id);
+  const { data: fantasyRosters } = fantasyTeamIds.length
+    ? await supabase
+        .from("fantasy_rosters")
+        .select("*")
+        .in("fantasy_team_id", fantasyTeamIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as Database["public"]["Tables"]["fantasy_rosters"]["Row"][] };
+
+  // Two-step lookup (badge ids -> badge rows) rather than an embedded
+  // `badges(...)` select, matching this codebase's existing convention of
+  // resolving small reference tables in a second query (see grounding.ts's
+  // follows resolution) instead of relying on PostgREST's FK-embed syntax.
+  const badgeIds = Array.from(new Set((userBadgeRows ?? []).map((row) => row.badge_id)));
+  const { data: badgeRows } = badgeIds.length
+    ? await supabase.from("badges").select("id, code, name, description").in("id", badgeIds)
+    : { data: [] as { id: string; code: string; name: string; description: string | null }[] };
+  const badgeById = new Map((badgeRows ?? []).map((badge) => [badge.id, badge]));
+  const badges = (userBadgeRows ?? []).map((row) => {
+    const badge = badgeById.get(row.badge_id);
+    return {
+      badgeId: row.badge_id,
+      code: badge?.code ?? row.badge_id,
+      name: badge?.name ?? "Unknown badge",
+      description: badge?.description ?? null,
+      awardedAt: row.awarded_at,
+    };
+  });
+
+  return {
+    error: null,
+    data: {
+      exportedAt: new Date().toISOString(),
+      profile,
+      posts: posts ?? [],
+      comments: comments ?? [],
+      predictions: predictions ?? [],
+      fantasyTeams: fantasyTeams ?? [],
+      fantasyRosters: fantasyRosters ?? [],
+      follows: follows ?? [],
+      saves: saves ?? [],
+      badges,
+      xpLedger: xpLedger ?? [],
+    },
+  };
 }

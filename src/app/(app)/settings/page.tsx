@@ -10,6 +10,7 @@ import { getNotificationPreferences } from "@/app/(app)/settings/actions";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
+import { DataExportSection } from "@/components/settings/data-export-section";
 import { AvatarPicker } from "@/components/settings/avatar-picker";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -78,6 +79,10 @@ export default async function SettingsPage() {
         <div className="flex flex-col gap-3 border-t border-white/5 py-5">
           <span className="text-xs text-foreground-subtle">Notifications</span>
           <NotificationPreferencesPanel initial={notificationPreferences} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+          <DataExportSection username={profile.username} />
         </div>
 
         <div className="flex flex-col gap-3 border-t border-white/5 pt-5">

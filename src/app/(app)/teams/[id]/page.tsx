@@ -29,6 +29,7 @@ import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { FormBadges } from "@/components/teams/form-badges";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { summarizeGoalTiming } from "@/lib/football/goal-timing";
 import { resultFor, type FormResult } from "@/lib/football/results";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { parseUuidParam } from "@/lib/params";
@@ -307,9 +308,22 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const finishedMatches = finishedMatchesCount ?? 0;
   const matchSampleLabel = `Based on ${finishedMatches} finished match${finishedMatches === 1 ? "" : "es"} KIVO has synced for ${team.name}.`;
 
-  // RECOMMENDATIONS.md item 162: goal-timing distribution.
-  const goalsScored = goalEvents?.length ?? 0;
-  const goalsAfter70 = (goalEvents ?? []).filter((e) => e.minute >= 70).length;
+  // RECOMMENDATIONS.md item 162: goal-timing distribution. RECOMMENDATIONS.md
+  // item 226: this used to aggregate goalEvents inline, a second copy of the
+  // exact aggregation src/lib/football/match-intelligence.ts's
+  // fetchTeamGoalTiming already extracted into summarizeGoalTiming() for the
+  // AI Copilot's grounding context (see grounding.ts) — same query shape
+  // (goal + penalty_goal events, own goals excluded, this team's own
+  // team_id), so this now calls that one shared function instead of
+  // reimplementing it a second time. isSufficientSample/minSampleRequired
+  // are available on the result but deliberately unused here: this page has
+  // always shown the real number alongside its real sample-size caption
+  // (matchSampleLabel below) rather than gating on a minimum, and changing
+  // that display behaviour isn't what item 226 asked for.
+  const { goalsScored, goalsAfter70 } = summarizeGoalTiming(
+    (goalEvents ?? []).map((e) => e.minute),
+    finishedMatches,
+  );
 
   // RECOMMENDATIONS.md item 163: discipline, team totals + per-player.
   type DisciplineRow = { id: string; name: string; yellow: number; red: number };

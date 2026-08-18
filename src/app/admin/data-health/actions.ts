@@ -58,6 +58,12 @@ export async function triggerTeamSquadSync(teamId: string): Promise<{ error: str
   const result = await syncTeamSquad(teamId);
 
   revalidatePath("/admin/data-health");
+  // RECOMMENDATIONS.md item 99: this is the public page InlineSyncButton
+  // actually renders on (teams/[id]/page.tsx) — without revalidating it
+  // too, router.refresh() re-fetches a payload the framework never marked
+  // stale, so the admin's "Sync now" click looked like it did nothing.
+  // Mirrors triggerPlayerTransfersSync's revalidatePath(`/players/${id}`) below.
+  revalidatePath(`/teams/${teamId}`);
 
   if (result.status === "failed") {
     return { error: result.error ?? "Squad sync failed. See the sync_runs row for details." };
@@ -83,6 +89,11 @@ export async function triggerFixtureDetailsSync(
   const result = await syncFixtureDetails(fixtureId, { autoSyncMissingSquads });
 
   revalidatePath("/admin/data-health");
+  // RECOMMENDATIONS.md item 99: same gap as triggerTeamSquadSync above — this
+  // is the public Match Centre page FixtureDetailsSyncControl actually
+  // renders on, and without revalidating it too, the admin's own
+  // router.refresh() re-fetched a payload the framework never marked stale.
+  revalidatePath(`/matches/${fixtureId}`);
 
   if (result.status === "failed") {
     return { error: result.error ?? "Fixture details sync failed. See the sync_runs row for details." };
@@ -99,6 +110,19 @@ export async function triggerStandingsSync(seasonId: string): Promise<{ error: s
   const result = await syncStandings(seasonId);
 
   revalidatePath("/admin/data-health");
+  // RECOMMENDATIONS.md item 99: same gap as triggerTeamSquadSync/
+  // triggerFixtureDetailsSync above, for the public leagues/[id] page's own
+  // InlineSyncButton. syncStandings only takes a seasonId, and leagues/[id]
+  // is keyed by competition id, so this looks the season's competition up
+  // rather than skip the revalidation — seasons carries no RLS restriction
+  // (same public-football-data class as teams/competitions), so the
+  // service-role client already used elsewhere on this page is fine here too.
+  const { data: season } = await createServiceRoleSupabaseClient()
+    .from("seasons")
+    .select("competition_id")
+    .eq("id", seasonId)
+    .maybeSingle();
+  if (season) revalidatePath(`/leagues/${season.competition_id}`);
 
   if (result.status === "failed") {
     return { error: result.error ?? "Standings sync failed. See the sync_runs row for details." };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, Check, AlertTriangle } from "lucide-react";
 
 type FixtureDetailsSyncAction = (
@@ -16,6 +17,7 @@ type FixtureDetailsSyncAction = (
  * server action itself — and its state is read at click time, not persisted.
  */
 export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSyncAction }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [autoSyncMissingSquads, setAutoSyncMissingSquads] = useState(false);
   const [result, setResult] = useState<{ error: string | null; recordsProcessed?: number } | null>(null);
@@ -24,7 +26,15 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
     if (pending) return;
     setResult(null);
     startTransition(async () => {
-      setResult(await action(autoSyncMissingSquads));
+      const outcome = await action(autoSyncMissingSquads);
+      setResult(outcome);
+      // RECOMMENDATIONS.md item 99: the server action already revalidates
+      // this fixture's path (see triggerFixtureDetailsSync), but a mounted
+      // client component doesn't pick that up on its own — router.refresh()
+      // re-fetches the RSC payload so the newly-synced lineups/events
+      // actually appear without the admin having to manually reload, same
+      // fix InlineSyncButton already applies.
+      if (!outcome.error) router.refresh();
     });
   }
 
@@ -67,7 +77,7 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
           ) : (
             <>
               <Check className="h-3 w-3 shrink-0" strokeWidth={2} />
-              Synced {result.recordsProcessed ?? 0} record{result.recordsProcessed === 1 ? "" : "s"}. Refresh to see it
+              Synced {result.recordsProcessed ?? 0} record{result.recordsProcessed === 1 ? "" : "s"}
             </>
           )}
         </p>
