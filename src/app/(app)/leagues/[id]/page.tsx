@@ -16,6 +16,7 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
+import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -199,6 +200,11 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
       </FadeIn>
+
+      {/* KIVO_NEXT_GEN KN-103. Placed after the table and fixtures rather than
+          before them: it answers "why is that section empty", which is only a
+          question once you have seen the empty section. */}
+      <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
 
       <FadeIn delay={0.25} className="self-center">
         <Link
