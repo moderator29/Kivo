@@ -45,5 +45,16 @@ next-env.d.ts
 # the original GitHub upload; only the processed /public assets ship here.
 /design/raw-uploads/
 
+# KN-138: screenshots pasted into the repo root. 17 of them (39.4MB) were
+# committed at top level, referenced by nothing in src/ or docs/, and every
+# checkout paid for them. They now live in design/raw-uploads/founder-
+# screenshots/ above, which is already ignored — so they stay on disk for
+# whoever needs them and stop riding along in the tree. This rule stops the
+# next batch landing at the root in the first place; anything genuinely
+# needed by the product belongs in public/ under a real name.
+/*.png
+/*.jpg
+/*.jpeg
+
 # Claude Code session state and background-agent worktrees — never repo content.
 /.claude/
