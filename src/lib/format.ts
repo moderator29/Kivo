@@ -147,3 +147,33 @@ export function formatDate(value: string, options: { month?: "numeric" | "2-digi
 export function formatNumber(value: number): string {
   return value.toLocaleString(DISPLAY_LOCALE);
 }
+
+/** Compact "time left" label ("2d 3h", "5h 30m", "45m") for an instant that
+ * is still in the future, and `null` once it isn't — the caller decides what
+ * "passed" reads as, because that differs by surface (a fantasy deadline says
+ * "Deadline passed"; a kickoff says the match is under way).
+ *
+ * Split out of fantasy's `formatDeadlineCountdown`, which now delegates to it,
+ * so /home's lead slot counts down to a kickoff in exactly the same shape a
+ * fantasy deadline counts down in — two clocks in one product that disagree on
+ * whether 90 minutes is "1h 30m" or "90m" is the kind of small inconsistency
+ * that makes an app feel assembled rather than designed.
+ *
+ * Locale-independent by construction (it emits its own d/h/m units rather than
+ * going through Intl), so unlike the rest of this module it is safe to render
+ * during SSR — though anything that has to keep ticking still needs a client
+ * component to re-render it. */
+export function formatDurationUntil(iso: string, now: Date | number = Date.now()): string | null {
+  const nowMs = typeof now === "number" ? now : now.getTime();
+  const diffMs = new Date(iso).getTime() - nowMs;
+  if (diffMs <= 0) return null;
+
+  const totalMinutes = Math.floor(diffMs / 60_000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}

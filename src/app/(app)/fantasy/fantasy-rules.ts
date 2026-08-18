@@ -8,6 +8,8 @@
  * server-only DB helpers.
  */
 
+import { formatDurationUntil } from "@/lib/format";
+
 /** KIVO's internal fantasy squad-budget cap, FPL-style "millions" — a game-
  * balance constant chosen for headroom over the flat starting price, not
  * derived from any real-world figure. */
@@ -175,18 +177,12 @@ export function generateInviteCode(length = 6): string {
   return code;
 }
 
+/** The gameweek-deadline wording around the shared countdown formatter in
+ * src/lib/format.ts. The d/h/m arithmetic moved there when /home's lead slot
+ * started counting down to a kickoff too (KN-37) — one clock, two terminal
+ * strings, rather than two clocks that could drift apart. */
 export function formatDeadlineCountdown(deadlineAt: string, now: Date = new Date()): string {
-  const diffMs = new Date(deadlineAt).getTime() - now.getTime();
-  if (diffMs <= 0) return "Deadline passed";
-
-  const totalMinutes = Math.floor(diffMs / 60_000);
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  return formatDurationUntil(deadlineAt, now) ?? "Deadline passed";
 }
 
 // The absolute kickoff-deadline time that used to be formatted here is now
