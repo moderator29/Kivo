@@ -16,6 +16,7 @@ import { TimezoneSection } from "@/components/settings/timezone-section";
 import { OtherDevicesSection } from "@/components/settings/other-devices-section";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
 import { DataExportSection } from "@/components/settings/data-export-section";
+import { YourDataSummary } from "@/components/settings/your-data-summary";
 import { AvatarPicker } from "@/components/settings/avatar-picker";
 import { AppearanceSection } from "@/components/theme/appearance-section";
 
@@ -125,7 +126,9 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
-          <DataExportSection username={profile.username} />
+          <YourDataSummary profileId={profile.id}>
+            <DataExportSection username={profile.username} />
+          </YourDataSummary>
         </div>
 
         <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">

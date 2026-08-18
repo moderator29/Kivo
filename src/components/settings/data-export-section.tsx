@@ -11,6 +11,9 @@ import { exportUserData } from "@/app/(app)/settings/actions";
  * browser file download of the JSON the server action returns; no server
  * route or storage involved, so nothing here is ever persisted beyond this
  * one request/response.
+ *
+ * Rendered inside YourDataSummary (KIVO_NEXT_GEN KN-112), which owns the
+ * heading and the description of what the file contains.
  */
 export function DataExportSection({ username }: { username: string }) {
   const [pending, startTransition] = useTransition();
@@ -46,14 +49,12 @@ export function DataExportSection({ username }: { username: string }) {
   }
 
   return (
+    // KIVO_NEXT_GEN KN-112: the heading and the "what's in it" sentence moved
+    // up into YourDataSummary, which now lists every category by name with a
+    // real count. Keeping a hand-written subset list here as well was how it
+    // came to be wrong: it named nine things while the export covered nine of
+    // seventeen, and neither list knew about the other.
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-sm font-semibold text-foreground">Your data</span>
-        <span className="text-xs text-foreground-subtle">
-          Download your profile, posts, comments, predictions, fantasy teams, follows, saves, badges and XP history
-          as a JSON file.
-        </span>
-      </div>
       <button
         type="button"
         disabled={pending}

@@ -288,6 +288,18 @@ export type UserDataExport = {
   saves: Database["public"]["Tables"]["saves"]["Row"][];
   badges: { badgeId: string; code: string; name: string; description: string | null; awardedAt: string }[];
   xpLedger: Database["public"]["Tables"]["xp_ledger"]["Row"][];
+  // KIVO_NEXT_GEN KN-112: eight categories of real user data were missing from
+  // a feature whose button says "Download my data". Every user-owned table is
+  // now covered, and USER_DATA_CATEGORIES (src/lib/user-data.ts) is the shared
+  // list that keeps this and the on-screen summary describing the same set.
+  reactions: Database["public"]["Tables"]["reactions"]["Row"][];
+  pollVotes: Database["public"]["Tables"]["poll_votes"]["Row"][];
+  fanRatings: Database["public"]["Tables"]["fan_ratings"]["Row"][];
+  aiConversations: Database["public"]["Tables"]["ai_conversations"]["Row"][];
+  aiMessages: Database["public"]["Tables"]["ai_messages"]["Row"][];
+  notifications: Database["public"]["Tables"]["notifications"]["Row"][];
+  notificationPreferences: Database["public"]["Tables"]["notification_preferences"]["Row"] | null;
+  supportRequests: Database["public"]["Tables"]["support_requests"]["Row"][];
 };
 
 export async function exportUserData(): Promise<{ error: string | null; data: UserDataExport | null }> {
@@ -312,6 +324,13 @@ export async function exportUserData(): Promise<{ error: string | null; data: Us
     { data: saves },
     { data: userBadgeRows },
     { data: xpLedger },
+    { data: reactions },
+    { data: pollVotes },
+    { data: fanRatings },
+    { data: aiConversations },
+    { data: notifications },
+    { data: notificationPreferences },
+    { data: supportRequests },
   ] = await Promise.all([
     supabase.from("posts").select("*").eq("author_profile_id", profile.id).order("created_at", { ascending: false }),
     supabase.from("comments").select("*").eq("author_profile_id", profile.id).order("created_at", { ascending: false }),
@@ -321,12 +340,31 @@ export async function exportUserData(): Promise<{ error: string | null; data: Us
     supabase.from("saves").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
     supabase.from("user_badges").select("badge_id, awarded_at").eq("profile_id", profile.id).order("awarded_at", { ascending: false }),
     supabase.from("xp_ledger").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("reactions").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("poll_votes").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("fan_ratings").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("ai_conversations").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("notifications").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
+    supabase.from("notification_preferences").select("*").eq("profile_id", profile.id).maybeSingle(),
+    supabase.from("support_requests").select("*").eq("profile_id", profile.id).order("created_at", { ascending: false }),
   ]);
 
   // fantasy_rosters has no profile_id of its own (see migration
   // 0001_kivo_core_schema.sql) — it's keyed on fantasy_team_id, so this
   // scopes to the team ids just fetched above rather than a fifth
   // independent query with nothing to filter on.
+  // ai_messages hangs off ai_conversations the same way fantasy_rosters hangs
+  // off fantasy_teams — no owner column of its own, so it is scoped to the
+  // conversation ids just fetched rather than left out for lack of one.
+  const conversationIds = (aiConversations ?? []).map((c) => c.id);
+  const { data: aiMessages } = conversationIds.length
+    ? await supabase
+        .from("ai_messages")
+        .select("*")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as Database["public"]["Tables"]["ai_messages"]["Row"][] };
+
   const fantasyTeamIds = (fantasyTeams ?? []).map((team) => team.id);
   const { data: fantasyRosters } = fantasyTeamIds.length
     ? await supabase
@@ -370,6 +408,14 @@ export async function exportUserData(): Promise<{ error: string | null; data: Us
       saves: saves ?? [],
       badges,
       xpLedger: xpLedger ?? [],
+      reactions: reactions ?? [],
+      pollVotes: pollVotes ?? [],
+      fanRatings: fanRatings ?? [],
+      aiConversations: aiConversations ?? [],
+      aiMessages: aiMessages ?? [],
+      notifications: notifications ?? [],
+      notificationPreferences: notificationPreferences ?? null,
+      supportRequests: supportRequests ?? [],
     },
   };
 }
