@@ -1,18 +1,33 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { FOOTBALL_LIVE_POLLING_ENABLED } from "@/lib/football";
-import { syncTodayFixtures } from "@/lib/football/sync";
+import { isValidSyncDate, syncTodayFixtures } from "@/lib/football/sync";
 import { syncTeamSquad } from "@/lib/football/sync-squads";
 import { syncFixtureDetails, syncStandings } from "@/lib/football/sync-match-details";
 import { syncPlayerTransfers, reconcileUnresolvedTransferTeams } from "@/lib/football/sync-transfers";
+import { logError } from "@/lib/log";
 
-export async function triggerFootballSync(): Promise<{ error: string | null; recordsProcessed?: number }> {
+/**
+ * KIVO_NEXT_GEN KN-31. `targetDate` is optional and defaults to today, so the
+ * existing "Sync now" button is unchanged. What it adds is the ability to fill
+ * a day the pipeline previously could not reach at all: `/matches` has always
+ * offered a seven-day date strip, and `syncTodayFixtures` — the only writer of
+ * `fixtures` — always asked the provider for today, so every other day in that
+ * strip was permanently, structurally empty.
+ *
+ * Deliberately an admin action rather than something the strip triggers itself.
+ * Every provider call costs quota against a free tier with a $0 budget
+ * (DECISIONS.md), and letting a page fetch spend it would make the cost a
+ * function of how many people click around a calendar.
+ */
+export async function triggerFootballSync(
+  targetDate?: string,
+): Promise<{ error: string | null; recordsProcessed?: number }> {
   const profile = await getOrCreateProfile();
   if (!profile || !canManageFootballData(profile.role)) {
     return { error: "You don't have football data admin access." };
@@ -24,7 +39,13 @@ export async function triggerFootballSync(): Promise<{ error: string | null; rec
     return { error: "No real football data provider is configured. Set API_FOOTBALL_KEY before syncing." };
   }
 
-  const result = await syncTodayFixtures();
+  // Validated here as well as inside syncTodayFixtures, so a bad value gets a
+  // sentence rather than a failed sync_runs row an admin then has to go read.
+  if (targetDate && !isValidSyncDate(targetDate)) {
+    return { error: "Enter a date as YYYY-MM-DD." };
+  }
+
+  const result = await syncTodayFixtures("manual", targetDate ? { targetDate } : undefined);
 
   revalidatePath("/admin/data-health");
   revalidatePath("/matches");

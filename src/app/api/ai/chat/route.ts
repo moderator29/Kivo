@@ -1,10 +1,10 @@
-import { logError } from "@/lib/log";
 import { NextResponse } from "next/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured, getAnthropicClient, AI_MODEL } from "@/lib/ai/client";
 import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 
 // RECOMMENDATIONS.md items 184/185: the three entity types Match Centre/team
 // pages/player pages can deep-link in with (see ask-ai-link.tsx). Validated
@@ -58,6 +58,10 @@ Provenance tagging (RECOMMENDATIONS.md items 188/300) — the KIVO CONTEXT block
 type StreamEvent =
   | { type: "meta"; conversationId: string }
   | { type: "delta"; text: string }
+  /** KN-24: the model hit `max_tokens` and the reply stops mid-thought. A
+   * distinct frame rather than a flag on `done`, so the client can render the
+   * honest affordance the moment the answer ends rather than inferring it. */
+  | { type: "truncated" }
   | { type: "done" }
   | { type: "error"; error: string };
 
@@ -255,6 +259,19 @@ export async function POST(req: Request) {
           .join("\n")
           .trim();
 
+        // KN-24. A reply that hit the 1024-token ceiling stops mid-sentence and
+        // is otherwise indistinguishable from a finished one — persisted as if
+        // complete, rendered without comment, offered for regenerate with no
+        // explanation of why it reads oddly. KIVO's whole discipline is not
+        // presenting something as more complete or more certain than it is;
+        // items 188/189 applied that to provenance, this applies it to
+        // completeness. Told twice, deliberately: once live over the stream for
+        // whoever is watching, and once in the row, so reopening the
+        // conversation from history says the same thing (migration 0069).
+        if (finalMessage.stop_reason === "max_tokens") {
+          send({ type: "truncated" });
+        }
+
         const { error: insertAssistantError } = await supabase.from("ai_messages").insert({
           conversation_id: finalConversationId,
           role: "assistant",
@@ -264,6 +281,9 @@ export async function POST(req: Request) {
           // message-count cap rather than a token sum.
           input_tokens: finalMessage.usage.input_tokens,
           output_tokens: finalMessage.usage.output_tokens,
+          // Verbatim from the API, never normalised or defaulted — a null here
+          // means "the API reported none", not "it finished normally".
+          stop_reason: finalMessage.stop_reason,
         });
         if (insertAssistantError) {
           logError("api.ai.chat.persistAssistantMessage", insertAssistantError);

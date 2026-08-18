@@ -1,11 +1,11 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 export type ConversationSummary = Pick<
   Database["public"]["Tables"]["ai_conversations"]["Row"],
@@ -13,7 +13,10 @@ export type ConversationSummary = Pick<
 >;
 export type ConversationMessage = Pick<
   Database["public"]["Tables"]["ai_messages"]["Row"],
-  "id" | "role" | "content" | "created_at"
+  // KN-24: stop_reason travels with the message so a conversation reopened
+  // from history says the same thing about a cut-short reply that the live
+  // stream said. Without it the honesty lasts exactly one page view.
+  "id" | "role" | "content" | "created_at" | "stop_reason"
 >;
 
 const MAX_TITLE_LENGTH = 80;
@@ -45,7 +48,7 @@ export async function loadConversationMessages(
 
   const { data, error } = await supabase
     .from("ai_messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, created_at, stop_reason")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
 

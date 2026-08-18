@@ -85,4 +85,28 @@ describe("isAuthorizedCronRequest", () => {
   it("fails closed when both the header and the secret are absent", () => {
     expect(isAuthorizedCronRequest(null, undefined)).toBe(false);
   });
+
+  // KN-26: the comparison moved from `===` to timingSafeEqual. These pin the
+  // edges that a naive constant-time rewrite gets wrong — timingSafeEqual
+  // THROWS on differing buffer lengths, so an unguarded call would turn a
+  // wrong-length guess into a 500 (and leak the secret's length through the
+  // difference between "false" and "crash").
+  it("rejects a shorter token without throwing", () => {
+    expect(isAuthorizedCronRequest("Bearer real", "real-secret")).toBe(false);
+  });
+
+  it("rejects a longer token without throwing", () => {
+    expect(isAuthorizedCronRequest("Bearer real-secret-plus-more", "real-secret")).toBe(false);
+  });
+
+  it("rejects a token that shares a long prefix with the real one", () => {
+    expect(isAuthorizedCronRequest("Bearer real-secreT", "real-secret")).toBe(false);
+  });
+
+  it("compares as bytes, so a multi-byte secret still authorizes", () => {
+    // A character-length check would disagree with the byte length here and
+    // reject a legitimate request.
+    expect(isAuthorizedCronRequest("Bearer sécrét-café", "sécrét-café")).toBe(true);
+    expect(isAuthorizedCronRequest("Bearer sécrét-cafe", "sécrét-café")).toBe(false);
+  });
 });

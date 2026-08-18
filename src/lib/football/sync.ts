@@ -27,6 +27,19 @@ import {
 type ServiceClient = SupabaseClient<Database>;
 type DbFixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
+/**
+ * Who started a sync run. Persisted verbatim onto `sync_runs.trigger_source`
+ * (migrations 0044 and 0070), and the four values have genuinely different
+ * quota profiles, which is why they are distinguished rather than collapsed:
+ *
+ *   manual — an admin clicked a sync button. Supervised, unbounded frequency.
+ *   cron   — the once-a-minute live worker. Unsupervised, six gates in front of it.
+ *   auto   — a page load found the data stale and scheduled a sync after the
+ *            response was sent. Unsupervised, frequency bounded by traffic.
+ *   daily  — the once-a-day baseline. Unsupervised, exactly one call a day.
+ */
+export type SyncTriggerSource = "manual" | "cron" | "auto" | "daily";
+
 export interface SyncResult {
   status: "succeeded" | "failed";
   recordsProcessed: number;
@@ -446,6 +459,18 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** `YYYY-MM-DD`, the only shape FootballDataProvider.getFixturesByDate accepts
+ * and the same shape `/matches?date=` uses. Validated rather than trusted: this
+ * value reaches a provider URL, and a malformed one produces a confusing
+ * provider error rather than a clear refusal. */
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isValidSyncDate(value: string): boolean {
+  if (!ISO_DATE_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 /**
  * Sync of today's fixtures — admin-triggered (Data Health's "Sync now",
  * `triggerLiveScoresRefresh`) or, since the Vercel Cron worker
@@ -523,7 +548,28 @@ async function dispatchStatusNotifications(
   });
 }
 
-export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manual"): Promise<SyncResult> {
+/**
+ * KIVO_NEXT_GEN KN-31. `targetDate` is the fix for a calendar that could never
+ * be filled. `/matches` accepts `?date=YYYY-MM-DD` and MatchesDateStrip offers
+ * a seven-day window, but this function — the only writer of `fixtures` — always
+ * asked the provider for `todayIsoDate()`. So every other day the strip offered
+ * was structurally guaranteed to be empty forever, no matter how often an admin
+ * synced. That is not a "not synced yet" state; it is a state that cannot
+ * resolve.
+ *
+ * Defaults to today, so every existing caller (the cron worker, the admin "Sync
+ * now" button, the daily pass) behaves exactly as before. Only the new
+ * date-scoped admin action passes anything else.
+ */
+export async function syncTodayFixtures(
+  triggerSource: SyncTriggerSource = "manual",
+  options?: { targetDate?: string },
+): Promise<SyncResult> {
+  const targetDate = options?.targetDate ?? todayIsoDate();
+  if (!isValidSyncDate(targetDate)) {
+    return { status: "failed", recordsProcessed: 0, error: `Invalid sync date "${targetDate}". Expected YYYY-MM-DD.` };
+  }
+
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
 
@@ -628,7 +674,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
   try {
     let fixtures: NormalizedFixture[];
     try {
-      fixtures = await provider.getFixturesByDate(todayIsoDate());
+      fixtures = await provider.getFixturesByDate(targetDate);
     } catch (err) {
       logError("football.sync.getfixturesbydate", err);
       throw err;
@@ -833,7 +879,11 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
      * them — and it is a flag for a human, not an automatic change.
      */
     if (processed > 0 && !lostLease) {
-      const dayStart = new Date(`${todayIsoDate()}T00:00:00.000Z`);
+      // Scoped to the day this run actually asked for, not to "today" — a
+      // backfill of last Saturday must not flag today's fixtures as absent
+      // just because the provider never mentioned them in a query about
+      // Saturday.
+      const dayStart = new Date(`${targetDate}T00:00:00.000Z`);
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
       const flagged = await flagAbsentFixtures(supabase, {
         provider: provider.name,

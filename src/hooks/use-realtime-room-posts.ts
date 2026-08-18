@@ -127,6 +127,8 @@ export function useRealtimeRoomPosts(fixtureId: string, initialPosts: RoomPost[]
               viewerReaction: null,
               commentCount: 0,
               isSystem: true,
+              // A KIVO goal/red-card announcement is never a poll.
+              poll: null,
             };
             if (!cancelled) {
               setPosts((prev) => (prev.some((p) => p.id === systemPost.id) ? prev : [systemPost, ...prev]));
@@ -134,26 +136,59 @@ export function useRealtimeRoomPosts(fixtureId: string, initialPosts: RoomPost[]
             return;
           }
 
-          supabase
-            .rpc("get_public_profiles", { p_ids: [inserted.author_profile_id] })
-            .then(({ data }) => {
-              if (cancelled) return;
-              const author = data?.[0];
-              const newPost: RoomPost = {
-                id: inserted.id,
-                body: inserted.body,
-                createdAt: inserted.created_at,
-                authorName: author?.display_name || author?.username || "KIVO fan",
-                authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
-                reactionCount: 0,
-                viewerReaction: null,
-                commentCount: 0,
-                isSystem: false,
-              };
-              setPosts((prev) => (prev.some((p) => p.id === newPost.id) ? prev : [newPost, ...prev]));
-            });
+          void Promise.all([
+            supabase.rpc("get_public_profiles", { p_ids: [inserted.author_profile_id] }),
+            // KN-29: is this a poll? See the doc comment above — an INSERT
+            // payload cannot say, so ask.
+            supabase
+              .from("poll_options")
+              .select("id, label, position")
+              .eq("post_id", inserted.id)
+              .order("position", { ascending: true }),
+          ]).then(([{ data: profiles }, { data: options }]) => {
+            if (cancelled) return;
+            const author = profiles?.[0];
+            const newPost: RoomPost = {
+              id: inserted.id,
+              body: inserted.body,
+              createdAt: inserted.created_at,
+              authorName: author?.display_name || author?.username || "KIVO fan",
+              authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
+              reactionCount: 0,
+              viewerReaction: null,
+              commentCount: 0,
+              isSystem: false,
+              poll:
+                options && options.length > 0
+                  ? {
+                      options: options.map((option) => ({
+                        id: option.id,
+                        label: option.label,
+                        position: option.position,
+                        voteCount: 0,
+                      })),
+                      totalVotes: 0,
+                      viewerOptionId: null,
+                      // Not "results failed to load" — this poll is seconds old
+                      // and genuinely has no votes. The distinction matters:
+                      // `resultsUnavailable` makes PollBlock say so instead of
+                      // showing zeros it cannot vouch for.
+                      resultsUnavailable: false,
+                    }
+                  : null,
+            };
+            setPosts((prev) => (prev.some((p) => p.id === newPost.id) ? prev : [newPost, ...prev]));
+          });
         },
       )
+      // KN-22. Unfiltered on purpose — see the doc comment for why a
+      // fixture_id filter cannot work on a DELETE without leaking the deleted
+      // post's body to every subscriber.
+      .on<PostsRow>("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, (payload) => {
+        const removedId = (payload.old as Partial<PostsRow>)?.id;
+        if (!removedId || cancelled) return;
+        setPosts((prev) => (prev.some((p) => p.id === removedId) ? prev.filter((p) => p.id !== removedId) : prev));
+      })
       .subscribe();
 
     return () => {

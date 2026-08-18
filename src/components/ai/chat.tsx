@@ -73,6 +73,12 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** KN-24: the model's own reason for stopping, verbatim (`max_tokens`,
+   * `end_turn`, …). `max_tokens` is the one the UI acts on — that reply ended
+   * because it ran out of room, not because it was finished, and saying so is
+   * the same honesty rule items 188/189 applied to provenance, applied to
+   * completeness. Undefined while a reply is still streaming. */
+  stopReason?: string | null;
   /** Only set once a message is "final" — a live user send, a completed
    * assistant reply, or one loaded from history. Absent while an assistant
    * reply is still streaming in. */
@@ -84,6 +90,7 @@ interface ChatMessage {
 type StreamFrame =
   | { type: "meta"; conversationId: string }
   | { type: "delta"; text: string }
+  | { type: "truncated" }
   | { type: "done" }
   | { type: "error"; error: string };
 
@@ -203,6 +210,7 @@ export function AiChat({
     let assistantStarted = false;
     let returnedId: string | undefined = activeConversationId;
     let streamError: string | null = null;
+    let truncated = false;
 
     function appendAssistantDelta(delta: string) {
       assistantText += delta;
@@ -254,6 +262,8 @@ export function AiChat({
             setActiveConversationId(frame.conversationId);
           } else if (frame.type === "delta") {
             appendAssistantDelta(frame.text);
+          } else if (frame.type === "truncated") {
+            truncated = true;
           } else if (frame.type === "error") {
             streamError = frame.error;
           }
@@ -262,7 +272,13 @@ export function AiChat({
 
       if (assistantStarted) {
         const finishedAt = new Date().toISOString();
-        setMessages((prev) => prev.map((m) => (m.id === assistantMessageId ? { ...m, createdAt: finishedAt } : m)));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, createdAt: finishedAt, stopReason: truncated ? "max_tokens" : null }
+              : m,
+          ),
+        );
       }
 
       if (streamError) {
@@ -360,7 +376,13 @@ export function AiChat({
     } else {
       setActiveConversationId(id);
       setMessages(
-        result.messages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content, createdAt: m.created_at })),
+        result.messages.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          createdAt: m.created_at,
+          stopReason: m.stop_reason,
+        })),
       );
     }
     setLoadingConversation(false);
@@ -400,7 +422,13 @@ export function AiChat({
         const reloaded = await loadConversationMessages(id);
         if (reloaded.error === null) {
           setMessages(
-            reloaded.messages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content, createdAt: m.created_at })),
+            reloaded.messages.map((m) => ({
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              createdAt: m.created_at,
+              stopReason: m.stop_reason,
+            })),
           );
         }
       }
@@ -597,6 +625,27 @@ export function AiChat({
             >
               {m.role === "assistant" ? renderMessageContent(m.content) : m.content}
             </div>
+
+            {/* KN-24. A reply that hit the token ceiling stops mid-thought and
+                otherwise looks exactly like a finished one. Said plainly, next
+                to the answer rather than buried in a tooltip, and with the one
+                action that actually helps — asking it to continue, which is a
+                normal next turn rather than a regenerate (regenerate would
+                throw away the part that did arrive). */}
+            {m.role === "assistant" && m.stopReason === "max_tokens" && (
+              <div className="flex max-w-[85%] flex-wrap items-center gap-2 rounded-xl border border-hairline bg-surface-inset px-3 py-2 text-xs text-foreground-muted">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" strokeWidth={2} aria-hidden="true" />
+                <span>This answer was cut short — it reached KIVO&apos;s length limit before finishing.</span>
+                <button
+                  type="button"
+                  onClick={() => send("Continue from where you stopped.")}
+                  disabled={pending}
+                  className="font-medium text-accent transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  Ask it to continue
+                </button>
+              </div>
+            )}
 
             {m.role === "assistant" && m.content && (
               <div className="flex items-center gap-2 px-1 text-foreground-subtle">

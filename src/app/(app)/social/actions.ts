@@ -1,6 +1,5 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -9,7 +8,9 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify } from "@/lib/notification-preferences";
 import { fetchPostsPage, type PostListItem } from "./posts";
+import { resolveFeedScope, type SocialFilter } from "@/lib/social-filters";
 import { buildNotification } from "@/lib/notification-payloads";
+import { logError } from "@/lib/log";
 
 const MAX_POST_LENGTH = 2000;
 
@@ -155,10 +156,20 @@ export async function createPoll(formData: FormData) {
   const rateLimit = await checkRateLimit(`user:${profile.id}`, "create_post", 5, 60);
   if (!rateLimit.ok) return { error: rateLimit.error };
 
+  // KN-29. `createPost` has always read this hidden field — `PostComposer`
+  // submits it whenever it is rendered inside a Match Centre Room — and
+  // `createPoll`, in the same file, never did. The consequence is not cosmetic:
+  // the founding brief names polls by example as "score/MOTM/ref decisions",
+  // and all three of those are inherently about one match. Without a
+  // fixture_id a poll cannot appear in the Room for the match it is about, so
+  // the one poll type the brief actually specifies was unbuildable through the
+  // UI. One line, and it is the same line createPost uses.
+  const fixtureId = String(formData.get("fixture_id") ?? "").trim() || null;
+
   const supabase = createServerSupabaseClient();
   const { data: post, error: postError } = await supabase
     .from("posts")
-    .insert({ author_profile_id: profile.id, body })
+    .insert({ author_profile_id: profile.id, body, fixture_id: fixtureId })
     .select("id")
     .single();
 
@@ -187,16 +198,26 @@ export async function createPoll(formData: FormData) {
   await maybeAwardTenPostsBadge(supabase, profile.id);
 
   revalidatePath("/social");
+  // KN-29: a Room-scoped poll has to invalidate the Room it was posted into,
+  // exactly as createPost already does for a Room-scoped post.
+  if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
   return { error: null };
 }
 
 /**
- * Records (or changes) the caller's vote on a poll post — delete-then-insert,
- * same convention as setReaction below, since poll_votes_unique_per_user
- * means only one row per (post, profile) can exist at a time. optionId is
- * verified against postId via a plain public select first so a stale or
- * tampered pairing fails with a real error rather than the trigger silently
- * attaching the vote to a different poll than the UI showed the user.
+ * Records (or changes) the caller's vote on a poll post.
+ *
+ * KN-23. `poll_votes_unique_per_user` means only one row per (post, profile)
+ * can exist, so changing a vote is unavoidably delete-then-insert. Done from
+ * here that was two round trips with nothing spanning them: a failure in the
+ * gap left the user with NO vote where they had one a moment earlier, while
+ * the error said "Couldn't record your vote" — which reads as "nothing
+ * changed". Both statements now happen inside `vote_on_poll` (migration 0066),
+ * so they commit together or not at all.
+ *
+ * The RPC is SECURITY INVOKER, not SECURITY DEFINER: RLS is still the thing
+ * deciding whether this caller may write, including 0045's moderation gate.
+ * See the migration for why that mattered more than the atomicity itself.
  */
 export async function voteOnPoll(postId: string, optionId: string) {
   const profile = await getOrCreateProfile();
@@ -206,21 +227,15 @@ export async function voteOnPoll(postId: string, optionId: string) {
   if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
+  const { error } = await supabase.rpc("vote_on_poll", { p_post_id: postId, p_option_id: optionId });
 
-  const { data: option } = await supabase.from("poll_options").select("id").eq("id", optionId).eq("post_id", postId).maybeSingle();
-  if (!option) return { error: "That poll option no longer exists." };
-
-  const { error: deleteError } = await supabase.from("poll_votes").delete().eq("post_id", postId).eq("profile_id", profile.id);
-  if (deleteError) {
-    logError("social.clearExistingPollVote", deleteError);
-    return { error: "Couldn't record your vote. Try again." };
-  }
-
-  const { error: insertError } = await supabase
-    .from("poll_votes")
-    .insert({ post_id: postId, option_id: optionId, profile_id: profile.id });
-  if (insertError) {
-    logError("social.recordPollVote", insertError);
+  if (error) {
+    // P0002 is the RPC's own "that option isn't on this poll" — a real,
+    // explainable state (the poll was edited or deleted under them), not an
+    // infrastructure failure, so it gets its own message rather than the
+    // generic one.
+    if (error.code === "P0002") return { error: "That poll option no longer exists." };
+    logError("social.recordPollVote", error);
     return { error: "Couldn't record your vote. Try again." };
   }
 
@@ -249,34 +264,28 @@ export async function setReaction(targetType: "post" | "comment", targetId: stri
 
   const supabase = createServerSupabaseClient();
 
-  const { error: deleteError } = await supabase
-    .from("reactions")
-    .delete()
-    .eq("target_type", targetType)
-    .eq("target_id", targetId)
-    .eq("profile_id", profile.id);
+  // KN-23, same shape as voteOnPoll above: the clear-then-set pair is one
+  // statement now (migration 0066), so a failure between them can no longer
+  // leave the user with no reaction at all after they asked to change one.
+  const { error } = await supabase.rpc("set_reaction", {
+    p_target_type: targetType,
+    p_target_id: targetId,
+    // Cast, and here is why it is not papering over anything: a plpgsql
+    // argument is nullable and `set_reaction` handles null explicitly (it means
+    // "clear my reaction" — the caller tapped their active one again). Supabase's
+    // type generator has no way to express SQL argument nullability, so it emits
+    // every Args field as non-null. The null is the documented contract, not a
+    // type hole.
+    p_reaction_type: reactionType as ReactionType,
+  });
 
-  if (deleteError) {
-    logError("social.clearExistingReaction", deleteError);
+  if (error) {
+    logError("social.setReaction", error);
     return { error: "Couldn't update your reaction." };
   }
 
-  if (reactionType !== null) {
-    const { error: insertError } = await supabase.from("reactions").insert({
-      target_type: targetType,
-      target_id: targetId,
-      profile_id: profile.id,
-      reaction_type: reactionType,
-    });
-
-    if (insertError) {
-      logError("social.setReaction", insertError);
-      return { error: "Couldn't update your reaction." };
-    }
-
-    if (targetType === "post") {
-      await notifyPostLiked(targetId, profile);
-    }
+  if (reactionType !== null && targetType === "post") {
+    await notifyPostLiked(targetId, profile);
   }
 
   revalidatePath("/social");
@@ -285,14 +294,23 @@ export async function setReaction(targetType: "post" | "comment", targetId: stri
 
 /** Appends the next page of `/social` posts, offset-based to match the
  * `loadMoreLeagues` / `loadMoreTeams` pattern (see components/leagues/leagues-list.tsx).
- * `followingOnly` (RECOMMENDATIONS item 175) threads through to fetchPostsPage
+ * The filter (RECOMMENDATIONS item 175, extended for Club mates and Rivals) threads through to fetchPostsPage
  * so "Load more" keeps respecting whichever tab the viewer had selected. */
 export async function loadMorePosts(
   offset: number,
-  options?: { followingOnly?: boolean },
+  options?: { filter?: SocialFilter },
 ): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
   const profile = await getOrCreateProfile();
-  return fetchPostsPage(offset, profile?.id ?? null, options);
+  // The scope is re-derived from the viewer's own profile on every call rather
+  // than passed in from the client: a filter name is safe to accept from a
+  // URL, a team id is not — accepting one would let anyone page through any
+  // club's fan feed by editing a request.
+  const scope = resolveFeedScope(options?.filter ?? "all", profile);
+  if (scope.kind === "unavailable") return { error: null, posts: [], hasMore: false };
+  return fetchPostsPage(offset, profile?.id ?? null, {
+    followingOnly: scope.kind === "following",
+    teamId: scope.kind === "team" ? scope.teamId : undefined,
+  });
 }
 
 /**
@@ -316,6 +334,42 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   // recipient who has social_alerts_enabled (or in_app_enabled) off should
   // never get the row in the first place.
   if (!(await shouldNotify(serviceClient, post.author_profile_id, "social_alerts_enabled"))) return;
+
+  // KN-21. Reactions are delete-then-insert, so *changing* one re-notifies, and
+  // toggling off and on re-notifies. With a 30-per-60s limit on set_reaction,
+  // one person could put thirty rows in one author's bell inside a minute — from
+  // a single post — just by tapping. The founding brief names "deduplicated" as
+  // a required property of the notification system; this is the reachable-today
+  // instance of it missing.
+  //
+  // Scoped to UNREAD rows deliberately. Once the author has read the last
+  // notification about this post, a later reaction from the same person is
+  // genuinely new information and should surface again; suppressing it forever
+  // would be a different bug. So the rule is "don't stack unread duplicates",
+  // not "notify once, ever".
+  //
+  // Filtered on the payload's own fields rather than on a new column, because
+  // the pairing that defines a duplicate — (post, liker) — is already in there
+  // and `notifications_payload_shape` (migration 0061) guarantees its shape.
+  const { data: existing, error: existingError } = await serviceClient
+    .from("notifications")
+    .select("id")
+    .eq("profile_id", post.author_profile_id)
+    .eq("type", "post_like")
+    .is("read_at", null)
+    .eq("payload->>post_id", postId)
+    .eq("payload->>liker_username", liker.username)
+    .limit(1)
+    .maybeSingle();
+
+  // Fails OPEN: if we cannot tell whether a duplicate exists, sending one extra
+  // notification is a much smaller harm than silently dropping the only one an
+  // author was going to get.
+  if (existingError) {
+    logError("social.checkDuplicateLikeNotification", existingError);
+  } else if (existing) {
+    return;
+  }
 
   // KN-90: the typed constructor, not an object literal — a dropped or renamed
   // field is now a type error here rather than a notification that renders
