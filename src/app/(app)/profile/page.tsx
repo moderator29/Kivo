@@ -133,6 +133,24 @@ export default async function ProfilePage({
         />
       </FadeIn>
 
+      {/* KIVO_NEXT_GEN KN-98. The profile is a summary of a person; "Your
+          season" is the narrative version of the same rows, and it needs a way
+          in from here or it is a page nobody finds. */}
+      <FadeIn delay={0.05}>
+        <Link
+          href="/profile/season"
+          className="kivo-glass flex items-center justify-between gap-3 rounded-2xl px-4 py-3 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold text-foreground">Your season</span>
+            <span className="text-xs text-foreground-subtle">
+              Your record, streak, fantasy arc and badges — counted from your own activity only.
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+        </Link>
+      </FadeIn>
+
       <FadeIn delay={0.06} className="flex flex-col gap-4">
         <ProfileTabs active={tab} />
         {tab === "posts" && <PostsPanel profileId={profile.id} />}
