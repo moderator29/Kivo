@@ -22,6 +22,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+// This suite exercises pure resolution logic and must not need a Next.js
+// request scope to do it. `next/headers` throws outright when called outside
+// one ("`cookies` was called outside a request scope"), so any code path in
+// profile.ts that reaches for it — now or later — would fail every test here
+// for a reason that has nothing to do with what is being tested. Stubbed to an
+// empty cookie jar: the default, uninteresting answer, which lets resolution
+// run exactly as it does for a real signed-in request.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined, getAll: () => [], has: () => false }),
+  headers: async () => new Headers(),
+}));
+
 const getAuthUser = vi.fn();
 vi.mock("./auth", () => ({ getAuthUser: () => getAuthUser() }));
 

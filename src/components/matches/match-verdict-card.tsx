@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Share2, Check } from "lucide-react";
+import { reactionEmoji, type ReactionType } from "@/lib/reactions";
 
 // Same real-sample threshold as FanRatingCard/HeadToHeadCard/PredictionCard —
 // a verdict built off one fan rating would be exactly the "100% off one
@@ -19,6 +20,20 @@ type MatchVerdictCardProps = {
    * query. */
   roomReactionCount: number;
   roomPostCount: number;
+  /**
+   * KIVO_NEXT_GEN KN-101. Two more real counts: the minute of the match with
+   * the most Room posts, and the Room's most-used reaction. Both null unless
+   * they clear a real floor — see getRoomVerdictExtras in
+   * src/lib/football/room-verdict.ts for the thresholds and why they exist.
+   *
+   * The item also suggests a "top-rated moment". Deliberately absent:
+   * `fan_ratings` rates the fixture, not a moment (migration 0032), so a
+   * top-rated moment would have to be inferred from post volume and then
+   * presented as a rating — the sentiment-shaped fabrication the item's own
+   * last line rules out.
+   */
+  busiestMinute?: { minute: number; postCount: number } | null;
+  topReaction?: { type: ReactionType; count: number } | null;
 };
 
 /**
@@ -37,6 +52,8 @@ export function MatchVerdictCard({
   fanRatingAvg,
   roomReactionCount,
   roomPostCount,
+  busiestMinute = null,
+  topReaction = null,
 }: MatchVerdictCardProps) {
   const [copied, setCopied] = useState(false);
   const hasRealRatingAvg = fanRatingCount >= MIN_MEANINGFUL_SAMPLE && fanRatingAvg !== null;
@@ -51,6 +68,10 @@ export function MatchVerdictCard({
       hasRoomActivity
         ? `${roomReactionCount} reaction${roomReactionCount === 1 ? "" : "s"} across ${roomPostCount} post${roomPostCount === 1 ? "" : "s"} in the Room`
         : null,
+      busiestMinute
+        ? `Busiest minute: ${busiestMinute.minute}' (${busiestMinute.postCount} posts)`
+        : null,
+      topReaction ? `Most-used reaction: ${reactionEmoji(topReaction.type)} (${topReaction.count})` : null,
     ].filter((line): line is string => line !== null);
 
     navigator.clipboard.writeText(lines.join("\n")).then(() => {
@@ -89,6 +110,31 @@ export function MatchVerdictCard({
           </div>
         )}
       </div>
+
+      {/* KN-101: two more real counts, each rendered only when it cleared its
+          own floor. A room with three posts has a "busiest minute" in the
+          arithmetic sense and it means nothing, so getRoomVerdictExtras
+          returns null and nothing appears here. */}
+      {(busiestMinute || topReaction) && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-hairline-soft pt-3">
+          {busiestMinute && (
+            <span className="text-[11px] text-foreground-subtle">
+              Busiest minute{" "}
+              <span className="font-semibold text-foreground">{busiestMinute.minute}&apos;</span> ·{" "}
+              {busiestMinute.postCount} posts
+            </span>
+          )}
+          {topReaction && (
+            <span className="text-[11px] text-foreground-subtle">
+              Most-used reaction{" "}
+              <span className="text-sm" aria-hidden="true">
+                {reactionEmoji(topReaction.type)}
+              </span>{" "}
+              <span className="font-semibold text-foreground">{topReaction.count}</span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

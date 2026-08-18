@@ -18,6 +18,7 @@ import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
+import { TeamMergePanel } from "@/components/admin/team-merge-panel";
 
 type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
 
@@ -125,6 +126,16 @@ export default async function DataHealthPage() {
   const activeProviderLabel = activeProviderLabelOrNull ?? "API-Football";
 
   const supabase = createServerSupabaseClient();
+
+  // KN-83: the club list for the merge tool. Bounded — a merge is a targeted
+  // repair, not a bulk operation, and a select of every club in a
+  // fully-synced database would be unusable anyway.
+  const { data: mergeableTeamRows } = await supabase
+    .from("teams")
+    .select("id, name")
+    .order("name", { ascending: true })
+    .limit(200);
+  const mergeableTeams = mergeableTeamRows ?? [];
   // trigger_source (migration 0044) scopes this to admin-clicked runs only —
   // the automated cron worker gets its own "Automated worker" section below
   // instead of crowding this list out. Vercel Cron fires the worker's route
@@ -620,6 +631,13 @@ export default async function DataHealthPage() {
       </div>
 
       <AutomationStatusPanel />
+
+      {/* KIVO_NEXT_GEN KN-83. Placed with the other data-integrity tools rather
+          than in its own screen — it is a repair for a specific condition
+          (the same real club synced twice under two providers), and burying it
+          somewhere separate would make it something nobody finds when they
+          need it. */}
+      <TeamMergePanel teams={mergeableTeams} />
 
       <SyncReliabilityPanel />
 

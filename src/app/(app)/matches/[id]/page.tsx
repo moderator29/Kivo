@@ -25,6 +25,7 @@ import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { absoluteUrl } from "@/lib/site-url";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
+import { getRoomVerdictExtras } from "@/lib/football/room-verdict";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -81,6 +82,14 @@ export default async function MatchCentrePage({
   // rule server-side, this just avoids fetching rating data for a fixture
   // nobody could have rated yet.
   const isFinished = fixture.status === "finished";
+
+  // KIVO_NEXT_GEN KN-101. Only for a finished match, and only then — a
+  // "busiest minute" of a match still being played is a moving number, and a
+  // verdict is a thing you deliver afterwards. Returns nulls rather than
+  // throwing if anything goes wrong; the verdict card simply omits the row.
+  const roomVerdictExtras = isFinished
+    ? await getRoomVerdictExtras(supabase, id, fixture.kickoff_at)
+    : { busiestMinute: null, topReaction: null };
 
   const [
     { data: events },
@@ -420,6 +429,8 @@ export default async function MatchCentrePage({
             fanRatingAvg={fanRatingAvg}
             roomReactionCount={roomReactionCount}
             roomPostCount={roomPosts.length}
+            busiestMinute={roomVerdictExtras.busiestMinute}
+            topReaction={roomVerdictExtras.topReaction}
           />
         </FadeIn>
       )}

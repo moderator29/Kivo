@@ -1,6 +1,5 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
@@ -8,7 +7,9 @@ import { createServerSupabaseClient } from "./supabase/server";
 import { resolveViewerProfile } from "./profile";
 import { isAuthConfigured, sanitizeRedirectPath } from "./auth";
 import { checkRateLimit, getClientIp } from "./rate-limit";
+import { trustedOriginFor } from "./site-url";
 import { RESEND_COOLDOWN_SECONDS, type AuthActionResult, type AuthMode } from "./auth-shared";
+import { logError } from "@/lib/log";
 
 /**
  * Server Actions behind the KIVO email sign-in / sign-up form
@@ -39,8 +40,12 @@ function describeAuthError(error: AuthError, mode: AuthMode): AuthActionResult {
     case "otp_expired":
       return { error: "That code has expired. Request a new one." };
     case "otp_disabled":
-      // signInWithOtp with shouldCreateUser: false and no such user.
-      return { error: "No KIVO account uses that email yet. Create one instead." };
+      // signInWithOtp with shouldCreateUser: false and no such user. NOT
+      // surfaced to the caller — see the enumeration note on sendEmailCode.
+      // This case is intercepted there and never reaches this function; the
+      // branch stays for the sign-up mode, where the same code means the
+      // project has OTP turned off entirely rather than "no such user".
+      return { error: "Email sign-in is turned off for this environment." };
     case "signup_disabled":
       return { error: "New sign-ups are turned off right now. Try again later." };
     case "email_address_invalid":
@@ -49,7 +54,10 @@ function describeAuthError(error: AuthError, mode: AuthMode): AuthActionResult {
     case "email_address_not_authorized":
       return { error: "That email address isn't allowed to sign in to this environment." };
     case "user_banned":
-      return { error: "This account has been suspended. Contact support if you think that's wrong." };
+      // KN-118: "contact support" now names a route that exists. Referred to
+      // by the on-page link rather than an absolute URL — KIVO's production
+      // domain is not decided in this repo and must not be invented here.
+      return { error: "This account has been suspended. If you think that's wrong, use the Get help link below." };
     case "over_email_send_rate_limit":
     case "over_request_rate_limit":
       return {
@@ -188,24 +196,62 @@ export async function sendEmailCode(
     },
   });
 
-  if (error) return describeAuthError(error, mode);
+  // KN-124: never answer "does this email have a KIVO account?".
+  //
+  // On /sign-in, `shouldCreateUser: false` makes Supabase return `otp_disabled`
+  // for an address that has never signed up. Reporting that back — which this
+  // used to, as "No KIVO account uses that email yet" — is a membership oracle:
+  // anyone can feed addresses in one at a time and learn who is on KIVO. The
+  // throttle added above makes that slow, not impossible, and a slow leak of a
+  // user list is still a leak.
+  //
+  // So sign-in now answers identically whether or not the account exists: the
+  // form advances to the code step either way. The UX that message existed to
+  // provide is preserved without the oracle — the code screen carries a
+  // permanent, unconditional "no code? you may not have an account yet, create
+  // one" line (src/components/auth/email-code-form.tsx), which is exactly the
+  // next action the old message prompted, shown to everybody instead of only to
+  // the people whose absence we just confirmed.
+  //
+  // /sign-up is unaffected: it creates the account or signs the existing one in,
+  // and has always responded identically either way.
+  //
+  // Recorded in DECISIONS.md ("Sign-in no longer confirms whether an email has
+  // a KIVO account"), because it is a deliberate UX-for-privacy trade.
+  if (error) {
+    if (mode === "sign-in" && error.code === "otp_disabled") return undefined;
+    return describeAuthError(error, mode);
+  }
   return undefined;
 }
 
 /**
- * Absolute origin of the current request, for the one thing that genuinely
- * needs one: the link Supabase embeds in the email, which is opened from a mail
- * client with no relation to this request. Prefers the explicitly configured
- * public URL and falls back to the forwarded host, so it is right in local dev,
- * on a preview deployment, and in production without being configured three
- * different ways.
+ * Absolute origin for the one thing that genuinely needs one: the link Supabase
+ * embeds in the email, which is opened from a mail client with no relation to
+ * this request.
+ *
+ * KN-125. This used to read `x-forwarded-host` and use it directly whenever
+ * NEXT_PUBLIC_APP_URL was unset — a header the caller sets, turned into the URL
+ * that goes out in mail sent from KIVO's own domain. Supabase re-validates
+ * `emailRedirectTo` against the project's redirect allow-list, and that IS the
+ * real mitigation, but that allow-list is dashboard configuration which appears
+ * nowhere in this repository: nothing in here proves it is set, so nothing in
+ * here may depend on it.
+ *
+ * The request host is still consulted, because discarding it outright breaks
+ * preview deployments (the PKCE verifier cookie was set on the preview host, so
+ * a link pointing at production cannot complete there). It is now *checked*
+ * first — `trustedOriginFor` accepts it only when it matches an origin this
+ * deployment is configured to answer on, and otherwise returns the canonical
+ * site URL. Every entry in that allow-list comes from server-side environment,
+ * never from the request.
  */
 async function requestOrigin(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
   const headerList = await headers();
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
-  const protocol = headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
+  return trustedOriginFor(
+    headerList.get("x-forwarded-host") ?? headerList.get("host"),
+    headerList.get("x-forwarded-proto"),
+  );
 }
 
 /**

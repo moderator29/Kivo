@@ -82,6 +82,16 @@ export default async function SignInPage({
                 Create an account
               </Link>
             </p>
+            {/* KN-118: the last line of the funnel. With no password and no
+                social login, someone whose code never arrives has no other
+                move — and /support is deliberately outside the (app) gate so
+                they can actually reach it. */}
+            <p className="text-xs text-foreground-subtle">
+              Can&apos;t get in?{" "}
+              <Link href="/support?topic=sign_in" className="font-medium text-accent transition-colors hover:text-foreground">
+                Get help signing in
+              </Link>
+            </p>
           </FadeIn>
         ) : (
           <FadeIn delay={0.12} className="kivo-glass-brand max-w-sm rounded-3xl p-6 text-center text-sm text-foreground-muted">

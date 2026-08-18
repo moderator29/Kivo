@@ -52,10 +52,70 @@ const MAX_POLL_OPTION_LENGTH = 80;
  * the presentational shell changes here; every server-side guarantee
  * PostComposer already had for a Room post stays exactly as it was.
  */
+/**
+ * KIVO_NEXT_GEN KN-100. The founding brief names Match Room polls by example —
+ * "score/MOTM/ref decisions" — and a sibling change made a Room able to *host*
+ * one. This is the part the item actually asks for: the templates, so asking
+ * the room the question the brief names is one tap rather than typing a
+ * question and three options with a match going on.
+ *
+ * Two rules the templates hold to.
+ *
+ * **Options are real or they are blank.** "Who wins?" offers the two clubs'
+ * actual names and a draw, because those come from the fixture. "Man of the
+ * match" pre-fills the question and leaves the options empty, because the
+ * honest answer set is the players this person watched, and KIVO offering a
+ * shortlist would be picking candidates on their behalf.
+ *
+ * **A poll is fan opinion and must never read as a KIVO prediction**
+ * (RECOMMENDATIONS items 178/246). A "who wins?" poll is fine — it is what the
+ * room thinks. A KIVO-computed win probability is not, and nothing here
+ * computes, weights or ranks anything: the poll stack counts votes, and the
+ * composer says so in one line under the templates.
+ */
+type PollTemplate = {
+  id: string;
+  chip: string;
+  question: string;
+  /** Options with real content; empty strings leave the field for the author. */
+  buildOptions: (home: string, away: string) => string[];
+  /** When this template makes sense. A finished match has already answered "who wins?". */
+  availableWhen: (isFinished: boolean) => boolean;
+};
+
+const POLL_TEMPLATES: PollTemplate[] = [
+  {
+    id: "who-wins",
+    chip: "Who wins?",
+    question: "Who wins?",
+    buildOptions: (home, away) => [home, "Draw", away],
+    availableWhen: (isFinished) => !isFinished,
+  },
+  {
+    id: "motm",
+    chip: "Man of the match",
+    question: "Man of the match?",
+    // Deliberately blank. Naming candidates would be KIVO choosing who is worth
+    // voting for, and the lineup is often not synced anyway.
+    buildOptions: () => ["", ""],
+    availableWhen: () => true,
+  },
+  {
+    id: "ref",
+    chip: "Was that a penalty?",
+    question: "Was that a penalty?",
+    buildOptions: () => ["Yes", "No", "Not sure"],
+    availableWhen: () => true,
+  },
+];
+
 export function RoomComposer({
   fixtureId,
   signedIn,
   onTypingChange,
+  homeTeamName,
+  awayTeamName,
+  isFinished = false,
 }: {
   fixtureId: string;
   signedIn: boolean;
@@ -63,6 +123,10 @@ export function RoomComposer({
    * is empty, sent, or idle for a few seconds. The composer owns this because
    * it is the only thing that knows; MatchRoomTab broadcasts it. */
   onTypingChange?: (typing: boolean) => void;
+  /** KN-100: real club names for the "Who wins?" template's options. */
+  homeTeamName: string;
+  awayTeamName: string;
+  isFinished?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -81,7 +145,15 @@ export function RoomComposer({
     );
   }
 
-  return <SignedInRoomComposer fixtureId={fixtureId} onTypingChange={onTypingChange} />;
+  return (
+    <SignedInRoomComposer
+      fixtureId={fixtureId}
+      onTypingChange={onTypingChange}
+      homeTeamName={homeTeamName}
+      awayTeamName={awayTeamName}
+      isFinished={isFinished}
+    />
+  );
 }
 
 /** How long a stalled composer keeps claiming its author is typing. Long
@@ -93,9 +165,15 @@ const TYPING_IDLE_MS = 6000;
 function SignedInRoomComposer({
   fixtureId,
   onTypingChange,
+  homeTeamName,
+  awayTeamName,
+  isFinished,
 }: {
   fixtureId: string;
   onTypingChange?: (typing: boolean) => void;
+  homeTeamName: string;
+  awayTeamName: string;
+  isFinished: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -120,6 +198,26 @@ function SignedInRoomComposer({
 
   const filledOptions = options.filter((option) => option.trim().length > 0).length;
   const canSubmitPoll = filledOptions >= MIN_POLL_OPTIONS;
+
+  /**
+   * Fills the composer from a template. The question goes into the existing
+   * body input (which `createPoll` already reads as the question), and the
+   * options replace whatever was there — a template is a starting point, and
+   * the author can edit every field afterwards, including the club names.
+   */
+  function applyTemplate(template: PollTemplate) {
+    const filled = template.buildOptions(homeTeamName, awayTeamName);
+    setOptions(filled.length >= MIN_POLL_OPTIONS ? filled : ["", ""]);
+    setPollOpen(true);
+    setError(null);
+    const bodyInput = formRef.current?.elements.namedItem("body");
+    if (bodyInput instanceof HTMLInputElement || bodyInput instanceof HTMLTextAreaElement) {
+      bodyInput.value = template.question;
+      bodyInput.focus();
+    }
+  }
+
+  const templates = POLL_TEMPLATES.filter((template) => template.availableWhen(isFinished));
 
   function closePoll() {
     setPollOpen(false);
@@ -200,6 +298,23 @@ function SignedInRoomComposer({
               className="overflow-hidden"
             >
               <div className="flex flex-col gap-1.5 pb-1.5 pr-1.5">
+                {/* KN-100: one tap for the three questions the founding brief
+                    names by example. Everything they fill in is editable. */}
+                {templates.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {templates.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => applyTemplate(template)}
+                        className="kivo-glass-sharp rounded-lg px-2.5 py-1 text-[11px] font-medium text-foreground-muted transition-colors hover:text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                      >
+                        {template.chip}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {options.map((option, index) => (
                   <div key={index} className="flex items-center gap-1.5">
                     <input
@@ -225,6 +340,10 @@ function SignedInRoomComposer({
                     )}
                   </div>
                 ))}
+                <p className="text-[10px] text-foreground-subtle">
+                  A Room poll is what this room thinks. KIVO counts the votes and nothing else — it never predicts a
+                  result.
+                </p>
                 {options.length < MAX_POLL_OPTIONS && (
                   <button
                     type="button"

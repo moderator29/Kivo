@@ -132,6 +132,7 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          criteria: Json | null
           description: string | null
           icon_url: string | null
           id: string
@@ -141,6 +142,7 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
+          criteria?: Json | null
           description?: string | null
           icon_url?: string | null
           id?: string
@@ -150,6 +152,7 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
+          criteria?: Json | null
           description?: string | null
           icon_url?: string | null
           id?: string
@@ -299,6 +302,47 @@ export type Database = {
             columns: ["sync_run_id"]
             isOneToOne: false
             referencedRelation: "sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_merges: {
+        Row: {
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          id: string
+          merged_id: string
+          merged_snapshot: Json
+          moved_counts: Json
+          performed_at: string
+          performed_by: string | null
+          survivor_id: string
+        }
+        Insert: {
+          entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          id?: string
+          merged_id: string
+          merged_snapshot: Json
+          moved_counts: Json
+          performed_at?: string
+          performed_by?: string | null
+          survivor_id: string
+        }
+        Update: {
+          entity_type?: Database["public"]["Enums"]["provider_entity_type"]
+          id?: string
+          merged_id?: string
+          merged_snapshot?: Json
+          moved_counts?: Json
+          performed_at?: string
+          performed_by?: string | null
+          survivor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_merges_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1362,6 +1406,80 @@ export type Database = {
           },
         ]
       }
+      prediction_league_members: {
+        Row: {
+          id: string
+          joined_at: string
+          league_id: string
+          profile_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          league_id: string
+          profile_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          league_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_league_members_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "prediction_leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prediction_league_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prediction_leagues: {
+        Row: {
+          created_at: string
+          creator_profile_id: string
+          id: string
+          invite_code: string | null
+          max_members: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_profile_id: string
+          id?: string
+          invite_code?: string | null
+          max_members?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_profile_id?: string
+          id?: string
+          invite_code?: string | null
+          max_members?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prediction_leagues_creator_profile_id_fkey"
+            columns: ["creator_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       predictions: {
         Row: {
           created_at: string
@@ -2287,6 +2405,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      evaluate_badge_criteria: {
+        Args: { p_profile_id: string }
+        Returns: number
+      }
       flag_absent_fixtures: {
         Args: {
           p_kickoff_from: string
@@ -2403,6 +2525,18 @@ export type Database = {
           predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
         }[]
       }
+      get_prediction_league_leaderboard: {
+        Args: { p_league_id: string }
+        Returns: {
+          correct: number
+          display_name: string
+          is_you: boolean
+          profile_id: string
+          settled: number
+          total_points: number
+          username: string
+        }[]
+      }
       get_predictions_leaderboard: {
         Args: { p_limit?: number }
         Returns: {
@@ -2492,6 +2626,21 @@ export type Database = {
           position: number
         }[]
       }
+      get_user_head_to_head: {
+        Args: { p_other_profile_id: string }
+        Returns: {
+          badge_count: number
+          fantasy_points: number
+          is_public: boolean
+          predictions_correct: number
+          predictions_made: number
+          predictions_settled: number
+          profile_id: string
+          shared_follows: number
+          side: string
+          total_xp: number
+        }[]
+      }
       get_xp_total: { Args: { p_profile_id: string }; Returns: number }
       is_username_available: {
         Args: { p_exclude_profile_id?: string; p_username: string }
@@ -2523,6 +2672,14 @@ export type Database = {
       mark_notifications_read: {
         Args: { p_notification_ids: string[] }
         Returns: undefined
+      }
+      merge_teams: {
+        Args: {
+          p_dry_run?: boolean
+          p_merged_id: string
+          p_survivor_id: string
+        }
+        Returns: Json
       }
       notification_payload_is_valid: {
         Args: { p_payload: Json; p_type: string }
@@ -2570,6 +2727,14 @@ export type Database = {
           max_teams: number
           name: string
           season_id: string
+        }[]
+      }
+      redeem_prediction_invite_code: {
+        Args: { p_invite_code: string }
+        Returns: {
+          error_message: string
+          id: string
+          name: string
         }[]
       }
       release_sync_lock: {

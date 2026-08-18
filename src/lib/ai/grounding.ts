@@ -5,6 +5,7 @@ import { computeTeamForm, computePlayerForm, resolveFixtureResult, type Resolved
 import { buildMatchInsights, type MatchInsights } from "@/lib/football/match-intelligence";
 import { createTtlCache } from "@/lib/ttl-cache";
 import { buildMentionFacts } from "./entity-resolution";
+import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 
 // RECOMMENDATIONS.md item 227: this pass's original enrichment scoped form to
 // the favourite team only "to keep this one extra query bounded" — these two
@@ -231,7 +232,18 @@ export async function buildGroundingContext(
 async function buildBaseGrounding(profile: Profile, focus: GroundingFocus | null): Promise<BaseGrounding> {
 
   const supabase = createServerSupabaseClient();
-  const today = new Date().toISOString().slice(0, 10);
+
+  // KN-32. "Today's synced fixtures" is a claim KIVO makes to a specific person
+  // about their day, and it was answered in UTC. For a Lagos user (UTC+1, the
+  // stated launch market) a 00:30 kickoff belonged to yesterday and a 23:30 one
+  // to tomorrow, so the Copilot could confidently tell somebody there was
+  // nothing on tonight while their match was in the grounding context under a
+  // different date. Wrong grounding is worse here than anywhere else in the
+  // product: the model explains what it is given, so a bad boundary does not
+  // produce a visible gap, it produces a confident wrong answer.
+  const { timeZone: viewerTimeZone } = resolveTimeZone(profile.timezone);
+  const dayStart = startOfDayInTimeZone(viewerTimeZone);
+  const dayEnd = startOfDayInTimeZone(viewerTimeZone, new Date(dayStart.getTime() + 36 * 60 * 60 * 1000));
 
   const [{ data: follows }, { data: favouriteTeam }, { data: todaysFixtures }] = await Promise.all([
     supabase
@@ -246,8 +258,8 @@ async function buildBaseGrounding(profile: Profile, focus: GroundingFocus | null
     supabase
       .from("fixtures")
       .select("kickoff_at, status, home_score, away_score, home_team:teams!fixtures_home_team_id_fkey(name), away_team:teams!fixtures_away_team_id_fkey(name), competition:competitions(name)")
-      .gte("kickoff_at", `${today}T00:00:00Z`)
-      .lte("kickoff_at", `${today}T23:59:59Z`)
+      .gte("kickoff_at", dayStart.toISOString())
+      .lt("kickoff_at", dayEnd.toISOString())
       .order("kickoff_at", { ascending: true })
       .limit(30),
   ]);

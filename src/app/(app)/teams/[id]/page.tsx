@@ -39,6 +39,7 @@ import { calculateAge, formatDate, formatNumber } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
+import { ClubCommunity } from "@/components/teams/club-community";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
@@ -743,6 +744,13 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </div>
         )}
       </FadeIn>
+
+      {/* KIVO_NEXT_GEN KN-102. Derived, not declared: this club's conversation
+          is already sitting in the Match Rooms of its own fixtures, reachable
+          through posts.fixture_id with no new column and no compose-time tag.
+          Renders nothing at all when there is nothing to show — a club page
+          should not carry an empty "community" heading. */}
+      <ClubCommunity teamId={team.id} teamName={team.name} viewerProfileId={profile?.id ?? null} />
     </div>
   );
 }

@@ -68,6 +68,24 @@ export function SocialFeed({
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [serverOffset, setServerOffset] = useState(initialOffset ?? initialPosts.length);
+  /**
+   * KIVO_NEXT_GEN KN-94. The position of the last row the server actually
+   * served, used instead of an offset for every page after the first.
+   *
+   * The offset above is kept only as the fallback for the very first "Load
+   * more" on a page rendered before a cursor exists — and for the team-scoped
+   * feed, whose ids come from an RPC that still takes an offset. Everywhere
+   * else this replaces it, because an offset asks for "rows 20-39 of whatever
+   * the list is right now" and a cursor asks for "posts older than this exact
+   * one". Only the second is stable while people are still posting.
+   *
+   * Seeded from the last post the server rendered, so the first "Load more"
+   * is already keyset rather than waiting a page to become correct.
+   */
+  const [cursor, setCursor] = useState<{ createdAt: string; id: string } | null>(() => {
+    const last = initialPosts[initialPosts.length - 1];
+    return last ? { createdAt: last.createdAt, id: last.id } : null;
+  });
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
@@ -121,18 +139,19 @@ export function SocialFeed({
   function handleLoadMore() {
     setError(null);
     startLoading(async () => {
-      const result = await loadMorePosts(serverOffset, { filter });
+      const result = await loadMorePosts(serverOffset, { filter, cursor: cursor ?? undefined });
       if (result.error) {
         setError(result.error);
         return;
       }
-      // Offset pagination over a feed that is still being written to can hand
-      // back a post that is already on screen: one new post shifts every
-      // older post one place down the window. Appending it blind produced a
-      // duplicate card *and* a duplicate React key (this list keys on
-      // post.id). Advance the offset by what the server served, and drop the
-      // overlap from what gets rendered.
+      // The dedupe below stays even though keyset paging (KN-94) should make
+      // an overlap impossible on the general feed: the team-scoped feed still
+      // pages by offset through an RPC, and this list keys on post.id, so a
+      // duplicate would be a duplicate React key rather than merely an ugly
+      // repeat. Cheap insurance on a path where the cost of being wrong is a
+      // broken list.
       setServerOffset((offset) => offset + result.posts.length);
+      setCursor(result.nextCursor);
       setPosts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
         return [...prev, ...result.posts.filter((p) => !seen.has(p.id))];
@@ -155,6 +174,7 @@ export function SocialFeed({
       }
       setPosts(result.posts);
       setServerOffset(result.posts.length);
+      setCursor(result.nextCursor);
       setHasMore(result.hasMore);
       setHasNewPosts(false);
       window.scrollTo({ top: 0, behavior: "smooth" });

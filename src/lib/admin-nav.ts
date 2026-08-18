@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, ShieldAlert, Users, Database, Palette } from "lucide-react";
+import { LayoutDashboard, ShieldAlert, LifeBuoy, Users, Database, Palette } from "lucide-react";
 
 /**
  * The /admin section's own navigation.
@@ -30,6 +30,13 @@ export type AdminNavItem = { href: string; label: string; icon: LucideIcon };
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/moderation", label: "Moderation", icon: ShieldAlert },
+  // KN-118. Above Users deliberately: KIVO has no password and no social
+  // login, so for anyone whose sign-in code never arrives this queue is the
+  // only route back into their account. It is time-sensitive in a way the
+  // others are not, and nothing notifies anybody that a request has landed —
+  // somebody opening this page IS the on-call rota until KIVO has transactional
+  // email of its own (docs/ACCOUNT_RECOVERY.md).
+  { href: "/admin/support", label: "Support", icon: LifeBuoy },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/data-health", label: "Data health", icon: Database },
   // KN-63. An internal reference, not an operational tool — last in the list

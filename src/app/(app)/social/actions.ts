@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { awardBadge, awardXp, hasBadge } from "@/lib/rewards";
+import { awardBadge, awardXp, evaluateBadgeCriteria, hasBadge } from "@/lib/rewards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify } from "@/lib/notification-preferences";
@@ -114,6 +114,11 @@ export async function createPost(formData: FormData) {
   ]);
 
   await maybeAwardTenPostsBadge(supabase, profile.id);
+  // KIVO_NEXT_GEN KN-92: every badge whose condition is a countable fact is now
+  // described in `badges.criteria` rather than in code, so this one call covers
+  // the whole data-driven half of the catalogue — and a badge added tomorrow
+  // over an existing fact needs no deploy at all.
+  await evaluateBadgeCriteria(profile.id);
 
   revalidatePath("/social");
   if (fixtureId) revalidatePath(`/matches/${fixtureId}`);
@@ -196,6 +201,11 @@ export async function createPoll(formData: FormData) {
   ]);
 
   await maybeAwardTenPostsBadge(supabase, profile.id);
+  // KIVO_NEXT_GEN KN-92: every badge whose condition is a countable fact is now
+  // described in `badges.criteria` rather than in code, so this one call covers
+  // the whole data-driven half of the catalogue — and a badge added tomorrow
+  // over an existing fact needs no deploy at all.
+  await evaluateBadgeCriteria(profile.id);
 
   revalidatePath("/social");
   // KN-29: a Room-scoped poll has to invalidate the Room it was posted into,
@@ -298,18 +308,38 @@ export async function setReaction(targetType: "post" | "comment", targetId: stri
  * so "Load more" keeps respecting whichever tab the viewer had selected. */
 export async function loadMorePosts(
   offset: number,
-  options?: { filter?: SocialFilter },
-): Promise<{ error: string | null; posts: PostListItem[]; hasMore: boolean }> {
+  options?: {
+    filter?: SocialFilter;
+    /**
+     * KIVO_NEXT_GEN KN-94. When present, paging is keyset rather than offset:
+     * "give me the posts strictly older than this exact row". A post written
+     * between two page requests then cannot shift the window and make the
+     * reader miss one — which offset paging does silently, and which deduping
+     * the resulting duplicate client-side hides rather than fixes.
+     *
+     * Safe to accept from the client: it is only ever a position in an ordering
+     * the server itself controls, and every row it can reach is one the same
+     * RLS policies would have returned anyway.
+     */
+    cursor?: { createdAt: string; id: string };
+  },
+): Promise<{
+  error: string | null;
+  posts: PostListItem[];
+  hasMore: boolean;
+  nextCursor: { createdAt: string; id: string } | null;
+}> {
   const profile = await getOrCreateProfile();
   // The scope is re-derived from the viewer's own profile on every call rather
   // than passed in from the client: a filter name is safe to accept from a
   // URL, a team id is not — accepting one would let anyone page through any
   // club's fan feed by editing a request.
   const scope = resolveFeedScope(options?.filter ?? "all", profile);
-  if (scope.kind === "unavailable") return { error: null, posts: [], hasMore: false };
+  if (scope.kind === "unavailable") return { error: null, posts: [], hasMore: false, nextCursor: null };
   return fetchPostsPage(offset, profile?.id ?? null, {
     followingOnly: scope.kind === "following",
     teamId: scope.kind === "team" ? scope.teamId : undefined,
+    cursor: options?.cursor,
   });
 }
 
