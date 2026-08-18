@@ -30,7 +30,7 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
 
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-foreground-subtle">
           <input
             type="checkbox"

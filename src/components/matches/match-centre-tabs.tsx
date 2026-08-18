@@ -13,6 +13,8 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
 import { HeatmapView } from "@/components/matches/heatmap-view";
+import { HeatmapEngine } from "@/lib/football/heatmap-engine";
+import type { PositionalObservation } from "@/lib/football/positional-types";
 
 type MatchEvent = {
   id: string;
@@ -257,15 +259,23 @@ function LineupsTab({
   );
 }
 
+const heatmapEngine = new HeatmapEngine();
+
 /**
  * RECOMMENDATIONS.md item 228: `HeatmapView`/`HeatmapEngine` were already
  * built and tested; this tab is the "add it as a tab" half of that item now
  * that the product decision has been made. No `PositionalDataProvider` is
- * connected anywhere in KIVO (`positional-types.ts`) — both calls below
- * always pass an empty `observations` array, so `HeatmapView` always renders
- * its own honest "Positional data unavailable for this match" empty state.
- * That is the correct, expected behaviour for every real fixture today, not
- * a bug to paper over with sample/fake data.
+ * connected anywhere in KIVO (`positional-types.ts`) — both observations
+ * arrays below are always empty, so today this always hits the single
+ * unified empty state further down. That is the correct, expected
+ * behaviour for every real fixture today, not a bug to paper over with
+ * sample/fake data.
+ *
+ * The per-side split only appears once at least one side has real data to
+ * show — until then, rendering two near-identical "positional data
+ * unavailable" panels side by side (differing only by team name) reads as
+ * a doubled-up placeholder rather than one polished "not available yet"
+ * message for the whole tab.
  */
 function HeatmapTab({
   fixtureId,
@@ -276,10 +286,20 @@ function HeatmapTab({
   homeTeamName: string;
   awayTeamName: string;
 }) {
+  const homeObservations: PositionalObservation[] = [];
+  const awayObservations: PositionalObservation[] = [];
+  const anyData =
+    heatmapEngine.build(homeObservations, { matchId: fixtureId }).hasData ||
+    heatmapEngine.build(awayObservations, { matchId: fixtureId }).hasData;
+
+  if (!anyData) {
+    return <HeatmapView observations={[]} matchId={fixtureId} subjectLabel="this match" />;
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <HeatmapView observations={[]} matchId={fixtureId} subjectLabel={homeTeamName} />
-      <HeatmapView observations={[]} matchId={fixtureId} subjectLabel={awayTeamName} />
+      <HeatmapView observations={homeObservations} matchId={fixtureId} subjectLabel={homeTeamName} />
+      <HeatmapView observations={awayObservations} matchId={fixtureId} subjectLabel={awayTeamName} />
     </div>
   );
 }
@@ -416,9 +436,12 @@ export function MatchCentreTabs(props: MatchCentreTabsProps) {
 function MatchCentreTabsFallback() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1 border-b border-white/10">
+      <div className="flex gap-1 overflow-x-auto border-b border-white/10">
         {TABS.map((tab) => (
-          <div key={tab} className="relative flex-1 px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted">
+          <div
+            key={tab}
+            className="relative min-w-fit flex-1 whitespace-nowrap px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted"
+          >
             {tab}
           </div>
         ))}
@@ -483,7 +506,7 @@ function MatchCentreTabsInner({
         role="tablist"
         aria-label="Match centre sections"
         onKeyDown={handleTabKeyDown}
-        className="flex gap-1 border-b border-white/10"
+        className="flex gap-1 overflow-x-auto border-b border-white/10"
       >
         {TABS.map((tab) => (
           <button
@@ -498,9 +521,11 @@ function MatchCentreTabsInner({
             aria-controls={`match-centre-panel-${tabSlug(tab)}`}
             tabIndex={active === tab ? 0 : -1}
             onClick={() => setActive(tab)}
-            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative min-w-fit flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
           >
-            <span className={`relative ${active === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
+            <span className={`relative whitespace-nowrap ${active === tab ? "text-foreground" : "text-foreground-muted"}`}>
+              {tab}
+            </span>
             {active === tab && (
               <motion.span
                 layoutId="match-centre-active-tab"
@@ -520,7 +545,7 @@ function MatchCentreTabsInner({
           Room aren't backed by this action, so the bar only shows for the
           other three. */}
       {(active === "Details" || active === "Stats" || active === "Lineups") && (
-        <div className="flex items-center justify-between gap-3 px-1">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1">
           <LastSyncedNote timestamp={detailsLastSyncedAt} label="Match details synced" />
           {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
         </div>

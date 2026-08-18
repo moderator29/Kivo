@@ -219,6 +219,25 @@ body {
   animation: kivo-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Backs the brief per-row highlight in `LiveFixtureList`
+   (src/components/matches/live-fixture-list.tsx): a soft cyan wash that
+   fades back to transparent, applied only while a row's own state says a
+   Realtime update just landed (a `useEffect` keyed off that fixture's
+   status/score/minute, not on initial mount) — the cue that a specific row
+   among several live rows is the one that just changed. */
+@keyframes kivo-row-flash {
+  0% {
+    background-color: rgba(0, 217, 255, 0.16);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.kivo-row-flash {
+  animation: kivo-row-flash 1.2s ease-out;
+}
+
 /* Shared treatment for the commissioned KIVO artwork pieces (public/brand/
    kivo-artwork-*.webp) wherever they're used past the landing hero: a slow
    float plus a radial mask so the image's own soft glow dissolves into the

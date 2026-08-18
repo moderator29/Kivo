@@ -79,7 +79,11 @@ export default async function LivePage() {
             <Radio className="h-4 w-4 text-live" strokeWidth={2} />
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Live now</h2>
           </div>
-          <LiveFixtureList fixtures={liveFixtures} />
+          {/* No live dot here — redundant with this section's own Radio-icon
+              header, unlike "Today's fixtures" below where a fixture could
+              flip to live mid-session via Realtime with no other cue on the
+              page. */}
+          <LiveFixtureList fixtures={liveFixtures} showLiveDot={false} />
         </FadeIn>
       )}
 

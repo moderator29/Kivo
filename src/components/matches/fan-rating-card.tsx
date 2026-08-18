@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, type KeyboardEvent } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Star } from "lucide-react";
 import { submitFanRating } from "@/app/(app)/matches/fan-rating-actions";
@@ -42,6 +42,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
   // each pick, rolled back alongside `rating` if the server call fails.
   const [count, setCount] = useState(ratingCount);
   const [avg, setAvg] = useState(avgRating);
+  const starRefs = useRef<Partial<Record<number, HTMLButtonElement | null>>>({});
 
   function handlePick(value: number) {
     if (!signedIn) {
@@ -77,6 +78,24 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
 
   const activeValue = hovered ?? rating ?? 0;
 
+  // Roving-tabindex arrow-key navigation for the radiogroup, per WAI-ARIA
+  // APG (one tab stop for the whole group; Left/Right moves and selects,
+  // matching native <input type="radio"> behaviour) — same pattern already
+  // used for the Match Centre tabs themselves.
+  function handleRadioKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (pending) return;
+    const current = rating ?? 0;
+    let next: number | null = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") next = current >= 5 ? 1 : current + 1;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = current <= 1 ? 5 : current - 1;
+    else if (e.key === "Home") next = 1;
+    else if (e.key === "End") next = 5;
+    if (next === null) return;
+    e.preventDefault();
+    handlePick(next);
+    starRefs.current[next]?.focus();
+  }
+
   return (
     <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
       <div className="flex items-center justify-between gap-2">
@@ -84,10 +103,19 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
         <span className="text-[11px] text-foreground-subtle">Fan opinion, not a provider rating</span>
       </div>
 
-      <div className="flex items-center gap-1" role="radiogroup" aria-label="Your rating" aria-busy={pending}>
+      <div
+        className="flex items-center gap-1"
+        role="radiogroup"
+        aria-label="Your rating"
+        aria-busy={pending}
+        onKeyDown={handleRadioKeyDown}
+      >
         {[1, 2, 3, 4, 5].map((value) => (
           <button
             key={value}
+            ref={(el) => {
+              starRefs.current[value] = el;
+            }}
             type="button"
             disabled={pending}
             onClick={() => handlePick(value)}
@@ -96,6 +124,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
             role="radio"
             aria-checked={rating === value}
             aria-label={`${value} star${value === 1 ? "" : "s"}`}
+            tabIndex={(rating ?? 1) === value ? 0 : -1}
             className="rounded p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed"
           >
             <Star

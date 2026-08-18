@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { isLiveStatus } from "@/lib/football/fixture-status";
@@ -31,7 +32,17 @@ export type LiveListFixture = {
  * only this part needs to be a Client Component; the page's data fetching
  * and empty-state logic stay server-side.
  */
-export function LiveFixtureList({ fixtures }: { fixtures: LiveListFixture[] }) {
+export function LiveFixtureList({
+  fixtures,
+  showLiveDot = true,
+}: {
+  fixtures: LiveListFixture[];
+  /** Whether a row that's actually live also gets the pulsing status dot
+   * (in addition to its live-coloured score text). Defaults on. Pass false
+   * from a "Live now" section that already carries its own live indicator
+   * (e.g. a header Radio icon) — the dot would be redundant there. */
+  showLiveDot?: boolean;
+}) {
   const liveFixtures = useRealtimeFixtures(fixtures);
   const groups = groupFixturesByCompetition(liveFixtures);
 
@@ -56,7 +67,7 @@ export function LiveFixtureList({ fixtures }: { fixtures: LiveListFixture[] }) {
           </div>
           <div className="flex flex-col divide-y divide-white/5">
             {group.fixtures.map((fixture) => (
-              <FixtureRowCard key={fixture.id} fixture={fixture} />
+              <FixtureRowCard key={fixture.id} fixture={fixture} showLiveDot={showLiveDot} />
             ))}
           </div>
         </div>
@@ -65,20 +76,37 @@ export function LiveFixtureList({ fixtures }: { fixtures: LiveListFixture[] }) {
   );
 }
 
-function FixtureRowCard({ fixture }: { fixture: LiveListFixture }) {
+function FixtureRowCard({ fixture, showLiveDot }: { fixture: LiveListFixture; showLiveDot: boolean }) {
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
   const live = isLiveStatus(fixture.status);
+
+  // Brief highlight when this row's live-relevant fields change via
+  // Realtime, so a score/minute update has some on-screen cue beyond the
+  // text silently swapping — especially noticeable with several live rows
+  // listed together. Deliberately skipped on the initial mount (only fires
+  // once the composite key actually *changes* from a previous render), so
+  // the whole list doesn't flash on first paint.
+  const updateKey = `${fixture.status}-${fixture.home_score}-${fixture.away_score}-${fixture.minute_elapsed}`;
+  const prevUpdateKeyRef = useRef(updateKey);
+  const [flash, setFlash] = useState(false);
+  useEffect(() => {
+    if (prevUpdateKeyRef.current === updateKey) return;
+    prevUpdateKeyRef.current = updateKey;
+    setFlash(true);
+    const timeout = setTimeout(() => setFlash(false), 1200);
+    return () => clearTimeout(timeout);
+  }, [updateKey]);
 
   return (
     <Link
       href={`/matches/${fixture.id}`}
-      className="flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-white/5"
+      className={`flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-white/5 ${flash ? "kivo-row-flash" : ""}`}
     >
       <div className="flex items-center justify-end">
         <FixtureStatusBadge
           status={fixture.status}
           kickoffAt={fixture.kickoff_at}
-          showLiveDot={false}
+          showLiveDot={showLiveDot}
           minuteElapsed={fixture.minute_elapsed}
         />
       </div>
