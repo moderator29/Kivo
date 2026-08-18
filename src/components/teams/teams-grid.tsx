@@ -1,18 +1,24 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
-import { loadMoreTeams, type TeamListItem } from "@/app/(app)/teams/actions";
+import type { TeamListItem } from "@/app/(app)/teams/constants";
 
 /**
- * `/teams`' grid plus a "Load more" button that appends the next page via
- * `loadMoreTeams` (offset-based, not true infinite scroll — RECOMMENDATIONS
- * item 112). Existing tiles keep their React key across a load, so only the
- * newly-appended tiles play the FadeIn entrance.
+ * `/teams`' grid plus a "Load more" control (offset-based, not true infinite
+ * scroll — RECOMMENDATIONS item 112).
+ *
+ * KN-47: "Load more" is a real `<Link>` to `?page=N+1` rather than a button
+ * calling a server action into local state. Three things follow from that, and
+ * they are the whole point of the change: pressing Back after opening a club
+ * returns to the same number of loaded pages instead of page one; the URL is
+ * shareable and bookmarkable; and the control works with JavaScript disabled.
+ * `scroll={false}` keeps the viewport where it is, so it still *feels* like
+ * appending rather than navigating.
  *
  * The name filter below is a plain client-side substring match over
  * whatever page(s) are already loaded — finding a team late in the alphabet
@@ -21,25 +27,17 @@ import { loadMoreTeams, type TeamListItem } from "@/app/(app)/teams/actions";
  * needs a "Load more" click before it can match; that's an accepted
  * trade-off for not standing up a new server action here.
  */
-export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: TeamListItem[]; initialHasMore: boolean }) {
-  const [teams, setTeams] = useState(initialTeams);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [error, setError] = useState<string | null>(null);
+export function TeamsGrid({
+  teams,
+  hasMore,
+  page,
+}: {
+  teams: TeamListItem[];
+  hasMore: boolean;
+  /** Pages currently loaded, straight from the URL — see resolveListPage. */
+  page: number;
+}) {
   const [query, setQuery] = useState("");
-  const [loading, startLoading] = useTransition();
-
-  function handleLoadMore() {
-    setError(null);
-    startLoading(async () => {
-      const result = await loadMoreTeams(teams.length);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setTeams((prev) => [...prev, ...result.teams]);
-      setHasMore(result.hasMore);
-    });
-  }
 
   const filteredTeams = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -81,21 +79,14 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
         />
       )}
 
-      {error && (
-        <p className="text-center text-xs text-critical" role="status" aria-live="polite">
-          {error}
-        </p>
-      )}
-
       {hasMore && (
-        <button
-          type="button"
-          onClick={handleLoadMore}
-          disabled={loading}
-          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        <Link
+          href={`/teams?page=${page + 1}`}
+          scroll={false}
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
-          {loading ? "Loading…" : "Load more"}
-        </button>
+          Load more
+        </Link>
       )}
     </div>
   );

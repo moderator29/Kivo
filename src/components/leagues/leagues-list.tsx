@@ -1,43 +1,38 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { CompetitionLogo } from "@/components/ui/competition-logo";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { staggerDelay } from "@/lib/stagger";
-import { loadMoreLeagues, type LeagueListItem } from "@/app/(app)/leagues/actions";
+import type { LeagueListItem } from "@/app/(app)/leagues/constants";
 
 /**
- * `/leagues`' list plus a "Load more" button that appends the next page via
- * `loadMoreLeagues` (offset-based, not true infinite scroll — RECOMMENDATIONS
- * item 112). Existing rows keep their React key across a load, so only the
- * newly-appended rows play the FadeIn entrance.
+ * `/leagues`' list plus a "Load more" control (offset-based, not true infinite
+ * scroll — RECOMMENDATIONS item 112).
+ *
+ * KN-47: the same URL-driven pagination `TeamsGrid` uses — `?page=N` in the
+ * address bar rather than an offset in React state, so Back from a competition
+ * page restores the list as it was, the URL is shareable, and the control works
+ * without JavaScript.
  *
  * The name filter below is a plain client-side substring match over
  * whatever page(s) are already loaded — same reasoning and trade-off as
  * `TeamsGrid`'s (audit item 5): it doesn't fetch anything itself, so a
  * league past the loaded pages still needs a "Load more" click first.
  */
-export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues: LeagueListItem[]; initialHasMore: boolean }) {
-  const [leagues, setLeagues] = useState(initialLeagues);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [error, setError] = useState<string | null>(null);
+export function LeaguesList({
+  leagues,
+  hasMore,
+  page,
+}: {
+  leagues: LeagueListItem[];
+  hasMore: boolean;
+  /** Pages currently loaded, straight from the URL — see resolveListPage. */
+  page: number;
+}) {
   const [query, setQuery] = useState("");
-  const [loading, startLoading] = useTransition();
-
-  function handleLoadMore() {
-    setError(null);
-    startLoading(async () => {
-      const result = await loadMoreLeagues(leagues.length);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setLeagues((prev) => [...prev, ...result.leagues]);
-      setHasMore(result.hasMore);
-    });
-  }
 
   const filteredLeagues = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -107,21 +102,14 @@ export function LeaguesList({ initialLeagues, initialHasMore }: { initialLeagues
         />
       )}
 
-      {error && (
-        <p className="text-center text-xs text-critical" role="status" aria-live="polite">
-          {error}
-        </p>
-      )}
-
       {hasMore && (
-        <button
-          type="button"
-          onClick={handleLoadMore}
-          disabled={loading}
-          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        <Link
+          href={`/leagues?page=${page + 1}`}
+          scroll={false}
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
-          {loading ? "Loading…" : "Load more"}
-        </button>
+          Load more
+        </Link>
       )}
     </div>
   );
