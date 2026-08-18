@@ -235,7 +235,11 @@ export default async function MatchCentrePage({
   const matchUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/matches/${fixture.id}`;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
+    // resolved content cross-dissolves in over MatchDetailLoading's skeleton
+    // instead of hard-cutting — the header card below keeps its own nested
+    // FadeIn too (a slightly different entrance, harmless to layer).
+    <FadeIn className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass-brand sticky top-2 z-10 flex flex-col gap-4 rounded-2xl p-5">
         {/* Match-centre-only keyframes: a breathing live badge, an expanding
             "on air" ring on its dot, and a brief scale-in for the score on
@@ -431,6 +435,6 @@ export default async function MatchCentrePage({
       >
         Back to today&apos;s matches
       </Link>
-    </div>
+    </FadeIn>
   );
 }

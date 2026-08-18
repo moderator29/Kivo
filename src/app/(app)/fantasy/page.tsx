@@ -6,6 +6,7 @@ import { carryForwardFantasyRoster, ensureFantasyPlayerPrices, getFantasyPriceMa
 import { canManageFootballData } from "@/lib/admin";
 import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { FadeIn } from "@/components/ui/fade-in";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -184,7 +185,11 @@ export default async function FantasyPage({
   const showGenerateGameweeks = !gameweek && canManageFootballData(profile.role);
 
   return (
-    <div className="flex flex-col gap-3">
+    // RECOMMENDATIONS.md item 271: this route's real Promise.all-batched
+    // fetch above resolves behind fantasy/loading.tsx's skeleton — FadeIn so
+    // the squad builder (and its Leaderboard tab, FantasyLeaderboard) cross-
+    // dissolves in rather than hard-cutting from shimmer to content.
+    <FadeIn className="flex flex-col gap-3">
       {showGenerateGameweeks && (
         <div className="kivo-glass mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-2xl p-4">
           <p className="text-xs text-foreground-subtle">
@@ -212,6 +217,6 @@ export default async function FantasyPage({
         leaderboard={leaderboard}
         carriedForwardFromGameweek={carriedForwardFromGameweek}
       />
-    </div>
+    </FadeIn>
   );
 }
