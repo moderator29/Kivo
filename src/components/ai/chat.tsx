@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info, AlertTriangle } from "lucide-react";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info, AlertTriangle, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { ThinkingLine } from "@/components/ui/thinking-orb";
@@ -24,7 +24,14 @@ type ChatFocus = { type: "fixture" | "team" | "player"; id: string } | null;
 const PROVENANCE_VERIFIED = "[[KIVO-VERIFIED]]";
 const PROVENANCE_CALCULATED = "[[KIVO-CALCULATED]]";
 const PROVENANCE_LIMITED = "[[KIVO-LIMITED]]";
-const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\]|\[\[KIVO-LIMITED\]\])/g;
+/** KIVO_NEXT_GEN KN-109: the fourth category, and the only one that is not a
+ * fact. A Match Room post is what somebody said, not what happened — it needed
+ * its own chip rather than sharing one with verified data, or "KIVO users think
+ * that was a foul" and "the referee gave a penalty" would reach the reader
+ * looking equally authoritative. */
+const PROVENANCE_COMMUNITY = "[[KIVO-COMMUNITY]]";
+const PROVENANCE_SPLIT_RE =
+  /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\]|\[\[KIVO-LIMITED\]\]|\[\[KIVO-COMMUNITY\]\])/g;
 
 /** Turns an assistant reply's inline provenance tags into small visible
  * chips instead of raw bracket text — degrades honestly if the model never
@@ -51,6 +58,17 @@ function renderMessageContent(content: string) {
         >
           <Calculator className="h-2.5 w-2.5" strokeWidth={2} />
           KIVO-calculated
+        </span>
+      );
+    }
+    if (part === PROVENANCE_COMMUNITY) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-surface-2 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-foreground-muted"
+        >
+          <MessageCircle className="h-2.5 w-2.5" strokeWidth={2} />
+          From the Room
         </span>
       );
     }
