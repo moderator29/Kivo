@@ -8,7 +8,6 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { isLiveStatus } from "@/lib/football/fixture-status";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
-import { useRealtimeFixtures } from "@/hooks/use-realtime-fixtures";
 import type { Database } from "@/lib/supabase/types";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -28,15 +27,16 @@ export type LiveListFixture = {
 };
 
 /**
- * Client half of the "Live now" / "Today's fixtures" list on /live: takes
- * the server-fetched rows as the initial paint (so the page still SSRs and
- * works with JS disabled), then layers real-time score/status/minute
- * updates on top via useRealtimeFixtures. Was previously two plain
- * functions inside the server component itself — pulled out here because
- * only this part needs to be a Client Component; the page's data fetching
- * and empty-state logic stay server-side.
+ * Presentational list of fixtures grouped by competition.
+ *
+ * Deliberately does **not** subscribe to Realtime itself. It used to (as
+ * `LiveFixtureList`), which was fine while /live rendered exactly one of these
+ * — but the page now renders a "Live now" and a "Today" section off one shared
+ * live-updating list (KIVO_NEXT_GEN KN-5), and two independently-subscribed
+ * lists could not have moved a fixture from one section to the other. The
+ * subscription now lives one level up, in LiveCentreSections.
  */
-export function LiveFixtureList({
+export function FixtureGroups({
   fixtures,
   showLiveDot = true,
   fantasyMatchCounts,
@@ -54,8 +54,7 @@ export function LiveFixtureList({
    * exactly as it does today. */
   fantasyMatchCounts?: Record<string, number>;
 }) {
-  const liveFixtures = useRealtimeFixtures(fixtures);
-  const groups = groupFixturesByCompetition(liveFixtures);
+  const groups = groupFixturesByCompetition(fixtures);
 
   return (
     <div className="flex flex-col gap-4">

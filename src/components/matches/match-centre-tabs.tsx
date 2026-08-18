@@ -386,10 +386,18 @@ function StatsTab({
       {rows.map((row) => {
         const homeVal = home?.[row.key] ?? null;
         const awayVal = away?.[row.key] ?? null;
-        const homeNum = homeVal ?? 0;
-        const awayNum = awayVal ?? 0;
-        const total = homeNum + awayNum;
-        const homePct = total > 0 ? (homeNum / total) * 100 : 50;
+        // KIVO_NEXT_GEN KN-7: a missing statistic used to be coerced to 0
+        // (`homeVal ?? 0`) purely so the comparison bar had a number to divide
+        // by. The numeric label correctly rendered "-", so the row said "not
+        // reported" in text and drew a confident 100%/0% split right underneath
+        // it. That is routine, not exotic: `fixture_statistics.expected_goals`
+        // is nullable by design because API-Football's free tier often reports
+        // xG for one side and not the other. A fabricated visual claim in the
+        // most screenshot-prone section of the app is the same class of error
+        // as a fabricated number — the bar simply has nothing to compare, so it
+        // renders as one flat neutral rail rather than a split.
+        const total = homeVal !== null && awayVal !== null ? homeVal + awayVal : null;
+        const homePct = total !== null && total > 0 ? ((homeVal ?? 0) / total) * 100 : 50;
         return (
           <div key={row.key} className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-xs">
@@ -403,10 +411,17 @@ function StatsTab({
                 {awayVal !== null ? row.suffix ?? "" : ""}
               </span>
             </div>
-            <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
-              <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
-              <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
-            </div>
+            {total !== null ? (
+              <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
+                <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
+                <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
+              </div>
+            ) : (
+              <div
+                className="h-1.5 rounded-full bg-surface-inset"
+                title={`${row.label} was only reported for one side, so there is nothing to compare.`}
+              />
+            )}
           </div>
         );
       })}

@@ -16,6 +16,7 @@ import { isAiConfigured } from "@/lib/ai/client";
 import { selectHomeLead, type LeadFixture } from "@/lib/home-lead";
 import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome } from "@/lib/predictions";
 import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
+import { fetchFixturesForTeams } from "@/lib/football/fixtures-by-team";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -25,6 +26,15 @@ function greeting() {
 }
 
 export const metadata: Metadata = { title: "Home" };
+
+/**
+ * KIVO_NEXT_GEN KN-16: neither followed-team fixture query had a `LIMIT`. The
+ * "today" one renders a section headed by whatever is live, and the "upcoming"
+ * one already asked for 6 — these make both ceilings explicit rather than
+ * relying on a followed-team set staying small.
+ */
+const MATCHDAY_FIXTURES_LIMIT = 20;
+const UPCOMING_FIXTURES_LIMIT = 6;
 
 /** The shape every fixture query on this page selects, so the row → LeadFixture
  * conversion below can be written once. */
@@ -146,28 +156,34 @@ export default async function HomePage() {
     (myTeamRows ?? []).map((t) => [t.id, t.short_name || t.name] as const),
   );
 
-  const followedFilter = matchdayTeamIds.map((id) => `home_team_id.eq.${id},away_team_id.eq.${id}`).join(",");
-
-  const [{ data: matchdayFixtures }, { data: upcomingFixtures }] = await Promise.all([
-    matchdayTeamIds.length
-      ? supabase
-          .from("fixtures")
-          .select(FIXTURE_SELECT)
-          .gte("kickoff_at", startOfDay.toISOString())
-          .lt("kickoff_at", endOfDay.toISOString())
-          .or(followedFilter)
-          .order("kickoff_at", { ascending: true })
-      : Promise.resolve({ data: null }),
-    matchdayTeamIds.length
-      ? supabase
-          .from("fixtures")
-          .select(FIXTURE_SELECT)
-          .or(followedFilter)
-          .eq("status", "scheduled")
-          .gt("kickoff_at", nowDate.toISOString())
-          .order("kickoff_at", { ascending: true })
-          .limit(6)
-      : Promise.resolve({ data: null }),
+  // KIVO_NEXT_GEN KN-15 and KN-16. This used to build one `.or()` filter string
+  // that grew by ~100 URL-encoded characters per followed team and carried no
+  // `LIMIT` at all — so the more clubs a user followed, the closer the request
+  // came to failing outright, and the page's own "your teams" section is
+  // exactly what would vanish. fetchFixturesForTeams chunks the ids and asks
+  // for each side with a plain `.in()` instead; see its module doc for why
+  // merging sorted prefixes is exact rather than a heuristic.
+  const [matchdayFixtures, upcomingFixtures] = await Promise.all([
+    fetchFixturesForTeams(matchdayTeamIds, MATCHDAY_FIXTURES_LIMIT, (column, ids) =>
+      supabase
+        .from("fixtures")
+        .select(FIXTURE_SELECT)
+        .gte("kickoff_at", startOfDay.toISOString())
+        .lt("kickoff_at", endOfDay.toISOString())
+        .in(column, ids)
+        .order("kickoff_at", { ascending: true })
+        .limit(MATCHDAY_FIXTURES_LIMIT),
+    ),
+    fetchFixturesForTeams(matchdayTeamIds, UPCOMING_FIXTURES_LIMIT, (column, ids) =>
+      supabase
+        .from("fixtures")
+        .select(FIXTURE_SELECT)
+        .in(column, ids)
+        .eq("status", "scheduled")
+        .gt("kickoff_at", nowDate.toISOString())
+        .order("kickoff_at", { ascending: true })
+        .limit(UPCOMING_FIXTURES_LIMIT),
+    ),
   ]);
 
   // ── The lead slot (KN-37) ────────────────────────────────────────────────
