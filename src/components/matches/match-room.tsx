@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { RoomComposer } from "@/components/matches/room-composer";
 import { PostCard } from "@/components/social/post-card";
 import { useRealtimeRoomPosts } from "@/hooks/use-realtime-room-posts";
-import kivoActionArtwork from "../../../public/brand/kivo-artwork-action.webp";
 import type { ReactionType } from "@/lib/reactions";
 
 export type RoomPost = {
@@ -71,15 +69,6 @@ export function MatchRoomTab({
 
       {posts.length === 0 ? (
         <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          {/* Second use of kivo-artwork-action.webp (also on Home's header —
-              see src/app/(app)/home/page.tsx for the trademark check it went
-              through). This is the one commissioned piece reused twice: its
-              live tackle-and-save action reads naturally on both the general
-              dashboard and here, a single fixture's own room, before anyone's
-              posted. Same edge-masked, floating treatment as the hero. */}
-          <div className="kivo-artwork-float kivo-artwork-mask relative h-32 w-52 sm:h-40 sm:w-64">
-            <Image src={kivoActionArtwork} alt="" fill className="object-contain" sizes="256px" />
-          </div>
           <p className="text-sm text-foreground-muted">
             No one&apos;s posted in this match room yet. Be the first.
           </p>

@@ -1,12 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Check, Eye, MessagesSquare, ShieldCheck, UserPlus, Sparkles } from "lucide-react";
-import kivoHeroArtwork from "../../public/brand/kivo-artwork-hero.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ScrollReveal } from "@/components/ui/scroll-reveal";
+import { KivoMark } from "@/components/ui/kivo-mark";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
-import { ScatteredTrophies } from "@/components/marketing/scattered-trophies";
 import { FaqSection } from "@/components/marketing/faq-section";
 
 // This page used to be `"use client"` in full just so two elements could
@@ -247,8 +246,6 @@ export default function LandingPage() {
         <span className="kivo-aurora-blob kivo-aurora-blob--cyan-soft" />
       </div>
 
-      <ScatteredTrophies />
-
       <div className="relative z-10 flex min-h-screen flex-col">
       <header className="flex items-center justify-between px-6 py-5 lg:px-12">
         <div className="flex items-center gap-2">
@@ -274,18 +271,25 @@ export default function LandingPage() {
       <main className="flex flex-1 flex-col">
         <section className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-8 overflow-hidden px-6 pb-16 pt-8 text-center lg:gap-9 lg:px-12 lg:pb-24 lg:pt-14">
           <style>{`
-            @keyframes kivo-hero-artwork-float {
+            @keyframes kivo-hero-logo-float {
               0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-10px); }
+              50% { transform: translateY(-6px); }
             }
           `}</style>
 
-          <div className="relative z-10 order-2 flex flex-col items-center gap-6 lg:order-1 lg:items-start lg:gap-7">
-            {/* No standalone logo mark here on purpose: the hero artwork
-                already carries a KIVO wordmark within its own composition,
-                and the header (always visible, see the top nav above) has
-                the brand glyph — a third repetition right above the tagline
-                was pure redundancy competing with the artwork for attention. */}
+          <div className="relative z-10 flex flex-col items-center gap-6 lg:gap-7">
+            <FadeIn delay={0}>
+              {/* Mark only — no wordmark, no tagline. The lockup's stacked text
+                  repeats the wordmark already in the header and the headline
+                  right below it, and it forced the K itself down to roughly
+                  half the box. Cropping to the mark lets it run much larger at
+                  the same footprint. Scales with the viewport rather than
+                  jumping at one breakpoint. */}
+              <div style={{ animation: "kivo-hero-logo-float 5s ease-in-out infinite" }}>
+                <KivoMark alt="KIVO" priority className="kivo-ink w-[13.5rem] sm:w-[17rem] lg:w-[21rem]" />
+              </div>
+            </FadeIn>
+
             <FadeIn delay={0.08}>
               <span className="rounded-full border border-hairline px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
                 Football. Together. Live.
@@ -326,38 +330,6 @@ export default function LandingPage() {
                 No account needed to look around. Sign up only when you want to play.
               </p>
             </FadeIn>
-          </div>
-
-          {/* Hero visual: commissioned KIVO artwork (see the import-site comment
-              above for the trademark check this went through). Shown on every
-              breakpoint, not just desktop, since a single scaling image (unlike
-              the old four-card cluster it replaced) has a clean mobile layout.
-              Ordered *before* the text column on mobile (order-1 vs. the text
-              column's order-2) so it's the first thing a visitor sees without
-              scrolling — a striking commissioned visual buried below the fold
-              undersells itself. Desktop keeps its original side-by-side
-              placement (order-2, right of the text) via the lg: overrides.
-              The image's own soft glow bleeds slightly non-black at its top/
-              bottom edges (checked in production), so it's edge-masked here to
-              dissolve into the page background instead of showing a rectangle. */}
-          <div className="relative z-10 order-1 flex w-full max-w-sm flex-1 items-center justify-center lg:order-2 lg:h-[460px] lg:max-w-none">
-            <div
-              style={{
-                animation: "kivo-hero-artwork-float 7s ease-in-out infinite",
-                maskImage: "radial-gradient(closest-side, black 72%, transparent 100%)",
-                WebkitMaskImage: "radial-gradient(closest-side, black 72%, transparent 100%)",
-              }}
-            >
-              <Image
-                src={kivoHeroArtwork}
-                alt="KIVO: live scores, AI-grounded analysis, and a social layer for football fans, all in one app"
-                width={1536}
-                height={1024}
-                className="h-auto w-full object-contain lg:h-[460px] lg:w-auto"
-                sizes="(min-width: 1024px) 640px, 90vw"
-                priority
-              />
-            </div>
           </div>
         </section>
 
