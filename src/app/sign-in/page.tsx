@@ -3,7 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FadeIn } from "@/components/ui/fade-in";
 import { EmailCodeForm } from "@/components/auth/email-code-form";
-import { getAuthUser, isAuthConfigured, sanitizeRedirectPath } from "@/lib/auth";
+import { isAuthConfigured, sanitizeRedirectPath } from "@/lib/auth";
+import { resolveViewerProfile } from "@/lib/profile";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 export const metadata = { title: "Sign in" };
@@ -15,7 +17,6 @@ export const dynamic = "force-dynamic";
 /** Reasons /auth/callback can send someone back here, in plain language. */
 const CALLBACK_ERRORS: Record<string, string> = {
   link_invalid: "That sign-in link has expired or was already used. Request a new code below.",
-  profile_failed: "You're signed in, but your KIVO profile couldn't be set up. Try once more.",
 };
 
 export default async function SignInPage({
@@ -37,8 +38,18 @@ export default async function SignInPage({
   // Someone who is already signed in has no business on this page; send them
   // where they were going instead of showing them a form for an account they
   // are already using.
-  if (await getAuthUser()) {
+  //
+  // Resolved through the profile rather than the bare session on purpose. A
+  // valid session whose profile row won't load must NOT be redirected into the
+  // app — the app group would find no profile and send them back here, and the
+  // two pages would bounce the user between them indefinitely. This is the
+  // other half of that cycle, so it terminates here too.
+  const viewer = await resolveViewerProfile();
+  if (viewer.status === "ready") {
     redirect(redirectTo ?? "/home");
+  }
+  if (viewer.status === "unavailable") {
+    return <ProfileUnavailable retryHref="/sign-in" />;
   }
 
   return (

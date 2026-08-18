@@ -8,8 +8,28 @@ import type { Database } from "./supabase/types";
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 /**
- * The KIVO profile row for the signed-in Supabase Auth user, creating it on
- * first sight. Returns null for a signed-out request.
+ * Why this exists rather than just `Profile | null`.
+ *
+ * "Nobody is signed in" and "somebody IS signed in but their profile row could
+ * not be read or created" are completely different situations that both used to
+ * collapse into `null`. Treating the second as the first is what produces an
+ * infinite redirect: the app group sends them to /sign-in, /sign-in sees a
+ * perfectly valid session and sends them back, forever — indistinguishable, to
+ * the person on the other end, from sign-in silently failing.
+ *
+ * So the two are named. `anonymous` redirects to sign-in; `unavailable` has to
+ * terminate somewhere honest with a retry (see
+ * src/components/auth/profile-unavailable.tsx). Never a redirect.
+ */
+export type ProfileResolution =
+  | { status: "anonymous" }
+  | { status: "ready"; profile: Profile }
+  | { status: "unavailable" };
+
+/**
+ * Resolves who the viewer is: the KIVO profile row for the signed-in Supabase
+ * Auth user, creating it on first sight, and distinguishing "signed out" from
+ * "signed in but the row is not available" (see ProfileResolution above).
  *
  * This is now the ONLY thing that provisions a profile. Under Clerk a webhook
  * created the row and this function was a fallback for when that webhook hadn't
@@ -34,14 +54,14 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
  * about data freshness changes, only redundant work within one render is
  * collapsed. See https://react.dev/reference/react/cache.
  */
-export const getOrCreateProfile = cache(async (): Promise<Profile | null> => {
+export const resolveViewerProfile = cache(async (): Promise<ProfileResolution> => {
   const user = await getAuthUser();
-  if (!user) return null;
+  if (!user) return { status: "anonymous" };
 
   const supabase = createServerSupabaseClient();
   const { data: existing } = await supabase.from("profiles").select("*").eq("auth_user_id", user.id).maybeSingle();
 
-  if (existing) return existing;
+  if (existing) return { status: "ready", profile: existing };
 
   const { data: created, error } = await supabase
     .from("profiles")
@@ -71,11 +91,25 @@ export const getOrCreateProfile = cache(async (): Promise<Profile | null> => {
     // Re-fetch instead of treating a signed-in user as profile-less.
     if (error.code === "23505") {
       const { data: retried } = await supabase.from("profiles").select("*").eq("auth_user_id", user.id).maybeSingle();
-      return retried;
+      return retried ? { status: "ready", profile: retried } : { status: "unavailable" };
     }
     console.error("Failed to create profile", error);
-    return null;
+    return { status: "unavailable" };
   }
 
-  return created;
+  return { status: "ready", profile: created };
 });
+
+/**
+ * The signed-in viewer's profile, or null.
+ *
+ * Kept as the ordinary way to ask, because most callers genuinely only need
+ * "is there a profile to act as?" — a guest and a broken profile are equally
+ * "no" to a page that just wants to show a follow button. Anything that
+ * decides where to send the user instead of what to render must use
+ * `resolveViewerProfile()` and handle `unavailable` without redirecting.
+ */
+export async function getOrCreateProfile(): Promise<Profile | null> {
+  const resolution = await resolveViewerProfile();
+  return resolution.status === "ready" ? resolution.profile : null;
+}

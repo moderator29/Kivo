@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { getOrCreateProfile } from "@/lib/profile";
+import { resolveViewerProfile } from "@/lib/profile";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import { hasAdminAccess } from "@/lib/admin";
 import { isPreviewModeActive } from "@/lib/preview-mode";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
@@ -28,10 +29,20 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
   // isn't configured for this environment, and either way the answer is the
   // same. See src/proxy.ts for why a middleware matcher can't be trusted with
   // this job.
-  const profile = await getOrCreateProfile();
-  if (!profile) {
+  const viewer = await resolveViewerProfile();
+  if (viewer.status === "anonymous") {
     redirect("/sign-in");
   }
+
+  // Signed in, but the profile row could not be read or created. Deliberately
+  // NOT a redirect: /sign-in would see the valid session and bounce them
+  // straight back here, and the two would trade the user back and forth
+  // forever. Stop, and say so.
+  if (viewer.status === "unavailable") {
+    return <ProfileUnavailable />;
+  }
+
+  const profile = viewer.profile;
 
   // A brand-new account lands here on its very first authenticated request
   // (getOrCreateProfile just created the row), so this is what actually carries

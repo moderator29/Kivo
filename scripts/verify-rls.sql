@@ -12,14 +12,14 @@
 --
 -- WHY THIS APPROACH INSTEAD OF A VITEST FILE HITTING POSTGREST
 -- --------------------------------------------------------------
--- KIVO uses Supabase's native third-party auth: RLS policies read the caller's
--- identity from `auth.jwt() ->> 'sub'` (see private.current_clerk_user_id() in
--- the migration), and that JWT is a *Clerk*-issued token verified against
--- Clerk's JWKS by Supabase's API gateway. There is no service that will hand a
--- test script a real, validly-signed Clerk JWT for a synthetic user without
--- driving an actual Clerk sign-in flow (which this repo does not have headless
--- credentials for), so a Vitest test using the anon key cannot authenticate as
--- a *specific* user and therefore cannot exercise cross-user isolation over
+-- KIVO uses Supabase Auth (migration 0053_supabase_auth_identity.sql moved it
+-- off Clerk). RLS policies resolve the caller through
+-- private.current_profile_id(), which reads `auth.uid()` — the uuid of the
+-- signed-in auth.users row. Minting a validly-signed session for a synthetic
+-- user from a script would mean driving a real email-OTP round trip including
+-- reading the code out of an inbox, which this repo has no headless path for,
+-- so a Vitest test using the anon key still cannot authenticate as a
+-- *specific* user and therefore cannot exercise cross-user isolation over
 -- PostgREST. (A companion Vitest file,
 -- src/lib/supabase/rls-anon.integration.test.ts, DOES exercise real anon-role
 -- PostgREST traffic for what's actually reachable that way: public-read
@@ -31,17 +31,21 @@
 -- itself sets after verifying a JWT:
 --
 --   set local role authenticated;
---   set local request.jwt.claims = '{"sub":"<clerk_user_id>","role":"authenticated"}';
+--   set local request.jwt.claims = '{"sub":"<auth.users.id>","role":"authenticated"}';
 --
--- private.current_clerk_user_id() reads exactly this via
--- `auth.jwt() ->> 'sub'` (confirmed live: auth.jwt() is
--- `coalesce(current_setting('request.jwt.claim', true),
--- current_setting('request.jwt.claims', true))::jsonb`). Setting it this way
--- is not a shortcut around RLS — it is precisely the input RLS policies
--- consume; the only thing this script doesn't reproduce is JWKS signature
--- verification itself, which is Supabase Auth's job, not RLS's. Every
--- assertion below runs through the real policy USING/WITH CHECK expressions
--- against real rows in the real database.
+-- auth.uid() reads exactly this — it is
+-- `(coalesce(current_setting('request.jwt.claim.sub', true),
+-- (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')))::uuid`.
+-- Setting it this way is not a shortcut around RLS — it is precisely the input
+-- RLS policies consume; the only thing this script doesn't reproduce is JWKS
+-- signature verification itself, which is Supabase Auth's job, not RLS's.
+-- Every assertion below runs through the real policy USING/WITH CHECK
+-- expressions against real rows in the real database.
+--
+-- The synthetic identities are real auth.users rows (profiles.auth_user_id has
+-- a foreign key to that table), seeded in section 1 and torn down in section 7
+-- alongside everything else. Their emails all end in `@example.invalid`, a
+-- reserved TLD that can never route mail anywhere.
 --
 -- Run via the Supabase MCP `execute_sql` tool (project: gkyjfihxxdynfwqhhpyn)
 -- or `psql "$DATABASE_URL" -f scripts/verify-rls.sql` with a role that can
@@ -83,12 +87,12 @@
 -- each independent (own BEGIN block, own transaction-local id lookups —
 -- nothing carries over between sections or depends on call/section order),
 -- so run: (a) sections 0-1 together as one call to seed, (b) each of
--- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h/6i/6j as its own call — 6a/6b, several of
--- the individual statements inside 6e/6f/6g, and several inside 6i/6j (each
--- clearly marked "PASS = 42501" or "PASS = 23514") are EXPECTED to come back
--- as a tool error, that error is the pass signal — then (c) section 7 as its
--- own final call regardless of how section 6 went,
--- so cleanup always happens.
+-- 2/3/4/5/6a/6b/6c/6d/6e/6f/6g/6h/6i/6j/6k as its own call — 6a/6b, several of
+-- the individual statements inside 6e/6f/6g, several inside 6i/6j (each
+-- clearly marked "PASS = 42501" or "PASS = 23514"), and 6k-ii through 6k-v are
+-- EXPECTED to come back as a tool error — that error is the pass signal — then
+-- (c) section 7 as its own final call regardless of how section 6 went, so
+-- cleanup always happens.
 -- =============================================================================
 
 
@@ -97,6 +101,7 @@
 -- -----------------------------------------------------------------------------
 
 delete from profiles where username like 'zzrlstest\_%' escape '\';
+delete from auth.users where email like 'zzrlstest\_%@example.invalid' escape '\';
 delete from fixtures where competition_id in (select id from competitions where name like 'ZZ RLS Test%');
 delete from players where full_name like 'ZZ RLS Test%';
 delete from seasons where competition_id in (select id from competitions where name like 'ZZ RLS Test%');
@@ -111,9 +116,28 @@ delete from competitions where name like 'ZZ RLS Test%';
 -- is the trusted "server-side provisioning" path the real app would use via
 -- service_role, not a client insert under test.
 
-insert into profiles (username, clerk_user_id, display_name) values
-  ('zzrlstest_alice', 'zzrlstest_clerk_alice', 'ZZ RLS Test Alice'),
-  ('zzrlstest_bob',   'zzrlstest_clerk_bob',   'ZZ RLS Test Bob');
+-- The identity these profiles are reached through is now a real auth.users
+-- row (migration 0053), and profiles.auth_user_id has a foreign key to it, so
+-- the users have to exist before the profiles do. Fixed uuids, not
+-- gen_random_uuid(), because the `set local request.jwt.claims` statements
+-- below have to name the same value literally — that claim IS what auth.uid()
+-- reads, so the uuid is the whole test identity.
+insert into auth.users (id, instance_id, aud, role, email) values
+  ('00000000-0000-4000-8000-00000000a11c', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_alice@example.invalid'),
+  ('00000000-0000-4000-8000-00000000b0b0', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_bob@example.invalid'),
+  ('00000000-0000-4000-8000-00000000ad11', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_admin@example.invalid'),
+  ('00000000-0000-4000-8000-00000000ca01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_carol@example.invalid'),
+  ('00000000-0000-4000-8000-00000000da7e', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_dave@example.invalid'),
+  ('00000000-0000-4000-8000-00000000e517', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_erin@example.invalid'),
+  ('00000000-0000-4000-8000-00000000f5a4', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_frank@example.invalid'),
+  -- Deliberately gets NO profiles row here: section 6k is about a brand-new
+  -- signee provisioning their own, which is what getOrCreateProfile() does on
+  -- a user's first authenticated request.
+  ('00000000-0000-4000-8000-00000000f4ce', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_grace@example.invalid');
+
+insert into profiles (username, auth_user_id, display_name) values
+  ('zzrlstest_alice', '00000000-0000-4000-8000-00000000a11c', 'ZZ RLS Test Alice'),
+  ('zzrlstest_bob',   '00000000-0000-4000-8000-00000000b0b0', 'ZZ RLS Test Bob');
 
 insert into competitions (name) values ('ZZ RLS Test Competition');
 
@@ -227,24 +251,24 @@ select id, 50, 'zzrlstest xp' from profiles where username = 'zzrlstest_bob';
 -- without touching alice/bob's role and risking section 2/3's existing
 -- "sees exactly her own row" counts), one per non-default moderation_status,
 -- plus a suspension whose expiry has already elapsed.
-insert into profiles (username, clerk_user_id, display_name, role) values
-  ('zzrlstest_admin', 'zzrlstest_clerk_admin', 'ZZ RLS Test Admin', 'admin'::user_role);
+insert into profiles (username, auth_user_id, display_name, role) values
+  ('zzrlstest_admin', '00000000-0000-4000-8000-00000000ad11', 'ZZ RLS Test Admin', 'admin'::user_role);
 
-insert into profiles (username, clerk_user_id, display_name, role, moderation_status, moderation_reason, moderation_expires_at, moderation_set_at)
-select 'zzrlstest_carol', 'zzrlstest_clerk_carol', 'ZZ RLS Test Carol', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest spam links', now() + interval '3 days', now()
+insert into profiles (username, auth_user_id, display_name, role, moderation_status, moderation_reason, moderation_expires_at, moderation_set_at)
+select 'zzrlstest_carol', '00000000-0000-4000-8000-00000000ca01'::uuid, 'ZZ RLS Test Carol', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest spam links', now() + interval '3 days', now()
 union all
-select 'zzrlstest_dave', 'zzrlstest_clerk_dave', 'ZZ RLS Test Dave', 'user'::user_role, 'banned'::moderation_status, 'zzrlstest harassment', null, now()
+select 'zzrlstest_dave', '00000000-0000-4000-8000-00000000da7e'::uuid, 'ZZ RLS Test Dave', 'user'::user_role, 'banned'::moderation_status, 'zzrlstest harassment', null, now()
 union all
-select 'zzrlstest_erin', 'zzrlstest_clerk_erin', 'ZZ RLS Test Erin', 'user'::user_role, 'shadow_muted'::moderation_status, null, null, now()
+select 'zzrlstest_erin', '00000000-0000-4000-8000-00000000e517'::uuid, 'ZZ RLS Test Erin', 'user'::user_role, 'shadow_muted'::moderation_status, null, null, now()
 union all
-select 'zzrlstest_frank', 'zzrlstest_clerk_frank', 'ZZ RLS Test Frank', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest expired already', now() - interval '1 hour', now() - interval '2 days';
+select 'zzrlstest_frank', '00000000-0000-4000-8000-00000000f5a4'::uuid, 'ZZ RLS Test Frank', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest expired already', now() - interval '1 hour', now() - interval '2 days';
 
 update profiles set moderation_set_by = (select id from profiles where username = 'zzrlstest_admin')
 where username in ('zzrlstest_carol', 'zzrlstest_dave', 'zzrlstest_erin', 'zzrlstest_frank');
 
 
 -- -----------------------------------------------------------------------------
--- 2. READ assertions as Alice (authenticated, sub = zzrlstest_clerk_alice)
+-- 2. READ assertions as Alice (authenticated, sub = Alice's auth.users id)
 -- -----------------------------------------------------------------------------
 -- Each section from here on is fully self-contained (independent BEGIN block,
 -- no dependency on what a previous section left behind), so sections can be
@@ -273,7 +297,7 @@ select
     true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 select check_name, passed from (
   select 'profiles: alice sees exactly her own row, not bob''s' as check_name,
@@ -317,7 +341,7 @@ rollback;
 
 
 -- -----------------------------------------------------------------------------
--- 3. READ assertions as Bob (authenticated, sub = zzrlstest_clerk_bob)
+-- 3. READ assertions as Bob (authenticated, sub = Bob's auth.users id)
 -- -----------------------------------------------------------------------------
 -- Mirrors section 2 from the other side, to confirm isolation is mutual and
 -- not an artifact of insertion order / row ids.
@@ -329,7 +353,7 @@ select set_config('rls_test.fixture_id',
   true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 
 select check_name, passed from (
   select 'profiles: bob sees exactly his own row, not alice''s' as check_name,
@@ -413,7 +437,7 @@ begin;
 select set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 -- Targets bob by his real id, captured just above (see the set_config note
 -- earlier in the file) — NOT via `where profile_id = (select id from
@@ -485,7 +509,7 @@ select
     true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 insert into predictions (profile_id, fixture_id, predicted_outcome)
 values (current_setting('rls_test.bob_id')::uuid, current_setting('rls_test.fixture_id')::uuid, 'draw');
 rollback;
@@ -516,7 +540,7 @@ select
   set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 select check_name, passed from (
   select 'get_xp_total: alice gets her own real total (100)' as check_name,
@@ -546,7 +570,7 @@ select set_config('rls_test.alice_notif_id',
   true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 
 select public.mark_notifications_read(array[current_setting('rls_test.alice_notif_id')::uuid]);
 
@@ -563,7 +587,7 @@ select set_config('rls_test.alice_notif_id',
   true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 select public.mark_notifications_read(array[current_setting('rls_test.alice_notif_id')::uuid]);
 
@@ -589,7 +613,7 @@ select
   set_config('rls_test.real_post_id', (select p.id::text from posts p where p.body = 'zzrlstest poll: who wins?'), true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 insert into poll_votes (post_id, option_id, profile_id)
 values (gen_random_uuid(), current_setting('rls_test.option_a_id')::uuid, (select id from profiles where username = 'zzrlstest_alice'));
@@ -606,7 +630,7 @@ begin;
 select set_config('rls_test.option_b_id', (select o.id::text from poll_options o join posts p on p.id = o.post_id where p.body = 'zzrlstest poll: who wins?' and o.position = 1), true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 
 insert into poll_votes (post_id, option_id, profile_id)
 values (current_setting('rls_test.option_b_id')::uuid, current_setting('rls_test.option_b_id')::uuid, (select id from profiles where username = 'zzrlstest_bob'));
@@ -621,7 +645,7 @@ select
   set_config('rls_test.option_b_id', (select o.id::text from poll_options o join posts p on p.id = o.post_id where p.body = 'zzrlstest poll: who wins?' and o.position = 1), true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 insert into poll_votes (post_id, option_id, profile_id)
 values (gen_random_uuid(), current_setting('rls_test.option_b_id')::uuid, current_setting('rls_test.bob_id')::uuid);
@@ -633,7 +657,7 @@ begin;
 select set_config('rls_test.real_post_id', (select p.id::text from posts p where p.body = 'zzrlstest poll: who wins?'), true);
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 with del_attempt as (
   delete from poll_votes
@@ -692,7 +716,7 @@ rollback;
 begin;
 select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest poll: who wins?'), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 insert into saves (profile_id, target_type, target_id)
 values ((select id from profiles where username = 'zzrlstest_alice'), 'post', current_setting('rls_test.post_id')::uuid);
 commit;
@@ -700,7 +724,7 @@ commit;
 begin;
 select set_config('rls_test.team_a_id', (select id::text from teams where name = 'ZZ RLS Test Team A'), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 insert into saves (profile_id, target_type, target_id)
 values ((select id from profiles where username = 'zzrlstest_bob'), 'team', current_setting('rls_test.team_a_id')::uuid);
 commit;
@@ -711,14 +735,14 @@ select
   set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
   set_config('rls_test.team_b_id', (select id::text from teams where name = 'ZZ RLS Test Team B'), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 insert into saves (profile_id, target_type, target_id)
 values (current_setting('rls_test.bob_id')::uuid, 'team', current_setting('rls_test.team_b_id')::uuid);
 rollback;
 
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 with del_attempt as (
   delete from saves
@@ -761,7 +785,7 @@ rollback;
 begin;
 select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 insert into fan_ratings (profile_id, fixture_id, rating)
 values ((select id from profiles where username = 'zzrlstest_alice'), current_setting('rls_test.finished_fixture_id')::uuid, 5);
 commit;
@@ -769,7 +793,7 @@ commit;
 begin;
 select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 insert into fan_ratings (profile_id, fixture_id, rating)
 values ((select id from profiles where username = 'zzrlstest_bob'), current_setting('rls_test.finished_fixture_id')::uuid, 3);
 commit;
@@ -779,7 +803,7 @@ commit;
 begin;
 select set_config('rls_test.scheduled_fixture_id', (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 insert into fan_ratings (profile_id, fixture_id, rating)
 values ((select id from profiles where username = 'zzrlstest_alice'), current_setting('rls_test.scheduled_fixture_id')::uuid, 4);
 rollback;
@@ -790,7 +814,7 @@ select
   set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true),
   set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 insert into fan_ratings (profile_id, fixture_id, rating)
 values (current_setting('rls_test.bob_id')::uuid, current_setting('rls_test.finished_fixture_id')::uuid, 1);
 rollback;
@@ -799,7 +823,7 @@ begin;
 select set_config('rls_test.finished_fixture_id', (select id::text from fixtures where status = 'finished' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true),
        set_config('rls_test.bob_id', (select id::text from profiles where username = 'zzrlstest_bob'), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_alice","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
 
 with upd_attempt as (
   update fan_ratings set rating = 1
@@ -880,7 +904,7 @@ rollback;
 -- merely hidden later).
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ca01","role":"authenticated"}';
 insert into posts (author_profile_id, body)
 select id, 'zzrlstest carol trying to post while suspended' from profiles where username = 'zzrlstest_carol';
 rollback;
@@ -890,7 +914,7 @@ begin;
 select set_config('rls_test.fixture_id',
   (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ca01","role":"authenticated"}';
 insert into predictions (profile_id, fixture_id, predicted_outcome)
 select id, current_setting('rls_test.fixture_id')::uuid, 'home_win' from profiles where username = 'zzrlstest_carol';
 rollback;
@@ -900,7 +924,7 @@ rollback;
 begin;
 select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest public post by alice'), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_dave","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000da7e","role":"authenticated"}';
 insert into reactions (target_type, target_id, profile_id, reaction_type)
 select 'post', current_setting('rls_test.post_id')::uuid, id, 'like' from profiles where username = 'zzrlstest_dave';
 rollback;
@@ -911,7 +935,7 @@ rollback;
 -- not just re-overwritten by the next lazy-expiry read).
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ca01","role":"authenticated"}';
 update profiles set moderation_status = 'active', moderation_reason = null, moderation_expires_at = null
 where username = 'zzrlstest_carol';
 rollback;
@@ -929,7 +953,7 @@ select 'moderation: carol''s suspension is unchanged after her rejected self-upd
 -- broken by being suspended.
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ca01","role":"authenticated"}';
 update profiles set bio = 'zzrlstest carol updated bio while suspended' where username = 'zzrlstest_carol';
 select 'moderation: carol can still edit her own bio while suspended' as check_name,
   (select bio from profiles where username = 'zzrlstest_carol') = 'zzrlstest carol updated bio while suspended' as passed;
@@ -938,7 +962,7 @@ rollback;
 -- shadow_muted: erin can post with zero visible friction to herself...
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000e517","role":"authenticated"}';
 insert into posts (author_profile_id, body)
 select id, 'zzrlstest erin shadow muted post' from profiles where username = 'zzrlstest_erin';
 select 'moderation: erin (shadow_muted) can post with zero friction' as check_name,
@@ -948,7 +972,7 @@ commit;
 -- ...but bob (an ordinary other user) genuinely cannot see it...
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 select 'moderation: bob cannot see erin (shadow_muted)''s post' as check_name,
   not exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
 rollback;
@@ -964,14 +988,14 @@ rollback;
 -- two carve-outs posts_select_public/comments_select_public grant).
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000e517","role":"authenticated"}';
 select 'moderation: erin can see her own shadow_muted post' as check_name,
   exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
 rollback;
 
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_admin","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ad11","role":"authenticated"}';
 select 'moderation: admin can see erin''s shadow_muted post' as check_name,
   exists (select 1 from posts where body = 'zzrlstest erin shadow muted post') as passed;
 rollback;
@@ -982,7 +1006,7 @@ rollback;
 -- against now() happening at read time, and his write must actually succeed.
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_frank","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000f5a4","role":"authenticated"}';
 
 select check_name, passed from (
   select 'moderation: frank (expired suspension) effective status reads active' as check_name,
@@ -1034,7 +1058,7 @@ begin;
 select set_config('rls_test.fixture_id',
   (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_carol","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ca01","role":"authenticated"}';
 insert into posts (author_profile_id, fixture_id, body)
 select id, current_setting('rls_test.fixture_id')::uuid, 'zzrlstest carol trying to post in room while suspended' from profiles where username = 'zzrlstest_carol';
 rollback;
@@ -1045,7 +1069,7 @@ begin;
 select set_config('rls_test.fixture_id',
   (select id::text from fixtures where status = 'scheduled' and home_team_id = (select id from teams where name = 'ZZ RLS Test Team A')), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000e517","role":"authenticated"}';
 insert into posts (author_profile_id, fixture_id, body)
 select id, current_setting('rls_test.fixture_id')::uuid, 'zzrlstest erin shadow muted room post' from profiles where username = 'zzrlstest_erin';
 select 'moderation: erin (shadow_muted) can post in the Room with zero friction' as check_name,
@@ -1056,7 +1080,7 @@ commit;
 -- either...
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 select 'moderation: bob cannot see erin (shadow_muted)''s Room post' as check_name,
   not exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
 rollback;
@@ -1071,14 +1095,14 @@ rollback;
 -- ...while erin herself and an admin both still can.
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_erin","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000e517","role":"authenticated"}';
 select 'moderation: erin can see her own shadow_muted Room post' as check_name,
   exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
 rollback;
 
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_admin","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ad11","role":"authenticated"}';
 select 'moderation: admin can see erin''s shadow_muted Room post' as check_name,
   exists (select 1 from posts where body = 'zzrlstest erin shadow muted room post') as passed;
 rollback;
@@ -1094,7 +1118,7 @@ delete from posts where body = 'zzrlstest erin shadow muted room post';
 -- his own post up as an official KIVO update.
 begin;
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 insert into posts (author_profile_id, body, is_system)
 select id, 'zzrlstest bob forging a system post', true from profiles where username = 'zzrlstest_bob';
 rollback;
@@ -1104,7 +1128,7 @@ rollback;
 begin;
 select set_config('rls_test.post_id', (select id::text from posts where body = 'zzrlstest public post by bob'), true);
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 update posts set is_system = true where id = current_setting('rls_test.post_id')::uuid;
 rollback;
 
@@ -1126,9 +1150,106 @@ select set_config('rls_test.fixture_id',
 insert into posts (author_profile_id, fixture_id, body, is_system)
 select id, current_setting('rls_test.fixture_id')::uuid, 'zzrlstest system goal post', true from profiles where username = 'kivo_system';
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"zzrlstest_clerk_bob","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000b0b0","role":"authenticated"}';
 select 'is_system: bob (ordinary user) can read the real KIVO system post' as check_name,
   exists (select 1 from posts where body = 'zzrlstest system goal post' and is_system = true) as passed;
+rollback;
+
+
+-- -----------------------------------------------------------------------------
+-- 6k. Supabase Auth identity + self-provisioning (migration 0053)
+-- -----------------------------------------------------------------------------
+-- The three rewritten `profiles` policies, exercised directly. This section is
+-- what proves the identity swap itself, as opposed to the ~50 downstream
+-- policies sections 2-6j cover by consequence.
+--
+-- profiles_insert_own stopped being defense-in-depth with 0053: there is no
+-- webhook provisioning rows any more, so getOrCreateProfile()
+-- (src/lib/profile.ts) inserts the caller's own row through this exact policy,
+-- with the caller's own session, on their first authenticated request. If this
+-- fails, sign-up completes and then dead-ends — so it is tested first.
+
+-- 6k-i. Grace (a real auth.users row with no profile yet) provisions her own.
+--       PASS = both rows below are `t`.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000f4ce","role":"authenticated"}';
+
+insert into profiles (auth_user_id, username, avatar_type, avatar_kivo_id)
+values ('00000000-0000-4000-8000-00000000f4ce', 'zzrlstest_grace', 'kivo', 'kivo-avatar-06');
+
+select check_name, passed from (
+  select 'identity: a new auth user can insert their own profile row' as check_name,
+    exists (select 1 from profiles where username = 'zzrlstest_grace') as passed
+  union all
+  select 'identity: private.current_profile_id() resolves that brand-new row',
+    private.current_profile_id() = (select id from profiles where username = 'zzrlstest_grace')
+) checks
+order by check_name;
+rollback;
+
+-- 6k-ii. PASS = this errors with 42501 (grace cannot provision a row pointing
+--        at somebody else's auth user — the whole point of the WITH CHECK).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000f4ce","role":"authenticated"}';
+insert into profiles (auth_user_id, username)
+values ('00000000-0000-4000-8000-00000000a11c', 'zzrlstest_forged');
+rollback;
+
+-- 6k-iii. PASS = this errors with 42501 (a self-provisioning insert cannot
+--         arrive pre-elevated).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000f4ce","role":"authenticated"}';
+insert into profiles (auth_user_id, username, role)
+values ('00000000-0000-4000-8000-00000000f4ce', 'zzrlstest_grace', 'super_admin'::user_role);
+rollback;
+
+-- 6k-iv. PASS = this errors with 42501 (private.current_role() still reads the
+--        stored pre-update value mid-statement, so self-promotion fails).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
+update profiles set role = 'admin'::user_role where username = 'zzrlstest_alice';
+rollback;
+
+-- 6k-v. PASS = this errors with 42501 (alice cannot re-point her row at
+--       another auth user and inherit their identity).
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
+update profiles set auth_user_id = '00000000-0000-4000-8000-00000000b0b0' where username = 'zzrlstest_alice';
+rollback;
+
+-- 6k-vi. The admin branch: private.current_role() / private.is_admin() have to
+--        keep resolving through the new identity column, or every admin
+--        surface in the app silently loses its data.
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000ad11","role":"authenticated"}';
+select check_name, passed from (
+  select 'identity: private.current_role() resolves the admin''s role' as check_name,
+    private.current_role() = 'admin'::user_role and private.is_admin() as passed
+  union all
+  select 'identity: admin sees every zzrlstest profile, not just their own',
+    (select count(*) from profiles where username like 'zzrlstest_%') = 7
+) checks
+order by check_name;
+rollback;
+
+-- 6k-vii. And the negative: a signed-out caller resolves to nobody rather than
+--         to some arbitrary row.
+begin;
+set local role anon;
+select check_name, passed from (
+  select 'identity: anon has no profile id' as check_name,
+    private.current_profile_id() is null as passed
+  union all
+  select 'identity: anon has no role and is not admin',
+    private.current_role() is null and private.is_admin() = false
+) checks
+order by check_name;
 rollback;
 
 
@@ -1137,6 +1258,7 @@ rollback;
 -- -----------------------------------------------------------------------------
 
 delete from profiles where username like 'zzrlstest\_%' escape '\';
+delete from auth.users where email like 'zzrlstest\_%@example.invalid' escape '\';
 delete from fixtures where competition_id in (select id from competitions where name like 'ZZ RLS Test%');
 delete from players where full_name like 'ZZ RLS Test%';
 delete from seasons where competition_id in (select id from competitions where name like 'ZZ RLS Test%');
@@ -1161,4 +1283,5 @@ select 'teardown: no zzrlstest rows remain in any seeded table' as check_name,
   and not exists (select 1 from poll_options)
   and not exists (select 1 from poll_votes)
   and not exists (select 1 from saves)
-  and not exists (select 1 from fan_ratings) as passed;
+  and not exists (select 1 from fan_ratings)
+  and not exists (select 1 from auth.users where email like 'zzrlstest\_%@example.invalid' escape '\') as passed;

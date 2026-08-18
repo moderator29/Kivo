@@ -3,7 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FadeIn } from "@/components/ui/fade-in";
 import { EmailCodeForm } from "@/components/auth/email-code-form";
-import { getAuthUser, isAuthConfigured, sanitizeRedirectPath } from "@/lib/auth";
+import { isAuthConfigured, sanitizeRedirectPath } from "@/lib/auth";
+import { resolveViewerProfile } from "@/lib/profile";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
 export const metadata = { title: "Create your account" };
@@ -23,8 +25,15 @@ export default async function SignUpPage({
   // value originates in a URL anyone can craft.
   const redirectTo = sanitizeRedirectPath((await searchParams).redirect_url);
 
-  if (await getAuthUser()) {
+  // Same reasoning as /sign-in: resolved through the profile, not the bare
+  // session, so a session whose profile won't load terminates here instead of
+  // being volleyed between this page and the app group forever.
+  const viewer = await resolveViewerProfile();
+  if (viewer.status === "ready") {
     redirect(redirectTo ?? "/home");
+  }
+  if (viewer.status === "unavailable") {
+    return <ProfileUnavailable retryHref="/sign-up" />;
   }
 
   return (

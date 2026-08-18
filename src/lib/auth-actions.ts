@@ -4,8 +4,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "./supabase/server";
-import { getOrCreateProfile } from "./profile";
+import { resolveViewerProfile } from "./profile";
 import { isAuthConfigured, sanitizeRedirectPath } from "./auth";
+import { checkRateLimit, getClientIp } from "./rate-limit";
 import { RESEND_COOLDOWN_SECONDS, type AuthActionResult, type AuthMode } from "./auth-shared";
 
 /**
@@ -80,6 +81,60 @@ function secondsFromRateLimitMessage(message: string): number | undefined {
 }
 
 /**
+ * Server-side throttling for the two endpoints anyone on the internet can hit
+ * without an account.
+ *
+ * These are not ordinary actions. `sendEmailCode` makes KIVO's own domain send
+ * mail to an address the caller chose, so unthrottled it is both a cost problem
+ * and a sending-reputation one — a burst of abuse can get the domain blocked,
+ * which breaks sign-up for everybody. `verifyEmailCode` guesses at a six-digit
+ * secret, so unthrottled it is a brute-force oracle. The form's resend cooldown
+ * is a courtesy to honest users and nothing more: it lives in the browser and
+ * is trivially bypassed by posting to the action directly.
+ *
+ * Two keys per call, deliberately. The email key stops one address being
+ * hammered (or mail-bombed) no matter where the requests come from; the IP key
+ * stops one attacker cycling through many addresses. Either alone leaves an
+ * obvious hole.
+ */
+async function throttle(action: string, address: string, perEmail: number, perIp: number, windowSeconds: number) {
+  const byEmail = await checkRateLimit(`email:${address}`, action, perEmail, windowSeconds);
+  if (!byEmail.ok) return byEmail;
+  return checkRateLimit(`ip:${await getClientIp()}`, action, perIp, windowSeconds);
+}
+
+/**
+ * checkRateLimit() needs the service-role key (rate_limit_events has no
+ * client-facing RLS policy by design), and createServiceRoleSupabaseClient()
+ * throws outright when that key is absent — which is the normal state of a
+ * local dev environment configured with only the public keys. Swallowing that
+ * one case keeps `next dev` usable while leaving every real limit intact
+ * wherever the key IS set, and it is consistent with checkRateLimit's own
+ * documented "fail open on infra errors, fail closed on over-limit" stance.
+ * Logged loudly rather than silently, because a deployed environment missing
+ * this key means these endpoints are running unthrottled.
+ */
+async function throttleOrPassThrough(
+  action: string,
+  address: string,
+  perEmail: number,
+  perIp: number,
+  windowSeconds: number,
+): Promise<AuthActionResult | undefined> {
+  try {
+    const result = await throttle(action, address, perEmail, perIp, windowSeconds);
+    if (!result.ok) return { error: result.error, retryAfterSeconds: windowSeconds };
+  } catch (error) {
+    console.error(
+      `Rate limiting is NOT active for ${action} — SUPABASE_SERVICE_ROLE_KEY is missing or invalid. ` +
+        "This endpoint is unthrottled until that is fixed.",
+      error,
+    );
+  }
+  return undefined;
+}
+
+/**
  * Step 1: email a six-digit code.
  *
  * `shouldCreateUser` is what makes /sign-in and /sign-up genuinely different
@@ -115,6 +170,12 @@ export async function sendEmailCode(
   if (!EMAIL_PATTERN.test(address)) {
     return { error: "Enter a valid email address." };
   }
+
+  // Three codes per address per 15 minutes is well clear of a real person
+  // mistyping their email once and resending once; 10 per IP per 15 minutes
+  // still allows a shared office NAT while shutting down bulk abuse.
+  const throttled = await throttleOrPassThrough("auth_send_email_code", address, 3, 10, 15 * 60);
+  if (throttled) return throttled;
 
   const next = sanitizeRedirectPath(redirectTo);
   const callback = new URL("/auth/callback", await requestOrigin());
@@ -173,6 +234,14 @@ export async function verifyEmailCode(
     return { error: "Enter the 6-digit code from your email." };
   }
 
+  // Brute-force guard: a six-digit code is one in a million, and this caps a
+  // single address at 8 guesses per 15 minutes (and one IP at 20 across all
+  // addresses). Supabase expires the code long before that budget could matter,
+  // but the limit has to exist here too — Supabase's own throttle is on sending,
+  // not on verifying.
+  const throttled = await throttleOrPassThrough("auth_verify_email_code", address, 8, 20, 15 * 60);
+  if (throttled) return throttled;
+
   const supabase = createServerSupabaseClient();
   const { error } = await supabase.auth.verifyOtp({ email: address, token, type: "email" });
   if (error) return describeAuthError(error, "sign-in");
@@ -180,16 +249,19 @@ export async function verifyEmailCode(
   // The session cookies are written by now, and createServerSupabaseClient() is
   // request-cached, so this call already runs as the freshly signed-in user —
   // creating their profile row on the spot if this is their first visit.
-  const profile = await getOrCreateProfile();
+  const viewer = await resolveViewerProfile();
 
-  // redirect() throws NEXT_REDIRECT, so it must stay outside any try/catch.
-  if (!profile) {
-    // Signed in, but the profile row could not be read or created. Sending them
-    // into (app) would just bounce them straight back out, so say so honestly.
-    return { error: "Signed in, but your KIVO profile couldn't be created. Try again." };
+  // Signed in, but the profile row could not be read or created. Reported in
+  // place rather than redirected: sending them into (app) would render the
+  // terminal ProfileUnavailable screen a navigation later, and telling them
+  // right here — on the form they are already looking at, with the code still
+  // typed — is both faster and clearer.
+  if (viewer.status !== "ready") {
+    return { error: "You're signed in, but your KIVO profile couldn't be set up. Try again." };
   }
 
-  if (!profile.onboarding_completed) redirect("/onboarding");
+  // redirect() throws NEXT_REDIRECT, so it must stay outside any try/catch.
+  if (!viewer.profile.onboarding_completed) redirect("/onboarding");
   redirect(sanitizeRedirectPath(redirectTo) ?? "/home");
 }
 

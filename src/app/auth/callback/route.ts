@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getOrCreateProfile } from "@/lib/profile";
+import { resolveViewerProfile } from "@/lib/profile";
 import { sanitizeRedirectPath } from "@/lib/auth";
 
 /**
@@ -55,11 +55,14 @@ export async function GET(request: NextRequest) {
 
   // Mirrors verifyEmailCode()'s destination logic so both halves of the email
   // land in exactly the same place.
-  const profile = await getOrCreateProfile();
-  if (!profile) {
-    return NextResponse.redirect(new URL("/sign-in?error=profile_failed", origin));
+  const viewer = await resolveViewerProfile();
+  if (viewer.status !== "ready") {
+    // Signed in but the profile is unavailable: /sign-in renders the honest,
+    // terminal ProfileUnavailable state for exactly this case rather than
+    // bouncing them onwards, so handing off to it is the whole fix.
+    return NextResponse.redirect(new URL("/sign-in", origin));
   }
-  if (!profile.onboarding_completed) {
+  if (!viewer.profile.onboarding_completed) {
     return NextResponse.redirect(new URL("/onboarding", origin));
   }
   return NextResponse.redirect(new URL(next ?? "/home", origin));
