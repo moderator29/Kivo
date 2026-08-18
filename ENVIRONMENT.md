@@ -52,7 +52,7 @@ Sign-in method: **email one-time code only** (see `DECISIONS.md`, 2026-08-18). N
 
 ### Sending the sign-in email in production
 
-Supabase's built-in email sender is intended for development and is heavily rate-limited (a handful of messages per hour per project, shared across every auth email). It is fine for local work and for testing, and it is **not** adequate for real signups. Before production traffic, configure custom SMTP under Dashboard → Project Settings → Authentication → SMTP Settings; `RESEND_API_KEY` below is the intended sender once that is wired. Nothing in the code changes when you do this — Supabase sends the mail either way.
+Supabase's built-in email sender is intended for development and is heavily rate-limited (a handful of messages per hour per project, shared across every auth email). It is fine for local work and for testing, and it is **not** adequate for real signups. Before production traffic, configure custom SMTP under Dashboard → Project Settings → Authentication → SMTP Settings; `RESEND_API_KEY` below is the intended sender once that is wired. Nothing in the code changes when you do this — Supabase sends the mail either way. **`docs/EMAIL_DELIVERABILITY.md` is the full runbook** (KN-117): which DNS records to publish and why, the rate-limit setting that stays in force even after custom SMTP is wired, what to test against which mailboxes, and the bounce/complaint path. With email OTP as the only sign-in method, an email that doesn't arrive is a user who cannot use KIVO at all — read that before launch, not after the first report.
 
 ## Football data — provider abstraction (see `DECISIONS.md`)
 

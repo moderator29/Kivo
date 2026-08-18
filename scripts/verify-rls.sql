@@ -100,6 +100,7 @@
 -- 0. Preflight cleanup (idempotent — in case a previous run was interrupted)
 -- -----------------------------------------------------------------------------
 
+delete from support_requests where reply_email like 'zzrlstest\_%@example.invalid' escape '\';
 delete from profiles where username like 'zzrlstest\_%' escape '\';
 delete from auth.users where email like 'zzrlstest\_%@example.invalid' escape '\';
 delete from fixtures where competition_id in (select id from competitions where name like 'ZZ RLS Test%');
@@ -130,6 +131,7 @@ insert into auth.users (id, instance_id, aud, role, email) values
   ('00000000-0000-4000-8000-00000000da7e', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_dave@example.invalid'),
   ('00000000-0000-4000-8000-00000000e517', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_erin@example.invalid'),
   ('00000000-0000-4000-8000-00000000f5a4', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_frank@example.invalid'),
+  ('00000000-0000-4000-8000-00000000509d', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'zzrlstest_sam@example.invalid'),
   -- Deliberately gets NO profiles row here: section 6k is about a brand-new
   -- signee provisioning their own, which is what getOrCreateProfile() does on
   -- a user's first authenticated request.
@@ -253,6 +255,14 @@ select id, 50, 'zzrlstest xp' from profiles where username = 'zzrlstest_bob';
 -- plus a suspension whose expiry has already elapsed.
 insert into profiles (username, auth_user_id, display_name, role) values
   ('zzrlstest_admin', '00000000-0000-4000-8000-00000000ad11', 'ZZ RLS Test Admin', 'admin'::user_role);
+
+-- KN-118 (migration 0055_support_requests): a support_admin, for section 6l.
+-- Deliberately a role that is NOT 'admin' — the point of that section is that
+-- support_requests is reachable by the narrow support role and by nobody else,
+-- so testing it with an account that would pass every admin check anyway
+-- would prove nothing.
+insert into profiles (username, auth_user_id, display_name, role) values
+  ('zzrlstest_sam', '00000000-0000-4000-8000-00000000509d', 'ZZ RLS Test Sam (support)', 'support_admin'::user_role);
 
 insert into profiles (username, auth_user_id, display_name, role, moderation_status, moderation_reason, moderation_expires_at, moderation_set_at)
 select 'zzrlstest_carol', '00000000-0000-4000-8000-00000000ca01'::uuid, 'ZZ RLS Test Carol', 'user'::user_role, 'suspended'::moderation_status, 'zzrlstest spam links', now() + interval '3 days', now()
@@ -387,6 +397,16 @@ rollback;
 -- -----------------------------------------------------------------------------
 -- 4. READ assertions as anon (no JWT at all — logged-out visitor)
 -- -----------------------------------------------------------------------------
+-- REWRITTEN BY MIGRATION 0059 (KN-120). The first two assertions here used to
+-- read "anon CAN see public reference data" and "anon CAN read a public post",
+-- and they were right for the KIVO that existed when they were written — one a
+-- guest could browse. Once the app was gated with no guest preview, they were
+-- documenting a data-exfiltration surface instead of a feature: the anon key
+-- ships in the browser bundle, so "anon can read posts" meant the entire social
+-- feed was world-readable to anyone who opened devtools, for a product that had
+-- just told its users the opposite. Both are inverted below, and the point of
+-- keeping them (rather than deleting them) is that they now fail loudly if any
+-- of those nineteen policies is ever quietly re-granted.
 
 begin;
 
@@ -397,11 +417,27 @@ select set_config('rls_test.fixture_id',
 set local role anon;
 
 select check_name, passed from (
-  select 'teams: anon can read public reference data' as check_name,
-    (select count(*) from teams where name like 'ZZ RLS Test%') = 2 as passed
+  select 'teams: anon can no longer read football reference data (0059)' as check_name,
+    (select count(*) from teams where name like 'ZZ RLS Test%') = 0 as passed
   union all
-  select 'posts: anon can read a public post',
-    exists (select 1 from posts where body = 'zzrlstest public post by alice')
+  select 'posts: anon can no longer read the social feed (0059)',
+    not exists (select 1 from posts where body = 'zzrlstest public post by alice')
+  union all
+  select 'fixtures/comments/reactions: none of the formerly-public tables leak to anon (0059)',
+    not exists (select 1 from fixtures)
+    and not exists (select 1 from comments)
+    and not exists (select 1 from reactions)
+    and not exists (select 1 from badges)
+  union all
+  select 'anon holds no EXECUTE on any public or private function (0059 + 0062)',
+    not exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('public', 'private')
+        and has_function_privilege('anon', p.oid, 'EXECUTE')
+    )
+  union all
+  select 'anon holds no USAGE on the private schema (0059)',
+    not has_schema_privilege('anon', 'private', 'USAGE')
   union all
   select 'profiles: anon cannot read any profile row (owner/admin-only table)',
     not exists (select 1 from profiles where username like 'zzrlstest_%')
@@ -1254,6 +1290,108 @@ rollback;
 
 
 -- -----------------------------------------------------------------------------
+-- 6l. support_requests — KIVO's only route from a locked-out user to a human
+--     (KN-118, migration 0055_support_requests + 0058)
+-- -----------------------------------------------------------------------------
+-- This table is shaped unlike anything else in the schema and therefore needs
+-- its own assertions rather than riding on the generic owner-only ones:
+--
+--   * It has NO client-facing INSERT policy at all, for anon or authenticated.
+--     Writes come from the service-role client in src/app/support/actions.ts,
+--     behind checkRateLimit. The person filing it is, by construction,
+--     somebody who cannot sign in — so a session-based write policy would be
+--     useless, and an anon INSERT policy would make this the one world-writable
+--     table in the schema.
+--   * Reads and triage are limited to support_admin/admin/super_admin, a
+--     narrower set than moderation's, because every row carries a real email
+--     address belonging to someone who is locked out.
+--
+-- 6l-i. The negative half: an ordinary signed-in user must see nothing and
+--       write nothing, and anon must not even hold the table grant.
+begin;
+insert into support_requests (reply_email, topic, message)
+values ('zzrlstest_locked_out@example.invalid', 'sign_in', 'zzrlstest: no code ever arrives for me');
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000a11c","role":"authenticated"}';
+select check_name, passed from (
+  select 'support: an ordinary user sees no support requests' as check_name,
+    (select count(*) from support_requests) = 0 as passed
+  union all
+  select 'support: an ordinary user holds no INSERT privilege on the table',
+    not has_table_privilege('authenticated', 'support_requests', 'INSERT')
+      or not exists (
+        select 1 from pg_policies
+        where schemaname = 'public' and tablename = 'support_requests' and cmd = 'INSERT'
+      )
+) checks
+order by check_name;
+rollback;
+
+-- 6l-ii. PASS = this errors with 42501. anon has no grant on the table at all
+--        (migration 0055 revokes the one Supabase's default privileges hand
+--        out), so it fails before RLS is even consulted.
+begin;
+set local role anon;
+select count(*) from support_requests;
+rollback;
+
+-- 6l-iii. The positive half. A policy that refuses everybody is not a policy:
+--         the support role must actually be able to read and triage the queue,
+--         or /admin/support is a page that always looks empty and the /support
+--         form is promising a person who never sees it.
+begin;
+insert into support_requests (reply_email, topic, message)
+values ('zzrlstest_locked_out@example.invalid', 'sign_in', 'zzrlstest: no code ever arrives for me');
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000509d","role":"authenticated"}';
+update support_requests
+   set status = 'in_progress',
+       handled_by = (select id from profiles where username = 'zzrlstest_sam'),
+       handled_at = now(),
+       internal_note = 'zzrlstest: verified, awaiting reply'
+ where reply_email = 'zzrlstest_locked_out@example.invalid';
+
+select check_name, passed from (
+  select 'support: support_admin can read the queue' as check_name,
+    (select count(*) from support_requests where reply_email = 'zzrlstest_locked_out@example.invalid') = 1 as passed
+  union all
+  select 'support: support_admin can triage a request',
+    (select status from support_requests where reply_email = 'zzrlstest_locked_out@example.invalid') = 'in_progress'::support_request_status
+) checks
+order by check_name;
+rollback;
+
+-- 6l-iv. Migration 0058's regression test, and the reason 0058 exists.
+--        support_requests.handled_by is `on delete set null`, but 0055's
+--        original paired check constraint required handled_by and handled_at
+--        to be null or non-null together. Those two rules contradict: deleting
+--        a support admin who had ever triaged anything made Postgres try to
+--        null handled_by, which violated the check, which failed the DELETE.
+--        Net effect — a staff account that had touched the queue could never be
+--        removed. Found by running exactly this section against the real
+--        project, not by reading the DDL.
+begin;
+insert into support_requests (reply_email, topic, message, status, handled_by, handled_at)
+values ('zzrlstest_handled@example.invalid', 'sign_in', 'zzrlstest: already triaged', 'closed',
+        (select id from profiles where username = 'zzrlstest_sam'), now());
+
+delete from profiles where username = 'zzrlstest_sam';
+
+select check_name, passed from (
+  select 'support: a handler''s profile can still be deleted (0058)' as check_name,
+    not exists (select 1 from profiles where username = 'zzrlstest_sam') as passed
+  union all
+  select 'support: handled_at survives the handler being deleted',
+    (select handled_at is not null and handled_by is null
+       from support_requests where reply_email = 'zzrlstest_handled@example.invalid')
+) checks
+order by check_name;
+rollback;
+
+
+-- -----------------------------------------------------------------------------
 -- 7. Teardown — remove every row this script created
 -- -----------------------------------------------------------------------------
 
@@ -1284,4 +1422,5 @@ select 'teardown: no zzrlstest rows remain in any seeded table' as check_name,
   and not exists (select 1 from poll_votes)
   and not exists (select 1 from saves)
   and not exists (select 1 from fan_ratings)
+  and not exists (select 1 from support_requests where reply_email like 'zzrlstest\_%@example.invalid' escape '\')
   and not exists (select 1 from auth.users where email like 'zzrlstest\_%@example.invalid' escape '\') as passed;
