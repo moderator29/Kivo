@@ -10,6 +10,10 @@ import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
+import { usePopoverPlacement } from "@/hooks/use-popover-placement";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import type { ReactionType } from "@/lib/reactions";
 import type { PollSummary } from "@/app/(app)/social/posts";
 import { cn } from "@/lib/utils";
@@ -46,7 +50,7 @@ function linkifyBody(body: string) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-kivo-cyan underline underline-offset-2 hover:text-kivo-cyan/80"
+          className="text-accent underline underline-offset-2 hover:text-accent/80"
         >
           {url}
         </a>
@@ -91,7 +95,7 @@ function PostBody({ body }: { body: string }) {
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          className="text-xs font-medium text-accent hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -157,18 +161,23 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             disabled={pending}
             aria-busy={pending}
             aria-pressed={isOwn}
+            title={!signedIn ? GUEST_ACTION_TITLE : undefined}
             className={cn(
-              "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
-              isOwn ? "border-kivo-cyan/50" : "border-white/10 hover:bg-white/5",
+              "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed",
+              isOwn ? "border-accent/50" : "border-hairline hover:bg-surface-2",
             )}
           >
-            <span className="absolute inset-y-0 left-0 bg-kivo-cyan/10" style={{ width: `${pct}%` }} aria-hidden="true" />
+            <span className="absolute inset-y-0 left-0 bg-accent-soft" style={{ width: `${pct}%` }} aria-hidden="true" />
             <span className="relative flex items-center justify-between gap-2">
               <span className={cn("flex min-w-0 items-center gap-1 truncate", isOwn ? "font-semibold text-foreground" : "text-foreground-muted")}>
                 {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
                 <span className="truncate">{option.label}</span>
               </span>
-              <span className="shrink-0 text-xs text-foreground-subtle">{pct}%</span>
+              <span className="flex shrink-0 items-center gap-1 text-xs text-foreground-subtle">
+                {/* RECOMMENDATIONS item 235 */}
+                <GuestLockHint show={!signedIn} className="h-2.5 w-2.5 shrink-0" />
+                {pct}%
+              </span>
             </span>
           </button>
         );
@@ -195,6 +204,10 @@ interface PostCardProps {
   /** Optional so existing call sites that haven't wired author identity through
    * yet still type-check; the name simply doesn't link without it. */
   authorUsername?: string | null;
+  /** Optional for the same reason as authorUsername above — call sites that
+   * haven't wired author identity through (Match Room) fall back to the
+   * initials badge below rather than needing an update just to type-check. */
+  authorAvatarSrc?: string | null;
   reactionCount: number;
   viewerReaction: ReactionType | null;
   commentCount: number;
@@ -209,6 +222,23 @@ interface PostCardProps {
    * (which doesn't fetch save state) still type-checks as "not saved"
    * rather than requiring a change there. */
   viewerSaved?: boolean;
+  /** RECOMMENDATIONS item 237: true for one post right after a notification
+   * deep-link lands the viewer on it — a brief `.kivo-row-flash` (same cue
+   * LiveFixtureList uses for "this row just changed") instead of a bare
+   * scroll with zero visual confirmation it found the right post. Defaults
+   * false for every ordinary render. */
+  highlighted?: boolean;
+  /** RECOMMENDATIONS item 254: true only for a KIVO-authored automatic
+   * goal/red-card announcement (posts.is_system — see
+   * supabase/migrations/0047_match_room_system_posts.sql). When true, the
+   * author row below ignores authorName/authorAvatarSrc entirely and always
+   * renders the same hardcoded "KIVO" + system badge — so what a post
+   * displays as can never be spoofed by whatever happens to be stored in
+   * those two fields, only by this boolean, which itself can only ever be
+   * true for a real service-role write (RLS rejects it from any client
+   * insert/update — see the migration). Defaults false for every ordinary
+   * post, general-feed or Room alike. */
+  isSystem?: boolean;
 }
 
 export function PostCard({
@@ -217,6 +247,7 @@ export function PostCard({
   createdAt,
   authorName,
   authorUsername = null,
+  authorAvatarSrc = null,
   reactionCount,
   viewerReaction,
   commentCount,
@@ -224,6 +255,8 @@ export function PostCard({
   index = 0,
   poll = null,
   viewerSaved = false,
+  highlighted = false,
+  isSystem = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -234,6 +267,19 @@ export function PostCard({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportPending, startReportTransition] = useTransition();
   const reportMenuRef = useRef<HTMLDivElement>(null);
+  const reportTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // RECOMMENDATIONS item 238: real viewport-edge collision detection for the
+  // report-reason popover, which used to always render `right-0 bottom-full`
+  // regardless of how close the trigger sat to the top of the viewport.
+  // Estimated size covers the header row plus REPORT_REASONS.length rows in
+  // the w-48 panel below.
+  const reportMenuPlacement = usePopoverPlacement(reportMenuOpen, reportMenuRef, {
+    estimatedHeight: 40 + REPORT_REASONS.length * 32,
+    estimatedWidth: 192,
+    defaultVertical: "top",
+    defaultHorizontal: "right",
+  });
 
   useEffect(() => {
     if (!justReported) return;
@@ -246,8 +292,21 @@ export function PostCard({
     function onClickOutside(e: MouseEvent) {
       if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) setReportMenuOpen(false);
     }
+    // Audit item 4: role="menu" popovers previously had no keyboard way to
+    // close short of activating an item or tabbing past them. Escape closes
+    // and returns focus to the trigger, matching the reaction picker below.
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setReportMenuOpen(false);
+        reportTriggerRef.current?.focus();
+      }
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [reportMenuOpen]);
 
   function handleReportClick() {
@@ -277,25 +336,51 @@ export function PostCard({
   return (
     <motion.article
       // Anchor target for notification click-through (see postHref() in
-      // lib/notification-registry.ts, `/social#post-<id>`). scroll-mt clears
-      // the sticky TopBar (and, on Match Centre, the sticky score card) so
-      // the post the link lands on isn't hidden underneath it.
+      // lib/notification-registry.ts, now `/social?post=<id>` — item 237).
+      // scroll-mt clears the sticky TopBar (and, on Match Centre, the sticky
+      // score card) so the post the link lands on isn't hidden underneath it.
       id={`post-${id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
-      className="kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
+      className={cn(
+        "kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-pop",
+        highlighted && "kivo-row-flash",
+      )}
     >
       <div className="flex items-center gap-2">
-        <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white ring-1 ring-white/10">
-          {authorName.charAt(0).toUpperCase()}
-        </div>
+        {isSystem ? (
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-hairline">
+            <KivoMarkGlyph size={20} />
+          </div>
+        ) : authorAvatarSrc ? (
+          <KivoAvatar src={authorAvatarSrc} name={authorName} size={32} className="ring-1 ring-hairline" />
+        ) : (
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-on-accent ring-1 ring-hairline">
+            {authorName.charAt(0).toUpperCase()}
+          </div>
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
-          {authorUsername ? (
+          {isSystem ? (
+            <span className="flex w-fit items-center gap-1.5">
+              <span className="text-sm font-medium text-foreground">KIVO</span>
+              {/* Same pill shape/colour as admin's role badges
+                  (ROLE_BADGE_STYLE in src/app/admin/users/page.tsx) — reused
+                  here so "official KIVO content" reads as visually distinct
+                  from any real fan's name using an already-established
+                  design-system cue, not a one-off new badge style. */}
+              <span
+                title="Automated KIVO match update — not posted by a fan"
+                className="inline-flex items-center rounded-full border border-kivo-cyan/30 bg-kivo-cyan/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-kivo-cyan"
+              >
+                System
+              </span>
+            </span>
+          ) : authorUsername ? (
             <Link
               href={`/u/${authorUsername}`}
-              className="w-fit truncate text-sm font-medium text-foreground hover:text-kivo-cyan"
+              className="w-fit truncate text-sm font-medium text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {authorName}
             </Link>
@@ -315,15 +400,17 @@ export function PostCard({
 
           <div ref={reportMenuRef} className="relative">
           <motion.button
+            ref={reportTriggerRef}
             type="button"
             onClick={handleReportClick}
             disabled={reported || reportPending}
             aria-haspopup={signedIn ? "menu" : undefined}
             aria-expanded={reportMenuOpen}
             aria-label={reported ? "Reported" : "Report post"}
+            title={!signedIn ? GUEST_ACTION_TITLE : undefined}
             whileTap={reported ? undefined : { scale: 0.88 }}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
+              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed",
               reported ? "text-foreground-subtle" : "text-foreground-subtle hover:text-critical",
             )}
           >
@@ -344,6 +431,8 @@ export function PostCard({
                 <motion.span key="flag" className="flex items-center gap-1.5">
                   <Flag className="h-3.5 w-3.5" strokeWidth={1.75} fill={reported ? "currentColor" : "none"} />
                   {reported ? "Reported" : "Report"}
+                  {/* RECOMMENDATIONS item 235 */}
+                  <GuestLockHint show={!signedIn} className="h-3 w-3 shrink-0 text-foreground-subtle" />
                 </motion.span>
               )}
             </AnimatePresence>
@@ -358,7 +447,11 @@ export function PostCard({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-                className="kivo-glass-sharp absolute right-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl p-1"
+                className={cn(
+                  "kivo-popover absolute z-20 w-48 overflow-hidden rounded-xl p-1",
+                  reportMenuPlacement.vertical === "top" ? "bottom-full mb-2" : "top-full mt-2",
+                  reportMenuPlacement.horizontal === "right" ? "right-0" : "left-0",
+                )}
               >
                 <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Report this post
@@ -371,7 +464,7 @@ export function PostCard({
                     disabled={reportPending}
                     aria-busy={reportPending}
                     onClick={() => submitReport(reason)}
-                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+                    className="kivo-menu-item text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                   >
                     {reason}
                   </button>

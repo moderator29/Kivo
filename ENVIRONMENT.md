@@ -22,6 +22,14 @@ Supabase's native third-party auth integration (Clerk JWTs authorizing Postgres/
 
 Until this is done, every RLS-gated query will be rejected (the JWT won't be trusted), even with all the env vars below set correctly.
 
+## ⚠️ Changing a Clerk key? You must trigger a brand-new Vercel deployment, not just save the env var
+
+This is a real, concrete failure mode, not a theoretical one — if sign-up/sign-in silently breaks (a verification code arrives, but submitting it bounces back to the sign-in/sign-up form instead of completing) right after adding or changing a Clerk key, **this is almost certainly why**.
+
+`next.config.ts` computes the Content-Security-Policy's Clerk allowlist (`connect-src`/`script-src`/`frame-src`) by decoding `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` **at build time** (`resolveClerkFrontendApiHost()`) — this is a hard Next.js constraint: `NEXT_PUBLIC_*` variables are baked into the build output, not read fresh at runtime. Saving a new value for this variable in the Vercel dashboard does **not** retroactively change an already-built deployment's CSP header. If the key changes (a different Clerk instance, dev → production keys, a typo fixed) but the site is still serving an old build, the CSP will allow the *previous* Clerk frontend API host — meaning the *new* key's actual verification/session network calls get silently blocked by the browser's CSP, while the sign-up form itself still renders fine (that part just needs the key to be present in the client bundle, not for the CSP to match it). The user sees: code arrives by email, but submitting it does nothing/bounces back — exactly the CSP blocking the network call, with no visible error unless you open the browser's DevTools console (a CSP violation there confirms this diagnosis immediately).
+
+**The fix**: after changing any Clerk (or Supabase) env var in Vercel, trigger an actual new deployment — the dashboard's "Redeploy" action on the latest deployment works, or push a new commit. Simply saving the env var is not enough.
+
 ---
 
 ## App
@@ -64,6 +72,16 @@ Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a s
 | `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts` — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
 | `FOOTBALL_SYNC_COMPETITION_IDS` | RECOMMENDATIONS.md item 28: comma-separated **provider-native** competition/league ids (API-Football's numeric league ids, or TheSportsDB's `idLeague` when that provider is selected) to scope `syncTodayFixtures` to. Read in `src/lib/football/competitions-config.ts` | Optional | Unset = no filter, every league the provider reports for the day still syncs (unchanged from before this item). Filters the already-fetched response rather than issuing one provider request per league — costs zero extra quota. |
 
+## Automated live-sync worker (Vercel Cron) — added 2026-08-18
+
+`src/app/api/cron/sync-live/route.ts`, scheduled via the `crons` array in `vercel.json` (`* * * * *`, once a minute — Vercel Cron's documented minimum interval). The schedule itself is unconditional; the route decides on every firing whether anything is actually worth a provider call (live/halftime fixtures, or one kicking off within ~10 minutes) before it spends any quota. See `docs/LIVE_DATA.md` for the full checklist of what's real vs. still unverifiable about this worker.
+
+| Variable | Purpose | Required | Notes |
+|---|---|---|---|
+| `CRON_SECRET` | Authorizes `/api/cron/sync-live` — the route rejects any request whose `Authorization: Bearer <value>` header doesn't match. Read in `src/app/api/cron/sync-live/route.ts` | **Required** for the cron route to ever do anything other than 500 | Vercel sets this automatically and sends it back as the Bearer token on every real Cron Jobs invocation once you add a Cron Job in the Vercel dashboard/`vercel.json` — see [vercel.com/docs/cron-jobs/manage-cron-jobs](https://vercel.com/docs/cron-jobs/manage-cron-jobs). Without it set, the route always returns 500 rather than silently accepting unauthenticated requests. |
+
+This is genuinely new, real infrastructure — not just an env var read. `FOOTBALL_LIVE_POLLING_ENABLED` (above) is still the gate that decides whether the worker is allowed to spend any provider quota once it does run; `CRON_SECRET` only decides who's allowed to trigger the route at all. Setting `CRON_SECRET` alone does not turn on live polling.
+
 ## AI Copilot
 
 | Variable | Purpose | Required | Notes |
@@ -82,8 +100,9 @@ These are declared in `.env.example` for a feature that's designed but not built
 | `NEXT_PUBLIC_APP_NAME` | Would override the "KIVO" display name in metadata/UI | Not implemented — "KIVO" is hardcoded instead; setting this has no effect |
 | `RESEND_API_KEY` | Transactional email (not auth — Clerk handles verification/reset emails itself) | Not wired — [resend.com](https://resend.com) |
 | `RESEND_FROM_EMAIL` | Sending address for transactional email | Not wired — requires a verified sending domain before production |
-| `CRON_SECRET` | Would authorize scheduled job endpoints if/when background sync jobs exist | Not used — all football syncs today are admin-triggered on demand, not cron |
 | `WEBHOOK_SECRET` | Reserved for future non-Clerk webhook consumers | Not used — `CLERK_WEBHOOK_SECRET` is the only webhook secret actually read |
+
+`CRON_SECRET` **used to be listed here** ("reserved, not used") — as of 2026-08-18 it's real; see the "Automated live-sync worker" section above, not this table.
 
 ---
 

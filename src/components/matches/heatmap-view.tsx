@@ -41,7 +41,7 @@ export function HeatmapView({ observations, playerId, matchId, subjectLabel }: H
     return (
       <div className="kivo-glass relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl p-8 text-center">
         <PitchLines />
-        <div className="relative flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+        <div className="relative flex h-12 w-12 items-center justify-center rounded-full border border-hairline bg-surface-1">
           <Radar className="h-6 w-6 text-foreground-subtle" strokeWidth={1.5} />
         </div>
         <div className="relative flex flex-col gap-1.5">
@@ -78,7 +78,7 @@ export function HeatmapView({ observations, playerId, matchId, subjectLabel }: H
             y={zone.row * cellHeight}
             width={cellWidth}
             height={cellHeight}
-            fill="var(--kivo-cyan)"
+            fill="var(--accent)"
             fillOpacity={zone.density * 0.7}
           />
         ))}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import { Copy, Check, Clock, Plus, History, Compass } from "lucide-react";
+import { Copy, Check, Clock, Plus, History, Compass, Crown } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { setGameweekRoster, setFantasyCaptain, type FantasyPlayerSearchResult } from "./actions";
 import { FantasyLeaderboard, type LeaderboardEntry } from "./fantasy-leaderboard";
@@ -18,6 +18,7 @@ import {
   SQUAD_SIZE,
   FANTASY_BUDGET_CAP,
   formatFantasyPrice,
+  formatDeadlineAbsolute,
   validateRoster,
   type PositionGroup,
   type PositionGroupOrOther,
@@ -57,6 +58,10 @@ type FantasyBuilderProps = {
   points: number | null;
   pointsAvailable: boolean;
   leaderboard: { entries: LeaderboardEntry[]; hasAnyScores: boolean };
+  /** RECOMMENDATIONS.md item 295: the viewer's own real fantasy_points row
+   * per scored gameweek for activeTeamId, ascending by gameweek number —
+   * see PointsByGameweekStrip in fantasy-leaderboard.tsx. */
+  pointsHistory: { gameweekNumber: number; points: number }[];
   /** Set only on the page load where a previous gameweek's squad was just
    * copied forward into this one — see carryForwardFantasyRoster. Deliberately
    * transient (not re-derived on every later load) so it reads as "here's why
@@ -130,6 +135,7 @@ export function FantasyBuilder({
   points,
   pointsAvailable,
   leaderboard,
+  pointsHistory,
   carriedForwardFromGameweek,
 }: FantasyBuilderProps) {
   const [view, setView] = useState<ViewTab>("Squad");
@@ -151,7 +157,13 @@ export function FantasyBuilder({
   const validation = useMemo(
     () =>
       validateRoster(
-        pending.map((p) => ({ playerId: p.playerId, positionGroup: p.positionGroup, price: p.price, isStarting: p.isStarting })),
+        pending.map((p) => ({
+          playerId: p.playerId,
+          positionGroup: p.positionGroup,
+          price: p.price,
+          isStarting: p.isStarting,
+          name: p.name,
+        })),
       ),
     [pending],
   );
@@ -289,10 +301,13 @@ export function FantasyBuilder({
             <button
               type="button"
               onClick={copyInviteCode}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-semibold tracking-wide text-foreground-muted transition hover:bg-white/5 active:scale-95"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 text-xs font-semibold tracking-wide text-foreground-muted transition hover:bg-surface-2 active:scale-95"
             >
               {copied ? <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />}
               {league.inviteCode}
+              <span className="sr-only" role="status" aria-live="polite">
+                {copied ? "Invite code copied" : ""}
+              </span>
             </button>
           )}
         </div>
@@ -303,8 +318,9 @@ export function FantasyBuilder({
               <Link
                 key={t.id}
                 href={`/fantasy?team=${t.id}`}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  t.id === activeTeamId ? "kivo-gradient-victory text-kivo-white" : "border border-white/10 text-foreground-muted hover:bg-white/5"
+                aria-current={t.id === activeTeamId ? "page" : undefined}
+                className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-medium transition ${
+                  t.id === activeTeamId ? "kivo-gradient-victory text-on-accent" : "border border-hairline text-foreground-muted hover:bg-surface-2"
                 }`}
               >
                 {t.name}
@@ -315,7 +331,7 @@ export function FantasyBuilder({
 
         <Link
           href="/fantasy/browse"
-          className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-kivo-cyan"
+          className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-accent"
         >
           <Compass className="h-3.5 w-3.5" strokeWidth={1.75} />
           Browse public leagues
@@ -327,7 +343,7 @@ export function FantasyBuilder({
         role="tablist"
         aria-label="Fantasy view"
         onKeyDown={handleViewTabKeyDown}
-        className="flex gap-1 border-b border-white/10"
+        className="flex gap-1 border-b border-hairline"
       >
         {VIEW_TABS.map((tab) => (
           <button
@@ -342,7 +358,7 @@ export function FantasyBuilder({
             aria-controls={viewPanelId(tab)}
             tabIndex={view === tab ? 0 : -1}
             onClick={() => setView(tab)}
-            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <span className={`relative ${view === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
             {view === tab && (
@@ -362,6 +378,7 @@ export function FantasyBuilder({
             entries={leaderboard.entries}
             hasAnyScores={leaderboard.hasAnyScores}
             activeTeamId={activeTeamId}
+            pointsHistory={pointsHistory}
           />
         </FadeIn>
       )}
@@ -384,7 +401,7 @@ export function FantasyBuilder({
           {carriedForwardFromGameweek !== null && (
             <FadeIn
               delay={0.02}
-              className="flex w-fit items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-foreground-subtle"
+              className="flex w-fit items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-3 py-1.5 text-[11px] text-foreground-subtle"
             >
               <History className="h-3 w-3 shrink-0" strokeWidth={1.75} />
               Carried forward from GW{carriedForwardFromGameweek}
@@ -395,6 +412,7 @@ export function FantasyBuilder({
               label={`Gameweek ${gameweek.number}`}
               value={<DeadlineCountdown deadlineAt={gameweek.deadlineAt} />}
               valueClass={locked ? "text-critical" : "text-foreground"}
+              caption={formatDeadlineAbsolute(gameweek.deadlineAt)}
             />
             <StatTile
               label="Budget left"
@@ -418,13 +436,23 @@ export function FantasyBuilder({
               <span
                 key={group}
                 className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
-                  counts[group] === SQUAD_RULES[group] ? "border-live/30 bg-live/10 text-live" : "border-white/10 text-foreground-muted"
+                  counts[group] === SQUAD_RULES[group] ? "border-live/30 bg-live/10 text-live" : "border-hairline text-foreground-muted"
                 }`}
               >
                 {group} {counts[group]}/{SQUAD_RULES[group]}
               </span>
             ))}
           </FadeIn>
+
+          {pending.length > 0 && !pending.some((p) => p.isCaptain) && (
+            <FadeIn
+              delay={0.12}
+              className="flex items-center gap-2 rounded-2xl border border-achievement/30 bg-achievement/10 px-3.5 py-2.5 text-xs text-achievement"
+            >
+              <Crown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              No captain selected — their points won&apos;t be doubled this gameweek.
+            </FadeIn>
+          )}
 
           <div className="kivo-glass relative flex flex-col gap-4 overflow-hidden rounded-3xl p-4">
             <PitchLines />
@@ -436,13 +464,16 @@ export function FantasyBuilder({
                   {SQUAD_RULES.Midfielders} midfielders and {SQUAD_RULES.Forwards} forwards, within a{" "}
                   {formatFantasyPrice(FANTASY_BUDGET_CAP)} budget.
                 </p>
+                <p className="max-w-xs text-[11px] text-foreground-subtle">
+                  Save your squad first, then open any player to set a captain and vice-captain.
+                </p>
                 <button
                   type="button"
                   onClick={() => {
                     setPickerFilter("All");
                     setPickerOpen(true);
                   }}
-                  className="kivo-gradient-victory mt-1 flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-kivo-white transition active:scale-95"
+                  className="kivo-gradient-victory mt-1 flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-on-accent transition active:scale-95"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   Add players
@@ -465,6 +496,31 @@ export function FantasyBuilder({
                     </FadeIn>
                   );
                 })}
+                {/* A rostered starter whose position doesn't resolve into any of
+                    the four known groups (e.g. provider data changed after the
+                    pick was saved) must never just vanish off the pitch — it
+                    still occupies a paid squad slot. Surfaced in its own
+                    flagged row instead of silently being dropped from every
+                    PITCH_ROWS group above. */}
+                {(() => {
+                  const unclassified = startingXI.filter((p) => p.positionGroup === "Other");
+                  if (unclassified.length === 0) return null;
+                  return (
+                    <FadeIn
+                      delay={0.15 + PITCH_ROWS.length * 0.06}
+                      className="flex flex-col items-center gap-2"
+                    >
+                      <span className="rounded-full border border-critical/30 bg-critical/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-critical">
+                        Unclassified position
+                      </span>
+                      <div className="flex flex-wrap items-start justify-center gap-3">
+                        {unclassified.map((p) => (
+                          <PlayerToken key={p.playerId} player={p} onClick={() => setSelectedPlayerId(p.playerId)} />
+                        ))}
+                      </div>
+                    </FadeIn>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -489,7 +545,7 @@ export function FantasyBuilder({
                   setPickerOpen(true);
                 }}
                 disabled={locked}
-                className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/15 py-3 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-hairline-strong py-3 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 Add player ({pending.length}/{SQUAD_SIZE})
@@ -526,7 +582,7 @@ export function FantasyBuilder({
                     onClick={handleSave}
                     disabled={saving || locked || !validation.ok}
                     aria-busy={saving}
-                    className="kivo-gradient-victory shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-kivo-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+                    className="kivo-gradient-victory shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-on-accent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
                   >
                     {saving ? "Saving…" : "Save squad"}
                   </button>

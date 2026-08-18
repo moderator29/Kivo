@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info } from "lucide-react";
-import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BorderBeam } from "@/components/ui/border-beam";
+import { ThinkingLine } from "@/components/ui/thinking-orb";
 import { formatClockTime, timeAgo } from "@/lib/format";
 import { ConversationHistoryPanel } from "@/components/ai/conversation-history";
 import { loadConversationMessages, renameConversation, deleteConversation, type ConversationSummary } from "@/app/(app)/ai/actions";
@@ -16,14 +16,15 @@ import { loadConversationMessages, renameConversation, deleteConversation, type 
  * that module is `server-only` and this is a client component. */
 type ChatFocus = { type: "fixture" | "team" | "player"; id: string } | null;
 
-/** RECOMMENDATIONS.md item 188: the exact literal tags the system prompt
- * (`/api/ai/chat/route.ts`) instructs the model to prefix its own claims
- * with — kept in sync with that prompt text by convention, not by a shared
- * constant, since one lives in a server-only route and the other in a
+/** RECOMMENDATIONS.md items 188/300: the exact literal tags the system
+ * prompt (`/api/ai/chat/route.ts`) instructs the model to prefix its own
+ * claims with — kept in sync with that prompt text by convention, not by a
+ * shared constant, since one lives in a server-only route and the other in a
  * client component. */
 const PROVENANCE_VERIFIED = "[[KIVO-VERIFIED]]";
 const PROVENANCE_CALCULATED = "[[KIVO-CALCULATED]]";
-const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\])/g;
+const PROVENANCE_LIMITED = "[[KIVO-LIMITED]]";
+const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\]|\[\[KIVO-LIMITED\]\])/g;
 
 /** Turns an assistant reply's inline provenance tags into small visible
  * chips instead of raw bracket text — degrades honestly if the model never
@@ -35,7 +36,7 @@ function renderMessageContent(content: string) {
       return (
         <span
           key={i}
-          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-kivo-cyan"
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-accent/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-accent"
         >
           <ShieldCheck className="h-2.5 w-2.5" strokeWidth={2} />
           Verified
@@ -50,6 +51,17 @@ function renderMessageContent(content: string) {
         >
           <Calculator className="h-2.5 w-2.5" strokeWidth={2} />
           KIVO-calculated
+        </span>
+      );
+    }
+    if (part === PROVENANCE_LIMITED) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-warning/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-warning"
+        >
+          <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2} />
+          Limited data
         </span>
       );
     }
@@ -421,7 +433,7 @@ export function AiChat({
           animate={{ scale: [1, 1.1, 1], opacity: [0.9, 1, 0.9] }}
           transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
         >
-          <Sparkles className="h-4 w-4 text-kivo-white" strokeWidth={1.75} />
+          <Sparkles className="h-4 w-4 text-on-accent" strokeWidth={1.75} />
         </motion.div>
         <h1 className="flex-1 text-lg font-semibold text-foreground">AI Copilot</h1>
 
@@ -434,8 +446,8 @@ export function AiChat({
           aria-expanded={showDisclosure}
           whileTap={{ scale: 0.92 }}
           className={cn(
-            "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-            showDisclosure ? "text-kivo-cyan" : "text-foreground-muted hover:text-foreground",
+            "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+            showDisclosure ? "text-accent" : "text-foreground-muted hover:text-foreground",
           )}
         >
           <Info className="h-4 w-4" strokeWidth={1.75} />
@@ -449,7 +461,7 @@ export function AiChat({
               disabled={messages.length === 0 && !activeConversationId}
               aria-label="New conversation"
               whileTap={{ scale: 0.92 }}
-              className="kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+              className="kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
             >
               <SquarePen className="h-4 w-4" strokeWidth={1.75} />
             </motion.button>
@@ -485,7 +497,7 @@ export function AiChat({
                 Provider quota remaining today:{" "}
                 <span className="text-foreground">{quotaRemaining !== null ? quotaRemaining : "not yet reported"}</span>
               </p>
-              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-black/20 p-3 text-[11px] leading-relaxed text-foreground-muted">
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface-inset p-3 text-[11px] leading-relaxed text-foreground-muted">
                 {groundingSummary || "No grounding context available."}
               </pre>
               <p className="text-[11px] text-foreground-subtle">
@@ -500,14 +512,14 @@ export function AiChat({
           any — dismissible so the user can fall back to an unscoped session
           without losing the conversation already in progress. */}
       {focus && focusLabel && (
-        <div className="flex items-center gap-1.5 self-start rounded-full border border-kivo-cyan/30 bg-kivo-cyan/10 py-1 pl-3 pr-1 text-xs text-kivo-cyan">
+        <div className="flex items-center gap-1.5 self-start rounded-full border border-accent/30 bg-accent/10 py-1 pl-3 pr-1 text-xs text-accent">
           <Sparkles className="h-3 w-3" strokeWidth={2} />
           Focused on {focusLabel}
           <button
             type="button"
             onClick={() => setFocus(null)}
             aria-label="Clear focus"
-            className="flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-kivo-cyan/20"
+            className="flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <X className="h-3 w-3" strokeWidth={2} />
           </button>
@@ -534,25 +546,6 @@ export function AiChat({
 
         {!loadingConversation && messages.length === 0 && (
           <>
-            {/* Third of the three commissioned KIVO artwork pieces placed off
-                the landing page this session (see the hero's placement
-                comment in src/app/page.tsx for the trademark check they went
-                through) — a "command center" composite that reads naturally
-                as the Copilot's own welcome visual. Same edge-masked,
-                floating treatment as the hero, only shown before a
-                conversation actually starts so it never competes with real
-                chat messages. */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="flex justify-center"
-            >
-              <div className="kivo-artwork-float kivo-artwork-mask relative h-40 w-64 sm:h-48 sm:w-80">
-                <Image src={kivoCommandArtwork} alt="" fill className="object-contain" sizes="320px" />
-              </div>
-            </motion.div>
-
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -573,7 +566,7 @@ export function AiChat({
                     transition={{ duration: 0.3, delay: 0.14 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
                     whileHover={{ y: -2, transition: { duration: 0.15 } }}
                     whileTap={{ scale: 0.96 }}
-                    className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-kivo-cyan/40 hover:bg-white/[0.06] hover:text-foreground"
+                    className="rounded-full border border-hairline px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-accent/40 hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
                     {s}
                   </motion.button>
@@ -594,7 +587,7 @@ export function AiChat({
             <div
               className={cn(
                 "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-                m.role === "user" ? "kivo-gradient-prime text-kivo-white" : "kivo-glass text-foreground",
+                m.role === "user" ? "kivo-gradient-prime text-on-accent" : "kivo-glass text-foreground",
               )}
             >
               {m.role === "assistant" ? renderMessageContent(m.content) : m.content}
@@ -606,7 +599,7 @@ export function AiChat({
                   type="button"
                   onClick={() => handleCopy(m.id, m.content)}
                   aria-label="Copy message"
-                  className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                  className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   {copiedMessageId === m.id ? (
                     <Check className="h-3 w-3" strokeWidth={2} />
@@ -625,7 +618,7 @@ export function AiChat({
                     disabled={pending}
                     aria-label="Regenerate response"
                     title="Regenerate response"
-                    className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
                     <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
                   </button>
@@ -641,16 +634,20 @@ export function AiChat({
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="kivo-glass mr-auto flex items-center gap-1 rounded-2xl px-4 py-3"
+            className="mr-auto"
           >
-            {[0, 1, 2].map((i) => (
-              <motion.span
-                key={i}
-                className="h-1.5 w-1.5 rounded-full bg-foreground-subtle"
-                animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
-                transition={{ duration: 1, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+            {/* The one place in the app that earns a border beam: the model is
+                actively composing and there is nothing else on screen to show
+                for it. The beam travels the pill's edge while the orb turns
+                inside it, so the wait reads as thinking rather than as a
+                stalled request. Both stop moving under reduced motion — the
+                ring and the dashes stay, so the state is still visible. */}
+            <BorderBeam className="w-fit rounded-full" duration={3.6}>
+              <ThinkingLine
+                label="Thinking…"
+                className="kivo-glass rounded-full px-4 py-2.5 text-xs font-medium text-foreground-muted"
               />
-            ))}
+            </BorderBeam>
           </motion.div>
         )}
 
@@ -668,7 +665,7 @@ export function AiChat({
           e.preventDefault();
           send(input);
         }}
-        className="kivo-glass flex items-end gap-2 rounded-2xl p-2 transition-shadow duration-300 focus-within:shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.35)]"
+        className="kivo-glass flex items-end gap-2 rounded-2xl p-2 transition-shadow duration-300 focus-within:shadow-[0_0_0_1px_var(--accent-hairline),0_8px_30px_-8px_var(--accent-hairline)]"
       >
         <textarea
           ref={textareaRef}
@@ -691,7 +688,7 @@ export function AiChat({
           aria-busy={pending}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.92 }}
-          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-kivo-white transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-40"
+          className="kivo-gradient-prime flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
           aria-label="Send"
         >
           <ArrowUp className="h-4 w-4" strokeWidth={2} />

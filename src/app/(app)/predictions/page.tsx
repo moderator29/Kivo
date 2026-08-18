@@ -89,7 +89,7 @@ export default async function PredictionsPage() {
         </div>
         <Link
           href="/predictions/mine"
-          className="flex shrink-0 items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          className="flex shrink-0 items-center gap-1 text-xs font-medium text-accent hover:text-accent/80"
         >
           My predictions
           <ArrowRight className="h-3 w-3" strokeWidth={2} />

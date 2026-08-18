@@ -13,7 +13,7 @@ export default function LiveLoading() {
           <Skeleton className="h-3.5 w-3.5 rounded-full" />
           <Skeleton className="h-3.5 w-20" />
         </div>
-        <div className="flex flex-col divide-y divide-white/5">
+        <div className="flex flex-col divide-y divide-hairline-soft">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex flex-col gap-2 px-2 py-2">
               <div className="flex items-center justify-between">

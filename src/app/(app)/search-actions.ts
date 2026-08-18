@@ -72,14 +72,18 @@ export async function getPopularTeams(): Promise<PopularTeam[]> {
  * signed in and by IP otherwise — same reasoning as getClientIp's own
  * doc-comment about why a spoofable header is an acceptable key here.
  */
-export async function searchPlatform(query: string): Promise<SearchResult[]> {
+export async function searchPlatform(query: string): Promise<{ error: string | null; results: SearchResult[] }> {
   const trimmed = query.trim().slice(0, MAX_QUERY_LENGTH);
-  if (trimmed.length < 2) return [];
+  if (trimmed.length < 2) return { error: null, results: [] };
 
   const profile = await getOrCreateProfile();
   const rateLimitKey = profile ? `user:${profile.id}` : `ip:${await getClientIp()}`;
   const rateLimit = await checkRateLimit(rateLimitKey, "search_platform", 30, 60);
-  if (!rateLimit.ok) return [];
+  // Bug 6 (audit): used to silently `return []` here, indistinguishable from
+  // a genuine zero-result search — same { error, ... } shape searchPlayers
+  // (players/actions.ts) already uses for the same situation, so the caller
+  // can show real rate-limit copy instead of a misleading "No matches".
+  if (!rateLimit.ok) return { error: rateLimit.error, results: [] };
 
   const supabase = createServerSupabaseClient();
   const pattern = `%${escapeLikePattern(trimmed)}%`;
@@ -129,5 +133,5 @@ export async function searchPlatform(query: string): Promise<SearchResult[]> {
     });
   }
 
-  return results;
+  return { error: null, results };
 }

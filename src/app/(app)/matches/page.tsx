@@ -102,7 +102,7 @@ export default async function MatchesPage({
                 {group.competitionId ? (
                   <Link
                     href={`/leagues/${group.competitionId}`}
-                    className="text-sm font-semibold text-foreground transition hover:text-kivo-cyan"
+                    className="text-sm font-semibold text-foreground transition hover:text-accent"
                   >
                     {group.competitionName}
                   </Link>
@@ -121,7 +121,7 @@ export default async function MatchesPage({
                     <FadeIn
                       key={fixture.id}
                       delay={0.08 + staggerDelay(index, 0.03)}
-                      className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                      className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-surface-2"
                     >
                       {/* Stretched-link overlay: makes the whole card navigate to
                           Match Centre (item 110), matching Home's FixtureRow and
@@ -145,7 +145,7 @@ export default async function MatchesPage({
                           {fixture.home_team?.id ? (
                             <Link
                               href={`/teams/${fixture.home_team.id}`}
-                              className="relative z-10 truncate text-sm text-foreground hover:text-kivo-cyan"
+                              className="relative z-10 truncate text-sm text-foreground hover:text-accent"
                             >
                               {fixture.home_team.name}
                             </Link>
@@ -160,7 +160,7 @@ export default async function MatchesPage({
                           {fixture.away_team?.id ? (
                             <Link
                               href={`/teams/${fixture.away_team.id}`}
-                              className="relative z-10 truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+                              className="relative z-10 truncate text-right text-sm text-foreground hover:text-accent"
                             >
                               {fixture.away_team.name}
                             </Link>

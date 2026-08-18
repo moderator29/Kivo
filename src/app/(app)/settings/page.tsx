@@ -4,12 +4,19 @@ import { currentUser } from "@clerk/nextjs/server";
 import { SignOutButton } from "@clerk/nextjs";
 import { CircleUserRound, LogOut, Mail, AtSign } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
+import { effectiveModerationStatus } from "@/lib/moderation";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { FadeIn } from "@/components/ui/fade-in";
-import { getNotificationPreferences } from "@/app/(app)/settings/actions";
+import { getNotificationPreferences, getActiveSessions } from "@/app/(app)/settings/actions";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
+import { ModerationStatusPanel } from "@/components/settings/moderation-status-panel";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
+import { ActivityPrivacyToggle } from "@/components/settings/activity-privacy-toggle";
+import { ActiveSessionsPanel } from "@/components/settings/active-sessions-panel";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
+import { DataExportSection } from "@/components/settings/data-export-section";
+import { AvatarPicker } from "@/components/settings/avatar-picker";
+import { AppearanceSection } from "@/components/theme/appearance-section";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -23,7 +30,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-foreground-muted">Sign up to manage your settings.</p>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -31,14 +38,35 @@ export default async function SettingsPage() {
     );
   }
 
-  const [user, notificationPreferences] = await Promise.all([currentUser(), getNotificationPreferences(profile.id)]);
+  const [user, notificationPreferences, activeSessions] = await Promise.all([
+    currentUser(),
+    getNotificationPreferences(profile.id),
+    getActiveSessions(),
+  ]);
   const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? null;
+
+  // RECOMMENDATIONS.md item 288: mirrors exactly what ModerationStatusPanel
+  // itself renders for (suspended/banned only, lazy-expiry-adjusted — see
+  // that component's own comment) so an active or shadow-muted account never
+  // renders an empty flex child into this page's gap-6 column below.
+  const moderationEffectiveStatus = effectiveModerationStatus(profile.moderation_status, profile.moderation_expires_at);
+  const showModerationPanel = moderationEffectiveStatus === "suspended" || moderationEffectiveStatus === "banned";
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
       </FadeIn>
+
+      {showModerationPanel && (
+        <FadeIn delay={0.04}>
+          <ModerationStatusPanel
+            status={profile.moderation_status}
+            reason={profile.moderation_reason}
+            expiresAt={profile.moderation_expires_at}
+          />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.08} className="kivo-glass flex flex-col rounded-3xl p-5">
         <div className="flex flex-col gap-1.5 py-4">
@@ -49,7 +77,7 @@ export default async function SettingsPage() {
           <span className="text-sm font-semibold text-foreground">{email ?? "No email on file"}</span>
         </div>
 
-        <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-1.5 border-t border-hairline-soft py-5">
           <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
             <AtSign className="h-3 w-3" strokeWidth={2} />
             Username
@@ -57,17 +85,47 @@ export default async function SettingsPage() {
           <UsernameEditor username={profile.username} />
         </div>
 
-        <div className="flex flex-col gap-1.5 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-1.5 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Profile details</span>
           <ProfileDetailsEditor bio={profile.bio} country={profile.country} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <span className="text-xs text-foreground-subtle">Privacy</span>
+          <ActivityPrivacyToggle initialShowActivityPublicly={profile.show_activity_publicly} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <span className="text-xs text-foreground-subtle">Avatar</span>
+          <AvatarPicker
+            profile={{
+              avatar_type: profile.avatar_type,
+              avatar_kivo_id: profile.avatar_kivo_id,
+              avatar_uploaded_url: profile.avatar_uploaded_url,
+              avatar_url: profile.avatar_url,
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <AppearanceSection />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
           <span className="text-xs text-foreground-subtle">Notifications</span>
           <NotificationPreferencesPanel initial={notificationPreferences} />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-white/5 pt-5">
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <DataExportSection username={profile.username} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
+          <span className="text-sm font-semibold text-foreground">Active sessions</span>
+          <ActiveSessionsPanel initial={activeSessions.sessions} initialError={activeSessions.error} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-hairline-soft pt-5">
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-semibold text-foreground">Session</span>
             <span className="text-xs text-foreground-subtle">Sign out of KIVO on this device.</span>

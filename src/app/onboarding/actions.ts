@@ -3,7 +3,14 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { awardBadge, awardXp } from "@/lib/rewards";
+import { awardBadge, awardXp, type AwardedBadge } from "@/lib/rewards";
+
+const ONBOARDING_COMPLETE_XP = 10;
+
+export type OnboardingCompletion = {
+  xpAwarded: number;
+  badge: AwardedBadge | null;
+};
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 
@@ -83,8 +90,14 @@ export async function saveUsernameStep(formData: FormData): Promise<{ error: str
  * Step 2 of 2 (or the only step, when no teams are synced yet to offer a
  * picker for). `teamId` is optional by design — favourite_team_id is a
  * personalization anchor (src/lib/ai/grounding.ts), not a requirement.
+ *
+ * Deliberately does *not* redirect: it used to jump straight to /home the
+ * instant XP/a badge were awarded, so the "Welcome to KIVO" moment never
+ * actually rendered anywhere. Returning the real award instead lets the
+ * client show a genuine completion screen (the actual badge + XP just
+ * earned) and navigate on to /home only once the user confirms.
  */
-export async function finishOnboarding(teamId: string | null) {
+export async function finishOnboarding(teamId: string | null): Promise<OnboardingCompletion> {
   const profile = await getOrCreateProfile();
   if (!profile) {
     redirect("/sign-in");
@@ -100,9 +113,12 @@ export async function finishOnboarding(teamId: string | null) {
     console.error("Failed to finish onboarding", error);
   }
 
-  await Promise.all([awardXp(profile.id, 10, "Completed onboarding"), awardBadge(profile.id, "welcome")]);
+  const [, badge] = await Promise.all([
+    awardXp(profile.id, ONBOARDING_COMPLETE_XP, "Completed onboarding"),
+    awardBadge(profile.id, "welcome"),
+  ]);
 
-  redirect("/home");
+  return { xpAwarded: ONBOARDING_COMPLETE_XP, badge };
 }
 
 /**

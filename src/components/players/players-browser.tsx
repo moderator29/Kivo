@@ -8,6 +8,7 @@ import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { staggerDelay } from "@/lib/stagger";
 import { searchPlayers, type PlayerSearchResult } from "@/app/(app)/players/actions";
+import { RESULTS_LIMIT } from "@/app/(app)/players/constants";
 import { POSITION_GROUPS } from "@/app/(app)/fantasy/fantasy-rules";
 
 export type PlayersClubOption = { id: string; name: string; shortName: string | null };
@@ -25,14 +26,17 @@ type FilterChip = (typeof FILTER_CHIPS)[number];
 export function PlayersBrowser({
   initialPlayers,
   clubs,
+  initialTruncated = false,
 }: {
   initialPlayers: PlayerSearchResult[];
   clubs: PlayersClubOption[];
+  initialTruncated?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<FilterChip>("All");
   const [teamId, setTeamId] = useState<string>("All");
   const [players, setPlayers] = useState(initialPlayers);
+  const [truncated, setTruncated] = useState(initialTruncated);
   const [error, setError] = useState<string | null>(null);
   const [searching, startSearching] = useTransition();
   const isFirstRun = useRef(true);
@@ -51,6 +55,7 @@ export function PlayersBrowser({
         const result = await searchPlayers(query, position, teamId);
         setError(result.error);
         setPlayers(result.players);
+        setTruncated(result.truncated);
       });
     }, 250);
     return () => clearTimeout(timeout);
@@ -66,7 +71,7 @@ export function PlayersBrowser({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search players…"
             aria-label="Search players"
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+            className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
           />
         </div>
 
@@ -76,11 +81,11 @@ export function PlayersBrowser({
               key={chip}
               type="button"
               onClick={() => setPosition(chip)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                 position === chip
-                  ? "kivo-gradient-victory text-kivo-white"
-                  : "border border-white/10 text-foreground-muted hover:bg-white/5"
-              }`}
+                  ? "kivo-gradient-victory text-on-accent"
+                  : "border border-hairline text-foreground-muted hover:bg-surface-2"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
             >
               {chip}
             </button>
@@ -90,7 +95,7 @@ export function PlayersBrowser({
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
             aria-label="Filter by club"
-            className="ml-auto rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-foreground-muted outline-none transition hover:bg-white/[0.08] focus:border-kivo-cyan/50"
+            className="ml-auto rounded-full border border-hairline bg-surface-inset px-3 py-2 text-[11px] font-semibold text-foreground-muted outline-none transition hover:bg-surface-2 focus:border-accent/50"
           >
             <option value="All">All clubs</option>
             {clubs.map((club) => (
@@ -119,7 +124,7 @@ export function PlayersBrowser({
           renderItem={(player) => (
             <Link
               href={`/players/${player.id}`}
-              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-surface-2 kivo-focusable"
             >
               <PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={36} />
               <div className="flex flex-1 flex-col overflow-hidden">
@@ -131,6 +136,12 @@ export function PlayersBrowser({
             </Link>
           )}
         />
+      )}
+
+      {!error && !searching && truncated && players.length > 0 && (
+        <p className="text-center text-xs text-foreground-subtle">
+          Showing the first {RESULTS_LIMIT} matches — refine your search to narrow it down.
+        </p>
       )}
     </div>
   );

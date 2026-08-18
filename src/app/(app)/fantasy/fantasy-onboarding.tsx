@@ -15,7 +15,7 @@ export function FantasyOnboarding({ availableSeasons }: { availableSeasons: Seas
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass-brand flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
         <div className="kivo-gradient-victory flex h-14 w-14 items-center justify-center rounded-2xl">
-          <Trophy className="h-7 w-7 text-kivo-white" strokeWidth={1.75} />
+          <Trophy className="h-7 w-7 text-on-accent" strokeWidth={1.75} />
         </div>
         <h1 className="text-xl font-semibold text-foreground">Build your fantasy squad</h1>
         <p className="max-w-sm text-sm leading-relaxed text-foreground-muted">
@@ -35,9 +35,9 @@ export function FantasyOnboarding({ availableSeasons }: { availableSeasons: Seas
       <FadeIn delay={0.15}>
         <Link
           href="/fantasy/browse"
-          className="kivo-glass flex items-center justify-center gap-2 rounded-2xl p-4 text-sm font-semibold text-foreground-muted transition hover:bg-white/5 hover:text-foreground"
+          className="kivo-glass kivo-glass-interactive flex items-center justify-center gap-2 rounded-2xl p-4 text-sm font-semibold text-foreground-muted transition hover:bg-surface-2 hover:text-foreground"
         >
-          <Compass className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Compass className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Browse public leagues
         </Link>
       </FadeIn>
@@ -79,12 +79,12 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
       className="kivo-glass flex flex-col gap-4 rounded-2xl p-5"
     >
       <div className="flex items-center gap-2">
-        <Plus className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+        <Plus className="h-4 w-4 text-accent" strokeWidth={1.75} />
         <h2 className="text-sm font-semibold text-foreground">Create a league</h2>
       </div>
 
       {disabled ? (
-        <p className="rounded-xl bg-white/5 px-3 py-3 text-xs leading-relaxed text-foreground-subtle">
+        <p className="rounded-xl bg-surface-2 px-3 py-3 text-xs leading-relaxed text-foreground-subtle">
           No active season yet. Fantasy leagues need a season to attach to. Check back once this season&apos;s
           competition calendar is synced.
         </p>
@@ -101,7 +101,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
               maxLength={60}
               placeholder="e.g. Office League"
               disabled={pending}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50 disabled:opacity-60"
+              className="rounded-xl border border-hairline bg-surface-inset px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50 disabled:opacity-60"
             />
           </div>
 
@@ -115,10 +115,10 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
                 value={season}
                 onChange={(e) => setSeason(e.target.value)}
                 disabled={pending}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-kivo-cyan/50 disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-surface-inset px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/50 disabled:opacity-60"
               >
                 {availableSeasons.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-kivo-navy">
+                  <option key={s.id} value={s.id} className="bg-surface-3">
                     {s.label}
                   </option>
                 ))}
@@ -136,7 +136,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
                 value={maxTeams}
                 onChange={(e) => setMaxTeams(Number(e.target.value))}
                 disabled={pending}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-kivo-cyan/50 disabled:opacity-60"
+                className="rounded-xl border border-hairline bg-surface-inset px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/50 disabled:opacity-60"
               />
             </div>
           </div>
@@ -146,8 +146,9 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
               type="button"
               onClick={() => setIsPrivate(true)}
               disabled={pending}
+              aria-pressed={isPrivate}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-semibold transition disabled:opacity-60 ${
-                isPrivate ? "border-transparent bg-kivo-cyan/15 text-kivo-cyan" : "border-white/10 text-foreground-muted hover:bg-white/5"
+                isPrivate ? "border-transparent bg-accent/15 text-accent" : "border-hairline text-foreground-muted hover:bg-surface-2"
               }`}
             >
               <Lock className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -157,8 +158,9 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
               type="button"
               onClick={() => setIsPrivate(false)}
               disabled={pending}
+              aria-pressed={!isPrivate}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-semibold transition disabled:opacity-60 ${
-                !isPrivate ? "border-transparent bg-kivo-cyan/15 text-kivo-cyan" : "border-white/10 text-foreground-muted hover:bg-white/5"
+                !isPrivate ? "border-transparent bg-accent/15 text-accent" : "border-hairline text-foreground-muted hover:bg-surface-2"
               }`}
             >
               <Globe className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -172,7 +174,7 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
             type="submit"
             disabled={pending || !name.trim()}
             aria-busy={pending}
-            className="kivo-gradient-victory rounded-xl py-2.5 text-sm font-semibold text-kivo-white transition disabled:opacity-50"
+            className="kivo-gradient-victory rounded-xl py-2.5 text-sm font-semibold text-on-accent transition disabled:opacity-50"
           >
             {pending ? "Creating…" : "Create league"}
           </button>
@@ -205,7 +207,7 @@ function JoinLeagueCard() {
   return (
     <form onSubmit={handleSubmit} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
       <div className="flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+        <KeyRound className="h-4 w-4 text-accent" strokeWidth={1.75} />
         <h2 className="text-sm font-semibold text-foreground">Join with an invite code</h2>
       </div>
 
@@ -220,7 +222,7 @@ function JoinLeagueCard() {
           maxLength={12}
           placeholder="e.g. K7X9QP"
           disabled={pending}
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-center text-sm font-semibold tracking-[0.3em] text-foreground outline-none transition placeholder:tracking-normal placeholder:text-foreground-subtle focus:border-kivo-cyan/50 disabled:opacity-60"
+          className="rounded-xl border border-hairline bg-surface-inset px-3 py-2.5 text-center text-sm font-semibold tracking-[0.3em] text-foreground outline-none transition placeholder:tracking-normal placeholder:text-foreground-subtle focus:border-accent/50 disabled:opacity-60"
         />
       </div>
 
@@ -230,7 +232,7 @@ function JoinLeagueCard() {
         type="submit"
         disabled={pending || !code.trim()}
         aria-busy={pending}
-        className="rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-foreground transition hover:bg-white/5 disabled:opacity-50"
+        className="rounded-xl border border-hairline py-2.5 text-sm font-semibold text-foreground transition hover:bg-surface-2 disabled:opacity-50"
       >
         {pending ? "Joining…" : "Join league"}
       </button>

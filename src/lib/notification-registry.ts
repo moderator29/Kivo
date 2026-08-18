@@ -20,13 +20,14 @@ import type { NotificationRow } from "@/lib/notifications";
  * types will grow continuously as features ship"), not a Postgres enum — so
  * this union is KIVO's own registry of every type a producer emits or is
  * reasonably expected to emit next, not a mirror of a DB constraint.
- * "post_like" (src/app/(app)/social/actions.ts), "match_kickoff"/
- * "match_goal"/"match_red_card"/"match_result"/"player_event"
- * (src/lib/football/match-notifications.ts, wired into the real sync code
- * paths in sync.ts/sync-match-details.ts) are wired to real producers;
- * prediction/fantasy/badge/moderation types below are forward-covered so
- * describe()/icon()/href() never fall back to a raw snake_case string once
- * those ship a producer too. Add new types here first.
+ * "post_like"/"post_comment"/"comment_reply" (src/app/(app)/social/actions.ts
+ * and comment-actions.ts), "new_follower" (src/app/(app)/follow-actions.ts),
+ * and "match_kickoff"/"match_goal"/"match_red_card"/"match_result"/
+ * "player_event" (src/lib/football/match-notifications.ts, wired into the
+ * real sync code paths in sync.ts/sync-match-details.ts) are all wired to
+ * real producers; prediction/fantasy/badge/moderation types below are still
+ * forward-covered only, so describe()/icon()/href() never fall back to a raw
+ * snake_case string once those ship a producer too. Add new types here first.
  */
 export type NotificationType =
   | "post_like"
@@ -59,15 +60,27 @@ function actorName(payload: Payload, prefix: string): string {
 /**
  * Where a post actually lives: the general `/social` feed, or a fixture's
  * Room tab in Match Centre when the post carries `posts.fixture_id` (see
- * src/components/matches/match-room.tsx). `#post-<id>` anchors to the id set
- * on PostCard's root element (src/components/social/post-card.tsx); `tab=room`
- * is read by MatchCentreTabs to open straight on the Room tab.
+ * src/components/matches/match-room.tsx). `tab=room` is read by
+ * MatchCentreTabs to open straight on the Room tab.
+ *
+ * RECOMMENDATIONS item 237: this used to append `#post-<id>`, a plain DOM
+ * fragment that only ever worked if the post already happened to be on the
+ * first page of whatever pagination the target list had loaded — a post
+ * further back than that simply had no matching element to scroll to, and
+ * the jump silently did nothing. `?post=<id>` instead is a real query param
+ * both `/social` (posts.ts's `fetchPostsPage`) and this fixture's Room tab
+ * read server-side to explicitly fetch and prepend that exact post if it
+ * isn't already in the page they'd normally load — see SocialPage and
+ * MatchCentrePage. The client then only has to scroll to an id that's
+ * guaranteed to already be in the DOM, never search pagination for it.
  */
 function postHref(payload: Payload): string {
   const postId = str(payload, "post_id");
   const fixtureId = str(payload, "fixture_id");
-  const anchor = postId ? `#post-${postId}` : "";
-  return fixtureId ? `/matches/${fixtureId}?tab=room${anchor}` : `/social${anchor}`;
+  const query = postId ? `?post=${encodeURIComponent(postId)}` : "";
+  return fixtureId
+    ? `/matches/${fixtureId}?tab=room${postId ? `&post=${encodeURIComponent(postId)}` : ""}`
+    : `/social${query}`;
 }
 
 function fixtureHref(payload: Payload): string {

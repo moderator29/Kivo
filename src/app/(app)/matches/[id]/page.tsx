@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MapPin } from "lucide-react";
+import { MapPin, Share2 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -15,8 +15,12 @@ import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
+import { MatchShareCard } from "@/components/matches/match-share-card";
+import { YourPredictionCard } from "@/components/matches/your-prediction-card";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
+import { buildMatchShareCardData } from "@/lib/football/match-share-card";
+import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -43,8 +47,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function MatchCentrePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MatchCentrePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ post?: string }>;
+}) {
   const { id } = await params;
+  const { post: targetPostId } = await searchParams;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
@@ -73,13 +84,15 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     { data: lineups },
     { data: stats },
     { data: standings },
-    { posts: roomPosts },
+    { posts: roomPostsPage },
     fixturesLastSyncedAt,
     detailsLastSyncedAt,
     headToHead,
     ownFanRating,
     fanRatingSummary,
     { data: managers },
+    { data: ownPrediction },
+    viewerFantasyRosterBySeason,
   ] = await Promise.all([
     supabase
       .from("fixture_events")
@@ -140,7 +153,41 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           .in("current_team_id", [fixture.home_team.id, fixture.away_team.id])
           .order("updated_at", { ascending: false })
       : Promise.resolve({ data: null }),
+    // RECOMMENDATIONS.md item 293: predictions_select_own already scopes this
+    // to the caller's own row — no RLS change, no RPC needed.
+    profile
+      ? supabase
+          .from("predictions")
+          .select("predicted_outcome, points_awarded")
+          .eq("fixture_id", id)
+          .eq("profile_id", profile.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // RECOMMENDATIONS.md item 294: real fantasy_rosters -> lineups player-id
+    // cross-reference for LineupsTab's "In your XI" pill — see
+    // getViewerFantasyRosterBySeasons' own doc comment for the full join
+    // chain. Scoped to just this one fixture's season.
+    profile
+      ? getViewerFantasyRosterBySeasons(supabase, profile.id, [fixture.season_id])
+      : Promise.resolve(new Map<string, ViewerFantasyRosterMap>()),
   ]);
+
+  const viewerFantasyRoster = viewerFantasyRosterBySeason.get(fixture.season_id) ?? new Map();
+  const viewerFantasyRosterForTab = [...viewerFantasyRoster.entries()].map(([playerId, flags]) => ({
+    playerId,
+    isCaptain: flags.isCaptain,
+  }));
+
+  // RECOMMENDATIONS item 237: same fix as /social's — a notification's
+  // `?post=<id>` link (postHref() in lib/notification-registry.ts) can name
+  // a Room post older than the 50 most recently loaded here. Fetch it
+  // explicitly and prepend it rather than leaving the client to scroll to an
+  // anchor that was never fetched at all.
+  let roomPosts = roomPostsPage;
+  if (targetPostId && !roomPostsPage.some((p) => p.id === targetPostId)) {
+    const { posts: targetPosts } = await fetchPostsPage(0, profile?.id ?? null, { fixtureId: id, postIds: [targetPostId] });
+    if (targetPosts.length > 0) roomPosts = [...targetPosts, ...roomPostsPage];
+  }
 
   const statsForTab = (stats ?? []).map((s) => ({
     teamId: s.team_id,
@@ -168,9 +215,11 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
     body: post.body,
     createdAt: post.createdAt,
     authorName: post.authorName,
+    authorAvatarSrc: post.authorAvatarSrc,
     reactionCount: post.reactionCount,
     viewerReaction: post.viewerReaction,
     commentCount: post.commentCount,
+    isSystem: post.isSystem,
   }));
 
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
@@ -195,8 +244,29 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
   const homeManager = (managers ?? []).find((m) => m.current_team_id === fixture.home_team?.id) ?? null;
   const awayManager = (managers ?? []).find((m) => m.current_team_id === fixture.away_team?.id) ?? null;
 
+  // MatchShareCard: reuses the exact fixture + fixture_events rows already
+  // fetched above (buildMatchShareCardData internally filters to just the
+  // goal-type events it needs) rather than issuing a second round trip via
+  // getMatchShareCardData — this page already has everything that function
+  // would otherwise re-fetch.
+  const shareCardData =
+    fixture.home_team && fixture.away_team
+      ? buildMatchShareCardData(fixture, (events ?? []).map((e) => ({
+          event_type: e.event_type,
+          minute: e.minute,
+          added_time: e.added_time,
+          team_id: e.team_id,
+          player_name: e.player?.known_as ?? e.player?.full_name ?? null,
+        })))
+      : null;
+  const matchUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/matches/${fixture.id}`;
+
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
+    // resolved content cross-dissolves in over MatchDetailLoading's skeleton
+    // instead of hard-cutting — the header card below keeps its own nested
+    // FadeIn too (a slightly different entrance, harmless to layer).
+    <FadeIn className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass-brand sticky top-2 z-10 flex flex-col gap-4 rounded-2xl p-5">
         {/* Match-centre-only keyframes: a breathing live badge, an expanding
             "on air" ring on its dot, and a brief scale-in for the score on
@@ -210,20 +280,33 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             50% { opacity: 1; transform: scale(1.04); }
           }
           @keyframes kivo-live-ring {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45); }
-            70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kivo-live) 45%, transparent); }
+            70% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--kivo-live) 0%, transparent); }
+            100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kivo-live) 0%, transparent); }
           }
           @keyframes kivo-score-reveal {
             0% { opacity: 0; transform: scale(0.82); }
             100% { opacity: 1; transform: scale(1); }
+          }
+          /* RECOMMENDATIONS.md item 18/316: kivo-score-reveal above fires
+             identically for a genuine goal and a routine sync correction.
+             MatchScoreDisplay only plays this one on a real, detected score
+             increase — reusing kivo-gradient-victory (already the app's
+             real achievement color) as a brief glow layered behind the
+             score, so an actual goal gets a visibly bigger moment than a
+             stat nudge, on top of the existing reveal rather than
+             replacing it. */
+          @keyframes kivo-goal-glow {
+            0% { opacity: 0; transform: scale(0.85); }
+            30% { opacity: 0.55; transform: scale(1.08); }
+            100% { opacity: 0; transform: scale(1); }
           }
         `}</style>
 
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
           <span>{fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}</span>
           {fixture.venue?.name && (
-            <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-kivo-cyan">
+            <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-accent">
               <MapPin className="h-3 w-3" strokeWidth={2} />
               {fixture.venue.name}
               {fixture.venue.city ? `, ${fixture.venue.city}` : ""}
@@ -240,7 +323,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             {homeManager && (
               <Link
                 href={`/managers/${homeManager.id}`}
-                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-accent"
               >
                 {homeManager.full_name}
               </Link>
@@ -262,7 +345,7 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             {awayManager && (
               <Link
                 href={`/managers/${awayManager.id}`}
-                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-kivo-cyan"
+                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-accent"
               >
                 {awayManager.full_name}
               </Link>
@@ -275,6 +358,20 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
             fixture pre-loaded as context, see ask-ai-link.tsx. */}
         <AskAiLink ctx="fixture" id={fixture.id} label="Ask AI about this match" />
       </FadeIn>
+
+      {/* RECOMMENDATIONS.md item 293: the caller's own real prediction for
+          this exact fixture — renders nothing when they haven't made one
+          (ownPrediction is null in that case, predictions_select_own already
+          scoped this to their own row). */}
+      {ownPrediction && (
+        <FadeIn delay={0.09}>
+          <YourPredictionCard
+            predictedOutcome={ownPrediction.predicted_outcome}
+            pointsAwarded={ownPrediction.points_awarded}
+            status={fixture.status}
+          />
+        </FadeIn>
+      )}
 
       {/* RECOMMENDATIONS.md item 170: only shown once the match is actually
           over — "rate a performance after the whistle" is the item's own
@@ -322,6 +419,19 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
         </FadeIn>
       )}
 
+      {/* RECOMMENDATIONS.md's MatchShareCard feature: a real, dynamic share
+          card for this exact fixture -- never rendered for a fixture with no
+          resolved teams (shareCardData is null in that case). */}
+      {shareCardData && (
+        <FadeIn delay={0.13} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+            <Share2 className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            Share this match
+          </h2>
+          <MatchShareCard fixtureId={fixture.id} data={shareCardData} matchUrl={matchUrl} />
+        </FadeIn>
+      )}
+
       <FadeIn delay={0.14}>
         <MatchCentreTabs
           fixtureId={fixture.id}
@@ -330,11 +440,13 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
           homeTeamName={fixture.home_team?.name ?? "Home team"}
           awayTeamName={fixture.away_team?.name ?? "Away team"}
           roomPosts={roomPostsForTab}
+          scrollToPostId={targetPostId ?? null}
           stats={statsForTab}
           signedIn={Boolean(profile)}
           canSyncDetails={canManageFootballData(profile?.role)}
           syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
           detailsLastSyncedAt={detailsLastSyncedAt}
+          viewerFantasyRoster={viewerFantasyRosterForTab}
           events={(events ?? []).map((e) => ({
             id: e.id,
             eventType: e.event_type,
@@ -374,10 +486,10 @@ export default async function MatchCentrePage({ params }: { params: Promise<{ id
 
       <Link
         href="/matches"
-        className="self-center text-xs text-foreground-subtle underline decoration-white/20 underline-offset-4 hover:text-foreground-muted"
+        className="self-center text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
       >
         Back to today&apos;s matches
       </Link>
-    </div>
+    </FadeIn>
   );
 }

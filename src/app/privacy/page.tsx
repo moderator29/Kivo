@@ -16,7 +16,7 @@ export default function PrivacyPage() {
     <MarketingPageShell>
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pb-8 pt-8 sm:px-6 sm:pt-12 lg:px-12 lg:pt-16">
         <FadeIn>
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Legal</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Legal</span>
         </FadeIn>
         <FadeIn delay={0.06}>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Privacy Policy</h1>
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">2. Information collected at signup</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               KIVO uses Clerk to handle authentication, we never see or store your password ourselves. When you
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">3. What KIVO&apos;s own database stores</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               Beyond your profile, KIVO stores the activity you generate while using the product, all tied to your
@@ -86,7 +86,7 @@ export default function PrivacyPage() {
             </ul>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">4. Football data is not about you</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               Scores, fixtures, standings, teams, players and similar football data come from API-Football, a
@@ -96,7 +96,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">5. How the AI Copilot handles your data</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               When you ask the AI Copilot a question, KIVO sends your message, a short window of your recent
@@ -108,7 +108,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">6. What KIVO does not do</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               As of this writing, KIVO does not run any third-party advertising, analytics, or tracking pixels of any
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">7. Who KIVO shares data with</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               KIVO relies on a small set of infrastructure providers to run the product, each handling only the data
@@ -135,7 +135,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">8. Your account, your control</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               You can view and edit your profile details from Settings at any time. Deleting your account (also
@@ -146,7 +146,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">9. Age requirement</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               KIVO is not directed at children and is not designed for use by anyone under 13 years old. You must be
@@ -155,7 +155,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">10. Security</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               Authentication is handled entirely by Clerk, KIVO never stores your password. Application data in
@@ -165,7 +165,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">11. Changes to this policy</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               As KIVO adds features, this policy will be updated to reflect what actually changed, and the
@@ -174,7 +174,7 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">12. Contact</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               This template does not yet list a monitored contact address. A real, monitored contact channel needs
@@ -189,7 +189,7 @@ export default function PrivacyPage() {
         <FadeIn className="flex flex-col items-center gap-2 text-center">
           <p className="text-sm text-foreground-subtle">
             Also see our{" "}
-            <Link href="/terms" className="text-kivo-cyan transition-colors hover:text-foreground">
+            <Link href="/terms" className="text-accent transition-colors hover:text-foreground">
               Terms of Service
             </Link>
             .

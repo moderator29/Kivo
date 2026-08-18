@@ -54,12 +54,12 @@ export function RecentlyViewedStrip() {
               transition={{ duration: 0.25, delay: index * 0.03, ease: [0.22, 1, 0.36, 1] }}
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.96 }}
-              className="kivo-glass-sharp flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-colors hover:bg-white/[0.06]"
+              className="kivo-glass-sharp flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-colors hover:bg-surface-2"
             >
               {entry.imageUrl ? (
                 <Image src={entry.imageUrl} alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
               ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2">
                   <Icon className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
                 </div>
               )}

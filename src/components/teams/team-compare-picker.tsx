@@ -50,7 +50,7 @@ export function TeamComparePicker({
             id="compare-team-a"
             value={teamA}
             onChange={(e) => setTeamA(e.target.value)}
-            className="kivo-glass-sharp rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none"
+            className="kivo-glass-sharp rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none kivo-focusable"
           >
             <option value="">Select a team</option>
             {teams
@@ -76,7 +76,7 @@ export function TeamComparePicker({
             id="compare-team-b"
             value={teamB}
             onChange={(e) => setTeamB(e.target.value)}
-            className="kivo-glass-sharp rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none"
+            className="kivo-glass-sharp rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none kivo-focusable"
           >
             <option value="">Select a team</option>
             {teams
@@ -103,7 +103,7 @@ export function TeamComparePicker({
         disabled={!canCompare}
         whileHover={canCompare ? { scale: 1.02 } : undefined}
         whileTap={canCompare ? { scale: 0.97 } : undefined}
-        className="kivo-gradient-prime self-center rounded-xl px-6 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        className="kivo-gradient-prime self-center rounded-xl px-6 py-2.5 text-sm font-semibold text-on-accent kivo-raise disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         Compare
       </motion.button>

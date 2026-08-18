@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Star, Check } from "lucide-react";
 import { toggleFollow } from "@/app/(app)/follow-actions";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 
 // RECOMMENDATIONS item 175: "user" added so this same button can follow
 // another profile, not just team/player/competition — same star affordance,
@@ -70,14 +71,24 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
         onClick={handleClick}
         aria-pressed={following}
         aria-label={following ? "Unfollow" : "Follow"}
-        className={`flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-60 ${dimension} ${
-          following ? "border-achievement/40 bg-achievement/10" : "border-white/10 hover:bg-white/5"
+        title={!signedIn ? GUEST_ACTION_TITLE : undefined}
+        className={`relative flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-60 ${dimension} ${
+          following ? "border-achievement/40 bg-achievement/10" : "border-hairline hover:bg-surface-2"
         }`}
       >
         <Star
           className={`${iconSize} transition ${following ? "fill-achievement text-achievement" : "text-foreground-subtle"}`}
           strokeWidth={1.75}
         />
+        {/* RECOMMENDATIONS item 235: pinned to the circle's corner rather than
+            inline — there's no room for an inline glyph next to a single icon
+            with no label. */}
+        <span className="absolute -top-0.5 -right-0.5">
+          <GuestLockHint
+            show={!signedIn}
+            className="h-3 w-3 rounded-full bg-surface text-foreground-subtle ring-1 ring-white/10"
+          />
+        </span>
       </button>
       <AnimatePresence>
         {flash && (
@@ -87,7 +98,7 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.9 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-white/10 bg-kivo-obsidian px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
+            className="absolute -bottom-6 right-0 z-10 flex items-center gap-1 whitespace-nowrap rounded-full border border-hairline bg-background px-2 py-0.5 text-[11px] font-medium text-live shadow-lg"
           >
             <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
             {flash === "followed" ? "Following" : "Unfollowed"}

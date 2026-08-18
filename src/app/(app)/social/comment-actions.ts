@@ -1,9 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge } from "@/lib/rewards";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { aggregateReactions, type ReactionType } from "@/lib/reactions";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { shouldNotify } from "@/lib/notification-preferences";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -17,6 +21,13 @@ export type CommentDTO = {
   createdAt: string;
   authorName: string;
   authorUsername: string | null;
+  authorAvatarSrc: string | null;
+  /** Audit item 6: ReactionPicker already accepts targetType="comment" and a
+   * size="sm" variant sized for a comment row, and the reactions schema/RLS
+   * already support target_type='comment' — this was the missing data plumbing
+   * that kept comments reactable in the DB but not in the UI. */
+  reactionCount: number;
+  viewerReaction: ReactionType | null;
 };
 
 /**
@@ -27,11 +38,17 @@ export type CommentDTO = {
  */
 export async function getComments(postId: string): Promise<{ comments: CommentDTO[]; error: string | null }> {
   const supabase = createServerSupabaseClient();
-  const { data: comments, error } = await supabase
-    .from("comments")
-    .select("id, post_id, parent_comment_id, body, created_at, author_profile_id")
-    .eq("post_id", postId)
-    .order("created_at", { ascending: true });
+  const [{ data: comments, error }, viewerProfile] = await Promise.all([
+    supabase
+      .from("comments")
+      .select("id, post_id, parent_comment_id, body, created_at, author_profile_id")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true }),
+    // Guests get null here (getOrCreateProfile returns null when signed out),
+    // which aggregateReactions already treats as "no viewer reaction" below —
+    // same as fetchPostsPage's viewerProfileId handling in posts.ts.
+    getOrCreateProfile(),
+  ]);
 
   if (error) {
     console.error("Failed to load comments", error);
@@ -43,14 +60,22 @@ export async function getComments(postId: string): Promise<{ comments: CommentDT
   // that way — same narrow SECURITY DEFINER function already used for post
   // authors on /social, not a second RPC.
   const authorIds = [...new Set((comments ?? []).map((c) => c.author_profile_id))];
-  const { data: authors } = authorIds.length
-    ? await supabase.rpc("get_public_profiles", { p_ids: authorIds })
-    : { data: [] };
+  const commentIds = (comments ?? []).map((c) => c.id);
+  const [{ data: authors }, { data: reactions }] = await Promise.all([
+    authorIds.length ? supabase.rpc("get_public_profiles", { p_ids: authorIds }) : Promise.resolve({ data: [] }),
+    // Audit item 6: reactions on comments — same aggregateReactions shape
+    // fetchPostsPage already uses for posts (src/app/(app)/social/posts.ts).
+    commentIds.length
+      ? supabase.from("reactions").select("target_id, profile_id, reaction_type").eq("target_type", "comment").in("target_id", commentIds)
+      : Promise.resolve({ data: [] }),
+  ]);
   const authorById = new Map((authors ?? []).map((a) => [a.id, a]));
+  const reactionsByComment = aggregateReactions(reactions ?? [], viewerProfile?.id ?? null);
 
   return {
     comments: (comments ?? []).map((c) => {
       const author = authorById.get(c.author_profile_id);
+      const reactionSummary = reactionsByComment.get(c.id) ?? { count: 0, viewerReaction: null };
       return {
         id: c.id,
         postId: c.post_id,
@@ -59,10 +84,71 @@ export async function getComments(postId: string): Promise<{ comments: CommentDT
         createdAt: c.created_at,
         authorName: author?.display_name || author?.username || "KIVO fan",
         authorUsername: author?.username ?? null,
+        authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
+        reactionCount: reactionSummary.count,
+        viewerReaction: reactionSummary.viewerReaction,
       };
     }),
     error: null,
   };
+}
+
+/**
+ * Audit item 9: `post_comment`/`comment_reply` were fully registered in
+ * notification-registry.ts (icon, copy, href) but had no producer anywhere —
+ * a repo-wide grep for `.from("notifications").insert` only ever found
+ * match-notifications.ts and social/actions.ts's notifyPostLiked; this file
+ * never inserted into `notifications` at all. Mirrors notifyPostLiked's
+ * pattern: a top-level comment notifies the post's author, a reply notifies
+ * the parent comment's author instead (never both), and never the commenter
+ * about their own comment/reply. Goes through the service-role client
+ * deliberately — notifications has no client-facing insert policy by design.
+ */
+async function notifyComment(
+  postId: string,
+  parentCommentId: string | null,
+  commenter: { id: string; username: string; display_name: string | null },
+) {
+  const supabase = createServerSupabaseClient();
+  const { data: post } = await supabase.from("posts").select("author_profile_id, fixture_id").eq("id", postId).maybeSingle();
+  if (!post) return;
+
+  let recipientId = post.author_profile_id;
+  let type: "post_comment" | "comment_reply" = "post_comment";
+
+  if (parentCommentId) {
+    const { data: parent } = await supabase
+      .from("comments")
+      .select("author_profile_id")
+      .eq("id", parentCommentId)
+      .maybeSingle();
+    if (!parent) return;
+    recipientId = parent.author_profile_id;
+    type = "comment_reply";
+  }
+
+  if (recipientId === commenter.id) return;
+
+  const actorPrefix = type === "post_comment" ? "commenter" : "replier";
+  const serviceClient = createServiceRoleSupabaseClient();
+
+  // RECOMMENDATIONS.md item 285: gate before writing, not after.
+  if (!(await shouldNotify(serviceClient, recipientId, "social_alerts_enabled"))) return;
+
+  const { error } = await serviceClient.from("notifications").insert({
+    profile_id: recipientId,
+    type,
+    // fixture_id (nullable) lets the bell/notifications page route back to
+    // the fixture's Match Centre Room tab for a room post, vs. /social for a
+    // general one — see postHref() in lib/notification-registry.ts.
+    payload: {
+      post_id: postId,
+      fixture_id: post.fixture_id,
+      [`${actorPrefix}_username`]: commenter.username,
+      [`${actorPrefix}_display_name`]: commenter.display_name,
+    },
+  });
+  if (error) console.error("Failed to create comment notification", error);
 }
 
 /**
@@ -82,6 +168,17 @@ export async function createComment(postId: string, body: string, parentCommentI
   if (!profile) {
     return { error: "You must be signed in to comment.", comment: null };
   }
+
+  // Item 239: comment-actions.ts had no checkRateLimit call at all, unlike
+  // createPost/toggleLike/toggleFollow/submitPrediction/searchPlatform.
+  // Same 5-per-60s window as createPost's own "create_post" limit
+  // (social/actions.ts) — comments are the same "short free-text write"
+  // shape as a post, just scoped to a thread instead of the feed, so there's
+  // no reason for a looser or tighter cap here. This one function backs both
+  // top-level comments and replies (parentCommentId), so a single action key
+  // covers both.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "create_comment", 5, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error, comment: null };
 
   const supabase = createServerSupabaseClient();
   const { data: inserted, error } = await supabase
@@ -103,6 +200,7 @@ export async function createComment(postId: string, body: string, parentCommentI
   // awardBadge is a harmless no-op on repeat comments (unique constraint on
   // user_badges swallows the duplicate) — same pattern as first_post.
   await awardBadge(profile.id, "first_comment");
+  await notifyComment(postId, parentCommentId, profile);
 
   revalidatePath("/social");
 
@@ -114,6 +212,9 @@ export async function createComment(postId: string, body: string, parentCommentI
     createdAt: inserted.created_at,
     authorName: profile.display_name || profile.username,
     authorUsername: profile.username,
+    authorAvatarSrc: resolveAvatarSrc(profile),
+    reactionCount: 0,
+    viewerReaction: null,
   };
 
   return { error: null, comment };

@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark } from "lucide-react";
+import { CircleUserRound, ArrowRight, Star, Flame, Award, Target, Bookmark, Pencil, MapPin } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { UsernameEditor } from "@/components/profile/username-editor";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoProfileBackground } from "@/components/profile/kivo-profile-background";
+import { BackgroundPicker } from "@/components/profile/background-picker";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { getCountryName } from "@/lib/countries";
 import { FadeIn } from "@/components/ui/fade-in";
 import { StatTile } from "@/components/home/stat-tile";
 
@@ -19,7 +24,7 @@ export default async function ProfilePage() {
         <p className="text-sm text-foreground-muted">Sign up to set up your KIVO profile.</p>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -53,8 +58,8 @@ export default async function ProfilePage() {
     supabase.from("user_badges").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
     supabase.from("predictions").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
     // points_awarded is only set by the admin scoring pass — same "real
-    // columns only" rule /predictions/mine's resultInfo() follows, not a
-    // guessed outcome from the fixture score.
+    // columns only" rule predictionResultInfo() (src/lib/predictions.ts)
+    // follows, not a guessed outcome from the fixture score.
     supabase
       .from("predictions")
       .select("id", { count: "exact", head: true })
@@ -76,14 +81,37 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
-        <div className="kivo-gradient-prime flex h-16 w-16 shrink-0 items-center justify-center rounded-full">
-          <CircleUserRound className="h-8 w-8 text-kivo-white" strokeWidth={1.5} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-foreground">{profile.display_name || "Your profile"}</h1>
-          <UsernameEditor username={profile.username} />
-        </div>
+      <KivoProfileBackground backgroundId={profile.background_id}>
+        <FadeIn className="kivo-glass flex items-center gap-4 rounded-3xl p-6">
+          <KivoAvatar src={resolveAvatarSrc(profile)} name={profile.display_name} size={64} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h1 className="truncate text-lg font-semibold text-foreground">{profile.display_name || "Your profile"}</h1>
+            <UsernameEditor username={profile.username} />
+          </div>
+          <Link
+            href="/settings"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-hairline px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:bg-surface-2"
+          >
+            <Pencil className="h-3 w-3" strokeWidth={2} />
+            Edit avatar
+          </Link>
+        </FadeIn>
+      </KivoProfileBackground>
+
+      {(profile.bio || profile.country) && (
+        <FadeIn delay={0.02} className="kivo-glass flex flex-col gap-2 rounded-3xl p-6">
+          {profile.bio && <p className="whitespace-pre-wrap text-sm text-foreground">{profile.bio}</p>}
+          {profile.country && (
+            <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
+              <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+              {getCountryName(profile.country)}
+            </span>
+          )}
+        </FadeIn>
+      )}
+
+      <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-4 rounded-3xl p-6">
+        <BackgroundPicker backgroundId={profile.background_id} />
       </FadeIn>
 
       <div className="grid grid-cols-3 gap-3">
@@ -116,12 +144,12 @@ export default async function ProfilePage() {
       <FadeIn delay={0.2} className="kivo-glass rounded-3xl p-6">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Star className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Star className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Following
           </h2>
           <Link
             href="/profile/following"
-            className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+            className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80"
           >
             View all
             <ArrowRight className="h-3 w-3" strokeWidth={2} />
@@ -143,10 +171,10 @@ export default async function ProfilePage() {
       <FadeIn delay={0.25} className="kivo-glass rounded-3xl p-6">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Bookmark className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Bookmark className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Saved
           </h2>
-          <Link href="/saved" className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
+          <Link href="/saved" className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80">
             View all
             <ArrowRight className="h-3 w-3" strokeWidth={2} />
           </Link>

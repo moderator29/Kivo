@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { SmilePlus } from "lucide-react";
 import { setReaction } from "@/app/(app)/social/actions";
 import { REACTIONS, type ReactionType } from "@/lib/reactions";
+import { usePopoverPlacement } from "@/hooks/use-popover-placement";
+import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,14 +44,39 @@ export function ReactionPicker({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // RECOMMENDATIONS item 238: real viewport-edge collision detection for the
+  // emoji strip, which used to always render `bottom-full left-0` regardless
+  // of how close the trigger sat to the top or left edge of the viewport.
+  // Estimated size is a single row of six 32px emoji buttons plus padding.
+  const placement = usePopoverPlacement(pickerOpen, containerRef, {
+    estimatedHeight: 56,
+    estimatedWidth: 220,
+    defaultVertical: "top",
+    defaultHorizontal: "left",
+  });
 
   useEffect(() => {
     if (!pickerOpen) return;
     function onClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setPickerOpen(false);
     }
+    // Audit item 4: Escape closes the popover and returns focus to the
+    // trigger — previously a keyboard-only user had no way to dismiss this
+    // role="menu" short of activating a reaction or tabbing past it.
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setPickerOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [pickerOpen]);
 
   // Auto-dismiss the error after a few seconds rather than leaving it stuck
@@ -101,6 +128,7 @@ export function ReactionPicker({
   return (
     <div ref={containerRef} className="relative">
       <motion.button
+        ref={triggerRef}
         type="button"
         onClick={handleTriggerClick}
         disabled={pending}
@@ -109,11 +137,12 @@ export function ReactionPicker({
         aria-expanded={pickerOpen}
         aria-pressed={Boolean(optimisticReaction)}
         aria-label={active ? `Remove ${active.label} reaction` : "React"}
+        title={!signedIn ? GUEST_ACTION_TITLE : undefined}
         whileTap={{ scale: 0.88 }}
         className={cn(
-          "flex w-fit items-center gap-1.5 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-70",
+          "flex w-fit items-center gap-1.5 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-70",
           isSmall ? "px-1.5 py-1 text-[11px]" : "px-2 py-1 text-xs",
-          active ? "text-kivo-cyan" : "text-foreground-subtle hover:text-foreground-muted",
+          active ? "text-accent" : "text-foreground-subtle hover:text-foreground-muted",
         )}
       >
         <motion.span
@@ -130,6 +159,8 @@ export function ReactionPicker({
           )}
         </motion.span>
         {optimisticCount > 0 ? optimisticCount : "React"}
+        {/* RECOMMENDATIONS item 235 */}
+        <GuestLockHint show={!signedIn} className={cn("shrink-0 text-foreground-subtle", isSmall ? "h-2.5 w-2.5" : "h-3 w-3")} />
       </motion.button>
 
       <AnimatePresence>
@@ -141,7 +172,11 @@ export function ReactionPicker({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="kivo-glass-sharp absolute bottom-full left-0 z-20 mb-2 flex items-center gap-0.5 rounded-xl p-1"
+            className={cn(
+              "kivo-popover absolute z-20 flex items-center gap-0.5 rounded-xl p-1",
+              placement.vertical === "top" ? "bottom-full mb-2" : "top-full mt-2",
+              placement.horizontal === "left" ? "left-0" : "right-0",
+            )}
           >
             {REACTIONS.map((reaction) => (
               <button
@@ -150,7 +185,7 @@ export function ReactionPicker({
                 role="menuitem"
                 aria-label={reaction.label}
                 onClick={() => applyReaction(reaction.type)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-base leading-none transition-transform hover:scale-125 hover:bg-white/5"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-base leading-none transition-transform hover:scale-125 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 {reaction.emoji}
               </button>

@@ -4,6 +4,7 @@ import { NoDataYet } from "@/components/ui/no-data-yet";
 import { EntityListPage } from "@/components/ui/entity-list-page";
 import { PlayersBrowser } from "@/components/players/players-browser";
 import { getNavItem } from "@/lib/navigation";
+import { RESULTS_LIMIT } from "./constants";
 
 const item = getNavItem("players");
 
@@ -17,7 +18,7 @@ export default async function PlayersPage() {
       .from("players")
       .select("id, full_name, known_as, position, nationality, photo_url, team:teams(name, short_name)")
       .order("full_name", { ascending: true })
-      .limit(100),
+      .limit(RESULTS_LIMIT),
     supabase.from("teams").select("id, name, short_name").order("name", { ascending: true }),
   ]);
 
@@ -39,6 +40,7 @@ export default async function PlayersPage() {
           photoUrl: player.photo_url,
         }))}
         clubs={(clubs ?? []).map((club) => ({ id: club.id, name: club.name, shortName: club.short_name }))}
+        initialTruncated={players.length === RESULTS_LIMIT}
       />
     </EntityListPage>
   );

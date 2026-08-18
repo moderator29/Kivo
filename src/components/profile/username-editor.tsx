@@ -74,7 +74,7 @@ export function UsernameEditor({ username }: { username: string }) {
             setAvailability("idle");
             setEditing(true);
           }}
-          className="flex items-center gap-1.5 text-sm text-foreground-muted transition-colors hover:text-foreground"
+          className="flex items-center gap-1.5 text-sm text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           @{username}
           <Pencil className="h-3 w-3" strokeWidth={1.75} />
@@ -122,7 +122,7 @@ export function UsernameEditor({ username }: { username: string }) {
             maxLength={24}
             pattern="[a-z0-9_]+"
             autoFocus
-            className="rounded-lg border border-white/10 bg-kivo-obsidian px-2 py-1 pr-6 text-sm text-foreground focus:border-kivo-blue focus:outline-none"
+            className="rounded-lg border border-hairline bg-background px-2 py-1 pr-6 text-sm text-foreground focus:border-accent-strong focus:outline-none"
           />
           <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">
             {availability === "checking" && (
@@ -136,7 +136,7 @@ export function UsernameEditor({ username }: { username: string }) {
           type="submit"
           disabled={pending || availability === "taken"}
           aria-busy={pending}
-          className="text-live disabled:opacity-50"
+          className="text-live disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label="Save"
         >
           <Check className="h-4 w-4" strokeWidth={2} />
@@ -147,7 +147,7 @@ export function UsernameEditor({ username }: { username: string }) {
             setDraft(username);
             setEditing(false);
           }}
-          className="text-foreground-subtle"
+          className="text-foreground-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label="Cancel"
         >
           <X className="h-4 w-4" strokeWidth={2} />

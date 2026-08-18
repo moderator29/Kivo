@@ -3,6 +3,7 @@ import { cache } from "react";
 import { currentUser } from "@clerk/nextjs/server";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "./supabase/server";
 import { isClerkConfigured } from "./clerk";
+import { randomKivoAvatarId } from "./kivo-assets";
 import type { Database } from "./supabase/types";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -45,6 +46,12 @@ export const getOrCreateProfile = cache(async (): Promise<Profile | null> => {
       username: `user_${user.id.replace(/[^a-zA-Z0-9]/g, "").slice(-10)}`,
       display_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || null,
       avatar_url: user.imageUrl ?? null,
+      // Same one-time random KIVO avatar assignment as the Clerk webhook's
+      // user.created handler (src/app/api/webhooks/clerk/route.ts) -- this is
+      // the fallback profile-creation path for when that webhook hasn't fired
+      // yet, and must not leave a profile with no avatar assigned at all.
+      avatar_type: "kivo",
+      avatar_kivo_id: randomKivoAvatarId(),
     })
     .select("*")
     .single();

@@ -16,7 +16,7 @@ export default function TermsPage() {
     <MarketingPageShell>
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pb-8 pt-8 sm:px-6 sm:pt-12 lg:px-12 lg:pt-16">
         <FadeIn>
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">Legal</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Legal</span>
         </FadeIn>
         <FadeIn delay={0.06}>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Terms of Service</h1>
@@ -49,7 +49,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">2. Account eligibility</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               You must be at least 13 years old to create a KIVO account. You sign in through Clerk, our
@@ -59,7 +59,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">3. Acceptable use</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               KIVO is a space for football fans to talk about the game, including the arguments. It is not a space
@@ -70,7 +70,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">4. Content you post</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               You own what you post to KIVO, posts, comments and anything else you create. By posting it, you grant
@@ -81,7 +81,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">5. Fantasy and predictions are entertainment only</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               KIVO&apos;s fantasy football and predictions features are free-to-play and for entertainment only.
@@ -91,7 +91,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">6. Football data and the AI Copilot</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               Live scores, fixtures and other football data are sourced from a third-party provider and synced into
@@ -103,7 +103,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">7. Termination</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               You can delete your account at any time from Settings, this permanently removes your profile and the
@@ -112,7 +112,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">8. Disclaimers and limitation of liability</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               KIVO is provided &ldquo;as is,&rdquo; without warranties of any kind, including that it will always be
@@ -121,7 +121,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">9. Changes to these terms</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               As KIVO changes, these terms will be updated to match, and the &ldquo;last updated&rdquo; date at the
@@ -129,7 +129,7 @@ export default function TermsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-white/5 pt-8">
+          <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">10. Contact</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
               This template does not yet list a monitored contact address. A real, monitored contact channel needs
@@ -144,7 +144,7 @@ export default function TermsPage() {
         <FadeIn className="flex flex-col items-center gap-2 text-center">
           <p className="text-sm text-foreground-subtle">
             Also see our{" "}
-            <Link href="/privacy" className="text-kivo-cyan transition-colors hover:text-foreground">
+            <Link href="/privacy" className="text-accent transition-colors hover:text-foreground">
               Privacy Policy
             </Link>
             .

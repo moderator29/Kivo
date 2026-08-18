@@ -6,6 +6,7 @@ import { carryForwardFantasyRoster, ensureFantasyPlayerPrices, getFantasyPriceMa
 import { canManageFootballData } from "@/lib/admin";
 import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { FadeIn } from "@/components/ui/fade-in";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -26,7 +27,7 @@ export default async function FantasyPage({
         <p className="text-sm text-foreground-muted">Sign up to build your fantasy squad.</p>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -76,10 +77,19 @@ export default async function FantasyPage({
   // fantasy_teams/fantasy_points/profiles are all owner-only RLS, so a plain
   // client select can never see a teammate's row — this goes through the same
   // ownership-checked RPC shape as get_fantasy_team_league above (see the
-  // get_fantasy_league_leaderboard migration comment).
-  const { data: leaderboardRows } = await supabase.rpc("get_fantasy_league_leaderboard", {
-    p_team_id: activeTeam.id,
-  });
+  // get_fantasy_league_leaderboard migration comment). Batched alongside the
+  // real points-history read below (RECOMMENDATIONS.md item 295) since
+  // neither depends on the other, both only need activeTeam.id.
+  const [{ data: leaderboardRows }, { data: pointsHistoryRows }] = await Promise.all([
+    supabase.rpc("get_fantasy_league_leaderboard", { p_team_id: activeTeam.id }),
+    // fantasy_points_select_own already scopes this to the caller's own
+    // team's rows — no RPC needed, unlike the leaderboard above (which has
+    // to read every team in the league, not just the viewer's own).
+    supabase
+      .from("fantasy_points")
+      .select("points, gameweek:fantasy_gameweeks(number)")
+      .eq("fantasy_team_id", activeTeam.id),
+  ]);
   const leaderboard = {
     entries: (leaderboardRows ?? []).map((row) => ({
       teamId: row.team_id,
@@ -90,6 +100,17 @@ export default async function FantasyPage({
     })),
     hasAnyScores: (leaderboardRows ?? []).some((row) => row.has_scores),
   };
+
+  // RECOMMENDATIONS.md item 295: a real gameweek-by-gameweek arc, not just
+  // the single current-gameweek number or the leaderboard's cumulative
+  // total — every scored gameweek already has a real fantasy_points row
+  // (written by scoreFantasyGameweek), this is purely a new read of it.
+  // Sorted client-side by the joined gameweek number rather than relying on
+  // the query builder's cross-table ordering support.
+  const pointsHistory = (pointsHistoryRows ?? [])
+    .filter((row): row is typeof row & { gameweek: { number: number } } => row.gameweek !== null)
+    .map((row) => ({ gameweekNumber: row.gameweek.number, points: row.points }))
+    .sort((a, b) => a.gameweekNumber - b.gameweekNumber);
 
   const { data: gameweek } = await supabase
     .from("fantasy_gameweeks")
@@ -163,9 +184,10 @@ export default async function FantasyPage({
       isViceCaptain: r.is_vice_captain,
     }));
 
-    // fantasy_points is populated by a trusted server-side scoring job that
-    // doesn't exist yet (needs real finished-fixture data to compute
-    // against) — an absent row means "not scored yet", not zero.
+    // fantasy_points is populated by an admin-triggered scoring pass
+    // (scoreFantasyGameweek, src/app/admin/data-health/fantasy-actions.ts)
+    // that only writes a row once this gameweek has at least one finished
+    // fixture — an absent row means "not scored yet", not zero.
     const { data: pointsRow } = await supabase
       .from("fantasy_points")
       .select("points")
@@ -183,7 +205,11 @@ export default async function FantasyPage({
   const showGenerateGameweeks = !gameweek && canManageFootballData(profile.role);
 
   return (
-    <div className="flex flex-col gap-3">
+    // RECOMMENDATIONS.md item 271: this route's real Promise.all-batched
+    // fetch above resolves behind fantasy/loading.tsx's skeleton — FadeIn so
+    // the squad builder (and its Leaderboard tab, FantasyLeaderboard) cross-
+    // dissolves in rather than hard-cutting from shimmer to content.
+    <FadeIn className="flex flex-col gap-3">
       {showGenerateGameweeks && (
         <div className="kivo-glass mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-2xl p-4">
           <p className="text-xs text-foreground-subtle">
@@ -209,8 +235,9 @@ export default async function FantasyPage({
         points={points}
         pointsAvailable={pointsAvailable}
         leaderboard={leaderboard}
+        pointsHistory={pointsHistory}
         carriedForwardFromGameweek={carriedForwardFromGameweek}
       />
-    </div>
+    </FadeIn>
   );
 }

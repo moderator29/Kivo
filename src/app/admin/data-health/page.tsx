@@ -1,7 +1,8 @@
-import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, Trophy, Activity, ShieldCheck, ListChecks, Clock3, ArrowLeftRight } from "lucide-react";
+import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, CircleSlash, Trophy, Activity, ShieldCheck, ListChecks, Clock3, ArrowLeftRight, RadioTower } from "lucide-react";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
+import { getActiveProviderStatus } from "@/lib/football";
 import { FadeIn } from "@/components/ui/fade-in";
 import { staggerDelay } from "@/lib/stagger";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
@@ -20,7 +21,12 @@ const STATUS_STYLE: Record<SyncStatus, { icon: typeof CheckCircle2; className: s
   success: { icon: CheckCircle2, className: "border-live/30 bg-live/10 text-live", label: "Success" },
   partial: { icon: MinusCircle, className: "border-warning/30 bg-warning/10 text-warning", label: "Partial" },
   failed: { icon: XCircle, className: "border-critical/30 bg-critical/10 text-critical", label: "Failed" },
-  running: { icon: Loader2, className: "border-white/10 text-foreground-subtle", label: "Running" },
+  running: { icon: Loader2, className: "border-hairline text-foreground-subtle", label: "Running" },
+  // migration 0044: the cron worker's own no-op decisions (flag off, nothing
+  // live, dedup hit, quota floor) — genuinely not one of the four statuses
+  // above, since no provider call was ever attempted. See
+  // src/app/api/cron/sync-live/route.ts.
+  skipped: { icon: CircleSlash, className: "border-hairline bg-surface-1 text-foreground-subtle", label: "Skipped" },
 };
 
 function formatTimestamp(value: string | null): string {
@@ -103,28 +109,53 @@ export default async function DataHealthPage() {
 
   // Honest per this platform's zero-fake-data rule: the mock provider never counts as
   // "connected" here, even in dev — it exists only so UI can be built without spending
-  // real provider quota. Mirrors getFootballDataProvider()'s own selection order
-  // (src/lib/football/index.ts) so this banner never claims a provider is connected
-  // that the app wouldn't actually construct — e.g. FOOTBALL_DATA_PROVIDER=thesportsdb
-  // with only API_FOOTBALL_KEY set correctly still reads as API-Football here, since
-  // that's genuinely what getFootballDataProvider() would fall back to.
-  const activeProviderName: "api-football" | "thesportsdb" | null =
-    process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" && process.env.THE_SPORTS_DB_API_KEY
-      ? "thesportsdb"
-      : process.env.API_FOOTBALL_KEY
-        ? "api-football"
-        : null;
+  // real provider quota. getActiveProviderStatus() mirrors getFootballDataProvider()'s
+  // own selection order (src/lib/football/index.ts) so this banner never claims a
+  // provider is connected that the app wouldn't actually construct — e.g.
+  // FOOTBALL_DATA_PROVIDER=thesportsdb with only API_FOOTBALL_KEY set correctly still
+  // reads as API-Football here, since that's genuinely what getFootballDataProvider()
+  // would fall back to. Also reused by the Admin Overview stat card so the two pages
+  // can never disagree about whether a provider is connected.
+  const { name: activeProviderName, label: activeProviderLabelOrNull } = getActiveProviderStatus();
   const providerConfigured = activeProviderName !== null;
-  const activeProviderLabel = activeProviderName === "thesportsdb" ? "TheSportsDB" : "API-Football";
+  const activeProviderLabel = activeProviderLabelOrNull ?? "API-Football";
 
   const supabase = createServerSupabaseClient();
+  // trigger_source (migration 0044) scopes this to admin-clicked runs only —
+  // the automated cron worker gets its own "Automated worker" section below
+  // instead of crowding this list out. Vercel Cron fires the worker's route
+  // once a minute once deployed, so without this filter a single manual sync
+  // from days ago would already have scrolled off this capped 10-row list.
   const { data: syncRuns } = await supabase
     .from("sync_runs")
     .select(
       "id, provider, entity_type, status, started_at, finished_at, records_processed, error_message, provider_quota_remaining",
     )
+    .eq("trigger_source", "manual")
     .order("started_at", { ascending: false })
     .limit(10);
+
+  // The automated worker's own recent history — every firing, including every
+  // no-op decision (see src/app/api/cron/sync-live/route.ts's module doc
+  // comment). Kept separate from syncRuns above so an admin can see "is the
+  // worker actually firing, and what did it decide" without it displacing
+  // manual sync history, and vice versa.
+  const { data: cronRuns } = await supabase
+    .from("sync_runs")
+    .select("id, status, started_at, finished_at, records_processed, error_message, provider_quota_remaining")
+    .eq("trigger_source", "cron")
+    .order("started_at", { ascending: false })
+    .limit(8);
+  const latestCronRun = cronRuns?.[0] ?? null;
+  // Vercel Cron fires this worker every minute (vercel.json) — a real gap
+  // meaningfully longer than that between "now" and the worker's last known
+  // check-in means either it isn't deployed/configured correctly, or (for a
+  // very fresh deploy) the first minute just hasn't ticked over yet. 5x the
+  // 1-minute schedule is a deliberately generous margin against ordinary
+  // scheduling jitter/cold starts before this warns anyone.
+  const CRON_STALE_THRESHOLD_MINUTES = 5;
+  const cronMinutesSinceLastRun = latestCronRun ? (new Date().getTime() - new Date(latestCronRun.started_at).getTime()) / 60_000 : null;
+  const cronWorkerIsStale = cronMinutesSinceLastRun !== null && cronMinutesSinceLastRun > CRON_STALE_THRESHOLD_MINUTES;
 
   // RECOMMENDATIONS.md item 53: the provider's own x-ratelimit-requests-remaining
   // header, persisted on whichever sync_runs row last saw a response — real data,
@@ -236,7 +267,7 @@ export default async function DataHealthPage() {
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              providerConfigured ? "bg-live/15" : "bg-white/5"
+              providerConfigured ? "bg-live/15" : "bg-surface-2"
             }`}
           >
             <Database className={`h-5 w-5 ${providerConfigured ? "text-live" : "text-foreground-subtle"}`} strokeWidth={1.75} />
@@ -260,7 +291,7 @@ export default async function DataHealthPage() {
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                 latestQuotaRun.provider_quota_remaining !== null && latestQuotaRun.provider_quota_remaining <= 10
                   ? "border-warning/30 bg-warning/10 text-warning"
-                  : "border-white/10 text-foreground-muted"
+                  : "border-hairline text-foreground-muted"
               }`}
               title="API-Football's own x-ratelimit-requests-remaining header from the most recent sync, not an estimate."
             >
@@ -274,7 +305,7 @@ export default async function DataHealthPage() {
 
       <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <ListChecks className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <ListChecks className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Sync order
         </h2>
         <p className="text-xs text-foreground-subtle">
@@ -283,7 +314,7 @@ export default async function DataHealthPage() {
         </p>
         <ol className="flex flex-col gap-2.5">
           {SYNC_ORDER_STEPS.map((step) => (
-            <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-white/5 px-3 py-2.5">
+            <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-surface-2 px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-foreground">{step.title}</span>
                 <span className="shrink-0 text-[11px] text-foreground-subtle">{step.where}</span>
@@ -298,7 +329,7 @@ export default async function DataHealthPage() {
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              unscoredPredictions > 0 ? "bg-warning/15" : "bg-white/5"
+              unscoredPredictions > 0 ? "bg-warning/15" : "bg-surface-2"
             }`}
           >
             <Trophy
@@ -329,7 +360,7 @@ export default async function DataHealthPage() {
         <div className="flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              unresolvedTransferSides > 0 ? "bg-warning/15" : "bg-white/5"
+              unresolvedTransferSides > 0 ? "bg-warning/15" : "bg-surface-2"
             }`}
           >
             <ArrowLeftRight
@@ -383,7 +414,7 @@ export default async function DataHealthPage() {
                       <span className="font-medium">GW{gw.number}</span>
                       {seasonLabel ? ` · ${seasonLabel}` : ""}
                       {gw.is_current && (
-                        <span className="ml-2 rounded-full bg-kivo-cyan/15 px-1.5 py-0.5 text-[11px] font-semibold text-kivo-cyan">
+                        <span className="ml-2 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
                           Current
                         </span>
                       )}
@@ -412,9 +443,9 @@ export default async function DataHealthPage() {
       </div>
 
       {totalRuns > 0 && (
-        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-4 divide-x divide-white/5 gap-3 rounded-2xl p-5">
+        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5 sm:grid-cols-4 sm:divide-x sm:divide-hairline-soft">
           <div className="flex flex-col items-center gap-1 text-center">
-            <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
             <span className="text-lg font-semibold text-foreground">{totalRuns}</span>
             <span className="text-[11px] text-foreground-subtle">Total syncs</span>
           </div>
@@ -442,10 +473,87 @@ export default async function DataHealthPage() {
       )}
 
       <div className="flex flex-col gap-3">
+        <FadeIn delay={0.15} className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+              <RadioTower className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+              Automated worker
+            </h2>
+            <p className="text-xs text-foreground-subtle">
+              Vercel Cron fires <code className="text-foreground-muted">/api/cron/sync-live</code> every minute. Every
+              firing is logged below, including no-ops — this is how to see whether it&apos;s actually running.
+            </p>
+          </div>
+          {latestCronRun && (
+            <span
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                cronWorkerIsStale ? "border-warning/30 bg-warning/10 text-warning" : "border-live/30 bg-live/10 text-live"
+              }`}
+            >
+              {cronWorkerIsStale ? "Not checking in" : "Checking in on schedule"}
+            </span>
+          )}
+        </FadeIn>
+
+        {!cronRuns || cronRuns.length === 0 ? (
+          <FadeIn delay={0.17} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
+            No cron firings recorded yet. Vercel Cron only runs against a real deployment — it never fires from local
+            dev, and won&apos;t show anything here until this branch is deployed to Vercel with{" "}
+            <code className="text-foreground-muted">vercel.json</code>&apos;s <code className="text-foreground-muted">crons</code> entry
+            live and <code className="text-foreground-muted">CRON_SECRET</code> set.
+          </FadeIn>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {cronWorkerIsStale && (
+              <FadeIn delay={0.17} className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                Last check-in was {formatTimestamp(latestCronRun!.started_at)} — more than {CRON_STALE_THRESHOLD_MINUTES}{" "}
+                minutes ago. The schedule fires every minute, so this either means Vercel Cron isn&apos;t invoking it
+                (check the Cron Jobs tab in the Vercel dashboard and that{" "}
+                <code className="text-warning">CRON_SECRET</code> matches), or this is a very fresh deploy that
+                hasn&apos;t had a minute tick over yet.
+              </FadeIn>
+            )}
+            {cronRuns.map((run, index) => {
+              const style = STATUS_STYLE[run.status];
+              const StatusIcon = style.icon;
+              return (
+                <FadeIn
+                  key={run.id}
+                  delay={0.18 + staggerDelay(index, 0.03)}
+                  className="kivo-glass flex items-start justify-between gap-3 rounded-xl p-3"
+                >
+                  <div>
+                    <p className="text-xs text-foreground-subtle">{formatTimestamp(run.started_at)}</p>
+                    <p className="text-xs text-foreground-muted">
+                      {run.error_message ??
+                        (run.records_processed !== null
+                          ? `${run.records_processed} record${run.records_processed === 1 ? "" : "s"} synced`
+                          : null)}
+                      {run.provider_quota_remaining !== null ? ` · ${run.provider_quota_remaining} quota left` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${style.className}`}
+                  >
+                    <StatusIcon className={`h-3 w-3 ${run.status === "running" ? "animate-spin" : ""}`} strokeWidth={2} />
+                    {style.label}
+                  </span>
+                </FadeIn>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
         <FadeIn delay={0.16} className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Recent sync runs</h2>
-            <p className="text-xs text-foreground-subtle">Prunes history older than 90 days. No cron, admin-triggered only.</p>
+            <p className="text-xs text-foreground-subtle">
+              Admin-triggered only (manual &ldquo;Sync now&rdquo;-style actions) — the automated cron worker has its
+              own section above. Prunes history older than 90 days.
+            </p>
           </div>
           <PruneSyncRunsButton />
         </FadeIn>
@@ -465,7 +573,7 @@ export default async function DataHealthPage() {
                 <FadeIn
                   key={run.id}
                   delay={0.2 + staggerDelay(index, 0.05)}
-                  className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-white/[0.03]"
+                  className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-surface-2"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>

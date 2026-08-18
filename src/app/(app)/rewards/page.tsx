@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Flame, Award, History, Trophy } from "lucide-react";
+import { Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -14,6 +14,65 @@ const item = getNavItem("rewards");
 
 export const metadata: Metadata = { title: item.label };
 
+type XpHistoryEntry = { amount: number; reason: string; created_at: string };
+type XpHistoryLine = { key: string; amount: number; reason: string; created_at: string; count: number };
+
+/** Collapses consecutive rows within a day that share the same amount and
+ * reason into one line with a count (item 236: a dozen "+2 XP — Posted in
+ * the community" rows in one day used to render as a dozen separate lines).
+ * Only *consecutive* runs collapse — entries are already newest-first, so
+ * this never merges e.g. two "Posted in the community" rows that happen to
+ * sandwich a different reason, which would misrepresent the real order of
+ * events. `created_at` on the collapsed line is the run's most recent
+ * timestamp (the first one seen, since the input is newest-first), so the
+ * displayed "time ago" still reflects the latest occurrence. */
+function collapseConsecutiveXpEntries(entries: XpHistoryEntry[]): XpHistoryLine[] {
+  const lines: XpHistoryLine[] = [];
+  for (const entry of entries) {
+    const last = lines[lines.length - 1];
+    if (last && last.amount === entry.amount && last.reason === entry.reason) {
+      last.count += 1;
+    } else {
+      lines.push({ key: entry.created_at, amount: entry.amount, reason: entry.reason, created_at: entry.created_at, count: 1 });
+    }
+  }
+  return lines;
+}
+
+/** Groups XP history rows (already newest-first from the query) into
+ * same-day buckets labeled "Today"/"Yesterday"/a short date, using the same
+ * UTC day boundary as the streak section on this page so "Today" here always
+ * means the same calendar day as the week strip's today pill. */
+function groupXpHistoryByDay(
+  entries: XpHistoryEntry[],
+  todayUtc: Date,
+): { label: string; entries: XpHistoryEntry[] }[] {
+  const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
+  const todayIso = toIsoDate(todayUtc);
+  const yesterdayUtc = new Date(todayUtc);
+  yesterdayUtc.setUTCDate(yesterdayUtc.getUTCDate() - 1);
+  const yesterdayIso = toIsoDate(yesterdayUtc);
+
+  const groups: { label: string; entries: XpHistoryEntry[] }[] = [];
+  for (const entry of entries) {
+    const entryDate = new Date(entry.created_at);
+    const entryIso = toIsoDate(entryDate);
+    const label =
+      entryIso === todayIso
+        ? "Today"
+        : entryIso === yesterdayIso
+          ? "Yesterday"
+          : entryDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && currentGroup.label === label) {
+      currentGroup.entries.push(entry);
+    } else {
+      groups.push({ label, entries: [entry] });
+    }
+  }
+  return groups;
+}
+
 export default async function RewardsPage() {
   const profile = await getOrCreateProfile();
   if (!profile) {
@@ -23,7 +82,7 @@ export default async function RewardsPage() {
         <p className="text-sm text-foreground-muted">Sign up to start earning XP and badges.</p>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -48,7 +107,7 @@ export default async function RewardsPage() {
       // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
       // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
       supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
-      supabase.from("user_badges").select("badge_id, awarded_at, badge:badges(code, name, description, icon_url)"),
+      supabase.from("user_badges").select("badge_id, awarded_at"),
       supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
       supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
       // Real current/longest daily-activity streak, derived live from this
@@ -62,7 +121,7 @@ export default async function RewardsPage() {
     ]);
 
   const totalXp = xpTotal ?? 0;
-  const earnedBadgeIds = new Set((earnedBadges ?? []).map((b) => b.badge_id));
+  const earnedBadgeDates = new Map((earnedBadges ?? []).map((b) => [b.badge_id, b.awarded_at] as const));
 
   const currentStreak = streak?.current_streak ?? 0;
   const longestStreak = streak?.longest_streak ?? 0;
@@ -71,9 +130,10 @@ export default async function RewardsPage() {
     (weekXp ?? []).map((row) => new Date(row.created_at).toISOString().slice(0, 10)),
   );
   const weekStrip = buildWeekStrip(todayUtc, activeDatesThisWeek);
+  const xpHistoryGroups = xpHistory ? groupXpHistoryByDay(xpHistory, todayUtc) : [];
   const streakMessage =
     currentStreak === 0
-      ? "Submit a prediction, make a transfer, or post to start your streak today."
+      ? "Post in the community, or wait for your next correct prediction to be scored, to start your streak today."
       : currentStreak === 1
         ? "Nice start — come back tomorrow to keep it going."
         : `${currentStreak} days strong. Keep the streak alive.`;
@@ -104,7 +164,7 @@ export default async function RewardsPage() {
 
       <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-3xl p-6">
         <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-          <Flame className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
+          <Zap className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
         </div>
         <div>
           {totalXp > 0 ? (
@@ -129,22 +189,22 @@ export default async function RewardsPage() {
           ) : (
             <span className="text-3xl font-bold tracking-tight text-foreground">0 XP</span>
           )}
-          <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, posts and community activity</p>
+          <p className="mt-1 text-xs text-foreground-subtle">Earned from onboarding, community posts and correct predictions</p>
         </div>
       </FadeIn>
 
       <FadeIn delay={0.08} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Flame className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Flame className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Activity streak
         </h2>
 
         {/* Big pill stat: flame + current streak. Driven entirely by
             get_activity_streak() — a profile with zero qualifying days
             genuinely shows 0, never a placeholder number. */}
-        <div className="kivo-glass-brand flex items-center gap-3 rounded-3xl p-5">
-          <div className="kivo-gradient-victory flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
-            <Flame className="h-5 w-5 text-kivo-white" strokeWidth={1.75} />
+        <div className="kivo-glass flex items-center gap-3 rounded-3xl p-5">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2">
+            <Flame className="h-5 w-5 text-accent" strokeWidth={1.75} />
           </div>
           <div>
             <span className="text-2xl font-bold tracking-tight text-foreground">{currentStreak}</span>
@@ -166,13 +226,11 @@ export default async function RewardsPage() {
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
                   day.isActive
-                    ? "kivo-gradient-victory text-kivo-white"
-                    : day.isToday
-                      ? "ring-1 ring-inset ring-kivo-cyan/50 text-foreground"
-                      : day.isFuture
-                        ? "text-foreground-subtle/50"
-                        : "bg-white/5 text-foreground-subtle"
-                }`}
+                    ? "kivo-gradient-victory text-on-accent"
+                    : day.isFuture
+                      ? "bg-surface-2 text-foreground-subtle/50"
+                      : "bg-surface-2 text-foreground-subtle"
+                } ${day.isToday ? "ring-1 ring-inset ring-accent/50" : ""}`}
               >
                 {day.dayNumber}
               </div>
@@ -191,7 +249,7 @@ export default async function RewardsPage() {
           </div>
           <div className="kivo-glass rounded-2xl p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Flame className="h-3.5 w-3.5 text-kivo-cyan" strokeWidth={1.75} />
+              <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
               Longest streak
             </span>
             <p className="mt-1.5 text-lg font-bold text-foreground">
@@ -204,7 +262,7 @@ export default async function RewardsPage() {
             src/lib/streak.ts for the single source of truth on the 7-day
             threshold this bar and copy both use. */}
         <div className="kivo-glass rounded-2xl p-4">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-track">
             <div
               className="kivo-gradient-prime h-full rounded-full transition-[width]"
               style={{ width: `${Math.round(tier.progress * 100)}%` }}
@@ -219,7 +277,7 @@ export default async function RewardsPage() {
 
       <FadeIn delay={0.1} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Award className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Award className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Badges
         </h2>
 
@@ -230,13 +288,14 @@ export default async function RewardsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {allBadges.map((badge, index) => {
-              const earned = earnedBadgeIds.has(badge.id);
+              const earnedAt = earnedBadgeDates.get(badge.id);
+              const earned = earnedAt !== undefined;
               return (
-                <FadeIn key={badge.id} delay={0.12 + staggerDelay(index, 0.03)}>
+                <FadeIn key={badge.id} delay={0.12 + staggerDelay(index, 0.03, allBadges.length)}>
                   <div
                     className={`kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ${
                       earned
-                        ? "transition ring-1 ring-inset ring-kivo-cyan/25 hover:-translate-y-0.5"
+                        ? "transition ring-1 ring-inset ring-accent/25 hover:-translate-y-0.5"
                         : "opacity-40 grayscale"
                     }`}
                   >
@@ -246,13 +305,15 @@ export default async function RewardsPage() {
                         alt=""
                         width={40}
                         height={40}
-                        className={`h-10 w-10 ${earned ? "drop-shadow-[0_0_10px_rgba(0,217,255,0.35)]" : ""}`}
+                        className={`h-10 w-10 ${earned ? "drop-shadow-[0_0_10px_var(--accent-hairline)]" : ""}`}
                       />
                     )}
                     <span className="text-xs font-semibold text-foreground">{badge.name}</span>
                     <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
-                    {!earned && (
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                    {earned ? (
+                      <span className="text-[10px] font-medium text-accent">Earned {timeAgo(earnedAt)}</span>
+                    ) : (
+                      <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                         Locked
                       </span>
                     )}
@@ -266,7 +327,7 @@ export default async function RewardsPage() {
 
       <FadeIn delay={0.15} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <History className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <History className="h-4 w-4 text-accent" strokeWidth={1.75} />
           XP history
         </h2>
 
@@ -275,14 +336,27 @@ export default async function RewardsPage() {
             No XP earned yet. Complete onboarding or post in the community to get started.
           </div>
         ) : (
-          <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-3xl">
-            {xpHistory.map((entry, index) => (
-              <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="text-xs font-medium text-foreground">{entry.reason}</p>
-                  <p className="text-[11px] text-foreground-subtle">{timeAgo(entry.created_at)}</p>
+          <div className="flex flex-col gap-4">
+            {xpHistoryGroups.map((group) => (
+              <div key={group.label} className="flex flex-col gap-1.5">
+                <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                  {group.label}
+                </p>
+                <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-3xl">
+                  {collapseConsecutiveXpEntries(group.entries).map((line) => (
+                    <div key={line.key} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div>
+                        <p className="text-xs font-medium text-foreground">{line.reason}</p>
+                        <p className="text-[11px] text-foreground-subtle">{timeAgo(line.created_at)}</p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-live">
+                        {line.amount > 0 ? "+" : ""}
+                        {line.amount} XP
+                        {line.count > 1 && <span className="text-foreground-subtle"> &times; {line.count}</span>}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <span className="shrink-0 text-xs font-semibold text-live">+{entry.amount} XP</span>
               </div>
             ))}
           </div>

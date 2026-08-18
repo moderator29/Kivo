@@ -7,6 +7,7 @@ import { createMapping, findMappedId, findProviderEntityId } from "./provider-ma
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
 import { notifyFixtureEvent } from "./match-notifications";
+import { getKivoSystemProfileId, insertSystemEventPost } from "./match-room-system-posts";
 import type {
   NormalizedFixtureStatistics,
   NormalizedLineups,
@@ -61,6 +62,7 @@ async function upsertFixtureEvent(
   relatedPlayerId: string | null,
   event: NormalizedMatchEvent & { eventType: Exclude<NormalizedMatchEventType, "unknown"> },
   teamNames: FixtureTeamNames,
+  systemProfileId: string | null,
 ): Promise<void> {
   const payload: Database["public"]["Tables"]["fixture_events"]["Insert"] = {
     fixture_id: fixtureId,
@@ -98,6 +100,19 @@ async function upsertFixtureEvent(
     eventType: event.eventType,
     minute: event.minute,
     playerId,
+    playerName: event.playerName,
+  });
+
+  // RECOMMENDATIONS.md item 254: same real-insert-only moment, same team
+  // name resolution, now also announced inside the fixture's own Match Room
+  // — see match-room-system-posts.ts for the goal/red-card gating and the
+  // is_system safety guarantees.
+  await insertSystemEventPost(supabase, systemProfileId, {
+    fixtureId,
+    teamName: names?.name ?? "Their team",
+    eventType: event.eventType,
+    minute: event.minute,
+    addedTime: event.addedTime,
     playerName: event.playerName,
   });
 }
@@ -197,6 +212,7 @@ async function processEvents(
   events: NormalizedMatchEvent[],
   unresolved: string[],
   teamNames: FixtureTeamNames,
+  systemProfileId: string | null,
 ): Promise<number> {
   let processed = 0;
 
@@ -237,6 +253,7 @@ async function processEvents(
         relatedPlayerId,
         { ...event, eventType },
         teamNames,
+        systemProfileId,
       );
       processed += 1;
     } catch (err) {
@@ -366,15 +383,21 @@ export async function syncFixtureDetails(
   // two sides, fetched once so upsertFixtureEvent can label a goal/red-card
   // notification without a per-event query. Absent (empty map) degrades to a
   // generic label in notifyFixtureEvent rather than blocking the notification.
-  const { data: fixtureTeamsRow } = await supabase
-    .from("fixtures")
-    .select(
-      `home_team_id, away_team_id,
-       home_team:teams!fixtures_home_team_id_fkey(name),
-       away_team:teams!fixtures_away_team_id_fkey(name)`,
-    )
-    .eq("id", fixtureId)
-    .maybeSingle();
+  // Fetched alongside item 254's system-post author id (also resolved once
+  // per run, same "thread it through instead of a per-event query" shape —
+  // see getKivoSystemProfileId's own doc comment).
+  const [{ data: fixtureTeamsRow }, systemProfileId] = await Promise.all([
+    supabase
+      .from("fixtures")
+      .select(
+        `home_team_id, away_team_id,
+         home_team:teams!fixtures_home_team_id_fkey(name),
+         away_team:teams!fixtures_away_team_id_fkey(name)`,
+      )
+      .eq("id", fixtureId)
+      .maybeSingle(),
+    getKivoSystemProfileId(supabase),
+  ]);
   const teamNames: FixtureTeamNames = new Map();
   if (fixtureTeamsRow?.home_team?.name && fixtureTeamsRow.away_team?.name) {
     teamNames.set(fixtureTeamsRow.home_team_id, {
@@ -424,7 +447,7 @@ export async function syncFixtureDetails(
     }
   }
 
-  processed += await processEvents(supabase, provider.name, fixtureId, events, unresolved, teamNames);
+  processed += await processEvents(supabase, provider.name, fixtureId, events, unresolved, teamNames, systemProfileId);
   processed += await processStatistics(supabase, provider.name, fixtureId, statistics, unresolved);
 
   const finishedAt = new Date().toISOString();

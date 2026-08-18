@@ -48,7 +48,7 @@ export function PlayerActionSheet({
               "Close" control before hearing anything about the player it's
               actually about. The panel's own X button (below) is the real,
               announced close control. */}
-          <div aria-hidden="true" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <div aria-hidden="true" className="absolute inset-0 bg-overlay backdrop-blur-sm" onClick={onClose} />
           <motion.div
             ref={panelRef}
             role="dialog"
@@ -58,9 +58,9 @@ export function PlayerActionSheet({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 24, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="kivo-glass relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3 rounded-3xl p-4 pt-2.5"
+            className="kivo-popover relative z-10 mx-3 mb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3 rounded-3xl p-4 pt-2.5"
           >
-            <div aria-hidden="true" className="mx-auto h-1 w-9 shrink-0 rounded-full bg-white/15" />
+            <div aria-hidden="true" className="mx-auto h-1 w-9 shrink-0 rounded-full bg-hairline-strong" />
 
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2.5">
@@ -76,7 +76,7 @@ export function PlayerActionSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-foreground-subtle transition hover:text-foreground"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground-subtle transition hover:text-foreground"
               >
                 <X className="h-4 w-4" strokeWidth={1.75} />
               </button>
@@ -86,6 +86,7 @@ export function PlayerActionSheet({
               <ActionRow
                 icon={player.isStarting ? ArrowDownToLine : ArrowUpFromLine}
                 label={player.isStarting ? "Move to bench" : "Move to starting XI"}
+                disabled={locked}
                 onClick={() => {
                   onToggleStarting();
                   onClose();
@@ -94,18 +95,18 @@ export function PlayerActionSheet({
               <ActionRow
                 icon={Crown}
                 label={player.isCaptain ? "Already captain" : "Make captain"}
-                disabled={!isSaved || locked || pending || player.isCaptain}
-                hint={!isSaved ? "Save your squad first" : undefined}
+                disabled={!isSaved || locked || pending || player.isCaptain || player.isViceCaptain}
+                hint={!isSaved ? "Save your squad first" : player.isViceCaptain ? "Already vice-captain — change that first" : undefined}
                 onClick={onMakeCaptain}
               />
               <ActionRow
                 icon={Star}
                 label={player.isViceCaptain ? "Already vice-captain" : "Make vice-captain"}
                 disabled={!isSaved || locked || pending || player.isViceCaptain || player.isCaptain}
-                hint={!isSaved ? "Save your squad first" : undefined}
+                hint={!isSaved ? "Save your squad first" : player.isCaptain ? "Already captain — change that first" : undefined}
                 onClick={onMakeViceCaptain}
               />
-              <ActionRow icon={Trash2} label="Remove from squad" tone="critical" onClick={onRemove} />
+              <ActionRow icon={Trash2} label="Remove from squad" tone="critical" disabled={locked} onClick={onRemove} />
             </div>
           </motion.div>
         </motion.div>
@@ -136,14 +137,14 @@ function ActionRow({
       onClick={onClick}
       whileTap={disabled ? undefined : { scale: 0.98 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 disabled:opacity-40 ${
-        tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-white/5"
+      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 disabled:opacity-40 ${
+        tone === "critical" ? "text-critical hover:bg-critical/10" : "text-foreground hover:bg-surface-2"
       }`}
     >
       <span className="flex items-center gap-2.5">
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-            tone === "critical" ? "bg-critical/10" : "bg-white/[0.06]"
+            tone === "critical" ? "bg-critical/10" : "bg-surface-2"
           }`}
         >
           <Icon className="h-4 w-4" strokeWidth={1.75} />

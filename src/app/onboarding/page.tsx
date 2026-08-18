@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation";
-import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
-import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { OnboardingForm } from "@/components/onboarding/onboarding-form";
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { isClerkConfigured } from "@/lib/clerk";
-import { FadeIn } from "@/components/ui/fade-in";
 
 // See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
 // the auth check alone.
@@ -43,22 +40,14 @@ export default async function OnboardingPage() {
     .limit(60);
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
+    <div className="relative flex min-h-screen flex-col items-center overflow-hidden bg-background px-4 py-8">
       <div className="kivo-aurora" aria-hidden="true">
         <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
         <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
         <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
       </div>
 
-      <div className="relative z-10 flex flex-col items-center gap-8">
-        <FadeIn>
-          <Image src={kivoLogo} alt="KIVO" width={96} height={96} className="h-24 w-24" priority />
-        </FadeIn>
-
-        <FadeIn delay={0.16} className="w-full max-w-sm">
-          <OnboardingForm defaultUsername={profile.username} availableTeams={teams ?? []} />
-        </FadeIn>
-      </div>
+      <OnboardingFlow defaultUsername={profile.username} availableTeams={teams ?? []} />
     </div>
   );
 }

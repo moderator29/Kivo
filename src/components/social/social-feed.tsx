@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Image from "next/image";
 import { ArrowUp } from "lucide-react";
-import kivoSocialArtwork from "../../../public/brand/kivo-artwork-social.webp";
 import { FadeIn } from "@/components/ui/fade-in";
 import { PostCard } from "@/components/social/post-card";
 import { loadMorePosts } from "@/app/(app)/social/actions";
@@ -20,6 +18,7 @@ export function SocialFeed({
   initialHasMore,
   signedIn,
   followingOnly = false,
+  scrollToPostId = null,
 }: {
   initialPosts: PostListItem[];
   initialHasMore: boolean;
@@ -28,12 +27,31 @@ export function SocialFeed({
    * more" keeps respecting the All/Following tab the page was rendered
    * with. */
   followingOnly?: boolean;
+  /** RECOMMENDATIONS item 237: a post id to scroll to and briefly highlight
+   * on mount — the page.tsx server component has already guaranteed this id
+   * is present in `initialPosts` (prepending it if it wasn't on the normal
+   * first page), so this only ever needs to scroll, never search pagination
+   * for it. */
+  scrollToPostId?: string | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const supabase = useSupabaseClient();
+
+  // Runs once on mount only — scrollToPostId is a one-shot "where the viewer
+  // arrived from" hint from the URL the page loaded with, not something a
+  // later prop change should re-trigger a scroll for.
+  const [highlightPostId, setHighlightPostId] = useState(scrollToPostId);
+  useEffect(() => {
+    if (!scrollToPostId) return;
+    const el = document.getElementById(`post-${scrollToPostId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const timeout = setTimeout(() => setHighlightPostId(null), 1600);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // RECOMMENDATIONS.md item 119: real "new posts arrived" signal via
   // Supabase Realtime on `posts` (migration 0042_realtime_posts — the exact
@@ -135,12 +153,12 @@ export function SocialFeed({
   }
 
   const newPostsPill = hasNewPosts && (
-    <FadeIn className="sticky top-2 z-10 flex justify-center">
+    <FadeIn className="sticky top-16 z-30 flex justify-center">
       <button
         type="button"
         onClick={handleShowNewPosts}
         disabled={refreshing}
-        className="kivo-gradient-prime flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-kivo-white shadow-lg transition-opacity disabled:opacity-60"
+        className="kivo-gradient-prime flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-on-accent shadow-pop kivo-raise disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <ArrowUp className="h-3.5 w-3.5" strokeWidth={2} />
         {refreshing ? "Loading…" : "New posts"}
@@ -153,16 +171,6 @@ export function SocialFeed({
       <div className="flex flex-col gap-3">
         {newPostsPill}
         <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          {/* Last of the three commissioned KIVO artwork pieces placed off the
-              landing page this session (see the hero's placement comment in
-              src/app/page.tsx for the trademark check they went through) — its
-              running players and social UI cards fit a community empty state
-              better than the generic Users icon alone. Same edge-masked,
-              floating treatment as the hero; only shown when there's genuinely
-              nothing else on screen, so it never crowds a real feed. */}
-          <div className="kivo-artwork-float kivo-artwork-mask relative h-36 w-56 sm:h-44 sm:w-72">
-            <Image src={kivoSocialArtwork} alt="" fill className="object-contain" sizes="288px" />
-          </div>
           <p className="text-sm text-foreground-muted">
             {followingOnly
               ? "Nobody you follow has posted yet. Follow a user from their profile to see their posts here."
@@ -184,6 +192,7 @@ export function SocialFeed({
           createdAt={post.createdAt}
           authorName={post.authorName}
           authorUsername={post.authorUsername}
+          authorAvatarSrc={post.authorAvatarSrc}
           reactionCount={post.reactionCount}
           viewerReaction={post.viewerReaction}
           commentCount={post.commentCount}
@@ -191,6 +200,8 @@ export function SocialFeed({
           index={index}
           poll={post.poll}
           viewerSaved={post.viewerSaved}
+          highlighted={post.id === highlightPostId}
+          isSystem={post.isSystem}
         />
       ))}
 
@@ -205,7 +216,7 @@ export function SocialFeed({
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

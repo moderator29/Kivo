@@ -26,7 +26,7 @@ export function PreviewModeBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 top-0 z-[60] flex h-9 items-center justify-center gap-2 bg-amber-400 px-4 text-center text-xs font-bold uppercase tracking-wide text-black shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+      className="fixed inset-x-0 top-0 z-[60] flex h-9 items-center justify-center gap-2 bg-amber-400 px-4 text-center text-xs font-bold uppercase tracking-wide text-black shadow-raise"
     >
       <FlaskConical className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} aria-hidden="true" />
       <span>Preview mode — sample data, not real. Visible to admins only.</span>

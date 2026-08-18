@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
 /** `/social` had a flat `.limit(50)` with no way to page further
  * (RECOMMENDATIONS item 119). 20 per page, offset-based "Load more" — same
@@ -16,6 +17,7 @@ export type PostListItem = {
   createdAt: string;
   authorName: string;
   authorUsername: string | null;
+  authorAvatarSrc: string | null;
   reactionCount: number;
   viewerReaction: ReactionType | null;
   commentCount: number;
@@ -27,6 +29,13 @@ export type PostListItem = {
    * Always false for a signed-out viewer (saves_select_own has nothing to
    * return them anyway). */
   viewerSaved: boolean;
+  /** RECOMMENDATIONS item 254: true only for a KIVO-authored automatic
+   * goal/red-card announcement (posts.is_system, migration
+   * 0047_match_room_system_posts) — false for every real user's post,
+   * general-feed or Room alike. Drives the "KIVO" system badge in
+   * PostCard/MatchRoomTab; never settable by a client write (see the
+   * migration's RLS comment). */
+  isSystem: boolean;
 };
 
 /**
@@ -47,7 +56,7 @@ export async function fetchPostsPage(
   const limit = options?.limit ?? SOCIAL_PAGE_SIZE;
   const supabase = createServerSupabaseClient();
 
-  type PostRow = { id: string; body: string; created_at: string; author_profile_id: string };
+  type PostRow = { id: string; body: string; created_at: string; author_profile_id: string; is_system: boolean };
   let pageRows: PostRow[];
   let hasMore = false;
 
@@ -56,11 +65,14 @@ export async function fetchPostsPage(
     // bounded set of post ids (most-recently-saved first) instead of a feed
     // page — no offset/range pagination, no followingOnly/fixtureId
     // filtering, just hydrate exactly these posts with the same joins every
-    // other caller gets.
+    // other caller gets. Not is_system-filtered either (unlike the plain
+    // feed query below) — this is "give me exactly this post id back",
+    // e.g. a notification deep-link, and should resolve regardless of who
+    // authored it.
     if (options.postIds.length === 0) return { error: null, posts: [], hasMore: false };
     const { data, error } = await supabase
       .from("posts")
-      .select("id, body, created_at, author_profile_id")
+      .select("id, body, created_at, author_profile_id, is_system")
       .in("id", options.postIds);
     if (error) {
       console.error("Failed to load posts", error);
@@ -92,11 +104,27 @@ export async function fetchPostsPage(
 
     let query = supabase
       .from("posts")
-      .select("id, body, created_at, author_profile_id")
+      .select("id, body, created_at, author_profile_id, is_system")
       .order("created_at", { ascending: false })
       .range(offset, offset + limit);
 
-    if (options?.fixtureId) query = query.eq("fixture_id", options.fixtureId);
+    if (options?.fixtureId) {
+      query = query.eq("fixture_id", options.fixtureId);
+    } else {
+      // RECOMMENDATIONS item 254: system-authored goal/red-card
+      // announcements are real content, but belong only inside their own
+      // fixture's Room, not the unscoped general feed. Pre-existing
+      // behaviour already lets an ordinary *human* Room post show up in
+      // /social too (fetchPostsPage never filtered fixture_id out of the
+      // general query, and fixing that is a separate, unscoped product
+      // decision this task didn't ask for) — this narrowly excludes only
+      // the new is_system content, so /social doesn't fill up with a
+      // repetitive auto-generated alert for every goal in every live match
+      // at once. Scoped to `!options?.fixtureId` specifically so Match
+      // Room's own fetch (which always passes fixtureId) is untouched —
+      // that's the one place these posts must always appear.
+      query = query.eq("is_system", false);
+    }
     if (followedAuthorIds) query = query.in("author_profile_id", followedAuthorIds);
 
     const { data: rows, error } = await query;
@@ -212,11 +240,13 @@ export async function fetchPostsPage(
         createdAt: post.created_at,
         authorName: author?.display_name || author?.username || "KIVO fan",
         authorUsername: author?.username ?? null,
+        authorAvatarSrc: author ? resolveAvatarSrc(author) : null,
         reactionCount: reactionSummary.count,
         viewerReaction: reactionSummary.viewerReaction,
         commentCount: commentCountByPost.get(post.id) ?? 0,
         poll,
         viewerSaved: savedPostIds.has(post.id),
+        isSystem: post.is_system,
       };
     }),
   };

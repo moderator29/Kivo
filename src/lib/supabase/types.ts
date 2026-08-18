@@ -1,6 +1,3 @@
-// Generated from the live schema via the Supabase MCP server — do not hand-edit.
-// Regenerate after every migration in supabase/migrations/.
-
 export type Json =
   | string
   | number
@@ -420,6 +417,7 @@ export type Database = {
           gameweek_id: string
           id: string
           points: number
+          scoring_model_version: string | null
           updated_at: string
         }
         Insert: {
@@ -428,6 +426,7 @@ export type Database = {
           gameweek_id: string
           id?: string
           points?: number
+          scoring_model_version?: string | null
           updated_at?: string
         }
         Update: {
@@ -436,6 +435,7 @@ export type Database = {
           gameweek_id?: string
           id?: string
           points?: number
+          scoring_model_version?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -813,6 +813,7 @@ export type Database = {
           followed_type: Database["public"]["Enums"]["follow_target_type"]
           follower_profile_id: string
           id: string
+          muted: boolean
         }
         Insert: {
           created_at?: string
@@ -820,6 +821,7 @@ export type Database = {
           followed_type: Database["public"]["Enums"]["follow_target_type"]
           follower_profile_id: string
           id?: string
+          muted?: boolean
         }
         Update: {
           created_at?: string
@@ -827,6 +829,7 @@ export type Database = {
           followed_type?: Database["public"]["Enums"]["follow_target_type"]
           follower_profile_id?: string
           id?: string
+          muted?: boolean
         }
         Relationships: [
           {
@@ -1247,6 +1250,7 @@ export type Database = {
           fixture_id: string | null
           id: string
           is_edited: boolean
+          is_system: boolean
           updated_at: string
         }
         Insert: {
@@ -1256,6 +1260,7 @@ export type Database = {
           fixture_id?: string | null
           id?: string
           is_edited?: boolean
+          is_system?: boolean
           updated_at?: string
         }
         Update: {
@@ -1265,6 +1270,7 @@ export type Database = {
           fixture_id?: string | null
           id?: string
           is_edited?: boolean
+          is_system?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -1334,7 +1340,11 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_kivo_id: string | null
+          avatar_type: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url: string | null
           avatar_url: string | null
+          background_id: string | null
           bio: string | null
           clerk_user_id: string
           country: string | null
@@ -1342,13 +1352,23 @@ export type Database = {
           display_name: string | null
           favourite_team_id: string | null
           id: string
+          moderation_expires_at: string | null
+          moderation_reason: string | null
+          moderation_set_at: string | null
+          moderation_set_by: string | null
+          moderation_status: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed: boolean
           role: Database["public"]["Enums"]["user_role"]
+          show_activity_publicly: boolean
           updated_at: string
           username: string
         }
         Insert: {
+          avatar_kivo_id?: string | null
+          avatar_type?: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url?: string | null
           avatar_url?: string | null
+          background_id?: string | null
           bio?: string | null
           clerk_user_id: string
           country?: string | null
@@ -1356,13 +1376,23 @@ export type Database = {
           display_name?: string | null
           favourite_team_id?: string | null
           id?: string
+          moderation_expires_at?: string | null
+          moderation_reason?: string | null
+          moderation_set_at?: string | null
+          moderation_set_by?: string | null
+          moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
+          show_activity_publicly?: boolean
           updated_at?: string
           username: string
         }
         Update: {
+          avatar_kivo_id?: string | null
+          avatar_type?: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url?: string | null
           avatar_url?: string | null
+          background_id?: string | null
           bio?: string | null
           clerk_user_id?: string
           country?: string | null
@@ -1370,8 +1400,14 @@ export type Database = {
           display_name?: string | null
           favourite_team_id?: string | null
           id?: string
+          moderation_expires_at?: string | null
+          moderation_reason?: string | null
+          moderation_set_at?: string | null
+          moderation_set_by?: string | null
+          moderation_status?: Database["public"]["Enums"]["moderation_status"]
           onboarding_completed?: boolean
           role?: Database["public"]["Enums"]["user_role"]
+          show_activity_publicly?: boolean
           updated_at?: string
           username?: string
         }
@@ -1381,6 +1417,13 @@ export type Database = {
             columns: ["favourite_team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_moderation_set_by_fkey"
+            columns: ["moderation_set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1684,6 +1727,7 @@ export type Database = {
           records_processed: number | null
           started_at: string
           status: Database["public"]["Enums"]["sync_status"]
+          trigger_source: string
         }
         Insert: {
           created_at?: string
@@ -1698,6 +1742,7 @@ export type Database = {
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
+          trigger_source?: string
         }
         Update: {
           created_at?: string
@@ -1712,6 +1757,7 @@ export type Database = {
           records_processed?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["sync_status"]
+          trigger_source?: string
         }
         Relationships: []
       }
@@ -1950,6 +1996,13 @@ export type Database = {
           total_points: number
         }[]
       }
+      get_fantasy_ownership: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: {
+          player_count: number
+          total_count: number
+        }[]
+      }
       get_fantasy_team_league: {
         Args: { p_team_id: string }
         Returns: {
@@ -1993,10 +2046,23 @@ export type Database = {
           username: string
         }[]
       }
+      get_my_followers: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          follower_profile_id: string
+        }[]
+      }
       get_public_profile_by_username: {
         Args: { p_username: string }
         Returns: {
+          avatar_kivo_id: string
+          avatar_type: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url: string
           avatar_url: string
+          background_id: string
+          bio: string
+          country: string
           display_name: string
           id: string
           username: string
@@ -2006,12 +2072,16 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: {
           badges: Json
+          is_public: boolean
           total_xp: number
         }[]
       }
       get_public_profiles: {
         Args: { p_ids: string[] }
         Returns: {
+          avatar_kivo_id: string
+          avatar_type: Database["public"]["Enums"]["avatar_type"]
+          avatar_uploaded_url: string
           avatar_url: string
           display_name: string
           id: string
@@ -2109,6 +2179,7 @@ export type Database = {
     }
     Enums: {
       ai_message_role: "system" | "user" | "assistant" | "tool"
+      avatar_type: "kivo" | "uploaded"
       delivery_channel: "push" | "email" | "sms" | "in_app"
       delivery_status: "pending" | "sent" | "delivered" | "failed"
       fixture_event_type:
@@ -2131,6 +2202,7 @@ export type Database = {
         | "abandoned"
         | "unknown"
       follow_target_type: "team" | "player" | "competition" | "user"
+      moderation_status: "active" | "shadow_muted" | "suspended" | "banned"
       moderation_target_type: "post" | "comment" | "profile"
       prediction_outcome: "home_win" | "draw" | "away_win"
       provider_entity_type:
@@ -2149,7 +2221,7 @@ export type Database = {
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
       save_target_type: "post" | "team" | "player"
-      sync_status: "running" | "success" | "partial" | "failed"
+      sync_status: "running" | "success" | "partial" | "failed" | "skipped"
       transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
         | "user"
@@ -2288,6 +2360,7 @@ export const Constants = {
   public: {
     Enums: {
       ai_message_role: ["system", "user", "assistant", "tool"],
+      avatar_type: ["kivo", "uploaded"],
       delivery_channel: ["push", "email", "sms", "in_app"],
       delivery_status: ["pending", "sent", "delivered", "failed"],
       fixture_event_type: [
@@ -2312,6 +2385,7 @@ export const Constants = {
         "unknown",
       ],
       follow_target_type: ["team", "player", "competition", "user"],
+      moderation_status: ["active", "shadow_muted", "suspended", "banned"],
       moderation_target_type: ["post", "comment", "profile"],
       prediction_outcome: ["home_win", "draw", "away_win"],
       provider_entity_type: [
@@ -2331,7 +2405,7 @@ export const Constants = {
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
       report_status: ["pending", "reviewing", "actioned", "dismissed"],
       save_target_type: ["post", "team", "player"],
-      sync_status: ["running", "success", "partial", "failed"],
+      sync_status: ["running", "success", "partial", "failed", "skipped"],
       transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [
         "user",

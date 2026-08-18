@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { UserRound } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { EntityListPage } from "@/components/ui/entity-list-page";
-import { TeamCrest } from "@/components/ui/team-crest";
-import { StaggeredList } from "@/components/ui/staggered-list";
-import { staggerDelay } from "@/lib/stagger";
+import { ManagersList } from "@/components/managers/managers-list";
 
 export const metadata: Metadata = { title: "Managers" };
 
@@ -38,31 +35,7 @@ export default async function ManagersPage() {
 
   return (
     <EntityListPage title="Managers" description="Managers synced alongside each team's squad.">
-      <StaggeredList
-        items={managers}
-        keyExtractor={(manager) => manager.id}
-        delay={(index) => staggerDelay(index, 0.02)}
-        className="flex flex-col gap-2"
-        renderItem={(manager) => (
-          <Link
-            href={`/managers/${manager.id}`}
-            className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
-              <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium text-foreground">{manager.full_name}</span>
-              <span className="truncate text-xs text-foreground-subtle">
-                {[manager.nationality, manager.current_team?.name].filter(Boolean).join(" · ") || "-"}
-              </span>
-            </div>
-            {manager.current_team && (
-              <TeamCrest crestUrl={manager.current_team.crest_url} name={manager.current_team.name} size={24} />
-            )}
-          </Link>
-        )}
-      />
+      <ManagersList managers={managers} />
     </EntityListPage>
   );
 }

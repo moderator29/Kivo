@@ -5,6 +5,7 @@ import { TopBar } from "./top-bar";
 import { OfflineBanner } from "./offline-banner";
 import { PageTransition } from "./page-transition";
 import { PreviewModeBanner } from "./preview-mode-banner";
+import { ModerationBanner, type ModerationBannerInfo } from "./moderation-banner";
 import { isAiConfigured } from "@/lib/ai/client";
 
 // No `MotionConfig` here — the root layout (src/app/layout.tsx) already
@@ -20,6 +21,7 @@ export function AppShell({
   isAdmin,
   previewMode,
   viewerProfile,
+  moderationBanner,
 }: {
   children: ReactNode;
   signedIn: boolean;
@@ -36,6 +38,13 @@ export function AppShell({
    * username) — null for a guest, in which case that header simply doesn't
    * render (see MobileBottomNav). Never fabricated placeholder identity. */
   viewerProfile: ViewerProfileSummary | null;
+  /** RECOMMENDATIONS.md item 234: real, current suspended/banned state for
+   * the signed-in viewer, computed server-side in (app)/layout.tsx from
+   * their own profile row. Null for a guest, an active user, or a
+   * shadow-muted one (shadow-mute is deliberately zero-friction to the
+   * muted user themselves) — this only ever renders for a genuine
+   * restriction on the real viewer, never a placeholder or guess. */
+  moderationBanner?: ModerationBannerInfo | null;
 }) {
   const aiConfigured = isAiConfigured();
 
@@ -53,6 +62,7 @@ export function AppShell({
 
       <DesktopSidebar aiConfigured={aiConfigured} isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
+        {moderationBanner && <ModerationBanner info={moderationBanner} />}
         <OfflineBanner />
         <TopBar signedIn={signedIn} isAdmin={isAdmin} previewMode={previewMode} />
         <main className="flex flex-1 flex-col pb-24 lg:pb-0">

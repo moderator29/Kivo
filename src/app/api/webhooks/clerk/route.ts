@@ -3,6 +3,7 @@ import { Webhook } from "svix";
 import type { WebhookEvent } from "@clerk/nextjs/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { randomKivoAvatarId } from "@/lib/kivo-assets";
 
 export async function POST(req: Request) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
@@ -42,11 +43,19 @@ export async function POST(req: Request) {
       // handle, so a placeholder derived from the (already-unique) Clerk id is assigned
       // here and replaced during onboarding — never colliding, never blocking signup.
       // Email is deliberately not stored: Clerk is the single source of truth for it.
+      //
+      // avatar_type/avatar_kivo_id: a random confirmed-clean KIVO avatar
+      // (RECOMMENDATIONS.md items 231/232, KIVO_AVATAR_IDS) is assigned once,
+      // here, at profile creation — never re-rolled on any later webhook
+      // event or login. See getOrCreateProfile() in src/lib/profile.ts for
+      // the same assignment on its own (fallback) profile-creation path.
       const { error } = await supabase.from("profiles").insert({
         clerk_user_id: user.id,
         username: `user_${user.id.replace(/[^a-zA-Z0-9]/g, "").slice(-10)}`,
         display_name: [user.first_name, user.last_name].filter(Boolean).join(" ") || null,
         avatar_url: user.image_url ?? null,
+        avatar_type: "kivo",
+        avatar_kivo_id: randomKivoAvatarId(),
       });
 
       // Duplicate-key is expected on webhook retries (Clerk does not guarantee
@@ -60,15 +69,17 @@ export async function POST(req: Request) {
     case "user.updated": {
       const user = event.data;
 
-      // Unconditional overwrite is safe today (RECOMMENDATIONS item 203,
-      // re-checked 2026-08-15): profiles.display_name/avatar_url have no
-      // KIVO-side editor anywhere in the app -- settings' ProfileDetailsEditor
-      // only writes bio/country (src/app/(app)/settings/actions.ts), so there
-      // is no user-side edit for a Clerk sync to revert yet. If display_name
-      // or avatar_url ever gets its own editor, this needs to stop
-      // unconditionally overwriting an already-set value (e.g. only fill on
-      // first creation, or gate on a has_custom_display_name-style flag) --
-      // re-audit this handler before shipping that editor, not after.
+      // Re-audited 2026-08-17 for the KIVO avatar/background editor: display_name
+      // still has no KIVO-side editor, so it's still safe to keep unconditionally
+      // overwriting from Clerk here. avatar_url is different now -- it stays a
+      // pure mirror of Clerk's own OAuth/Clerk-hosted photo (a separate concept
+      // from the KIVO-native avatar), so it keeps syncing unconditionally too.
+      // But avatar_type/avatar_kivo_id/avatar_uploaded_url are KIVO-native
+      // fields the user now controls directly via /settings (see
+      // src/app/(app)/settings/avatar-actions.ts) -- an unrelated Clerk-side
+      // profile change (name, photo, etc.) must never silently reset them, so
+      // this update only ever touches display_name/avatar_url, never those
+      // three columns.
       const { error } = await supabase
         .from("profiles")
         .update({

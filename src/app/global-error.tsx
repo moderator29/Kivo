@@ -15,8 +15,14 @@
 // font itself just falls back to the browser default here, which the docs
 // call out as an acceptable, lighter-weight trade-off for this rare a path.
 //
-// This is a single-theme (always dark) design system — see globals.css,
-// there's no light/dark toggle to account for here.
+// KIVO is dual-theme: every token in globals.css lives under a
+// [data-theme] block, so an <html> with no `data-theme` attribute resolves
+// NONE of them (--background, --foreground, --surface-* would all be
+// undefined) and this fallback would render unstyled. Since this component
+// replaces the root layout, it has to set the attribute itself: it renders
+// with DEFAULT_THEME server-side and pulls in the same blocking <ThemeScript>
+// the root layout uses, so a light-mode user still gets light mode here
+// without a flash.
 //
 // Next.js version note: this app runs a version where the error component
 // receives both `retry` and `reset` — the docs call out `retry()` as the one
@@ -25,6 +31,8 @@
 
 import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
+import { ThemeScript } from "@/components/theme/theme-script";
+import { DEFAULT_THEME } from "@/lib/theme";
 import "./globals.css";
 
 export default function GlobalError({
@@ -41,12 +49,15 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" data-theme={DEFAULT_THEME} className="h-full antialiased">
+      <head>
+        <ThemeScript />
+      </head>
       <body className="min-h-full bg-background text-foreground">
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
           <div className="kivo-glass-brand flex w-full max-w-md flex-col items-center gap-7 rounded-3xl px-8 py-12">
             <div className="kivo-gradient-intelligence flex h-16 w-16 items-center justify-center rounded-2xl">
-              <AlertTriangle className="h-8 w-8 text-kivo-white" strokeWidth={1.75} />
+              <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.75} />
             </div>
 
             <div className="flex flex-col gap-2">
@@ -59,7 +70,7 @@ export default function GlobalError({
             <button
               type="button"
               onClick={retry}
-              className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+              className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Try again
             </button>

@@ -6,6 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp } from "@/lib/rewards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
+import { shouldNotify } from "@/lib/notification-preferences";
 import { fetchPostsPage, type PostListItem } from "./posts";
 
 const MAX_POST_LENGTH = 2000;
@@ -277,6 +278,12 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   if (!post || post.author_profile_id === liker.id) return;
 
   const serviceClient = createServiceRoleSupabaseClient();
+
+  // RECOMMENDATIONS.md item 285: gate before writing, not after — a
+  // recipient who has social_alerts_enabled (or in_app_enabled) off should
+  // never get the row in the first place.
+  if (!(await shouldNotify(serviceClient, post.author_profile_id, "social_alerts_enabled"))) return;
+
   const { error } = await serviceClient.from("notifications").insert({
     profile_id: post.author_profile_id,
     type: "post_like",

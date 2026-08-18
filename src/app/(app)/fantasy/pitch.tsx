@@ -34,7 +34,7 @@ export function StatTile({
 export function PitchLines() {
   return (
     <svg
-      className="pointer-events-none absolute inset-4 opacity-[0.07]"
+      className="pointer-events-none absolute inset-4 opacity-[0.07] light:opacity-[0.16]"
       viewBox="0 0 100 140"
       preserveAspectRatio="none"
       aria-hidden
@@ -57,18 +57,18 @@ export function PlayerToken({ player, onClick, compact = false }: { player: Rost
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.94 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className="group flex flex-col items-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+      className="group flex flex-col items-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       style={{ width: compact ? 64 : 76 }}
     >
       <div className="relative">
         <div
-          className="flex items-center justify-center rounded-full border border-white/10 bg-white/[0.06] transition group-hover:bg-white/10"
+          className="flex items-center justify-center rounded-full border border-hairline bg-surface-1 transition group-hover:bg-surface-2"
           style={{ width: size, height: size }}
         >
           <UserRound className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />
         </div>
         {player.teamCrestUrl && (
-          <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-kivo-obsidian ring-1 ring-white/10">
+          <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-background ring-1 ring-hairline">
             {/* 12px crest render, never worth Next's optimizer round trip
                 per club (RECOMMENDATIONS item 86) */}
             <Image src={player.teamCrestUrl} alt="" width={12} height={12} unoptimized className="object-contain" />
@@ -81,7 +81,7 @@ export function PlayerToken({ player, onClick, compact = false }: { player: Rost
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 22 }}
-              className="kivo-gradient-victory absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-kivo-white ring-2 ring-kivo-obsidian"
+              className="kivo-gradient-victory absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-on-accent ring-2 ring-background"
             >
               C
             </motion.div>
@@ -94,7 +94,7 @@ export function PlayerToken({ player, onClick, compact = false }: { player: Rost
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 22 }}
-              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-achievement/40 bg-achievement/15 text-[10px] font-bold text-achievement ring-2 ring-kivo-obsidian"
+              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-achievement/40 bg-achievement/15 text-[10px] font-bold text-achievement ring-2 ring-background"
             >
               V
             </motion.div>

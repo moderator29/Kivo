@@ -93,7 +93,7 @@ export default async function SavedPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
                 Teams · {savedTeams.length}
               </h2>
-              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+              <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                 {savedTeams.map((team) => (
                   <div key={team.id} className="flex items-center gap-3 px-4 py-3">
                     <Link href={`/teams/${team.id}`} className="flex min-w-0 flex-1 items-center gap-3 transition-all hover:translate-x-1">
@@ -112,11 +112,11 @@ export default async function SavedPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
                 Players · {savedPlayers.length}
               </h2>
-              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+              <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                 {savedPlayers.map((player) => (
                   <div key={player.id} className="flex items-center gap-3 px-4 py-3">
                     <Link href={`/players/${player.id}`} className="flex min-w-0 flex-1 items-center gap-3 transition-all hover:translate-x-1">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
                         <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
@@ -156,6 +156,7 @@ export default async function SavedPage() {
                     index={index}
                     poll={post.poll}
                     viewerSaved={post.viewerSaved}
+                    isSystem={post.isSystem}
                   />
                 ))}
               </div>

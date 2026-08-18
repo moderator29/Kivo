@@ -29,11 +29,11 @@ const FOOTER_LINKS: { heading: string; links: { label: string; href: string }[] 
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-white/5 px-4 py-12 sm:px-6 lg:px-12">
+    <footer className="border-t border-hairline-soft px-4 py-12 sm:px-6 lg:px-12">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="flex max-w-xs flex-col gap-3">
-            <Link href="/" className="flex min-h-10 items-center gap-2">
+            <Link href="/" className="flex min-h-10 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
               <KivoMarkGlyph size={28} />
               <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
             </Link>
@@ -55,7 +55,7 @@ export function SiteFooter() {
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="flex min-h-10 items-center text-sm text-foreground-muted transition-colors hover:text-foreground"
+                        className="flex min-h-10 items-center text-sm text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                       >
                         {link.label}
                       </Link>
@@ -66,7 +66,7 @@ export function SiteFooter() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-2 border-t border-white/5 pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-t border-hairline-soft pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} KIVO</span>
           <span>Real football data, real fans, no fabricated stats. Ever.</span>
         </div>

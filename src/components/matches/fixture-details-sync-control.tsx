@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, Check, AlertTriangle } from "lucide-react";
 
 type FixtureDetailsSyncAction = (
@@ -16,6 +17,7 @@ type FixtureDetailsSyncAction = (
  * server action itself — and its state is read at click time, not persisted.
  */
 export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSyncAction }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [autoSyncMissingSquads, setAutoSyncMissingSquads] = useState(false);
   const [result, setResult] = useState<{ error: string | null; recordsProcessed?: number } | null>(null);
@@ -24,19 +26,27 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
     if (pending) return;
     setResult(null);
     startTransition(async () => {
-      setResult(await action(autoSyncMissingSquads));
+      const outcome = await action(autoSyncMissingSquads);
+      setResult(outcome);
+      // RECOMMENDATIONS.md item 99: the server action already revalidates
+      // this fixture's path (see triggerFixtureDetailsSync), but a mounted
+      // client component doesn't pick that up on its own — router.refresh()
+      // re-fetches the RSC payload so the newly-synced lineups/events
+      // actually appear without the admin having to manually reload, same
+      // fix InlineSyncButton already applies.
+      if (!outcome.error) router.refresh();
     });
   }
 
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-foreground-subtle">
           <input
             type="checkbox"
             checked={autoSyncMissingSquads}
             onChange={(e) => setAutoSyncMissingSquads(e.target.checked)}
-            className="h-3 w-3 rounded border-white/20 bg-transparent accent-kivo-cyan"
+            className="h-3 w-3 rounded border-hairline-strong bg-transparent accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           />
           Also sync missing squads (extra quota)
         </label>
@@ -45,7 +55,7 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
           disabled={pending}
           aria-busy={pending}
           onClick={handleClick}
-          className="flex items-center gap-2 rounded-lg bg-kivo-cyan/15 px-3 py-1.5 text-xs font-semibold text-kivo-cyan transition hover:bg-kivo-cyan/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} strokeWidth={2} />
           {pending ? "Syncing…" : "Sync match details"}
@@ -67,7 +77,7 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
           ) : (
             <>
               <Check className="h-3 w-3 shrink-0" strokeWidth={2} />
-              Synced {result.recordsProcessed ?? 0} record{result.recordsProcessed === 1 ? "" : "s"}. Refresh to see it
+              Synced {result.recordsProcessed ?? 0} record{result.recordsProcessed === 1 ? "" : "s"}
             </>
           )}
         </p>

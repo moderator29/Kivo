@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   THEME VARIANTS
+
+   KIVO ships two themes. `data-theme` is written onto <html> before first
+   paint by the blocking script in src/components/theme/theme-script.tsx, so
+   it is ALWAYS one of "dark" | "light" by the time any rule below is
+   evaluated — never absent, never "system". The user's "system" preference
+   is resolved to a concrete value by that script (and re-resolved live when
+   the OS preference changes), which keeps CSS free of `prefers-color-scheme`
+   guards and keeps the two sources of truth from disagreeing.
+
+   These custom variants let component code write `dark:` / `light:` for the
+   handful of cases a token can't express (e.g. an asset swap). Prefer
+   tokens; reach for the variants only when there is genuinely no token.
+--------------------------------------------------------------------------- */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+/* ---------------------------------------------------------------------------
+   BRAND CONSTANTS
+
+   Hue identity that does NOT change between themes. Anything theme-dependent
+   lives in the [data-theme] blocks below, never here.
+--------------------------------------------------------------------------- */
 :root {
   --kivo-obsidian: #05060a;
   --kivo-navy-deep: #0a1020;
@@ -15,15 +39,39 @@
      hits ~4.25:1 on #05060a, short of WCAG AA's 4.5:1 for normal-size text. */
   --kivo-slate-text: #8592a8;
 
-  --kivo-live: #22c55e;
-  --kivo-critical: #ff3b4a;
-  --kivo-warning: #facc15;
-  --kivo-info: #38bdf8;
-  --kivo-achievement: #f5c451;
+  /* Deeper cousins of the brand hues, for light mode only. #00d9ff on white
+     is ~1.4:1 and #2563ff on the light page background is ~4.4:1 — both
+     below AA for text — so light mode accents shift down the same hue ramp
+     rather than reusing the dark-mode values. */
+  --kivo-blue-deep: #1e50e6;
+  --kivo-cyan-deep: #0284a8;
+  --kivo-violet-deep: #6425e0;
 
-  --kivo-glass: rgba(255, 255, 255, 0.05);
-  --kivo-glass-border: rgba(255, 255, 255, 0.06);
-  --kivo-glass-hover: rgba(255, 255, 255, 0.08);
+  /* --------------------------------------------------------------------
+     SHAPE + MOTION — theme-independent.
+     -------------------------------------------------------------------- */
+  --kivo-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --kivo-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Slight overshoot for elements that "pop" in (menus, toasts, active
+     segment pills). Deliberately gentle — this is a sports product, not a
+     toy; anything bouncier reads as unserious at this density. */
+  --kivo-ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
+  --kivo-dur-fast: 120ms;
+  --kivo-dur-base: 180ms;
+  --kivo-dur-slow: 320ms;
+}
+
+/* ---------------------------------------------------------------------------
+   DARK THEME (the original KIVO look, retokenised)
+
+   Surfaces are translucent white over obsidian, so depth comes from
+   luminance, not shadow — shadows are nearly invisible against #05060a and
+   would just add cost. The elevation ladder is instead expressed as
+   increasing white alpha, with a 1px top highlight on raised surfaces to
+   fake a light source.
+--------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  color-scheme: dark;
 
   --background: var(--kivo-obsidian);
   --background-secondary: var(--kivo-navy-deep);
@@ -31,6 +79,151 @@
   --foreground: var(--kivo-white);
   --foreground-muted: var(--kivo-white-soft);
   --foreground-subtle: var(--kivo-slate-text);
+
+  /* Elevation ladder. surface-1 is the ambient panel every card/list row
+     sits on; surface-2 is its hover/selected state; surface-3 is for things
+     that float ABOVE the page (menus, popovers, command palette, sheets)
+     and is deliberately opaque so page content never bleeds through a
+     dropdown. */
+  --surface-1: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --surface-3: #121a2e;
+  /* Recessed rail behind a segmented control / tab strip — the inverse of an
+     elevation, so it goes DARKER than the page rather than lighter. */
+  --surface-track: rgba(0, 0, 0, 0.28);
+  /* The pill that slides across that rail. */
+  --surface-raised: rgba(255, 255, 255, 0.10);
+  --surface-inset: rgba(0, 0, 0, 0.22);
+
+  --hairline-soft: rgba(255, 255, 255, 0.05);
+  --hairline: rgba(255, 255, 255, 0.10);
+  --hairline-strong: rgba(255, 255, 255, 0.18);
+
+  --accent: var(--kivo-cyan);
+  --accent-strong: var(--kivo-blue);
+  --accent-soft: rgba(0, 217, 255, 0.12);
+  --accent-hairline: rgba(0, 217, 255, 0.35);
+  /* Text/icons that sit ON an accent or gradient fill. Fixed per theme so a
+     primary button's label never inverts along with body text. */
+  --on-accent: var(--kivo-white);
+
+  --ring: rgba(0, 217, 255, 0.6);
+  --overlay: rgba(2, 3, 7, 0.72);
+
+  /* Barely-there in dark; kept non-zero so raised surfaces still separate
+     from the page on OLED-black displays. */
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-raise: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 8px 28px -6px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 20px 60px -16px rgba(0, 0, 0, 0.8), 0 4px 12px rgba(0, 0, 0, 0.5);
+  /* Top-edge highlight that sells "lit from above" on translucent panels.
+     Light mode has real shadows instead and sets this to nothing. */
+  --sheen: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-blur: 20px;
+  --glass-shadow: none;
+
+  --skeleton: rgba(255, 255, 255, 0.07);
+  --skeleton-shine: rgba(255, 255, 255, 0.13);
+}
+
+/* ---------------------------------------------------------------------------
+   LIGHT THEME
+
+   Modelled on the reference set: a near-white page with a faint vertical
+   wash, pure-white cards floating on it, depth carried by soft layered
+   shadows rather than borders, hairlines used only to define an edge the
+   shadow can't. Radii stay large and generous; icons stay thin-stroked.
+
+   The one rule that keeps this from turning into "dark mode with the colours
+   swapped": on light, ELEVATION MEANS LIGHTER + MORE SHADOW. A card is
+   whiter than the page it sits on; a menu is the same white but throws a
+   bigger shadow. Recessed things (segment rails, inputs) go grey.
+--------------------------------------------------------------------------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Not #fff — a hair of cool grey so white cards read as elevated against
+     it. Pure white pages make every card boundary disappear. */
+  --background: #f6f7f9;
+  --background-secondary: #ffffff;
+  --surface: #ffffff;
+  /* Near-black rather than black: #000 on white is harsh at this type size
+     and reads as unfinished. Carries a trace of the brand navy. */
+  --foreground: #0b0e17;
+  --foreground-muted: #4b5364;
+  /* 5.0:1 on --background, so it stays AA-legible at the 12px sizes this
+     token is used at all over the app. */
+  --foreground-subtle: #5f6a7d;
+
+  --surface-1: #ffffff;
+  --surface-2: #f1f2f5;
+  --surface-3: #ffffff;
+  --surface-track: #ebedf1;
+  --surface-raised: #ffffff;
+  --surface-inset: #f2f3f6;
+
+  --hairline-soft: rgba(11, 14, 23, 0.05);
+  --hairline: rgba(11, 14, 23, 0.09);
+  --hairline-strong: rgba(11, 14, 23, 0.16);
+
+  --accent: var(--kivo-blue-deep);
+  --accent-strong: var(--kivo-blue-deep);
+  --accent-soft: rgba(30, 80, 230, 0.09);
+  --accent-hairline: rgba(30, 80, 230, 0.28);
+  --on-accent: #ffffff;
+
+  --ring: rgba(30, 80, 230, 0.55);
+  --overlay: rgba(11, 14, 23, 0.34);
+
+  /* The whole light-mode aesthetic lives here. Two-layer shadows: a tight
+     contact shadow for the edge, plus a wide, heavily-offset ambient one for
+     the float. Low alphas — anything heavier reads as a 2015 material card. */
+  --shadow-soft: 0 1px 2px rgba(11, 14, 23, 0.05);
+  --shadow-raise: 0 1px 2px rgba(11, 14, 23, 0.05), 0 4px 12px -4px rgba(11, 14, 23, 0.08);
+  --shadow-pop: 0 1px 3px rgba(11, 14, 23, 0.06), 0 12px 32px -10px rgba(11, 14, 23, 0.16);
+  --shadow-float: 0 2px 6px rgba(11, 14, 23, 0.06), 0 24px 64px -16px rgba(11, 14, 23, 0.2);
+  --sheen: none;
+
+  /* "Glass" on light is frosted white, not tinted transparency — and it
+     carries a real shadow, because on a light page a translucent panel with
+     no shadow is indistinguishable from the background. */
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(11, 14, 23, 0.07);
+  --glass-hover: rgba(255, 255, 255, 0.95);
+  --glass-blur: 24px;
+  --glass-shadow: 0 1px 2px rgba(11, 14, 23, 0.05), 0 8px 24px -10px rgba(11, 14, 23, 0.1);
+
+  --skeleton: #e8eaee;
+  --skeleton-shine: #f4f5f7;
+}
+
+/* Legacy aliases. Several components still reference these names directly in
+   inline styles; they now follow the theme instead of being frozen dark. */
+:root {
+  --kivo-glass: var(--glass-bg);
+  --kivo-glass-border: var(--glass-border);
+  --kivo-glass-hover: var(--glass-hover);
+
+  --kivo-live: #22c55e;
+  --kivo-critical: #ff3b4a;
+  --kivo-warning: #facc15;
+  --kivo-info: #38bdf8;
+  --kivo-achievement: #f5c451;
+}
+
+/* Status hues need to shift on light: #22c55e / #facc15 / #38bdf8 are all
+   below 3:1 on a white card, which fails for both text and the small icons
+   and dots they're used on. Same hue, deeper. */
+[data-theme="light"] {
+  --kivo-live: #0f9d52;
+  --kivo-critical: #d91e2c;
+  --kivo-warning: #a16207;
+  --kivo-info: #0284a8;
+  --kivo-achievement: #a1720c;
 }
 
 @theme inline {
@@ -40,6 +233,27 @@
   --color-foreground: var(--foreground);
   --color-foreground-muted: var(--foreground-muted);
   --color-foreground-subtle: var(--foreground-subtle);
+
+  /* Semantic surface + line tokens. These are what component code should
+     reach for: `bg-surface-1`, `border-hairline`, `divide-hairline-soft`.
+     They replace the old hardcoded `bg-white/5` / `border-white/10` family,
+     which could only ever describe one theme. */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-track: var(--surface-track);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-inset: var(--surface-inset);
+
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-hairline-strong: var(--hairline-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-overlay: var(--overlay);
 
   --color-kivo-obsidian: var(--kivo-obsidian);
   --color-kivo-navy-deep: var(--kivo-navy-deep);
@@ -58,6 +272,16 @@
   --color-info: var(--kivo-info);
   --color-achievement: var(--kivo-achievement);
 
+  /* Namespaced so they sit alongside Tailwind's own shadow-sm/md/lg rather
+     than silently redefining them for code that still uses those. */
+  --shadow-soft: var(--shadow-soft);
+  --shadow-raise: var(--shadow-raise);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-float: var(--shadow-float);
+
+  --ease-out-kivo: var(--kivo-ease-out);
+  --ease-spring: var(--kivo-ease-spring);
+
   --font-sans: var(--font-jakarta);
   --font-mono: var(--font-geist-mono);
 }
@@ -70,129 +294,699 @@ html {
      (WCAG 1.4.4). 106.25% of the 16px default renders the same 17px this
      replaced. RECOMMENDATIONS.md item 153. */
   font-size: 106.25%;
-  /* RECOMMENDATIONS.md item 154: without this, native controls (the season
-     <select> in the fantasy create-league card, date/number inputs, the
-     browser's own scrollbar) render with light chrome on KIVO's dark page —
-     the `className="bg-kivo-navy"` on that <select>'s <option> elements is
-     ignored by most browsers, so the dropdown itself was likely white-on-
-     white. KIVO is dark-only (no light theme to opt into), so this is a
-     static declaration, not a media-query toggle. */
-  color-scheme: dark;
+  /* `color-scheme` is no longer declared here — it moved onto the
+     [data-theme] blocks above so native chrome (the season <select>'s
+     dropdown, date/number inputs, scrollbars, form autofill) follows the
+     chosen theme instead of being pinned dark. RECOMMENDATIONS.md item 154.
+     Set on <html> via data-theme, so it still applies to the whole document
+     including the scrollbar. */
+  background: var(--background);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  /* Light mode gets a very faint top-down wash rather than a flat fill —
+     the reference set does the same, and it stops large empty regions of a
+     content-light page from reading as a dead grey slab. Fixed attachment so
+     it doesn't repeat down a long scroll. Dark mode leaves it flat: the
+     ambient aurora already supplies that gradation. */
+  transition: background-color var(--kivo-dur-slow) var(--kivo-ease-out),
+    color var(--kivo-dur-slow) var(--kivo-ease-out);
+}
+
+[data-theme="light"] body {
+  background-image: linear-gradient(180deg, #ffffff 0%, var(--background) 46%);
+  background-attachment: fixed;
 }
 
 ::selection {
-  background: var(--kivo-blue);
-  color: var(--kivo-white);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
-.kivo-glass {
-  background: var(--kivo-glass);
-  border: 1px solid var(--kivo-glass-border);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+/* Typography tokens (RECOMMENDATIONS.md item 18, 2026-08-18 typography pass).
+   Two safe, cascading base-level fixes rather than per-component edits —
+   same pattern already established below by `.transition-transform` inside
+   the reduced-motion block, which also layers a plain rule onto one of
+   Tailwind's own utility class names instead of overriding it. */
+
+/* `--font-geist-mono` is loaded (next/font, src/app/layout.tsx) and wired to
+   Tailwind's `font-mono` token (`--font-mono` above) but, confirmed by grep,
+   was never actually applied anywhere in the app — every one of the ~17
+   score/price/date/stat call sites that already opt into Tailwind's
+   `tabular-nums` (transfers, fixtures, fantasy prices/points, standings,
+   the date strip, player comparisons — real numeric data, deliberately
+   marked as such by whoever wrote each of those call sites) render in the
+   same proportional Plus Jakarta Sans as body text, so KIVO has been paying
+   the download cost of an entire second font family for zero visual effect.
+   Piggybacking on `tabular-nums` rather than editing each call site turns
+   every one of them into the distinct, data-precise numeral treatment
+   `tabular-nums` already implies (mono digits are the standard scoreboard/
+   stock-ticker convention, and read as more deliberate than same-face
+   numerals) — cascades to every existing and future use of the utility, and
+   spends a font that was already a zero-cost download instead of adding
+   one. Only `font-variant-numeric` comes from Tailwind's own `.tabular-nums`
+   utility; this adds `font-family` alongside it, nothing removed or
+   overridden. */
+.tabular-nums {
+  font-family: var(--font-mono);
 }
 
-/* Opt-in hover feedback (RECOMMENDATIONS.md item 159): `.kivo-glass` alone
-   used to brighten on hover unconditionally, which made static containers
-   (fixture list items, stat panels — a plain `<div>` with no click handler)
-   signal clickability they don't have. Every genuinely interactive surface
-   built on `.kivo-glass` already layers its own explicit `hover:bg-white/…`
-   utility class on top for its real feedback (see PostComposer's guest CTA,
-   the player page's current-club link, the "Browse public leagues" link),
-   so this class was purely redundant there and actively misleading
-   everywhere else — add it explicitly where a `.kivo-glass` element really
-   is the whole click target and needs its own ambient hover instead. */
-.kivo-glass-interactive:hover {
-  background: var(--kivo-glass-hover);
+/* Headings wrap on their own line breaks today (see the many `max-w-*`
+   caps on `h1`/`h2` across the landing page, About, and elsewhere,
+   deliberately sized to force 2 lines) with no control over *where* that
+   break lands, which can strand a single short word alone on the last
+   line. `text-wrap: balance` asks the browser to choose break points that
+   even out line lengths instead — a real, if small, craft difference on
+   exactly the highest-visibility text in the product. Pure progressive
+   enhancement (Baseline widely-available as of 2024; browsers that don't
+   support it just keep today's default wrapping), so this is zero-risk. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
-/* Glass panel with a visible brand-gradient stroke around it, for moments
-   that should read as "premium" rather than ambient (hero cards, feature
-   highlights). The gradient lives on a masked ::before ring so the actual
-   glass background stays untouched and independently opaque/blurred —
-   stacking the gradient directly into .kivo-glass's own (mostly
-   transparent) background would just let the bright gradient dominate the
-   whole card instead of reading as a thin stroke. */
-.kivo-glass-brand {
-  position: relative;
-  background: var(--kivo-glass);
-  border: 1px solid transparent;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+/* Scrollbars: the default light-mode scrollbar is a thick grey slab that
+   fights the soft surfaces around it. Thin + neutral in both themes. */
+* {
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+@layer components {
+  /* ---------------------------------------------------------------------------
+     FOCUS
+
+     One ring for the whole app, themed. Uses :focus-visible only, so pointer
+     users never see it, and sits on an offset so it reads as a halo around the
+     control rather than a border repaint (which shifts perceived size).
+  --------------------------------------------------------------------------- */
+  .kivo-focus:focus-visible,
+  .kivo-focusable:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* ---------------------------------------------------------------------------
+     SURFACES
+  --------------------------------------------------------------------------- */
+
+  /* The workhorse. In dark this is the translucent panel it always was; in
+     light it becomes a white card with a soft two-layer shadow and a hairline
+     edge, which is exactly the card treatment in the reference set. Because
+     ~96 files already use `.kivo-glass`, retokenising it here is what gives
+     most of the app a real light mode without touching those files. */
+  .kivo-glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+
+  /* Opt-in hover feedback (RECOMMENDATIONS.md item 159): `.kivo-glass` alone
+     used to brighten on hover unconditionally, which made static containers
+     (fixture list items, stat panels — a plain `<div>` with no click handler)
+     signal clickability they don't have. Every genuinely interactive surface
+     built on `.kivo-glass` already layers its own explicit `hover:bg-white/…`
+     utility class on top for its real feedback (see PostComposer's guest CTA,
+     the player page's current-club link, the "Browse public leagues" link),
+     so this class was purely redundant there and actively misleading
+     everywhere else — add it explicitly where a `.kivo-glass` element really
+     is the whole click target and needs its own ambient hover instead. */
+  .kivo-glass-interactive {
+    transition: background-color var(--kivo-dur-base) var(--kivo-ease-out),
+      box-shadow var(--kivo-dur-base) var(--kivo-ease-out),
+      border-color var(--kivo-dur-base) var(--kivo-ease-out);
+  }
+
+  .kivo-glass-interactive:hover {
+    background: var(--glass-hover);
+    /* Light mode lifts on hover; in dark --shadow-raise is near-invisible, so
+       the background change above carries it there instead. */
+    box-shadow: var(--shadow-raise);
+  }
+
+  /* Glass panel with a visible brand-gradient stroke around it, for moments
+     that should read as "premium" rather than ambient (hero cards, feature
+     highlights). The gradient lives on a masked ::before ring so the actual
+     glass background stays untouched and independently opaque/blurred —
+     stacking the gradient directly into .kivo-glass's own (mostly
+     transparent) background would just let the bright gradient dominate the
+     whole card instead of reading as a thin stroke. */
+  .kivo-glass-brand {
+    position: relative;
+    background: var(--glass-bg);
+    border: 1px solid transparent;
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+
+  .kivo-glass-brand:hover {
+    background: var(--glass-hover);
+  }
+
+  .kivo-glass-brand::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-violet), var(--kivo-magenta));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* The raw cyan→violet→magenta ramp is neon against white — it reads as a
+     sticker rather than a stroke. Light mode uses the deeper end of the same
+     hues at partial opacity so it still says "brand" without shouting. */
+  [data-theme="light"] .kivo-glass-brand::before {
+    background: linear-gradient(
+      135deg,
+      var(--kivo-cyan-deep),
+      var(--kivo-violet-deep),
+      var(--kivo-blue-deep)
+    );
+    opacity: 0.55;
+  }
+
+  /* Sharp-edged glass for buttons/controls: a crisp bright border instead of
+     the ambient low-opacity one on .kivo-glass, so it reads as interactive. */
+  .kivo-glass-sharp {
+    background: var(--glass-bg);
+    border: 1px solid var(--accent-hairline);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: border-color var(--kivo-dur-fast) var(--kivo-ease-out),
+      background-color var(--kivo-dur-fast) var(--kivo-ease-out),
+      box-shadow var(--kivo-dur-fast) var(--kivo-ease-out);
+  }
+
+  .kivo-glass-sharp:hover {
+    background: var(--glass-hover);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-raise);
+  }
+
+  /* Floating layer: menus, dropdowns, popovers, the command palette, sheets.
+     Opaque in both themes — a translucent menu over dense fixture data is
+     unreadable — and carries the largest shadow in the system so it is
+     unambiguously above the page. This is the "Share ▾" menu surface from the
+     reference set. */
+  .kivo-popover {
+    background: var(--surface-3);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-pop), var(--sheen);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+
+  /* Recessed rail for segmented controls and tab strips (the Social/People and
+     Plan/Debug/Ask rows in the reference set). Pair with `.kivo-segment-item`. */
+  .kivo-segment {
+    background: var(--surface-track);
+    border: 1px solid var(--hairline-soft);
+    border-radius: 9999px;
+    padding: 3px;
+    display: inline-flex;
+    gap: 2px;
+  }
+
+  .kivo-segment-item {
+    border-radius: 9999px;
+    transition: background-color var(--kivo-dur-base) var(--kivo-ease-out),
+      color var(--kivo-dur-base) var(--kivo-ease-out),
+      box-shadow var(--kivo-dur-base) var(--kivo-ease-out);
+  }
+
+  .kivo-segment-item[data-active="true"] {
+    background: var(--surface-raised);
+    color: var(--foreground);
+    box-shadow: var(--shadow-soft), var(--sheen);
+  }
+
+  .kivo-segment-item[data-active="false"]:hover {
+    color: var(--foreground);
+  }
+
+  /* Inputs and other genuinely recessed fields. Light mode insets them (grey
+     fill, no shadow) so they read as "type here" rather than as another card. */
+  .kivo-field {
+    background: var(--surface-inset);
+    border: 1px solid var(--hairline);
+    border-radius: 0.875rem;
+    color: var(--foreground);
+    transition: border-color var(--kivo-dur-fast) var(--kivo-ease-out),
+      background-color var(--kivo-dur-fast) var(--kivo-ease-out),
+      box-shadow var(--kivo-dur-fast) var(--kivo-ease-out);
+  }
+
+  .kivo-field::placeholder {
+    color: var(--foreground-subtle);
+  }
+
+  .kivo-field:hover {
+    border-color: var(--hairline-strong);
+  }
+
+  .kivo-field:focus,
+  .kivo-field:focus-within {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  /* ---------------------------------------------------------------------------
+     GRADIENTS
+
+     The brand ramps are tuned for obsidian. Dropped straight onto white they
+     glow and lose all their internal contrast, and white label text on the
+     lighter end of the cyan ramp falls under 3:1. Light mode therefore runs
+     the same ramps a few stops deeper, which keeps the identity while keeping
+     --on-accent legible across the whole fill.
+  --------------------------------------------------------------------------- */
+  .kivo-gradient-prime {
+    background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
+  }
+
+  .kivo-gradient-intelligence {
+    background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-blue), var(--kivo-cyan));
+  }
+
+  .kivo-gradient-pulse {
+    background-image: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-blue));
+  }
+
+  .kivo-gradient-premium {
+    background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-magenta));
+  }
+
+  .kivo-gradient-victory {
+    background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-violet), var(--kivo-achievement));
+  }
+
+  [data-theme="light"] .kivo-gradient-prime {
+    background-image: linear-gradient(135deg, #1a3fd4, #0b7fb8);
+  }
+
+  [data-theme="light"] .kivo-gradient-intelligence {
+    background-image: linear-gradient(135deg, #5b21c9, #1a3fd4, #0b7fb8);
+  }
+
+  [data-theme="light"] .kivo-gradient-pulse {
+    background-image: linear-gradient(135deg, #0b7fb8, #1a3fd4);
+  }
+
+  [data-theme="light"] .kivo-gradient-premium {
+    background-image: linear-gradient(135deg, #5b21c9, #a91fc4);
+  }
+
+  [data-theme="light"] .kivo-gradient-victory {
+    background-image: linear-gradient(135deg, #1a3fd4, #5b21c9, #8a5f0a);
+  }
+
+  /* Gradient-filled buttons need a real pressed/hover story. `hover:opacity-90`
+     on a gradient over a light page just washes it out toward the background;
+     a small lift plus a tinted shadow reads as a physical press instead. */
+  .kivo-raise {
+    transition: transform var(--kivo-dur-base) var(--kivo-ease-out),
+      box-shadow var(--kivo-dur-base) var(--kivo-ease-out),
+      filter var(--kivo-dur-base) var(--kivo-ease-out);
+  }
+
+  .kivo-raise:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-pop);
+    filter: saturate(1.06);
+  }
+
+  .kivo-raise:active {
+    transform: translateY(0) scale(0.985);
+    box-shadow: var(--shadow-soft);
+  }
 }
 
-.kivo-glass-brand:hover {
-  background: var(--kivo-glass-hover);
+
+@media (prefers-reduced-motion: reduce) {
+  .kivo-raise:hover,
+  .kivo-raise:active {
+    transform: none;
+  }
+}
+@layer components {
+  .kivo-text-gradient-prime {
+    /* Fallback in case background-clip: text doesn't paint — never fully transparent. */
+    color: var(--accent);
+    background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  /* Cyan-into-white gradient text is invisible on a light page. Deepen both
+     stops so the clipped text stays readable on --background. */
+  [data-theme="light"] .kivo-text-gradient-prime {
+    background-image: linear-gradient(135deg, #1a3fd4, #0b7fb8);
+  }
 }
 
-.kivo-glass-brand::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-violet), var(--kivo-magenta));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Sharp-edged glass for buttons/controls: a crisp bright border instead of
-   the ambient low-opacity one on .kivo-glass, so it reads as interactive. */
-.kivo-glass-sharp {
-  background: var(--kivo-glass);
-  border: 1px solid rgba(0, 217, 255, 0.35);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.kivo-glass-sharp:hover {
-  background: var(--kivo-glass-hover);
-  border-color: rgba(0, 217, 255, 0.6);
-}
-
-.kivo-gradient-prime {
-  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
-}
-
-.kivo-gradient-intelligence {
-  background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-blue), var(--kivo-cyan));
-}
-
-.kivo-gradient-pulse {
-  background-image: linear-gradient(135deg, var(--kivo-cyan), var(--kivo-blue));
-}
-
-.kivo-gradient-premium {
-  background-image: linear-gradient(135deg, var(--kivo-violet), var(--kivo-magenta));
-}
-
-.kivo-gradient-victory {
-  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-violet), var(--kivo-achievement));
-}
-
-.kivo-text-gradient-prime {
-  /* Fallback in case background-clip: text doesn't paint — never fully transparent. */
-  color: var(--kivo-cyan);
-  background-image: linear-gradient(135deg, var(--kivo-blue), var(--kivo-cyan));
-  -webkit-background-clip: text;
-  background-clip: text;
-}
 
 @supports (background-clip: text) or (-webkit-background-clip: text) {
   .kivo-text-gradient-prime {
     color: transparent;
   }
 }
+@layer components {
+  /* ---------------------------------------------------------------------------
+     BORDER BEAM
+
+     An iridescent highlight that travels around a surface's edge — used for
+     "something is happening" states (AI Copilot thinking, a sync running, a
+     live match ticking) where a spinner would be too loud and nothing at all
+     would read as frozen. Implemented as a conic gradient rotating behind a
+     masked 1px ring, so the surface's own background is untouched and the
+     effect costs one composited rotation.
+
+     Two layers, because the reference does two things at once: a travelling
+     beam on the border, and a soft bloom bleeding INWARD from it. Without the
+     bloom the beam reads as a hairline novelty; with it the whole surface
+     feels lit.
+  --------------------------------------------------------------------------- */
+  .kivo-beam {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .kivo-beam::before,
+  .kivo-beam::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* The ring itself. */
+  .kivo-beam::before {
+    padding: 1px;
+    background: conic-gradient(
+      from var(--beam-angle, 0deg),
+      transparent 0deg,
+      var(--kivo-cyan) 40deg,
+      var(--kivo-violet) 80deg,
+      var(--kivo-magenta) 110deg,
+      transparent 150deg,
+      transparent 360deg
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    animation: kivo-beam-spin var(--beam-duration, 4s) linear infinite;
+    z-index: 1;
+  }
+
+  /* The inward bloom. Blurred and clipped to the surface, sitting under the
+     content but over the surface fill. */
+  .kivo-beam::after {
+    background: conic-gradient(
+      from var(--beam-angle, 0deg),
+      transparent 0deg,
+      var(--kivo-cyan) 40deg,
+      var(--kivo-violet) 90deg,
+      var(--kivo-magenta) 120deg,
+      transparent 160deg,
+      transparent 360deg
+    );
+    filter: blur(16px);
+    opacity: 0.5;
+    animation: kivo-beam-spin var(--beam-duration, 4s) linear infinite;
+    z-index: 0;
+  }
+
+  /* On white the raw ramp is neon. Light mode runs it softer and lower-opacity
+     so it reads as the pearlescent sheen in the reference rather than RGB
+     gamer lighting — the bloom does most of the work and the ring is a whisper. */
+  [data-theme="light"] .kivo-beam::before {
+    opacity: 0.75;
+  }
+
+  [data-theme="light"] .kivo-beam::after {
+    opacity: 0.35;
+    filter: blur(20px);
+  }
+}
+
+
+/* `@property` is what makes the conic gradient actually animate: without a
+   registered custom property with a real syntax, browsers can only step
+   `--beam-angle` discretely, and the beam would jump instead of travel. */
+@property --beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes kivo-beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+/* Reduced motion: keep the iridescence (it carries meaning — this surface is
+   active) but stop it travelling. A static ramp still reads as "lit". */
+@media (prefers-reduced-motion: reduce) {
+  .kivo-beam::before,
+  .kivo-beam::after {
+    animation: none !important;
+    --beam-angle: 135deg;
+  }
+}
+@layer components {
+  /* ---------------------------------------------------------------------------
+     IRIDESCENT BLOOM
+
+     The soft pearl wash behind the hero surfaces in the reference set. Sits
+     behind content as a decorative layer; deliberately desaturated so it never
+     competes with the brand gradients used on actual controls.
+  --------------------------------------------------------------------------- */
+  .kivo-bloom {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
+  .kivo-bloom::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(40% 40% at 22% 28%, color-mix(in oklab, var(--kivo-cyan) 55%, transparent), transparent 70%),
+      radial-gradient(38% 38% at 76% 34%, color-mix(in oklab, var(--kivo-violet) 50%, transparent), transparent 70%),
+      radial-gradient(44% 44% at 54% 82%, color-mix(in oklab, var(--kivo-magenta) 42%, transparent), transparent 70%);
+    filter: blur(60px);
+    opacity: 0.18;
+    animation: kivo-bloom-drift 18s ease-in-out infinite;
+  }
+
+  [data-theme="light"] .kivo-bloom::before {
+    /* On white a 0.18 bloom is invisible-then-muddy; lower saturation and
+       slightly higher opacity lands on the pearl sheen instead. */
+    opacity: 0.28;
+    filter: blur(72px) saturate(0.7);
+  }
+}
+
+
+@keyframes kivo-bloom-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, -4%, 0) scale(1.08);
+  }
+}
+@layer components {
+  /* ---------------------------------------------------------------------------
+     ICON TILE
+
+     The rounded-square app-icon treatment from the reference: a white (or
+     glass) tile, generous radius, thin edge, soft shadow, and a faint
+     iridescent bloom leaking from one corner. Used for feature tiles, empty
+     states, and section markers.
+  --------------------------------------------------------------------------- */
+  .kivo-tile {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.125rem;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-raise), var(--sheen);
+    color: var(--foreground-muted);
+    overflow: hidden;
+    transition: transform var(--kivo-dur-base) var(--kivo-ease-out),
+      box-shadow var(--kivo-dur-base) var(--kivo-ease-out);
+  }
+
+  .kivo-tile::before {
+    content: "";
+    position: absolute;
+    inset: -55% -55% 40% 40%;
+    background: radial-gradient(
+      circle at 30% 70%,
+      color-mix(in oklab, var(--kivo-violet) 60%, transparent),
+      color-mix(in oklab, var(--kivo-cyan) 45%, transparent) 45%,
+      transparent 72%
+    );
+    filter: blur(14px);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  [data-theme="light"] .kivo-tile {
+    background: #ffffff;
+  }
+
+  .kivo-tile:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-pop), var(--sheen);
+  }
+
+  /* ---------------------------------------------------------------------------
+     MENU ITEMS
+
+     Rows inside `.kivo-popover`. Full-bleed hover fill with the surface's own
+     inner radius, matching the reference's share menu — not a bordered button,
+     not a colour-only change. */
+  .kivo-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    text-align: left;
+    color: var(--foreground-muted);
+    transition: background-color var(--kivo-dur-fast) var(--kivo-ease-out),
+      color var(--kivo-dur-fast) var(--kivo-ease-out);
+  }
+
+  .kivo-menu-item:hover:not(:disabled),
+  .kivo-menu-item[data-active="true"] {
+    background: var(--surface-2);
+    color: var(--foreground);
+  }
+
+  .kivo-menu-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ---------------------------------------------------------------------------
+     SKELETONS
+
+     Reference language: very soft neutral blocks, a slow sheen travelling
+     across them, no hard edges. Themed via --skeleton/--skeleton-shine so the
+     light version is a pale grey on white rather than an inverted dark bar.
+  --------------------------------------------------------------------------- */
+  .kivo-skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton);
+    border-radius: 0.625rem;
+  }
+
+  .kivo-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    animation: kivo-skeleton-sweep 1.6s var(--kivo-ease-in-out) infinite;
+  }
+}
+
+
+@keyframes kivo-skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kivo-skeleton::after {
+    display: none;
+  }
+}
+@layer components {
+  /* ---------------------------------------------------------------------------
+     THINKING ORB
+
+     The dotted-ring pending marker from the reference's task lists — a ring of
+     dashes that rotates while a step is in flight. Pure CSS (a dashed border
+     on a circle), so a list of twenty of them costs twenty composited
+     rotations and no DOM.
+  --------------------------------------------------------------------------- */
+  .kivo-orb {
+    display: inline-block;
+    border-radius: 9999px;
+    border: 1.5px dashed currentColor;
+    opacity: 0.65;
+    animation: kivo-orb-spin 3.2s linear infinite;
+  }
+
+  .kivo-orb--solid {
+    border-style: solid;
+    border-color: currentColor transparent currentColor transparent;
+    opacity: 1;
+    animation-duration: 1.1s;
+  }
+}
+
+
+@keyframes kivo-orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@layer components {
+  /* ---------------------------------------------------------------------------
+     SCROLL EDGE
+
+     Fades the top/bottom of an internally-scrolling region into its surface
+     instead of letting content slice off at a hard line. Uses the surface
+     colour as the fade target, so it works on both themes without a hardcoded
+     stop.
+  --------------------------------------------------------------------------- */
+  .kivo-scroll-fade {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent 100%
+    );
+  }
+}
+
 
 /* Backs the `<FadeIn>` component (src/components/ui/fade-in.tsx): a plain CSS
    entrance so server-rendered content becomes visible the instant it paints,
@@ -214,9 +1008,29 @@ body {
     transform: translateY(0);
   }
 }
+@layer components {
+  .kivo-fade-in {
+    animation: kivo-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
 
-.kivo-fade-in {
-  animation: kivo-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+/* Backs the brief per-row highlight in `LiveFixtureList`
+   (src/components/matches/live-fixture-list.tsx): a soft cyan wash that
+   fades back to transparent, applied only while a row's own state says a
+   Realtime update just landed (a `useEffect` keyed off that fixture's
+   status/score/minute, not on initial mount) — the cue that a specific row
+   among several live rows is the one that just changed. */
+@keyframes kivo-row-flash {
+  0% {
+    background-color: rgba(0, 217, 255, 0.16);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.kivo-row-flash {
+  animation: kivo-row-flash 1.2s ease-out;
 }
 
 /* Shared treatment for the commissioned KIVO artwork pieces (public/brand/
@@ -234,14 +1048,33 @@ body {
     transform: translateY(-10px);
   }
 }
+@layer components {
+  .kivo-artwork-float {
+    animation: kivo-artwork-float 7s ease-in-out infinite;
+  }
 
-.kivo-artwork-float {
-  animation: kivo-artwork-float 7s ease-in-out infinite;
+  .kivo-artwork-mask {
+    mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+    -webkit-mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+  }
 }
 
-.kivo-artwork-mask {
-  mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
-  -webkit-mask-image: radial-gradient(closest-side, black 72%, transparent 100%);
+
+/* Full-bleed variant of the mask above, for the one context where the
+   artwork should run edge-to-edge (the onboarding carousel's HeroArt,
+   src/components/onboarding/onboarding-flow.tsx) instead of floating as a
+   small inset illustration. `.kivo-artwork-mask`'s radial oval fades all
+   four sides, which is right for a small boxed illustration but wrong here
+   — with the image spanning the full width of the onboarding card, a
+   left/right fade would just reintroduce empty gutters we deliberately
+   removed. This fades top and bottom only (matching the actual, documented
+   defect: the source art's own soft glow bleeding non-black specifically
+   at its top/bottom edges — see the comment above kivoHeroArtwork's import
+   in src/app/page.tsx), the same directional-fade technique `.kivo-ticker`
+   already uses horizontally, just rotated 90 degrees. */
+.kivo-artwork-mask-bleed {
+  mask-image: linear-gradient(to bottom, transparent, black 16%, black 84%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 16%, black 84%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -274,54 +1107,71 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+@layer components {
+  /* Landing hero background aurora: slow-drifting, low-opacity brand-gradient
+     glow blobs positioned behind the hero copy. Purely decorative (aria-hidden,
+     pointer-events: none) and pure CSS so it costs nothing beyond a composited
+     transform. Each blob's animation-duration is clamped to near-zero by the
+     prefers-reduced-motion block above, same as every other animation on the
+     page — nothing extra to wire up here. */
+  .kivo-aurora {
+    position: absolute;
+    inset: -15% -10%;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
 
-/* Landing hero background aurora: slow-drifting, low-opacity brand-gradient
-   glow blobs positioned behind the hero copy. Purely decorative (aria-hidden,
-   pointer-events: none) and pure CSS so it costs nothing beyond a composited
-   transform. Each blob's animation-duration is clamped to near-zero by the
-   prefers-reduced-motion block above, same as every other animation on the
-   page — nothing extra to wire up here. */
-.kivo-aurora {
-  position: absolute;
-  inset: -15% -10%;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
+  /* Backs <KivoProfileBackground> (src/components/profile/kivo-profile-background.tsx):
+     a dark scrim over a user's chosen KIVO background image so foreground
+     .kivo-glass cards/text stay readable on top of it, reusing this file's own
+     obsidian/glass tokens rather than a new colour. Two layers: a flat wash for
+     overall contrast everywhere, plus a bottom-heavy gradient (most profile
+     content sits toward the lower/middle of the hero) for extra depth where
+     text actually lives. */
+  .kivo-profile-background-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to bottom, rgba(5, 6, 10, 0.55) 0%, rgba(5, 6, 10, 0.72) 65%, rgba(5, 6, 10, 0.88) 100%),
+      rgba(5, 6, 10, 0.25);
+  }
+
+  .kivo-aurora-blob {
+    position: absolute;
+    width: 50%;
+    height: 60%;
+    border-radius: 9999px;
+    filter: blur(90px);
+    opacity: 0.35;
+    will-change: transform;
+  }
+
+  .kivo-aurora-blob--cyan {
+    top: -5%;
+    left: 2%;
+    background: radial-gradient(circle, var(--kivo-cyan), transparent 70%);
+    animation: kivo-aurora-drift-a 20s ease-in-out infinite;
+  }
+
+  .kivo-aurora-blob--violet {
+    right: -4%;
+    bottom: -12%;
+    background: radial-gradient(circle, var(--kivo-violet), transparent 70%);
+    animation: kivo-aurora-drift-b 26s ease-in-out infinite;
+  }
+
+  .kivo-aurora-blob--magenta {
+    top: 30%;
+    left: 30%;
+    width: 38%;
+    height: 45%;
+    opacity: 0.22;
+    background: radial-gradient(circle, var(--kivo-magenta), transparent 70%);
+    animation: kivo-aurora-drift-c 24s ease-in-out infinite;
+  }
 }
 
-.kivo-aurora-blob {
-  position: absolute;
-  width: 50%;
-  height: 60%;
-  border-radius: 9999px;
-  filter: blur(90px);
-  opacity: 0.35;
-  will-change: transform;
-}
-
-.kivo-aurora-blob--cyan {
-  top: -5%;
-  left: 2%;
-  background: radial-gradient(circle, var(--kivo-cyan), transparent 70%);
-  animation: kivo-aurora-drift-a 20s ease-in-out infinite;
-}
-
-.kivo-aurora-blob--violet {
-  right: -4%;
-  bottom: -12%;
-  background: radial-gradient(circle, var(--kivo-violet), transparent 70%);
-  animation: kivo-aurora-drift-b 26s ease-in-out infinite;
-}
-
-.kivo-aurora-blob--magenta {
-  top: 30%;
-  left: 30%;
-  width: 38%;
-  height: 45%;
-  opacity: 0.22;
-  background: radial-gradient(circle, var(--kivo-magenta), transparent 70%);
-  animation: kivo-aurora-drift-c 24s ease-in-out infinite;
-}
 
 @keyframes kivo-aurora-drift-a {
   0%,
@@ -352,33 +1202,35 @@ body {
     transform: translate(4%, -6%) scale(1.05);
   }
 }
+@layer components {
+  /* Page-wide variant of the aurora above: fixed to the viewport instead of
+     absolute inside one section, so the glow keeps breathing behind the whole
+     scroll rather than stopping at the hero's box. Used on the landing page's
+     root wrapper. Same reduced-motion handling applies automatically since it
+     reuses the same keyframes/blob classes. */
+  .kivo-aurora-page {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
 
-/* Page-wide variant of the aurora above: fixed to the viewport instead of
-   absolute inside one section, so the glow keeps breathing behind the whole
-   scroll rather than stopping at the hero's box. Used on the landing page's
-   root wrapper. Same reduced-motion handling applies automatically since it
-   reuses the same keyframes/blob classes. */
-.kivo-aurora-page {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
+  /* A much quieter version for logged-in app pages: content has to stay the
+     priority, so this drops opacity and adds a slow overall breathing pulse
+     (scale) rather than the hero's bigger drift, and sits fixed behind the
+     app shell at the lowest z-index. */
+  .kivo-aurora-ambient {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.5;
+    animation: kivo-aurora-breathe 14s ease-in-out infinite;
+  }
 }
 
-/* A much quieter version for logged-in app pages: content has to stay the
-   priority, so this drops opacity and adds a slow overall breathing pulse
-   (scale) rather than the hero's bigger drift, and sits fixed behind the
-   app shell at the lowest z-index. */
-.kivo-aurora-ambient {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 0.5;
-  animation: kivo-aurora-breathe 14s ease-in-out infinite;
-}
 
 @keyframes kivo-aurora-breathe {
   0%,
@@ -389,29 +1241,31 @@ body {
     opacity: 0.65;
   }
 }
+@layer components {
+  /* Shared crop for the K-mark-only glyph (top portion of the square lockup,
+     mark-then-wordmark stacked) used by KivoMarkGlyph. Opacity is applied
+     inline per usage (see that component) rather than here, since it varies a
+     lot between the one large hero watermark and the small scattered accents.
+     Slow rotate+drift keeps every instance from feeling like a static sticker. */
+  .kivo-mark-glyph {
+    position: relative;
+    overflow: hidden;
+    pointer-events: none;
+    animation: kivo-mark-glyph-drift 40s ease-in-out infinite;
+  }
 
-/* Shared crop for the K-mark-only glyph (top portion of the square lockup,
-   mark-then-wordmark stacked) used by KivoMarkGlyph. Opacity is applied
-   inline per usage (see that component) rather than here, since it varies a
-   lot between the one large hero watermark and the small scattered accents.
-   Slow rotate+drift keeps every instance from feeling like a static sticker. */
-.kivo-mark-glyph {
-  position: relative;
-  overflow: hidden;
-  pointer-events: none;
-  animation: kivo-mark-glyph-drift 40s ease-in-out infinite;
+  .kivo-mark-glyph img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: none;
+  }
+
+  .kivo-mark-glyph--reverse {
+    animation-direction: reverse;
+  }
 }
 
-.kivo-mark-glyph img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  max-width: none;
-}
-
-.kivo-mark-glyph--reverse {
-  animation-direction: reverse;
-}
 
 @keyframes kivo-mark-glyph-drift {
   0%,
@@ -427,5 +1281,176 @@ body {
   .kivo-mark-glyph,
   .kivo-aurora-ambient {
     animation: none !important;
+  }
+}
+
+/* A 4th, quieter aurora blob layered into the landing page's existing
+   .kivo-aurora-page (see the three .kivo-aurora-blob--* variants above) —
+   more depth for the page now that it has real content below the hero to
+   drift behind, without upsetting the "brand colour as ~10% accent" balance:
+   lower opacity than any of the original three, and it reuses drift-b's own
+   keyframe (reversed, slower) rather than adding a new one. Automatically
+   covered by the prefers-reduced-motion clamp above, same as every other
+   .kivo-aurora-blob. */
+.kivo-aurora-blob--cyan-soft {
+  width: 34%;
+  height: 40%;
+  bottom: 4%;
+  left: -8%;
+  opacity: 0.14;
+  background: radial-gradient(circle, var(--kivo-cyan), transparent 70%);
+  animation: kivo-aurora-drift-b 32s ease-in-out infinite reverse;
+}
+
+/* Decorative marquee strip (landing page, between the hero and the proof
+   points): a slow horizontal scroll restating real platform facts that are
+   already stated, in full, elsewhere on the page (the proof points grid
+   right below it, the feature showcase, /transparency). Because it's purely
+   a restatement — never the sole source of a claim — the strip is rendered
+   aria-hidden and exists as ambient texture, not new information a screen
+   reader needs to parse twice. The edge mask fades each end to transparent
+   instead of hard-cropping mid-word. Seamless loop: the track renders its
+   item list twice back to back and animates exactly -50%, so the second
+   copy lines up perfectly as the first scrolls off. Reduced-motion is the
+   same global animation-duration clamp as every other animation in this
+   file — nothing extra to wire up here. */
+.kivo-ticker {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+.kivo-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: kivo-ticker-scroll 34s linear infinite;
+}
+
+@keyframes kivo-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Same edge-fade technique as `.kivo-ticker` above, factored out for a real
+   `overflow-x: auto` scroll container instead of a fixed decorative marquee
+   (RECOMMENDATIONS.md item 277) — first consumer is the Match Centre
+   Standings tab (`StandingsTab` in match-centre-tabs.tsx), whose
+   `min-w-[26rem]` table can require a horizontal scroll on a narrow phone
+   with nothing today signalling there's more to see. Deliberately just the
+   mask, no `position`/`overflow` of its own: unlike the ticker, a scroll
+   container already owns those (`overflow-x-auto` is already Tailwind on
+   the wrapper) and forcing `overflow: hidden` here would hide the very
+   scrolling this exists to hint at. */
+.kivo-scroll-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+}
+
+@layer components {
+  /* ---------------------------------------------------------------------------
+     AURORA — LIGHT THEME
+
+     The dark aurora is saturated cyan/violet at 0.35 opacity, which over a
+     near-white page turns into two bruise-coloured smudges. Light mode keeps
+     the same drifting shapes (they're what stop a large empty page reading as
+     a dead slab) but desaturates hard and drops opacity, so the result is the
+     faint pearl wash from the reference rather than visible colour.
+  --------------------------------------------------------------------------- */
+  [data-theme="light"] .kivo-aurora-blob {
+  /* A saturated blob at 0.35 over near-white turns into a bruise, so light
+     mode desaturates hard and drops opacity. More blur than dark as well:
+     a heavily-blurred radial gradient at low alpha bands visibly against a
+     light backdrop — the 8-bit steps that are invisible over obsidian
+     become faint concentric rings over #f6f7f9 — and widening the falloff
+     spreads each step far enough apart to stop reading as a ring. */
+  filter: blur(140px) saturate(0.5);
+  opacity: 0.13;
+}
+
+[data-theme="light"] .kivo-aurora-blob--magenta {
+  opacity: 0.08;
+}
+
+/* App pages get none of it. The marketing page can afford ambient colour
+   behind a short hero; a fixture list cannot — there the same rings sit
+   behind dense white cards and read as a rendering fault rather than as
+   atmosphere. The body's own top-down wash already keeps those pages from
+   looking like a flat grey slab, which is all the ambient layer was for. */
+[data-theme="light"] .kivo-aurora-ambient {
+  display: none;
+}
+
+  /* -------------------------------------------------------------------------
+     DARK-AUTHORED IMAGERY ON A LIGHT PAGE
+
+     Every brand raster is painted to glow against obsidian, which makes them
+     misbehave on a near-white page in ways blend modes cannot fix. Worth
+     stating, because "just multiply it" is the obvious wrong answer: over a
+     white backdrop every separable blend mode collapses to plain source-over
+     (multiply returns Cs when Cb is 1), so a blend mode buys nothing at all
+     here. Only masking and opacity do real work.
+     ------------------------------------------------------------------------- */
+
+  /* The commissioned artwork is fully opaque over a black field, so on light
+     it lands as a heavy dark slab beside the copy it is meant to sit behind.
+     Its radial mask already dissolves the edges; this pulls it back so it
+     reads as backdrop rather than as the subject. */
+  [data-theme="light"] .kivo-artwork-mask {
+    opacity: 0.72;
+  }
+
+  /* The logo lockup is not a clean cutout: the whole 1254² square carries a
+     faint blue bloom at roughly 4% alpha (measured off the asset, not
+     guessed). Over #f6f7f9 that composites to about #f1f1ff, so the asset
+     reads as a tinted rectangle with hard edges around the mark.
+
+     Applied in BOTH themes, not just light. On obsidian the bloom is nearly
+     invisible as colour, but it still has a hard rectangular boundary — and
+     now that the hero crops tight to the glyph's own bounding box rather
+     than showing the padded square, that boundary lands right against the
+     mark and reads as a box in dark too. What is being removed is an edge,
+     not a glow.
+
+     Done by remapping the alpha channel rather than by masking — see
+     src/components/theme/ink-filter.tsx for why a mask cannot work here. */
+  .kivo-ink {
+    filter: url(#kivo-ink-alpha);
+  }
+
+  /* ---------------------------------------------------------------------------
+     ACCENT GLOW
+
+     Replaces the scattered arbitrary shadows that baked `rgba(0,217,255,…)` /
+     `rgba(37,99,255,…)` straight into a utility class. Those were tuned so a
+     cyan halo would bloom against obsidian; over a near-white page the same
+     halo reads as a dirty smudge around the button rather than as light.
+
+     Two parts, same as the originals: a 1px accent ring that tightens the
+     button's edge against the page, and an ambient drop below it. Light mode
+     drops the ring (a white page already separates the button) and keeps a
+     restrained tinted shadow, so a primary button reads as lifted rather than
+     as glowing.
+  --------------------------------------------------------------------------- */
+  .kivo-glow {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
+      0 8px 30px -8px color-mix(in oklab, var(--accent-strong) 55%, transparent);
+  }
+
+  [data-theme="light"] .kivo-glow {
+    box-shadow: 0 1px 2px rgba(11, 14, 23, 0.06),
+      0 10px 26px -10px color-mix(in oklab, var(--accent-strong) 42%, transparent);
+  }
+
+  .kivo-glow-soft {
+    box-shadow: 0 0 16px -2px color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+
+  [data-theme="light"] .kivo-glow-soft {
+    box-shadow: 0 4px 14px -6px color-mix(in oklab, var(--accent-strong) 40%, transparent);
   }
 }

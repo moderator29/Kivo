@@ -57,7 +57,8 @@ export function getStreakTier(currentStreak: number): StreakTierInfo {
 export type WeekStripDay = {
   /** UTC calendar date, "YYYY-MM-DD". */
   isoDate: string;
-  /** Single-letter weekday label, "M".."S". */
+  /** Two-letter weekday label, "Mo".."Su" — unambiguous unlike single
+   * letters, which repeat ("T" for Tue/Thu, "S" for Sat/Sun). */
   label: string;
   /** Day-of-month number for display. */
   dayNumber: number;
@@ -68,7 +69,7 @@ export type WeekStripDay = {
   isActive: boolean;
 };
 
-const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);

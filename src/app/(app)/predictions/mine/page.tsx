@@ -1,39 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Target, CheckCircle2, XCircle, Clock, MinusCircle } from "lucide-react";
+import { ArrowLeft, Target } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
 import { staggerDelay } from "@/lib/stagger";
-import type { FixtureStatus } from "@/lib/football/fixture-status";
-import { PREDICTION_OUTCOME_LABEL, computeStreaks } from "@/lib/predictions";
+import { PREDICTION_OUTCOME_LABEL, computeStreaks, predictionResultInfo } from "@/lib/predictions";
 
 export const metadata: Metadata = { title: "My Predictions" };
 
-/**
- * A prediction's result, purely from real columns — `points_awarded` is null
- * until the admin scoring pass (predictions-actions.ts's scorePredictions)
- * resolves it, so "not scored yet" is shown honestly rather than as a 0 or a
- * guessed outcome. Never derives correctness from the fixture score directly:
- * `points_awarded` is the single source of truth for what was actually
- * graded, same as the leaderboard.
- */
-function resultInfo(status: FixtureStatus, pointsAwarded: number | null) {
-  if (pointsAwarded !== null) {
-    return pointsAwarded > 0
-      ? { label: `Correct · +${pointsAwarded} pts`, className: "text-live", icon: CheckCircle2 }
-      : { label: "Incorrect", className: "text-critical", icon: XCircle };
-  }
-  if (status === "finished") {
-    return { label: "Not scored yet", className: "text-foreground-subtle", icon: Clock };
-  }
-  if (status === "postponed" || status === "cancelled" || status === "abandoned") {
-    return { label: "No result", className: "text-foreground-subtle", icon: MinusCircle };
-  }
-  return { label: "Pending", className: "text-foreground-subtle", icon: Clock };
-}
+// RECOMMENDATIONS.md items 168/250: the same minimum-sample suppression
+// convention already established for PredictionCard's consensus bar and
+// FanRatingCard's aggregate — a competition with one or two scored picks
+// should never render a rate that reads as more meaningful than it is.
+const MIN_MEANINGFUL_SAMPLE = 3;
+
+type CompetitionAccuracy = { name: string; total: number; correct: number; accuracyPct: number };
 
 export default async function MyPredictionsPage() {
   const profile = await getOrCreateProfile();
@@ -48,7 +33,7 @@ export default async function MyPredictionsPage() {
         <p className="text-sm text-foreground-muted">Sign in to see your prediction history and record.</p>
         <Link
           href={`/sign-up?redirect_url=${encodeURIComponent("/predictions/mine")}`}
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -58,8 +43,16 @@ export default async function MyPredictionsPage() {
 
   const supabase = createServerSupabaseClient();
   // predictions_select_own already restricts this to the caller's own rows,
-  // so a plain query (no RPC) is enough for a full, honest history.
-  const { data: predictionRows } = await supabase
+  // so a plain query (no RPC) is enough for a full, honest history. The page
+  // still caps what it fetches/renders at 100 rows (real pagination is a
+  // larger change than this view needs today) — { count: "exact" } gets the
+  // real total alongside that page so the stats block can honestly disclose
+  // when it's only covering a slice, instead of silently under-reporting a
+  // user's lifetime record.
+  const {
+    data: predictionRows,
+    count: totalPredictionCount,
+  } = await supabase
     .from("predictions")
     .select(
       `id, predicted_outcome, points_awarded, created_at,
@@ -69,6 +62,7 @@ export default async function MyPredictionsPage() {
          away_team:teams!fixtures_away_team_id_fkey(id, name, crest_url),
          competition:competitions(name, short_name)
        )`,
+      { count: "exact" },
     )
     .eq("profile_id", profile.id)
     .order("created_at", { ascending: false })
@@ -78,6 +72,8 @@ export default async function MyPredictionsPage() {
   // should never actually be null in practice — filtered defensively anyway
   // rather than rendering a broken row.
   const rows = (predictionRows ?? []).filter((row) => row.fixture !== null);
+  const totalPredictions = totalPredictionCount ?? rows.length;
+  const isTruncatedHistory = totalPredictions > rows.length;
 
   const scoredRows = rows.filter((row) => row.points_awarded !== null);
   const correctCount = scoredRows.filter((row) => (row.points_awarded ?? 0) > 0).length;
@@ -93,6 +89,27 @@ export default async function MyPredictionsPage() {
           scoredRows.map((row) => ({ pointsAwarded: row.points_awarded ?? 0, kickoffAt: row.fixture!.kickoff_at })),
         )
       : null;
+
+  // RECOMMENDATIONS.md item 292: a per-competition cut of the same scored
+  // rows already fetched above (the query already joins
+  // fixture.competition:competitions(name, short_name)) — a reduce over rows
+  // already in memory, not a new query.
+  const competitionAccuracy: CompetitionAccuracy[] = Array.from(
+    scoredRows
+      .reduce((byCompetition, row) => {
+        const competitionName =
+          row.fixture!.competition?.short_name ?? row.fixture!.competition?.name ?? "Unknown competition";
+        const existing = byCompetition.get(competitionName) ?? { total: 0, correct: 0 };
+        existing.total += 1;
+        if ((row.points_awarded ?? 0) > 0) existing.correct += 1;
+        byCompetition.set(competitionName, existing);
+        return byCompetition;
+      }, new Map<string, { total: number; correct: number }>())
+      .entries(),
+  )
+    .map(([name, { total, correct }]) => ({ name, total, correct, accuracyPct: Math.round((correct / total) * 100) }))
+    .filter((entry) => entry.total >= MIN_MEANINGFUL_SAMPLE)
+    .sort((a, b) => b.total - a.total);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -116,7 +133,7 @@ export default async function MyPredictionsPage() {
           </p>
           <Link
             href="/predictions"
-            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Make a prediction
           </Link>
@@ -159,12 +176,40 @@ export default async function MyPredictionsPage() {
             </FadeIn>
           )}
 
-          {scoredRows.length < rows.length && (
-            <p className="-mt-3 text-center text-xs text-foreground-subtle">
-              {scoredRows.length === 0
-                ? "None of your predictions have been scored yet."
-                : `${scoredRows.length} of ${rows.length} scored so far.`}
-            </p>
+          {competitionAccuracy.length > 0 && (
+            <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-1 rounded-2xl p-5">
+              <h2 className="pb-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+                By competition
+              </h2>
+              <div className="flex flex-col divide-y divide-white/5">
+                {competitionAccuracy.map((entry) => (
+                  <div key={entry.name} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="truncate text-sm text-foreground">{entry.name}</span>
+                    <span className="shrink-0 text-sm text-foreground-muted">
+                      {entry.correct}/{entry.total} · <span className="font-semibold text-foreground">{entry.accuracyPct}%</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </FadeIn>
+          )}
+
+          {(isTruncatedHistory || scoredRows.length < rows.length) && (
+            <div className="-mt-3 flex flex-col items-center gap-0.5 text-center text-xs text-foreground-subtle">
+              {isTruncatedHistory && (
+                <p>
+                  Showing your most recent {rows.length} of {totalPredictions} predictions — the stats above reflect
+                  these {rows.length} only.
+                </p>
+              )}
+              {scoredRows.length < rows.length && (
+                <p>
+                  {scoredRows.length === 0
+                    ? "None of your predictions have been scored yet."
+                    : `${scoredRows.length} of ${rows.length} scored so far.`}
+                </p>
+              )}
+            </div>
           )}
 
           <div className="flex flex-col gap-3">
@@ -172,7 +217,7 @@ export default async function MyPredictionsPage() {
               const fixture = row.fixture!;
               const competitionName = fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition";
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-              const result = resultInfo(fixture.status, row.points_awarded);
+              const result = predictionResultInfo(fixture.status, row.points_awarded);
               const ResultIcon = result.icon;
 
               return (
@@ -180,7 +225,7 @@ export default async function MyPredictionsPage() {
                   <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-foreground-subtle">{competitionName}</span>
-                      <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} />
+                      <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} includeWeekday />
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
@@ -189,7 +234,7 @@ export default async function MyPredictionsPage() {
                         {fixture.home_team?.id ? (
                           <Link
                             href={`/teams/${fixture.home_team.id}`}
-                            className="truncate text-sm text-foreground hover:text-kivo-cyan"
+                            className="truncate text-sm text-foreground hover:text-accent"
                           >
                             {fixture.home_team.name}
                           </Link>
@@ -206,7 +251,7 @@ export default async function MyPredictionsPage() {
                         {fixture.away_team?.id ? (
                           <Link
                             href={`/teams/${fixture.away_team.id}`}
-                            className="truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+                            className="truncate text-right text-sm text-foreground hover:text-accent"
                           >
                             {fixture.away_team.name}
                           </Link>
@@ -219,17 +264,17 @@ export default async function MyPredictionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-3">
+                    <div className="flex items-center justify-between gap-2 border-t border-hairline-soft pt-3">
                       <span className="text-xs text-foreground-muted">
                         You picked{" "}
                         <span className="font-semibold text-foreground">
                           {PREDICTION_OUTCOME_LABEL[row.predicted_outcome]}
                         </span>
                       </span>
-                      <span className={`flex shrink-0 items-center gap-1 text-xs font-medium ${result.className}`}>
+                      <ResultBadgeReveal isCorrect={(row.points_awarded ?? 0) > 0} className={result.className}>
                         <ResultIcon className="h-3.5 w-3.5" strokeWidth={2} />
                         {result.label}
-                      </span>
+                      </ResultBadgeReveal>
                     </div>
                   </div>
                 </FadeIn>
