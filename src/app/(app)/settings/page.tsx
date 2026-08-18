@@ -4,11 +4,15 @@ import { currentUser } from "@clerk/nextjs/server";
 import { SignOutButton } from "@clerk/nextjs";
 import { CircleUserRound, LogOut, Mail, AtSign } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
+import { effectiveModerationStatus } from "@/lib/moderation";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { FadeIn } from "@/components/ui/fade-in";
-import { getNotificationPreferences } from "@/app/(app)/settings/actions";
+import { getNotificationPreferences, getActiveSessions } from "@/app/(app)/settings/actions";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
+import { ModerationStatusPanel } from "@/components/settings/moderation-status-panel";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
+import { ActivityPrivacyToggle } from "@/components/settings/activity-privacy-toggle";
+import { ActiveSessionsPanel } from "@/components/settings/active-sessions-panel";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
 import { DataExportSection } from "@/components/settings/data-export-section";
 import { AvatarPicker } from "@/components/settings/avatar-picker";
@@ -33,14 +37,35 @@ export default async function SettingsPage() {
     );
   }
 
-  const [user, notificationPreferences] = await Promise.all([currentUser(), getNotificationPreferences(profile.id)]);
+  const [user, notificationPreferences, activeSessions] = await Promise.all([
+    currentUser(),
+    getNotificationPreferences(profile.id),
+    getActiveSessions(),
+  ]);
   const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? null;
+
+  // RECOMMENDATIONS.md item 288: mirrors exactly what ModerationStatusPanel
+  // itself renders for (suspended/banned only, lazy-expiry-adjusted — see
+  // that component's own comment) so an active or shadow-muted account never
+  // renders an empty flex child into this page's gap-6 column below.
+  const moderationEffectiveStatus = effectiveModerationStatus(profile.moderation_status, profile.moderation_expires_at);
+  const showModerationPanel = moderationEffectiveStatus === "suspended" || moderationEffectiveStatus === "banned";
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
       </FadeIn>
+
+      {showModerationPanel && (
+        <FadeIn delay={0.04}>
+          <ModerationStatusPanel
+            status={profile.moderation_status}
+            reason={profile.moderation_reason}
+            expiresAt={profile.moderation_expires_at}
+          />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.08} className="kivo-glass flex flex-col rounded-3xl p-5">
         <div className="flex flex-col gap-1.5 py-4">
@@ -65,6 +90,11 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+          <span className="text-xs text-foreground-subtle">Privacy</span>
+          <ActivityPrivacyToggle initialShowActivityPublicly={profile.show_activity_publicly} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
           <span className="text-xs text-foreground-subtle">Avatar</span>
           <AvatarPicker
             profile={{
@@ -83,6 +113,11 @@ export default async function SettingsPage() {
 
         <div className="flex flex-col gap-3 border-t border-white/5 py-5">
           <DataExportSection username={profile.username} />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/5 py-5">
+          <span className="text-sm font-semibold text-foreground">Active sessions</span>
+          <ActiveSessionsPanel initial={activeSessions.sessions} initialError={activeSessions.error} />
         </div>
 
         <div className="flex flex-col gap-3 border-t border-white/5 pt-5">
