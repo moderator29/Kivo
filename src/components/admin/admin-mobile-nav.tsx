@@ -5,10 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, type LucideIcon } from "lucide-react";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { isActiveRoute } from "@/lib/navigation";
-import { ADMIN_NAV as items } from "@/lib/admin-nav";
 import { cn } from "@/lib/utils";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
@@ -18,7 +17,7 @@ import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 // URL. This is the mobile-drawer counterpart, same grouped-list-with-
 // dividers shape as the just-refreshed main app "More" sheet and settings
 // page, and the same useFocusTrap contract every dialog in this app uses.
-export function AdminMobileNav() {
+export function AdminMobileNav({ items }: { items: { href: string; label: string; icon: LucideIcon }[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);

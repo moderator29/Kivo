@@ -32,11 +32,17 @@ export function UsernameEditor({ username }: { username: string }) {
   // Driving it from the event handler keeps every setAvailability call
   // inside a callback (this handler, the debounce timer, or the check's
   // response), never synchronously inside an effect body.
-  function handleDraftChange(value: string) {
+  function handleDraftChange(rawValue: string) {
+    // Same normalise-on-input fix as onboarding-flow.tsx: the server and the
+    // availability check both lowercase, but `pattern="[a-z0-9_]+"` on the
+    // input rejects the raw uppercase, so a handle could read "Available"
+    // and still refuse to submit. Fold case on the way in so what's shown is
+    // what's stored.
+    const value = rawValue.toLowerCase();
     setDraft(value);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
-    const candidate = value.trim().toLowerCase();
+    const candidate = value.trim();
     if (!USERNAME_PATTERN.test(candidate)) {
       setAvailability("idle");
       return;

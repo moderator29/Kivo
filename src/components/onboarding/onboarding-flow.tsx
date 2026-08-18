@@ -88,11 +88,20 @@ export function OnboardingFlow({
   // Driving it from the event handler keeps every setAvailability call
   // inside a callback (this handler, the debounce timer, or the check's
   // response), never synchronously inside an effect body.
-  function handleUsernameChange(value: string) {
+  function handleUsernameChange(rawValue: string) {
+    // Normalise as the user types rather than validating after the fact.
+    // The server stores `username.trim().toLowerCase()` and the availability
+    // check lowercases too — so typing "Puffnutz_" reported "Available"
+    // (correctly, "puffnutz_" was free) while the input's own
+    // `pattern="[a-z0-9_]+"` silently blocked submit with the browser's
+    // useless "Match the requested format". Showing the user the exact
+    // string that will be saved removes the contradiction entirely: there is
+    // no invalid state to report, because uppercase is folded on the way in.
+    const value = rawValue.toLowerCase();
     setUsernameValue(value);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
-    const candidate = value.trim().toLowerCase();
+    const candidate = value.trim();
     if (!USERNAME_PATTERN.test(candidate)) {
       setAvailability("idle");
       return;
