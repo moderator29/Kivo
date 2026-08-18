@@ -160,3 +160,33 @@ Email-OTP-only is not just what shipped — it is a real security simplification
 **What was deliberately NOT done**: `profiles.clerk_user_id` is not dropped, existing rows are not relinked or deleted, and no data migration of any kind rides along with the auth swap. Those are destructive and reversible-only-with-backups; they get their own decision.
 
 **Consequence for `deleteAccount()`**: it now deletes the Supabase Auth user directly, but must first remove that user's objects from the `avatars` bucket — Supabase refuses to delete an auth user who still owns Storage objects. Without that sweep, deletion would fail for exactly the users most likely to have real data worth deleting, and the error would surface as an unrelated server fault.
+
+
+---
+
+### 2026-08-18 — Gating the app: KIVO stops publishing 11,000 URLs it no longer serves
+
+**Decision**: `sitemap.ts` and `robots.ts` now describe only the four genuinely public pages (`/`, `/about`, `/terms`, `/privacy`). Everything else is `disallow`ed. The read-only public preview of match and entity pages is **not** built, and is left as an open question for the founder rather than assumed either way.
+
+**Context**: the same-day move to Supabase Auth put the entire `(app)` group behind a sign-in wall with no guest preview. The SEO and sharing surface was not part of that change and kept running as built: `sitemap.ts` published nine app routes plus up to 5,000 teams, 5,000 players and 1,000 leagues; `robots.ts` explicitly allowed all of them; `generateMetadata` and `matches/[id]/opengraph-image.tsx` still existed to make shared links look good. Every one of those URLs answered a crawler — and the friend somebody sent a match link to — with a login form.
+
+**Rationale**: continuing to advertise 11,000 URLs that all return a login wall is the same category of untruth as a fabricated statistic, just told to a search engine instead of a user. It is also actively harmful rather than merely useless: a large set of URLs that all resolve to one gate is a textbook soft-404/thin-content signal, and the cost lands on the whole domain, including the four pages that *are* real. Cutting the sitemap to the truth costs nothing today, because none of those 11,000 URLs can currently be crawled successfully anyway.
+
+**What was deliberately NOT decided here**: whether KIVO should carve out a genuine read-only public preview for `/matches/[id]` and the team/player/league pages. That is the growth-loop question, not a correctness question, and it is a **product** call with a real trade-off on both sides:
+
+- **For a preview**: KIVO's own stated growth loop is fans sharing match links. A shared link that opens a login form converts far worse than one that opens the match and asks for sign-in at the point of participation (reacting, posting, predicting). Every major competitor is publicly crawlable. The entity pages carry no personal data — they are public football facts — so a preview is not a privacy trade.
+- **Against**: the founder's decision hours earlier was explicit that there is no guest preview of the product at all, and reintroducing one through the side door would be inventing a policy rather than implementing one.
+
+The recommendation, stated as a recommendation and not acted on: build the preview, scoped to `/matches/[id]`, `/teams/[id]`, `/players/[id]` and `/leagues/[id]` only, read-only, with every interactive affordance routed through the existing sign-in gate (which now preserves the destination — see the same day's KN-123 work, so a preview visitor who signs in lands back on the match they were reading). That is a strictly additive change to `src/app/(app)/layout.tsx` plus these two files. Until that call is made, the honest state is the one now shipped.
+
+---
+
+### 2026-08-18 — Sign-in no longer confirms whether an email address has a KIVO account
+
+**Decision**: `/sign-in` responds identically whether or not the submitted address has an account. Supabase's `otp_disabled` error (which, with `shouldCreateUser: false`, means "no such user") is swallowed on the sign-in path and the form advances to the code step either way. The message it replaced — *"No KIVO account uses that email yet. Create one instead."* — is gone.
+
+**Rationale**: that message was a membership oracle. Anyone could feed addresses in one at a time and learn, definitively, who is on KIVO. Server-side rate limiting now exists on both auth endpoints (three sends per address and ten per IP per fifteen minutes), which makes the probe slow — but a slow leak of a user list is still a leak, and rate limiting is not the right tool for a question that should not be answerable at all. This matches the standard treatment of account enumeration on any passwordless sign-in flow.
+
+**What the UX cost is, and what pays for it**: a user who mistypes their address now waits for an email that will never arrive, instead of being told immediately. That is a real regression and it is paid for on the code screen, which now carries a permanent, unconditional line: *"Nothing arrived at all? You may not have a KIVO account yet — create one."* Shown to everybody, so it reveals nothing, and it prompts exactly the action the old message prompted. `/sign-up` is unchanged; it creates the account or signs the existing one in, and has always answered identically either way.
+
+**Consequence for support**: the reporter can no longer tell these cases apart, but an operator can. `docs/ACCOUNT_RECOVERY.md` §2 makes checking `auth.users` for the address the second triage step, precisely because the product deliberately will not.
