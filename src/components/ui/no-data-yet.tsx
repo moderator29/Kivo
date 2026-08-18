@@ -23,7 +23,7 @@ interface NoDataYetProps {
 export function NoDataYet({ icon, title, description }: NoDataYetProps) {
   return (
     <FadeIn className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-foreground-subtle">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-1 text-foreground-subtle">
         {icon}
       </div>
       <div className="flex flex-col gap-1.5">

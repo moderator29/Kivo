@@ -31,8 +31,11 @@ export function FeatureCard({
           only its usual thin gradient edge stroke. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -inset-2 rounded-[1.75rem] opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-50"
-        style={{ background: "linear-gradient(135deg, var(--kivo-cyan), var(--kivo-violet), var(--kivo-magenta))" }}
+        className="pointer-events-none absolute -inset-2 rounded-[1.75rem] opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-50 light:group-hover:opacity-30 light:saturate-75"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--kivo-cyan), var(--kivo-violet), var(--kivo-magenta))",
+        }}
       />
       <div className="kivo-glass-brand relative flex flex-col gap-3 rounded-3xl p-6">
         <Image src={icon} alt="" width={56} height={56} className="h-14 w-14 object-contain" />

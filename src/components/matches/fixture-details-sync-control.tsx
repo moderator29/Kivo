@@ -36,7 +36,7 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
             type="checkbox"
             checked={autoSyncMissingSquads}
             onChange={(e) => setAutoSyncMissingSquads(e.target.checked)}
-            className="h-3 w-3 rounded border-white/20 bg-transparent accent-kivo-cyan"
+            className="h-3 w-3 rounded border-hairline-strong bg-transparent accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           />
           Also sync missing squads (extra quota)
         </label>
@@ -45,7 +45,7 @@ export function FixtureDetailsSyncControl({ action }: { action: FixtureDetailsSy
           disabled={pending}
           aria-busy={pending}
           onClick={handleClick}
-          className="flex items-center gap-2 rounded-lg bg-kivo-cyan/15 px-3 py-1.5 text-xs font-semibold text-kivo-cyan transition hover:bg-kivo-cyan/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} strokeWidth={2} />
           {pending ? "Syncing…" : "Sync match details"}

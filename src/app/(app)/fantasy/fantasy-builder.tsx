@@ -289,7 +289,7 @@ export function FantasyBuilder({
             <button
               type="button"
               onClick={copyInviteCode}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-semibold tracking-wide text-foreground-muted transition hover:bg-white/5 active:scale-95"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 text-xs font-semibold tracking-wide text-foreground-muted transition hover:bg-surface-2 active:scale-95"
             >
               {copied ? <Check className="h-3.5 w-3.5 text-live" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />}
               {league.inviteCode}
@@ -304,7 +304,7 @@ export function FantasyBuilder({
                 key={t.id}
                 href={`/fantasy?team=${t.id}`}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  t.id === activeTeamId ? "kivo-gradient-victory text-kivo-white" : "border border-white/10 text-foreground-muted hover:bg-white/5"
+                  t.id === activeTeamId ? "kivo-gradient-victory text-on-accent" : "border border-hairline text-foreground-muted hover:bg-surface-2"
                 }`}
               >
                 {t.name}
@@ -315,7 +315,7 @@ export function FantasyBuilder({
 
         <Link
           href="/fantasy/browse"
-          className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-kivo-cyan"
+          className="flex w-fit items-center gap-1 text-xs font-medium text-foreground-subtle transition hover:text-accent"
         >
           <Compass className="h-3.5 w-3.5" strokeWidth={1.75} />
           Browse public leagues
@@ -327,7 +327,7 @@ export function FantasyBuilder({
         role="tablist"
         aria-label="Fantasy view"
         onKeyDown={handleViewTabKeyDown}
-        className="flex gap-1 border-b border-white/10"
+        className="flex gap-1 border-b border-hairline"
       >
         {VIEW_TABS.map((tab) => (
           <button
@@ -342,7 +342,7 @@ export function FantasyBuilder({
             aria-controls={viewPanelId(tab)}
             tabIndex={view === tab ? 0 : -1}
             onClick={() => setView(tab)}
-            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <span className={`relative ${view === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
             {view === tab && (
@@ -384,7 +384,7 @@ export function FantasyBuilder({
           {carriedForwardFromGameweek !== null && (
             <FadeIn
               delay={0.02}
-              className="flex w-fit items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-foreground-subtle"
+              className="flex w-fit items-center gap-1.5 rounded-full border border-hairline bg-surface-2 px-3 py-1.5 text-[11px] text-foreground-subtle"
             >
               <History className="h-3 w-3 shrink-0" strokeWidth={1.75} />
               Carried forward from GW{carriedForwardFromGameweek}
@@ -418,7 +418,7 @@ export function FantasyBuilder({
               <span
                 key={group}
                 className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
-                  counts[group] === SQUAD_RULES[group] ? "border-live/30 bg-live/10 text-live" : "border-white/10 text-foreground-muted"
+                  counts[group] === SQUAD_RULES[group] ? "border-live/30 bg-live/10 text-live" : "border-hairline text-foreground-muted"
                 }`}
               >
                 {group} {counts[group]}/{SQUAD_RULES[group]}
@@ -442,7 +442,7 @@ export function FantasyBuilder({
                     setPickerFilter("All");
                     setPickerOpen(true);
                   }}
-                  className="kivo-gradient-victory mt-1 flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-kivo-white transition active:scale-95"
+                  className="kivo-gradient-victory mt-1 flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-on-accent transition active:scale-95"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   Add players
@@ -489,7 +489,7 @@ export function FantasyBuilder({
                   setPickerOpen(true);
                 }}
                 disabled={locked}
-                className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/15 py-3 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-hairline-strong py-3 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 Add player ({pending.length}/{SQUAD_SIZE})
@@ -526,7 +526,7 @@ export function FantasyBuilder({
                     onClick={handleSave}
                     disabled={saving || locked || !validation.ok}
                     aria-busy={saving}
-                    className="kivo-gradient-victory shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-kivo-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+                    className="kivo-gradient-victory shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-on-accent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
                   >
                     {saving ? "Saving…" : "Save squad"}
                   </button>

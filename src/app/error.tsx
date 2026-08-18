@@ -39,7 +39,7 @@ export default function GlobalError({
         <Image src={kivoLogo} alt="" width={48} height={48} className="h-12 w-12 shrink-0" priority />
 
         <div className="kivo-gradient-intelligence flex h-16 w-16 items-center justify-center rounded-2xl">
-          <AlertTriangle className="h-8 w-8 text-kivo-white" strokeWidth={1.75} />
+          <AlertTriangle className="h-8 w-8 text-on-accent" strokeWidth={1.75} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -53,13 +53,13 @@ export default function GlobalError({
           <button
             type="button"
             onClick={retry}
-            className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+            className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Try again
           </button>
           <Link
             href="/home"
-            className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-semibold text-foreground-muted transition hover:bg-white/5"
+            className="rounded-xl border border-hairline px-5 py-2.5 text-sm font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Back to Home
           </Link>

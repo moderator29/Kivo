@@ -145,7 +145,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             <h1 className="truncate text-xl font-semibold text-foreground">{displayName}</h1>
             {showFullNameSubtitle && <p className="truncate text-xs text-foreground-subtle">{player.full_name}</p>}
             {player.position && (
-              <span className="mt-1 inline-block rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+              <span className="mt-1 inline-block rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                 {player.position}
               </span>
             )}
@@ -158,11 +158,11 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
         <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
-            <Flag className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+            <Flag className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             {player.nationality ?? "Nationality not yet synced"}
           </div>
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
-            <Cake className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+            <Cake className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             {player.date_of_birth
               ? `${formatDate(player.date_of_birth)} (age ${calculateAge(player.date_of_birth)})`
               : "Date of birth not yet synced"}
@@ -171,7 +171,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         <FadeIn delay={0.18}>
           <Link
             href={`/players/compare?a=${player.id}`}
-            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
           >
             <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             Compare with another player
@@ -186,13 +186,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
       <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Shield className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Shield className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Current club
         </h2>
         {player.current_team ? (
           <Link
             href={`/teams/${player.current_team.id}`}
-            className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            className="kivo-glass kivo-glass-interactive flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
           >
             <TeamCrest crestUrl={player.current_team.crest_url} name={player.current_team.name} />
             <div className="min-w-0">
@@ -211,7 +211,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Activity className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Season stats
         </h2>
         {hasMatchData ? (
@@ -238,7 +238,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
 
       <FadeIn delay={0.28} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <LineChart className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <LineChart className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Recent form
         </h2>
         {recentForm.isSufficientSample ? (
@@ -263,7 +263,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       <FadeIn delay={0.3} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <ArrowLeftRight className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <ArrowLeftRight className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Transfer history
           </h2>
           <LastSyncedNote timestamp={transfersLastSyncedAt} />
@@ -273,13 +273,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             {transfers.map((transfer) => (
               <div
                 key={transfer.id}
-                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
               >
                 <div className="flex items-center gap-2">
                   {transfer.from_team ? (
                     <Link
                       href={`/teams/${transfer.from_team.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-kivo-cyan"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-accent"
                     >
                       <TeamCrest crestUrl={transfer.from_team.crest_url} name={transfer.from_team.name} />
                       <span className="truncate">{transfer.from_team.short_name ?? transfer.from_team.name}</span>
@@ -294,7 +294,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                   {transfer.to_team ? (
                     <Link
                       href={`/teams/${transfer.to_team.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-kivo-cyan"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-accent"
                     >
                       <TeamCrest crestUrl={transfer.to_team.crest_url} name={transfer.to_team.name} />
                       <span className="truncate">{transfer.to_team.short_name ?? transfer.to_team.name}</span>
@@ -306,9 +306,9 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                     </span>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                <div className="flex items-center justify-between gap-3 border-t border-hairline-soft pt-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
                       {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
                     </span>
                     <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transfer_date)}</span>

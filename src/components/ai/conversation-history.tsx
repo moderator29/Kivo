@@ -89,17 +89,17 @@ function ConversationRow({
         }
       }}
       className={cn(
-        "group flex w-full items-center gap-2 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60",
-        active && "bg-white/[0.05]",
+        "group flex w-full items-center gap-2 border-b border-hairline-soft px-4 py-3 text-left transition-colors last:border-0 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
+        active && "bg-accent-soft",
       )}
     >
       <div
         className={cn(
           "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-          active ? "kivo-gradient-prime" : "bg-white/[0.06]",
+          active ? "kivo-gradient-prime" : "bg-surface-2",
         )}
       >
-        <MessageSquare className={cn("h-3.5 w-3.5", active ? "text-kivo-white" : "text-foreground-subtle")} strokeWidth={1.75} />
+        <MessageSquare className={cn("h-3.5 w-3.5", active ? "text-on-accent" : "text-foreground-subtle")} strokeWidth={1.75} />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -120,7 +120,7 @@ function ConversationRow({
             }}
             onBlur={submitRename}
             maxLength={80}
-            className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-kivo-cyan"
+            className="w-full rounded-md border border-hairline bg-surface-inset px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           />
         ) : (
           <p className={cn("truncate text-sm", active ? "font-medium text-foreground" : "text-foreground-muted")}>
@@ -143,7 +143,7 @@ function ConversationRow({
             disabled={pending}
             aria-busy={pending}
             aria-label="Rename conversation"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
@@ -155,10 +155,10 @@ function ConversationRow({
           aria-busy={pending}
           aria-label={confirmingDelete ? "Confirm delete conversation" : "Delete conversation"}
           className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:opacity-50",
+            "flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
             confirmingDelete
               ? "bg-critical/15 text-critical hover:bg-critical/25"
-              : "text-foreground-subtle hover:bg-white/[0.08] hover:text-critical",
+              : "text-foreground-subtle hover:bg-surface-2 hover:text-critical",
           )}
         >
           {confirmingDelete ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
@@ -208,7 +208,7 @@ export function ConversationHistoryPanel({
         aria-haspopup="dialog"
         whileTap={{ scale: 0.92 }}
         className={cn(
-          "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+          "kivo-glass-sharp flex h-10 w-10 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
           open && "text-foreground",
         )}
       >
@@ -227,7 +227,7 @@ export function ConversationHistoryPanel({
             transition={{ type: "spring", stiffness: 500, damping: 40 }}
             className="kivo-glass-brand fixed left-4 right-4 top-16 z-30 max-h-[70vh] overflow-hidden rounded-2xl sm:absolute sm:left-0 sm:right-auto sm:top-11 sm:max-h-none sm:w-80"
           >
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-hairline-soft px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Conversation history</span>
             </div>
             <div className="max-h-96 overflow-y-auto">

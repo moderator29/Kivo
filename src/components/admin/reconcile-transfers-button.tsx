@@ -31,7 +31,7 @@ export function ReconcileTransfersButton() {
         disabled={pending}
         aria-busy={pending}
         onClick={handleClick}
-        className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-sm font-semibold text-foreground-muted transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+        className="flex items-center gap-2 rounded-lg bg-surface-1 px-4 py-2 text-sm font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
       >
         <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} strokeWidth={2} />
         {pending ? "Reconciling…" : "Reconcile unresolved clubs"}

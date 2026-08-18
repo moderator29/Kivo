@@ -38,7 +38,7 @@ export function DiscoverCard({
       transition={{ duration: 0.35, delay, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
-      className="kivo-glass-sharp flex flex-col gap-3 rounded-2xl p-5 transition-colors hover:bg-white/[0.06]"
+      className="kivo-glass-sharp flex flex-col gap-3 rounded-2xl p-5 transition-colors hover:bg-surface-2"
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.85 }}
@@ -55,7 +55,7 @@ export function DiscoverCard({
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: delay + 0.14, ease: [0.22, 1, 0.36, 1] }}
-        className="text-xs font-medium text-kivo-cyan"
+        className="text-xs font-medium text-accent"
       >
         {count.toLocaleString()} {countLabel}
       </motion.span>

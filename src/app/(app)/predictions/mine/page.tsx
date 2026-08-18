@@ -48,7 +48,7 @@ export default async function MyPredictionsPage() {
         <p className="text-sm text-foreground-muted">Sign in to see your prediction history and record.</p>
         <Link
           href={`/sign-up?redirect_url=${encodeURIComponent("/predictions/mine")}`}
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -116,7 +116,7 @@ export default async function MyPredictionsPage() {
           </p>
           <Link
             href="/predictions"
-            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Make a prediction
           </Link>
@@ -189,7 +189,7 @@ export default async function MyPredictionsPage() {
                         {fixture.home_team?.id ? (
                           <Link
                             href={`/teams/${fixture.home_team.id}`}
-                            className="truncate text-sm text-foreground hover:text-kivo-cyan"
+                            className="truncate text-sm text-foreground hover:text-accent"
                           >
                             {fixture.home_team.name}
                           </Link>
@@ -206,7 +206,7 @@ export default async function MyPredictionsPage() {
                         {fixture.away_team?.id ? (
                           <Link
                             href={`/teams/${fixture.away_team.id}`}
-                            className="truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+                            className="truncate text-right text-sm text-foreground hover:text-accent"
                           >
                             {fixture.away_team.name}
                           </Link>
@@ -219,7 +219,7 @@ export default async function MyPredictionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-3">
+                    <div className="flex items-center justify-between gap-2 border-t border-hairline-soft pt-3">
                       <span className="text-xs text-foreground-muted">
                         You picked{" "}
                         <span className="font-semibold text-foreground">

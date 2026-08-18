@@ -27,10 +27,10 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
   const hasScore = fixture.home_score !== null && fixture.away_score !== null;
 
   return (
-    <div className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-white/[0.06]">
+    <div className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-surface-2">
       <Link
         href={`/matches/${fixture.id}`}
-        className="absolute inset-0 z-0 rounded-2xl"
+        className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         aria-label={`${fixture.home_team?.name ?? "Home team"} vs ${fixture.away_team?.name ?? "Away team"}, match centre`}
       />
       <div className="relative z-0 mb-2 flex items-center justify-between">
@@ -41,13 +41,13 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
       </div>
       <div className="relative z-0 flex items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2">
-          <span className="shrink-0 rounded-full p-0.5 ring-1 ring-white/10">
+          <span className="shrink-0 rounded-full p-0.5 ring-1 ring-hairline">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
           </span>
           {fixture.home_team?.id ? (
             <Link
               href={`/teams/${fixture.home_team.id}`}
-              className="relative z-10 truncate text-sm text-foreground hover:text-kivo-cyan"
+              className="relative z-10 truncate text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {fixture.home_team.name}
             </Link>
@@ -62,14 +62,14 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
           {fixture.away_team?.id ? (
             <Link
               href={`/teams/${fixture.away_team.id}`}
-              className="relative z-10 truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+              className="relative z-10 truncate text-right text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {fixture.away_team.name}
             </Link>
           ) : (
             <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
           )}
-          <span className="shrink-0 rounded-full p-0.5 ring-1 ring-white/10">
+          <span className="shrink-0 rounded-full p-0.5 ring-1 ring-hairline">
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
           </span>
         </div>

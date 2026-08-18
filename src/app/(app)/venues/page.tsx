@@ -43,9 +43,9 @@ export default async function VenuesPage() {
         renderItem={(venue) => (
           <Link
             href={`/venues/${venue.id}`}
-            className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
               <MapPin className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
             </div>
             <div className="flex min-w-0 flex-1 flex-col">

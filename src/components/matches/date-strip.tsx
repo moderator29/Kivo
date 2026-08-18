@@ -38,7 +38,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
       <Link
         href={`/matches?date=${dateKey(addDays(selected, -1))}`}
         aria-label="Previous day"
-        className="kivo-glass-sharp flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition hover:text-foreground"
+        className="kivo-glass-sharp flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition hover:text-foreground kivo-focusable"
       >
         <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
       </Link>
@@ -55,16 +55,16 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
               aria-current={isSelected ? "date" : undefined}
               className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-center transition ${
                 isSelected
-                  ? "kivo-gradient-victory text-kivo-white"
-                  : "text-foreground-muted hover:bg-white/[0.06] hover:text-foreground"
-              }`}
+                  ? "kivo-gradient-victory text-on-accent"
+                  : "text-foreground-muted hover:bg-surface-2 hover:text-foreground"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
             >
               <span className="text-[11px] font-semibold uppercase tracking-wide opacity-80">
                 {day.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}
               </span>
               <span className="text-sm font-semibold tabular-nums">{day.getUTCDate()}</span>
               <span
-                className={`h-1 w-1 rounded-full ${isToday ? (isSelected ? "bg-kivo-white" : "bg-kivo-cyan") : "bg-transparent"}`}
+                className={`h-1 w-1 rounded-full ${isToday ? (isSelected ? "bg-on-accent" : "bg-accent") : "bg-transparent"}`}
                 aria-hidden="true"
               />
             </Link>
@@ -75,7 +75,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
       <Link
         href={`/matches?date=${dateKey(addDays(selected, 1))}`}
         aria-label="Next day"
-        className="kivo-glass-sharp flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition hover:text-foreground"
+        className="kivo-glass-sharp flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition hover:text-foreground kivo-focusable"
       >
         <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
       </Link>
@@ -83,7 +83,7 @@ export function MatchesDateStrip({ selected }: { selected: Date }) {
       {selectedKey !== todayKey && (
         <Link
           href="/matches"
-          className="kivo-glass-sharp shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground"
+          className="kivo-glass-sharp shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground kivo-focusable"
         >
           Today
         </Link>

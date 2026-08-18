@@ -71,7 +71,7 @@ export default async function DiscoverPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-6">
         <div className="kivo-gradient-prime flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-          <Compass className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
+          <Compass className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
         </div>
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-foreground">Discover</h1>
@@ -101,9 +101,9 @@ export default async function DiscoverPage() {
       <FadeIn delay={0.1 + staggerDelay(surfaces.length, 0.06)}>
         <Link
           href="/transparency"
-          className="kivo-glass flex items-center gap-3 rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+          className="kivo-glass kivo-glass-interactive flex items-center gap-3 rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
-          <ShieldCheck className="h-5 w-5 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+          <ShieldCheck className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
           <span className="flex flex-col">
             <span className="text-sm font-medium text-foreground">What KIVO knows</span>
             <span className="text-xs text-foreground-muted">See exactly what&apos;s synced right now, and how fresh it is.</span>

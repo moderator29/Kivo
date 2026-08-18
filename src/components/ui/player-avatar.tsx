@@ -38,7 +38,7 @@ export function PlayerAvatar({
   }
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-white/5"
+      className="flex shrink-0 items-center justify-center rounded-full bg-surface-1"
       style={{ width: size, height: size }}
     >
       <UserRound className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.5} />

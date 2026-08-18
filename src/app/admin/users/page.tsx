@@ -39,7 +39,7 @@ export default async function AdminUsersPage() {
       <FadeIn delay={0.08} className="kivo-glass-brand overflow-x-auto rounded-2xl">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-foreground-subtle">
+            <tr className="border-b border-hairline-soft text-xs uppercase tracking-wide text-foreground-subtle">
               <th className="px-4 py-3 font-medium">Username</th>
               <th className="px-4 py-3 font-medium">Display name</th>
               <th className="px-4 py-3 font-medium">Role</th>
@@ -48,7 +48,7 @@ export default async function AdminUsersPage() {
           </thead>
           <tbody>
             {(users ?? []).map((user) => (
-              <tr key={user.id} className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.03]">
+              <tr key={user.id} className="border-b border-hairline-soft transition-colors last:border-0 hover:bg-surface-2">
                 <td className="px-4 py-3 text-foreground">{user.username}</td>
                 <td className="px-4 py-3 text-foreground-muted">{user.display_name ?? "-"}</td>
                 <td className="px-4 py-3 text-foreground-muted">{user.role}</td>

@@ -102,7 +102,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col items-center gap-2 text-center">
         <TeamCrest crestUrl={team.crestUrl} name={team.name} size={48} />
-        <Link href={`/teams/${team.id}`} className="text-base font-semibold text-foreground hover:text-kivo-cyan">
+        <Link href={`/teams/${team.id}`} className="text-base font-semibold text-foreground hover:text-accent">
           {team.name}
         </Link>
         {team.country && <p className="text-xs text-foreground-subtle">{team.country}</p>}
@@ -135,7 +135,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
                 ["L", team.standing.lost],
                 ["PTS", team.standing.points],
               ].map(([label, value]) => (
-                <div key={label as string} className="rounded-lg bg-white/5 px-1.5 py-1.5">
+                <div key={label as string} className="rounded-lg bg-surface-2 px-1.5 py-1.5">
                   <div className="text-xs font-semibold text-foreground">{value}</div>
                   <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
                 </div>
@@ -180,7 +180,7 @@ export default async function TeamComparePage({
         </p>
         <Link
           href="/teams"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Browse teams
         </Link>
@@ -245,7 +245,7 @@ export default async function TeamComparePage({
           <p className="text-sm text-foreground-muted">
             One of the selected teams couldn&apos;t be found. It may have been removed, or the link is incorrect.
           </p>
-          <Link href="/teams" className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
+          <Link href="/teams" className="text-xs font-medium text-accent hover:text-accent/80">
             Browse teams
           </Link>
         </FadeIn>

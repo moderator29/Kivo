@@ -114,13 +114,13 @@ export function OnboardingForm({
                 onClick={() => setSelectedTeamId(team.id)}
                 className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors disabled:opacity-50 ${
                   isSelected
-                    ? "border-kivo-cyan/60 bg-kivo-cyan/10 text-foreground"
-                    : "border-white/10 bg-kivo-obsidian text-foreground-muted hover:border-white/20"
-                }`}
+                    ? "border-accent/60 bg-accent/10 text-foreground"
+                    : "border-hairline bg-background text-foreground-muted hover:border-hairline-strong"
+                } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
               >
                 <TeamCrest crestUrl={team.crest_url} name={team.name} size={20} />
                 <span className="truncate">{team.short_name ?? team.name}</span>
-                {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-kivo-cyan" strokeWidth={2.5} />}
+                {isSelected && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.5} />}
               </button>
             );
           })}
@@ -133,7 +133,7 @@ export function OnboardingForm({
           onClick={() => handleFinish(selectedTeamId)}
           whileHover={pending || !selectedTeamId ? undefined : { scale: 1.02 }}
           whileTap={pending || !selectedTeamId ? undefined : { scale: 0.97 }}
-          className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-on-accent kivo-raise disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {pending ? "Saving…" : "Continue"}
         </motion.button>
@@ -142,7 +142,7 @@ export function OnboardingForm({
           type="button"
           disabled={pending}
           onClick={() => handleFinish(null)}
-          className="text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50"
+          className="text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Skip for now
         </button>
@@ -172,7 +172,7 @@ export function OnboardingForm({
               value={usernameValue}
               onChange={(e) => handleUsernameChange(e.target.value)}
               placeholder="e.g. lagos_ultra"
-              className="w-full rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2.5 pr-9 text-sm text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
+              className="w-full rounded-xl border border-hairline bg-background px-3 py-2.5 pr-9 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent-strong focus:outline-none"
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
               {availability === "checking" && (
@@ -223,7 +223,7 @@ export function OnboardingForm({
           aria-busy={pending}
           whileHover={pending || availability === "taken" ? undefined : { scale: 1.02 }}
           whileTap={pending || availability === "taken" ? undefined : { scale: 0.97 }}
-          className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="kivo-gradient-prime rounded-xl px-4 py-2.5 text-sm font-semibold text-on-accent kivo-raise disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {pending ? "Saving…" : "Continue"}
         </motion.button>
@@ -232,7 +232,7 @@ export function OnboardingForm({
           type="button"
           disabled={pending}
           onClick={() => startTransition(() => skipOnboarding())}
-          className="text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50"
+          className="text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Skip for now
         </button>

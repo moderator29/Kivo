@@ -43,7 +43,7 @@ export function LiveFixtureList({ fixtures }: { fixtures: LiveListFixture[] }) {
             {group.competitionId ? (
               <Link
                 href={`/leagues/${group.competitionId}`}
-                className="text-xs font-semibold text-foreground-muted transition hover:text-kivo-cyan"
+                className="text-xs font-semibold text-foreground-muted transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 {group.competitionName}
               </Link>
@@ -54,7 +54,7 @@ export function LiveFixtureList({ fixtures }: { fixtures: LiveListFixture[] }) {
               {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
             </span>
           </div>
-          <div className="flex flex-col divide-y divide-white/5">
+          <div className="flex flex-col divide-y divide-hairline-soft">
             {group.fixtures.map((fixture) => (
               <FixtureRowCard key={fixture.id} fixture={fixture} />
             ))}
@@ -72,7 +72,7 @@ function FixtureRowCard({ fixture }: { fixture: LiveListFixture }) {
   return (
     <Link
       href={`/matches/${fixture.id}`}
-      className="flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-white/5"
+      className="flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
     >
       <div className="flex items-center justify-end">
         <FixtureStatusBadge

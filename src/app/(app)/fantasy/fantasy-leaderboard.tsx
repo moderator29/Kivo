@@ -38,21 +38,21 @@ export function FantasyLeaderboard({
     <div className="flex flex-col gap-3">
       <div className="kivo-glass-brand flex flex-col gap-1 rounded-2xl p-4">
         <h2 className="px-1 pb-2 text-sm font-semibold text-foreground">League standings</h2>
-        <div className="flex flex-col divide-y divide-white/5">
+        <div className="flex flex-col divide-y divide-hairline-soft">
           {entries.map((entry, index) => {
             const isViewer = entry.teamId === activeTeamId;
             return (
               <div
                 key={entry.teamId}
                 className={`flex items-center gap-3 px-2 py-2.5 ${
-                  isViewer ? "rounded-xl bg-kivo-cyan/10 ring-1 ring-kivo-cyan/30" : ""
+                  isViewer ? "rounded-xl bg-accent/10 ring-1 ring-accent/30" : ""
                 }`}
               >
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-1 ${
                     index === 0
                       ? "bg-achievement/15 text-achievement ring-achievement/30"
-                      : "bg-white/[0.06] text-foreground-subtle ring-white/10"
+                      : "bg-surface-2 text-foreground-subtle ring-hairline"
                   }`}
                 >
                   {index + 1}
@@ -61,14 +61,14 @@ export function FantasyLeaderboard({
                   <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
                     <span className="truncate">{entry.teamName}</span>
                     {isViewer && (
-                      <span className="shrink-0 rounded-full bg-kivo-cyan/20 px-1.5 py-0.5 text-[11px] font-semibold text-kivo-cyan">
+                      <span className="shrink-0 rounded-full bg-accent/20 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
                         You
                       </span>
                     )}
                   </p>
                   <Link
                     href={`/u/${entry.ownerUsername}`}
-                    className="block truncate text-xs text-foreground-subtle hover:text-kivo-cyan"
+                    className="block truncate text-xs text-foreground-subtle hover:text-accent"
                   >
                     @{entry.ownerUsername}
                   </Link>

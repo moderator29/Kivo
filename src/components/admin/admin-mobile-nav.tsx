@@ -46,7 +46,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-label="Open admin navigation"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.05] text-foreground-muted transition-colors hover:bg-white/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-1 text-foreground-muted transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           <Menu className="h-5 w-5" strokeWidth={1.75} />
         </button>
@@ -63,7 +63,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
           >
             <div
               aria-hidden="true"
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-overlay backdrop-blur-sm"
               onClick={() => setOpen(false)}
             />
             <motion.div
@@ -85,7 +85,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
                 <button
                   onClick={() => setOpen(false)}
                   aria-label="Close admin navigation"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.05] text-foreground-muted transition-colors hover:bg-white/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-1 text-foreground-muted transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   <X className="h-4 w-4" strokeWidth={1.75} />
                 </button>
@@ -95,7 +95,7 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
                 <span className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
                   Admin
                 </span>
-                <div className="flex flex-col divide-y divide-white/[0.06] rounded-2xl bg-white/[0.02]">
+                <div className="flex flex-col divide-y divide-hairline-soft rounded-2xl bg-surface-1">
                   {items.map((item) => {
                     const active = isActiveRoute(pathname, item.href);
                     return (
@@ -105,8 +105,8 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
                         onClick={() => setOpen(false)}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "flex min-h-14 items-center gap-3 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
-                          active ? "text-kivo-cyan" : "text-foreground hover:text-kivo-cyan",
+                          "flex min-h-14 items-center gap-3 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                          active ? "text-accent" : "text-foreground hover:text-accent",
                         )}
                       >
                         <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
@@ -117,11 +117,11 @@ export function AdminMobileNav({ items }: { items: { href: string; label: string
                 </div>
               </div>
 
-              <div className="mt-auto flex flex-col divide-y divide-white/[0.06] rounded-2xl bg-white/[0.02]">
+              <div className="mt-auto flex flex-col divide-y divide-hairline-soft rounded-2xl bg-surface-1">
                 <Link
                   href="/home"
                   onClick={() => setOpen(false)}
-                  className="flex min-h-14 items-center px-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                  className="flex min-h-14 items-center px-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   ← Back to KIVO
                 </Link>

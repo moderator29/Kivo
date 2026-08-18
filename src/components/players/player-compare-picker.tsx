@@ -76,7 +76,7 @@ function PlayerSlot({
             type="button"
             onClick={() => onChange(null)}
             aria-label={`Clear ${label}`}
-            className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition hover:bg-white/5"
+            className="shrink-0 rounded-lg p-1.5 text-foreground-subtle transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <X className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
@@ -94,11 +94,11 @@ function PlayerSlot({
               onFocus={() => setOpen(true)}
               placeholder="Search players…"
               aria-label={label}
-              className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-kivo-cyan/50"
+              className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
             />
           </div>
           {open && query.trim().length >= 2 && (
-            <div className="kivo-glass absolute top-full z-20 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl p-1.5">
+            <div className="kivo-popover absolute top-full z-20 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl p-1.5">
               {searching && visibleResults.length === 0 ? (
                 <div className="flex flex-col gap-1" aria-label="Searching" role="status">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -123,7 +123,7 @@ function PlayerSlot({
                       setQuery("");
                       setOpen(false);
                     }}
-                    className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white/5"
+                    className="kivo-menu-item gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                   >
                     <PlayerAvatar photoUrl={option.photoUrl} name={option.name} size={28} />
                     <div className="min-w-0 flex-1">
@@ -179,7 +179,7 @@ export function PlayerComparePicker({
         type="button"
         onClick={handleCompare}
         disabled={!canCompare}
-        className="kivo-gradient-prime self-center rounded-xl px-6 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        className="kivo-gradient-prime self-center rounded-xl px-6 py-2.5 text-sm font-semibold text-on-accent kivo-raise disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         Compare
       </button>

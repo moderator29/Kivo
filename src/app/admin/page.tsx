@@ -15,7 +15,7 @@ function StatCard({
 }) {
   return (
     <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-5">
-      <Icon className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+      <Icon className="h-4 w-4 text-accent" strokeWidth={1.75} />
       <span className="text-2xl font-semibold text-foreground">{value}</span>
       <span className="text-xs font-medium text-foreground-subtle">{label}</span>
     </div>

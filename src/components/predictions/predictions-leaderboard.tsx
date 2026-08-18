@@ -20,7 +20,7 @@ export function PredictionsLeaderboard({
     <div className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <Trophy className="h-4 w-4 text-accent" strokeWidth={1.75} />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Leaderboard</h2>
         </div>
         <span className="text-xs text-foreground-subtle">{CORRECT_PREDICTION_POINTS} pts per correct pick</span>
@@ -40,7 +40,7 @@ export function PredictionsLeaderboard({
               <li
                 key={entry.profileId}
                 className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
-                  isViewer ? "bg-white/[0.08]" : ""
+                  isViewer ? "bg-accent-soft" : ""
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-3">
@@ -48,15 +48,15 @@ export function PredictionsLeaderboard({
                   {entry.username ? (
                     <Link
                       href={`/u/${entry.username}`}
-                      className="truncate text-sm font-medium text-foreground hover:text-kivo-cyan"
+                      className="truncate text-sm font-medium text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                     >
                       {entry.name}
-                      {isViewer && <span className="ml-1.5 text-xs font-normal text-kivo-cyan">(you)</span>}
+                      {isViewer && <span className="ml-1.5 text-xs font-normal text-accent">(you)</span>}
                     </Link>
                   ) : (
                     <span className="truncate text-sm font-medium text-foreground">
                       {entry.name}
-                      {isViewer && <span className="ml-1.5 text-xs font-normal text-kivo-cyan">(you)</span>}
+                      {isViewer && <span className="ml-1.5 text-xs font-normal text-accent">(you)</span>}
                     </span>
                   )}
                 </div>

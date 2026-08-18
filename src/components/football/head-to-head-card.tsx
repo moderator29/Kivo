@@ -21,7 +21,7 @@ export function HeadToHeadCard({ teamA, teamB, record }: { teamA: TeamRef; teamB
   return (
     <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
       <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-        <Swords className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+        <Swords className="h-4 w-4 text-accent" strokeWidth={1.75} />
         Head to head
       </h2>
 
@@ -37,17 +37,17 @@ export function HeadToHeadCard({ teamA, teamB, record }: { teamA: TeamRef; teamB
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-white/5 px-2 py-2">
+            <div className="rounded-xl bg-surface-1 px-2 py-2">
               <div className="text-2xl font-bold text-foreground">{record.teamAWins}</div>
               <div className="truncate text-[11px] uppercase tracking-wide text-foreground-subtle">
                 {teamA.shortName ?? teamA.name} wins
               </div>
             </div>
-            <div className="rounded-xl bg-white/5 px-2 py-2">
+            <div className="rounded-xl bg-surface-1 px-2 py-2">
               <div className="text-2xl font-bold text-foreground">{record.draws}</div>
               <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">Draws</div>
             </div>
-            <div className="rounded-xl bg-white/5 px-2 py-2">
+            <div className="rounded-xl bg-surface-1 px-2 py-2">
               <div className="text-2xl font-bold text-foreground">{record.teamBWins}</div>
               <div className="truncate text-[11px] uppercase tracking-wide text-foreground-subtle">
                 {teamB.shortName ?? teamB.name} wins

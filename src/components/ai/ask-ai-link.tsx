@@ -14,7 +14,7 @@ export function AskAiLink({ ctx, id, label }: { ctx: "fixture" | "team" | "playe
   return (
     <Link
       href={`/ai?ctx=${ctx}&id=${id}`}
-      className="mt-4 flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+      className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
     >
       <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
       {label ?? "Ask AI about this"}

@@ -31,10 +31,10 @@ export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolea
   })).filter((group) => group.items.length > 0);
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/5 bg-kivo-navy-deep/60 px-3 py-6 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-hairline-soft bg-surface-3/60 px-3 py-6 lg:flex">
       <Link
         href="/home"
-        className="flex items-center gap-2 rounded-lg px-3 pb-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="flex items-center gap-2 rounded-lg px-3 pb-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <Image src={kivoLogo} alt="" width={36} height={36} className="h-9 w-9 shrink-0" priority />
         <span className="text-lg font-semibold tracking-tight text-foreground">KIVO</span>
@@ -52,7 +52,7 @@ export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolea
             slim accent bar + icon/text color, not a filled pill. */}
         <div className="kivo-glass flex flex-col rounded-2xl">
           {groups.map((group, index) => (
-            <div key={group.label} className={cn("flex flex-col py-1.5", index > 0 && "border-t border-white/5")}>
+            <div key={group.label} className={cn("flex flex-col py-1.5", index > 0 && "border-t border-hairline-soft")}>
               <span className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
                 {group.label}
               </span>
@@ -66,7 +66,7 @@ export function DesktopSidebar({ aiConfigured, isAdmin }: { aiConfigured: boolea
               server-side in (app)/layout.tsx), same as ADMIN_NAV_ITEM's own
               reasoning for staying out of NAV_ITEMS/SIDEBAR_GROUPS above. */}
           {isAdmin && (
-            <div className="flex flex-col border-t border-white/5 py-1.5">
+            <div className="flex flex-col border-t border-hairline-soft py-1.5">
               <span className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
                 Admin
               </span>
@@ -96,7 +96,7 @@ function SidebarLink({
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60",
+        "group relative flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
         active ? "font-semibold text-foreground" : "text-foreground-muted hover:text-foreground",
       )}
     >
@@ -111,13 +111,13 @@ function SidebarLink({
       <Icon
         className={cn(
           "h-[18px] w-[18px] shrink-0 transition-colors",
-          active ? "text-kivo-cyan" : "text-foreground-subtle group-hover:text-foreground-muted",
+          active ? "text-accent" : "text-foreground-subtle group-hover:text-foreground-muted",
         )}
         strokeWidth={1.75}
       />
       <span className="flex-1">{item.label}</span>
       {isComingSoon && (
-        <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+        <span className="rounded-full border border-hairline px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
           Soon
         </span>
       )}

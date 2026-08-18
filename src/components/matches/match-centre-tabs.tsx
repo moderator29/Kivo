@@ -118,7 +118,7 @@ function tabFromSlug(slug: string | null): Tab {
 function PlayerNameLink({ playerId, playerName, className }: { playerId: string; playerName: string; className?: string }) {
   if (!playerId) return <span className={className}>{playerName}</span>;
   return (
-    <Link href={`/players/${playerId}`} className={`${className ?? ""} hover:text-kivo-cyan hover:underline`.trim()}>
+    <Link href={`/players/${playerId}`} className={`${className ?? ""} hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`.trim()}>
       {playerName}
     </Link>
   );
@@ -154,7 +154,7 @@ function DetailsTab({ events }: { events: MatchEvent[] }) {
             <span className="text-sm text-foreground">{EVENT_LABEL[event.eventType]}</span>
             <span className="text-xs text-foreground-subtle">
               {event.playerId ? (
-                <Link href={`/players/${event.playerId}`} className="hover:text-kivo-cyan hover:underline">
+                <Link href={`/players/${event.playerId}`} className="hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
                   {event.playerName ?? "Unknown player"}
                 </Link>
               ) : (
@@ -164,7 +164,7 @@ function DetailsTab({ events }: { events: MatchEvent[] }) {
                 <>
                   {" · "}
                   {event.relatedPlayerId ? (
-                    <Link href={`/players/${event.relatedPlayerId}`} className="hover:text-kivo-cyan hover:underline">
+                    <Link href={`/players/${event.relatedPlayerId}`} className="hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
                       {event.relatedPlayerName}
                     </Link>
                   ) : (
@@ -338,9 +338,9 @@ function StatsTab({
                 {awayVal !== null ? row.suffix ?? "" : ""}
               </span>
             </div>
-            <div className="flex h-1.5 overflow-hidden rounded-full bg-white/5">
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
               <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
-              <div className="h-full bg-white/15" style={{ width: `${100 - homePct}%` }} />
+              <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
             </div>
           </div>
         );
@@ -377,7 +377,7 @@ function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: Standi
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-                className={highlighted ? "bg-kivo-cyan/5" : ""}
+                className={highlighted ? "bg-accent/5" : ""}
               >
                 <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
                 <td className="max-w-0 py-2 text-foreground">
@@ -416,7 +416,7 @@ export function MatchCentreTabs(props: MatchCentreTabsProps) {
 function MatchCentreTabsFallback() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1 border-b border-white/10">
+      <div className="flex gap-1 border-b border-hairline">
         {TABS.map((tab) => (
           <div key={tab} className="relative flex-1 px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted">
             {tab}
@@ -483,7 +483,7 @@ function MatchCentreTabsInner({
         role="tablist"
         aria-label="Match centre sections"
         onKeyDown={handleTabKeyDown}
-        className="flex gap-1 border-b border-white/10"
+        className="flex gap-1 border-b border-hairline"
       >
         {TABS.map((tab) => (
           <button
@@ -498,7 +498,7 @@ function MatchCentreTabsInner({
             aria-controls={`match-centre-panel-${tabSlug(tab)}`}
             tabIndex={active === tab ? 0 : -1}
             onClick={() => setActive(tab)}
-            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="relative flex-1 px-1 py-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <span className={`relative ${active === tab ? "text-foreground" : "text-foreground-muted"}`}>{tab}</span>
             {active === tab && (

@@ -34,8 +34,8 @@ export function FixtureStatusBadge({
         live
           ? "border-live/30 bg-live/10 text-live"
           : status === "finished"
-            ? "border-white/10 text-foreground-subtle"
-            : "border-white/10 text-foreground-muted"
+            ? "border-hairline text-foreground-subtle"
+            : "border-hairline text-foreground-muted"
       }`}
     >
       {live && showLiveDot && (

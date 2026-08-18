@@ -47,7 +47,7 @@ export default async function TransparencyPage() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 lg:px-8">
       <FadeIn className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-6">
         <div className="kivo-gradient-prime flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-          <ShieldCheck className="h-6 w-6 text-kivo-white" strokeWidth={1.75} />
+          <ShieldCheck className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
         </div>
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-foreground">What KIVO knows</h1>

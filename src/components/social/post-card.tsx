@@ -46,7 +46,7 @@ function linkifyBody(body: string) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-kivo-cyan underline underline-offset-2 hover:text-kivo-cyan/80"
+          className="text-accent underline underline-offset-2 hover:text-accent/80"
         >
           {url}
         </a>
@@ -91,7 +91,7 @@ function PostBody({ body }: { body: string }) {
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+          className="text-xs font-medium text-accent hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -158,11 +158,11 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
             aria-busy={pending}
             aria-pressed={isOwn}
             className={cn(
-              "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
-              isOwn ? "border-kivo-cyan/50" : "border-white/10 hover:bg-white/5",
+              "relative overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed",
+              isOwn ? "border-accent/50" : "border-hairline hover:bg-surface-2",
             )}
           >
-            <span className="absolute inset-y-0 left-0 bg-kivo-cyan/10" style={{ width: `${pct}%` }} aria-hidden="true" />
+            <span className="absolute inset-y-0 left-0 bg-accent-soft" style={{ width: `${pct}%` }} aria-hidden="true" />
             <span className="relative flex items-center justify-between gap-2">
               <span className={cn("flex min-w-0 items-center gap-1 truncate", isOwn ? "font-semibold text-foreground" : "text-foreground-muted")}>
                 {isOwn && <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />}
@@ -285,17 +285,17 @@ export function PostCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
-      className="kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-[0_12px_40px_-16px_rgba(37,99,255,0.35)]"
+      className="kivo-glass scroll-mt-24 flex flex-col gap-3 rounded-2xl p-4 transition-shadow duration-300 hover:shadow-pop"
     >
       <div className="flex items-center gap-2">
-        <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-kivo-white ring-1 ring-white/10">
+        <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-on-accent ring-1 ring-hairline">
           {authorName.charAt(0).toUpperCase()}
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
           {authorUsername ? (
             <Link
               href={`/u/${authorUsername}`}
-              className="w-fit truncate text-sm font-medium text-foreground hover:text-kivo-cyan"
+              className="w-fit truncate text-sm font-medium text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {authorName}
             </Link>
@@ -323,7 +323,7 @@ export function PostCard({
             aria-label={reported ? "Reported" : "Report post"}
             whileTap={reported ? undefined : { scale: 0.88 }}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:cursor-not-allowed",
+              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed",
               reported ? "text-foreground-subtle" : "text-foreground-subtle hover:text-critical",
             )}
           >
@@ -358,7 +358,7 @@ export function PostCard({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-                className="kivo-glass-sharp absolute right-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl p-1"
+                className="kivo-popover absolute right-0 bottom-full z-20 mb-2 w-48 overflow-hidden rounded-xl p-1"
               >
                 <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   Report this post
@@ -371,7 +371,7 @@ export function PostCard({
                     disabled={reportPending}
                     aria-busy={reportPending}
                     onClick={() => submitReport(reason)}
-                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kivo-cyan/60 disabled:opacity-50"
+                    className="kivo-menu-item text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                   >
                     {reason}
                   </button>

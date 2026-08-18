@@ -92,7 +92,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           {competition.logo_url ? (
             <Image src={competition.logo_url} alt={competition.name} width={36} height={36} className="h-9 w-9 shrink-0 object-contain" />
           ) : (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
               <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
             </div>
           )}
@@ -146,13 +146,13 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
               </thead>
               <tbody>
                 {standings.map((row) => (
-                  <tr key={row.team_id} className="transition-colors hover:bg-white/5">
+                  <tr key={row.team_id} className="transition-colors hover:bg-surface-2">
                     <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
                     <td className="max-w-0 py-2 text-foreground">
                       {row.team?.id ? (
                         <Link
                           href={`/teams/${row.team.id}`}
-                          className="flex items-center gap-2 truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                          className="flex items-center gap-2 truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                         >
                           {row.team.crest_url ? (
                             <Image src={row.team.crest_url} alt="" width={16} height={16} className="shrink-0 object-contain" />
@@ -204,7 +204,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
       <FadeIn delay={0.25} className="self-center">
         <Link
           href="/leagues"
-          className="flex items-center gap-1 text-xs text-foreground-subtle underline decoration-white/20 underline-offset-4 hover:text-foreground-muted"
+          className="flex items-center gap-1 text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
         >
           <ArrowLeft className="h-3 w-3" strokeWidth={2} />
           Back to leagues

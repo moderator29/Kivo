@@ -40,9 +40,9 @@ function ConsensusBar({ consensus }: { consensus: PredictionConsensus }) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex h-1.5 overflow-hidden rounded-full bg-white/5">
-        <div className="h-full bg-kivo-cyan" style={{ width: `${pct(consensus.home_win)}%` }} />
-        <div className="h-full bg-white/25" style={{ width: `${pct(consensus.draw)}%` }} />
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
+        <div className="h-full bg-accent" style={{ width: `${pct(consensus.home_win)}%` }} />
+        <div className="h-full bg-hairline-strong" style={{ width: `${pct(consensus.draw)}%` }} />
         <div className="h-full bg-kivo-violet" style={{ width: `${pct(consensus.away_win)}%` }} />
       </div>
       <p className="text-center text-[11px] text-foreground-subtle">
@@ -163,7 +163,7 @@ export function PredictionCard({
         <div className="flex flex-1 items-center gap-2">
           <TeamCrest crestUrl={homeTeam.crest_url} name={homeTeam.name} />
           {homeTeam.id ? (
-            <Link href={`/teams/${homeTeam.id}`} className="truncate text-sm text-foreground hover:text-kivo-cyan">
+            <Link href={`/teams/${homeTeam.id}`} className="truncate text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
               {homeTeam.name}
             </Link>
           ) : (
@@ -175,7 +175,7 @@ export function PredictionCard({
           {awayTeam.id ? (
             <Link
               href={`/teams/${awayTeam.id}`}
-              className="truncate text-right text-sm text-foreground hover:text-kivo-cyan"
+              className="truncate text-right text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {awayTeam.name}
             </Link>
@@ -200,8 +200,8 @@ export function PredictionCard({
               whileTap={{ scale: 0.97 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               className={`relative overflow-hidden rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-60 ${
-                active ? "border-transparent" : "border-white/10 hover:bg-white/5"
-              }`}
+                active ? "border-transparent" : "border-hairline hover:bg-surface-2"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
             >
               {active && (
                 <motion.span
@@ -210,7 +210,7 @@ export function PredictionCard({
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
-              <span className={`relative ${active ? "text-kivo-white" : "text-foreground-muted"}`}>
+              <span className={`relative ${active ? "text-on-accent" : "text-foreground-muted"}`}>
                 {PREDICTION_OUTCOME_LABEL[outcome]}
               </span>
             </motion.button>

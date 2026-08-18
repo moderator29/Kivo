@@ -3,7 +3,6 @@ import Link from "next/link";
 import { SignUp } from "@clerk/nextjs";
 import { FadeIn } from "@/components/ui/fade-in";
 import { sanitizeRedirectPath } from "@/lib/clerk";
-import { kivoClerkAppearance } from "@/lib/clerk-appearance";
 import kivoLogo from "../../../../public/brand/kivo-logo-transparent.webp";
 
 export default async function SignUpPage({
@@ -38,15 +37,14 @@ export default async function SignUpPage({
             <SignUp
               forceRedirectUrl={redirectUrl}
               signInForceRedirectUrl={redirectUrl}
-              appearance={kivoClerkAppearance}
             />
             <p className="max-w-xs text-center text-xs text-foreground-subtle">
               By signing up, you agree to KIVO&apos;s{" "}
-              <Link href="/terms" className="text-kivo-cyan transition-colors hover:text-foreground">
+              <Link href="/terms" className="text-accent transition-colors hover:text-foreground">
                 Terms of Service
               </Link>{" "}
               and{" "}
-              <Link href="/privacy" className="text-kivo-cyan transition-colors hover:text-foreground">
+              <Link href="/privacy" className="text-accent transition-colors hover:text-foreground">
                 Privacy Policy
               </Link>
               .

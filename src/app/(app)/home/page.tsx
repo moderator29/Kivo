@@ -145,7 +145,7 @@ export default async function HomePage() {
       <FadeIn delay={0.08} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Today</h2>
-          <Link href="/matches" className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
+          <Link href="/matches" className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80">
             All matches
             <ArrowRight className="h-3 w-3" strokeWidth={2} />
           </Link>
@@ -174,7 +174,7 @@ export default async function HomePage() {
         ) : (
           <p className="mt-3 text-sm text-foreground-muted">
             No matches synced for today yet. The football data pipeline is admin-triggered, not automatic. Check{" "}
-            <Link href="/matches" className="text-kivo-cyan hover:text-kivo-cyan/80">
+            <Link href="/matches" className="text-accent hover:text-accent/80">
               Matches
             </Link>{" "}
             for the latest.
@@ -190,7 +190,7 @@ export default async function HomePage() {
         <FadeIn delay={0.1} className="kivo-glass-brand rounded-2xl p-5">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-              <Flame className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+              <Flame className="h-4 w-4 text-accent" strokeWidth={1.75} />
               Your matchday
             </h2>
           </div>
@@ -226,13 +226,13 @@ export default async function HomePage() {
       <FadeIn delay={0.12} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Star className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Star className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Your teams
           </h2>
           {followedTeamIds.length > 0 && (
             <Link
               href="/profile/following"
-              className="flex items-center gap-1 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+              className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80"
             >
               Manage
               <ArrowRight className="h-3 w-3" strokeWidth={2} />
@@ -242,7 +242,7 @@ export default async function HomePage() {
 
         {!profile ? (
           <p className="mt-3 text-sm text-foreground-muted">
-            <Link href="/sign-up?redirect_url=%2Fhome" className="text-kivo-cyan hover:text-kivo-cyan/80">
+            <Link href="/sign-up?redirect_url=%2Fhome" className="text-accent hover:text-accent/80">
               Sign up to follow a team
             </Link>{" "}
             and see their fixtures here.
@@ -315,7 +315,7 @@ export default async function HomePage() {
       <FadeIn delay={0.48} className="kivo-glass rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Users className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+            <Users className="h-4 w-4 text-accent" strokeWidth={1.75} />
             Community
           </h2>
         </div>
@@ -324,7 +324,7 @@ export default async function HomePage() {
         </p>
         <Link
           href="/social"
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-white/[0.06] px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.1]"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
         >
           Open Social
           <ArrowRight className="h-4 w-4" strokeWidth={1.75} />

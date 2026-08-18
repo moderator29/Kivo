@@ -10,7 +10,7 @@ import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 export function SiteHeader() {
   return (
     <header className="flex items-center justify-between px-4 py-5 sm:px-6 lg:px-12">
-      <Link href="/" className="flex min-h-10 items-center gap-2">
+      <Link href="/" className="flex min-h-10 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
         <KivoMarkGlyph size={32} />
         <span className="text-lg font-semibold tracking-tight text-foreground">KIVO</span>
       </Link>
@@ -20,13 +20,13 @@ export function SiteHeader() {
             renders a couple of px short of the 40px guideline. */}
         <Link
           href="/sign-in"
-          className="flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 sm:px-4"
+          className="flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 sm:px-4"
         >
           Sign in
         </Link>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 sm:px-4"
+          className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-semibold text-on-accent kivo-glow kivo-raise kivo-focusable sm:px-4"
         >
           Sign up
         </Link>

@@ -91,7 +91,7 @@ export default async function FollowingPage() {
           </p>
           <Link
             href="/teams"
-            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+            className="kivo-gradient-prime rounded-xl px-4 py-2 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Browse teams
           </Link>
@@ -103,7 +103,7 @@ export default async function FollowingPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
                 Teams · {followedTeams.length}
               </h2>
-              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+              <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                 {followedTeams.map((team) => (
                   <div key={team.id} className="flex items-center gap-3 px-4 py-3">
                     <Link
@@ -125,14 +125,14 @@ export default async function FollowingPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
                 Players · {followedPlayers.length}
               </h2>
-              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+              <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                 {followedPlayers.map((player) => (
                   <div key={player.id} className="flex items-center gap-3 px-4 py-3">
                     <Link
                       href={`/players/${player.id}`}
                       className="flex min-w-0 flex-1 items-center gap-3 transition-all hover:translate-x-1"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
                         <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
@@ -154,14 +154,14 @@ export default async function FollowingPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
                 Competitions · {followedCompetitions.length}
               </h2>
-              <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+              <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                 {followedCompetitions.map((competition) => (
                   <div key={competition.id} className="flex items-center gap-3 px-4 py-3">
                     <Link
                       href={`/leagues/${competition.id}`}
                       className="flex min-w-0 flex-1 items-center gap-3 transition-all hover:translate-x-1"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
                         <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">

@@ -128,7 +128,7 @@ export default async function PlayerComparePage({
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
         <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
-          <GitCompareArrows className="h-5 w-5 text-kivo-cyan" strokeWidth={1.75} />
+          <GitCompareArrows className="h-5 w-5 text-accent" strokeWidth={1.75} />
           Compare players
         </h1>
         <p className="text-sm text-foreground-muted">
@@ -151,7 +151,7 @@ export default async function PlayerComparePage({
           <p className="text-sm text-foreground-muted">
             One of the selected players couldn&apos;t be found. It may have been removed, or the link is incorrect.
           </p>
-          <Link href="/players" className="text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80">
+          <Link href="/players" className="text-xs font-medium text-accent hover:text-accent/80">
             Browse players
           </Link>
         </FadeIn>
@@ -164,7 +164,7 @@ export default async function PlayerComparePage({
             <PlayerHeader player={playerB} />
           </div>
 
-          <div className="flex flex-col divide-y divide-white/5 border-t border-white/5">
+          <div className="flex flex-col divide-y divide-hairline-soft border-t border-hairline-soft">
             <StatRow label="Appearances" a={playerA.stats.appearances} b={playerB.stats.appearances} />
             <StatRow label="Starts" a={playerA.stats.starts} b={playerB.stats.starts} />
             <StatRow label="Goals" a={playerA.stats.goals} b={playerB.stats.goals} />

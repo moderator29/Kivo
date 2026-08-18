@@ -122,13 +122,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/sign-in"
-            className="flex min-h-10 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="flex min-h-10 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             Sign in
           </Link>
           <Link
             href="/sign-up"
-            className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+            className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             Sign up
           </Link>
@@ -164,7 +164,7 @@ export default function LandingPage() {
             </FadeIn>
 
             <FadeIn delay={0.08}>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">
+              <span className="rounded-full border border-hairline px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
                 Football. Together. Live.
               </span>
             </FadeIn>
@@ -185,14 +185,14 @@ export default function LandingPage() {
             <FadeIn delay={0.32} className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/home"
-                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-kivo-white shadow-[0_0_0_1px_rgba(0,217,255,0.4),0_8px_30px_-8px_rgba(37,99,255,0.6)] transition duration-150 hover:scale-[1.03] hover:opacity-90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="kivo-gradient-prime flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Explore KIVO
                 <ArrowRight className="h-4 w-4" strokeWidth={2} />
               </Link>
               <Link
                 href="/sign-up"
-                className="kivo-glass-sharp flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground transition-all duration-150 hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+                className="kivo-glass-sharp kivo-raise flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Create free account
               </Link>
@@ -241,7 +241,7 @@ export default function LandingPage() {
 
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
           <FadeIn className="flex flex-col items-center gap-3 text-center">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-kivo-cyan">How it works</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">How it works</span>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
               Look around free. Sign up when you&apos;re ready to play.
             </h2>
@@ -249,7 +249,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {HOW_IT_WORKS.map((step, index) => (
               <FadeIn key={step.title} delay={index * 0.08} className="kivo-glass-brand flex flex-col gap-3 rounded-3xl p-6">
-                <step.icon className="h-8 w-8 text-kivo-cyan" strokeWidth={1.75} />
+                <step.icon className="h-8 w-8 text-accent" strokeWidth={1.75} />
                 <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
                 <p className="text-sm leading-relaxed text-foreground-muted">{step.description}</p>
               </FadeIn>
@@ -258,7 +258,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-white/5 px-6 py-12 lg:px-12">
+      <footer className="border-t border-hairline-soft px-6 py-12 lg:px-12">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
             <div className="flex max-w-xs flex-col gap-3">
@@ -292,7 +292,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <div className="flex flex-col gap-2 border-t border-white/5 pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 border-t border-hairline-soft pt-6 text-xs text-foreground-subtle sm:flex-row sm:items-center sm:justify-between">
             <span>© {new Date().getFullYear()} KIVO</span>
             <span>Real football data, real fans, no fabricated stats. Ever.</span>
           </div>

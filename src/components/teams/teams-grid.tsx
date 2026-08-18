@@ -43,12 +43,12 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
         renderItem={(team) => (
           <Link
             href={`/teams/${team.id}`}
-            className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.06]"
+            className="kivo-glass-sharp flex flex-col items-center gap-2 rounded-2xl p-4 text-center transition-all hover:-translate-y-0.5 hover:bg-surface-2 kivo-focusable"
           >
             {team.crestUrl ? (
               <Image src={team.crestUrl} alt={team.name} width={36} height={36} className="h-9 w-9 object-contain" />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2">
                 <Shield className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
               </div>
             )}
@@ -69,7 +69,7 @@ export function TeamsGrid({ initialTeams, initialHasMore }: { initialTeams: Team
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-center rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-white/5 disabled:opacity-50"
+          className="self-center rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

@@ -32,10 +32,10 @@ export function AdminSidebar({ items }: { items: { href: string; label: string; 
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60",
+                  "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all kivo-focusable",
                   active
-                    ? "kivo-gradient-prime text-kivo-white shadow-[0_0_16px_-2px_rgba(0,217,255,0.4)]"
-                    : "text-foreground-muted hover:bg-white/[0.05] hover:text-foreground",
+                    ? "kivo-gradient-prime text-on-accent kivo-glow-soft"
+                    : "text-foreground-muted hover:bg-surface-2 hover:text-foreground",
                 )}
               >
                 <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
@@ -47,7 +47,7 @@ export function AdminSidebar({ items }: { items: { href: string; label: string; 
         <div className="mt-auto px-2 pb-1">
           <Link
             href="/home"
-            className="flex min-h-10 items-center text-xs text-foreground-subtle transition-colors hover:text-foreground-muted"
+            className="flex min-h-10 items-center text-xs text-foreground-subtle transition-colors hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             ← Back to KIVO
           </Link>

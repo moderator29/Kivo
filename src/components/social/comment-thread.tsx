@@ -17,7 +17,7 @@ function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () =
         {comment.authorUsername ? (
           <Link
             href={`/u/${comment.authorUsername}`}
-            className="text-xs font-medium text-foreground hover:text-kivo-cyan"
+            className="text-xs font-medium text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             {comment.authorName}
           </Link>
@@ -31,7 +31,7 @@ function CommentItem({ comment, onReply }: { comment: CommentDTO; onReply?: () =
         <button
           type="button"
           onClick={onReply}
-          className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-kivo-cyan"
+          className="w-fit text-[11px] font-medium text-foreground-subtle transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Reply
         </button>
@@ -121,7 +121,7 @@ export function CommentThread({
         type="button"
         onClick={handleToggle}
         aria-expanded={expanded}
-        className="flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+        className="flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
         {count > 0 ? `${count} comment${count === 1 ? "" : "s"}` : "Comment"}
@@ -134,7 +134,7 @@ export function CommentThread({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col gap-3 overflow-hidden border-t border-white/5 pt-3"
+            className="flex flex-col gap-3 overflow-hidden border-t border-hairline-soft pt-3"
           >
             {loadPending && !loaded && <p className="text-xs text-foreground-subtle">Loading comments…</p>}
             {loadError && (
@@ -157,7 +157,7 @@ export function CommentThread({
                           onReply={() => setReplyTo({ id: comment.id, authorName: comment.authorName })}
                         />
                         {replies.length > 0 && (
-                          <div className="ml-4 flex flex-col gap-2 border-l border-white/5 pl-3">
+                          <div className="ml-4 flex flex-col gap-2 border-l border-hairline-soft pl-3">
                             {replies.map((reply) => (
                               <CommentItem key={reply.id} comment={reply} />
                             ))}
@@ -177,7 +177,7 @@ export function CommentThread({
                     <CornerDownRight className="h-3 w-3 shrink-0" strokeWidth={1.75} />
                     Replying to {replyTo.authorName}
                   </span>
-                  <button type="button" onClick={() => setReplyTo(null)} className="hover:text-foreground-muted">
+                  <button type="button" onClick={() => setReplyTo(null)} className="hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
                     Cancel
                   </button>
                 </div>
@@ -189,13 +189,13 @@ export function CommentThread({
                   placeholder={
                     signedIn ? (replyTo ? `Reply to ${replyTo.authorName}…` : "Write a comment…") : "Sign up to comment."
                   }
-                  className="w-full rounded-xl border border-white/10 bg-kivo-obsidian px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:border-kivo-blue focus:outline-none"
+                  className="w-full rounded-xl border border-hairline bg-background px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:border-accent-strong focus:outline-none"
                 />
                 <button
                   type="submit"
                   disabled={submitPending}
                   aria-busy={submitPending}
-                  className="kivo-gradient-prime shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-kivo-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="kivo-gradient-prime shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-on-accent kivo-raise disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   {submitPending ? "Posting…" : signedIn ? (replyTo ? "Reply" : "Post") : "Sign up to comment"}
                 </button>

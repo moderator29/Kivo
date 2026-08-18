@@ -55,7 +55,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
-          <FadeIn delay={0} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/5">
+          <FadeIn delay={0} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-2">
             <MapPin className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
           </FadeIn>
           <FadeIn delay={0.05} className="min-w-0 flex-1">
@@ -65,14 +65,14 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <FadeIn delay={0.1} className="mt-4 flex items-center gap-2 text-sm text-foreground-muted">
-          <Users2 className="h-4 w-4 shrink-0 text-kivo-cyan" strokeWidth={1.75} />
+          <Users2 className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
           {venue.capacity ? `Capacity ${venue.capacity.toLocaleString()}` : "Capacity not yet synced"}
         </FadeIn>
       </div>
 
       <FadeIn delay={0.15} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <CalendarClock className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
+          <CalendarClock className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Fixtures at this venue
         </h2>
         {fixtures && fixtures.length > 0 ? (

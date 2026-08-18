@@ -2,7 +2,6 @@ import Image from "next/image";
 import { SignIn } from "@clerk/nextjs";
 import { FadeIn } from "@/components/ui/fade-in";
 import { sanitizeRedirectPath } from "@/lib/clerk";
-import { kivoClerkAppearance } from "@/lib/clerk-appearance";
 import kivoLogo from "../../../../public/brand/kivo-logo-transparent.webp";
 
 export default async function SignInPage({
@@ -34,7 +33,6 @@ export default async function SignInPage({
             <SignIn
               forceRedirectUrl={redirectUrl}
               signUpForceRedirectUrl={redirectUrl}
-              appearance={kivoClerkAppearance}
             />
           </FadeIn>
         ) : (

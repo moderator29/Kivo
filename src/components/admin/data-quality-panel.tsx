@@ -38,7 +38,7 @@ export async function DataQualityPanel() {
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {rows.map((row) => (
-          <div key={row.label} className="flex flex-col gap-1 rounded-xl bg-white/[0.02] p-3">
+          <div key={row.label} className="flex flex-col gap-1 rounded-xl bg-surface-1 p-3">
             <span className={`text-lg font-semibold ${row.value === 0 ? "text-foreground" : "text-warning"}`}>
               {row.value}
             </span>

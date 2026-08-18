@@ -26,7 +26,7 @@ export default async function NotificationsPage({
         <p className="text-sm text-foreground-muted">Sign up to see your notifications.</p>
         <Link
           href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-kivo-white transition-opacity hover:opacity-90"
+          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Sign up
         </Link>
@@ -77,7 +77,7 @@ export default async function NotificationsPage({
           {hasPrev ? (
             <Link
               href={page - 1 > 1 ? `/notifications?page=${page - 1}` : "/notifications"}
-              className="rounded text-xs font-medium text-kivo-cyan hover:text-kivo-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              className="rounded text-xs font-medium text-accent hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Newer
             </Link>
@@ -87,7 +87,7 @@ export default async function NotificationsPage({
           {hasNext ? (
             <Link
               href={`/notifications?page=${page + 1}`}
-              className="rounded text-xs font-medium text-kivo-cyan hover:text-kivo-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+              className="rounded text-xs font-medium text-accent hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               Older
             </Link>
