@@ -52,10 +52,10 @@ export default function TermsPage() {
           <div className="flex flex-col gap-3 border-t border-hairline-soft pt-8">
             <h2 className="text-lg font-semibold text-foreground sm:text-xl">2. Account eligibility</h2>
             <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
-              You must be at least 13 years old to create a KIVO account. You sign in through Clerk, our
-              authentication provider, using email or continuing with X. You&apos;re responsible for keeping your
-              sign-in credentials secure and for the activity that happens under your account. One account per
-              person, please.
+              You must be at least 13 years old to create a KIVO account. You sign in with your email address:
+              Supabase Auth, our authentication provider, emails you a one-time code and entering it signs you in.
+              There is no password. You&apos;re responsible for keeping access to that email account secure and for
+              the activity that happens under your KIVO account. One account per person, please.
             </p>
           </div>
 

@@ -57,14 +57,15 @@ export async function selectKivoAvatar(kivoId: string) {
 
 /**
  * Uploads a real user photo to the `avatars` Storage bucket at
- * `<clerk_user_id>/<timestamp>.<ext>` — the folder-per-user layout the
- * bucket's own RLS policies (avatars_insert_own etc.) key off via
- * private.current_clerk_user_id() — then makes it the active avatar. Never
- * overwrites/deletes a prior upload (a fresh timestamped path every time),
- * so an in-flight request referencing the old URL is never broken out from
- * under it; an old, no-longer-referenced object is just left in place (this
- * feature deliberately doesn't build a cleanup path — see this action's
- * module doc and RECOMMENDATIONS.md for the follow-up idea).
+ * `<auth_user_id>/<timestamp>.<ext>` — the folder-per-user layout the
+ * bucket's own RLS policies (avatars_insert_own etc.) key off by comparing
+ * the first path segment to auth.uid()::text
+ * (supabase/migrations/0053_supabase_auth_identity.sql) — then makes it the
+ * active avatar. Never overwrites/deletes a prior upload (a fresh timestamped
+ * path every time), so an in-flight request referencing the old URL is never
+ * broken out from under it; an old, no-longer-referenced object is just left
+ * in place (this feature deliberately doesn't build a cleanup path — see this
+ * action's module doc and RECOMMENDATIONS.md for the follow-up idea).
  */
 export async function uploadAvatar(formData: FormData) {
   const file = formData.get("avatar");
@@ -84,7 +85,16 @@ export async function uploadAvatar(formData: FormData) {
   if (!profile) return { error: "You must be signed in." };
 
   const supabase = createServerSupabaseClient();
-  const path = `${profile.clerk_user_id}/${Date.now()}.${ext}`;
+
+  // The folder name IS the ownership check: avatars_insert_own compares
+  // (storage.foldername(name))[1] to auth.uid()::text. A profile without an
+  // auth_user_id is a pre-migration Clerk-era row that cannot hold a session
+  // at all, so there is no id to write under — bail rather than build a path
+  // the policy is guaranteed to reject with a raw storage error.
+  if (!profile.auth_user_id) {
+    return { error: "Something went wrong. Try again." };
+  }
+  const path = `${profile.auth_user_id}/${Date.now()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
     contentType: file.type,

@@ -70,8 +70,9 @@ export function randomKivoAvatarId(): KivoAvatarId {
  * avatar_kivo_id (falling back to null if it's somehow not a confirmed-clean
  * id, e.g. stale data from before a future item-231 change); anything else
  * (a profile that predates this feature, with avatar_kivo_id/avatar_type
- * defaulted but never actually chosen) falls back to the legacy
- * Clerk-synced `avatar_url`, and finally null (render a placeholder).
+ * defaulted but never actually chosen) falls back to the legacy `avatar_url`
+ * column — Clerk-synced photos on the handful of pre-2026-08-18 rows; nothing
+ * writes it any more — and finally null (render a placeholder).
  */
 export function resolveAvatarSrc(profile: {
   avatar_type: "kivo" | "uploaded" | null;

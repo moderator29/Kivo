@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
 import { LayoutDashboard, ShieldAlert, Users, Database as DatabaseIcon } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess } from "@/lib/admin";
-import { isClerkConfigured } from "@/lib/clerk";
+import { getAuthUser } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
 
@@ -21,11 +20,15 @@ const ADMIN_NAV = [
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   // Resource-level auth boundary — see src/proxy.ts for why this isn't a middleware
-  // matcher. Unconfigured Clerk has no session to check, so skip straight to sign-in.
-  if (!isClerkConfigured()) {
+  // matcher. getAuthUser() verifies the JWT's signature against Supabase's JWKS
+  // rather than trusting the session cookie, and returns null both when nobody
+  // is signed in and when auth isn't configured for this environment; either
+  // way the only correct answer here is the sign-in page. This replaced Clerk's
+  // auth.protect(), which threw rather than returning when middleware hadn't run.
+  const user = await getAuthUser();
+  if (!user) {
     redirect("/sign-in");
   }
-  await auth.protect();
 
   const profile = await getOrCreateProfile();
 

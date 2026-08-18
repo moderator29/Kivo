@@ -14,11 +14,13 @@ This file is a living document — update it as each engine/surface below actual
 
 | Area | Status | Notes |
 |---|---|---|
-| Clerk sign up / sign in / sign out | COMPLETE | `src/app/sign-in/`, `src/app/sign-up/`, Clerk-hosted flows, KIVO-themed via `src/lib/clerk-appearance.ts` |
-| Email verification | COMPLETE | Handled entirely by Clerk itself, no KIVO code involved |
-| Protected routes | COMPLETE | Resource-level `auth.protect()` per layout (`(app)/layout.tsx`, `admin/layout.tsx`, `onboarding/page.tsx`) — proxy/middleware intentionally does optimistic-only checks, real enforcement is at the resource |
-| Clerk → Supabase sync (webhook) | COMPLETE | `src/app/api/webhooks/clerk/route.ts` — svix signature verification, `user.created`/`user.updated`/`user.deleted`, idempotent (duplicate-key on retry is a no-op) |
-| OAuth/social sign-in | NOT IMPLEMENTED | Not configured in Clerk yet — this is a Clerk Dashboard config change, not a code change, when the founder wants it |
+| Supabase Auth sign up / sign in / sign out | COMPLETE | `src/app/sign-in/`, `src/app/sign-up/`, KIVO's own forms (`src/components/auth/`) — email one-time code only, no password. Sign-out via `signOut()` in `src/app/(app)/session-actions.ts`. Replaced Clerk 2026-08-18, see `DECISIONS.md` |
+| Email verification | COMPLETE | Inherent to the flow — the one-time code *is* the verification. Supabase sends it; no KIVO code involved. Production needs custom SMTP (`ENVIRONMENT.md`) since the built-in sender is rate-limited |
+| Protected routes | COMPLETE | Resource-level `getAuthUser()` per layout (`(app)/layout.tsx`, `admin/layout.tsx`, `onboarding/page.tsx`), which verifies the JWT against Supabase's JWKS rather than trusting the cookie — proxy/middleware only refreshes the session cookie, real enforcement is at the resource |
+| Profile provisioning | COMPLETE | `getOrCreateProfile()` (`src/lib/profile.ts`) creates the row on the caller's first authenticated request. No webhook: the Clerk `user.created`/`updated`/`deleted` sync route was deleted 2026-08-18, and deletion is now carried by `profiles.auth_user_id references auth.users on delete cascade` (migration 0053) |
+| Account deletion | COMPLETE | `deleteAccount()` (`src/app/(app)/settings/actions.ts`) sweeps the user's `avatars` Storage objects (Supabase refuses to delete a user who still owns any), then `auth.admin.deleteUser()`, which cascades the profile and everything under it |
+| Per-device session list / revoke | NOT POSSIBLE | Shipped on Clerk's session API 2026-08-17, deleted with Clerk 2026-08-18. Supabase Auth exposes no list-sessions or revoke-by-id. Replaced by a real "Sign out other devices" action (`signOut({ scope: "others" })`). See RECOMMENDATIONS.md item 321 |
+| OAuth/social sign-in | NOT IMPLEMENTED | A Supabase Dashboard provider toggle plus a sign-in button when the founder wants it — not an architecture change |
 
 ## Football data & provider abstraction
 

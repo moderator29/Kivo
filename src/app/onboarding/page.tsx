@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
-import { isClerkConfigured } from "@/lib/clerk";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
 // See src/app/(app)/layout.tsx for why this must be explicit rather than implied by
 // the auth check alone.
@@ -11,16 +10,12 @@ export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
   // Resource-level auth boundary — see src/proxy.ts for why this isn't a middleware
-  // matcher. Unconfigured Clerk has no session to check, so skip straight to sign-in.
-  if (!isClerkConfigured()) {
-    redirect("/sign-in");
-  }
-  await auth.protect();
-
+  // matcher. Expressed as "no profile means no session" rather than a call into a
+  // specific auth provider's SDK: getOrCreateProfile() is the one place that knows
+  // who the viewer is, and it already returns null for a signed-out (or
+  // unconfigured-auth) request, so this guard stays correct while the provider
+  // underneath it is being swapped out.
   const profile = await getOrCreateProfile();
-
-  // auth.protect() above already guarantees a signed-in user; a null profile here
-  // means row creation itself failed (see lib/profile.ts), not a missing session.
   if (!profile) {
     redirect("/sign-in");
   }
@@ -47,7 +42,15 @@ export default async function OnboardingPage() {
         <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
       </div>
 
-      <OnboardingFlow defaultUsername={profile.username} availableTeams={teams ?? []} />
+      <OnboardingFlow
+        defaultUsername={profile.username}
+        availableTeams={teams ?? []}
+        // The KIVO avatar this profile was assigned at creation
+        // (randomKivoAvatarId, in getOrCreateProfile) — passed so the
+        // completion screen can show the user their own real avatar even if
+        // the post-write read comes back without one.
+        avatarSrc={resolveAvatarSrc(profile)}
+      />
     </div>
   );
 }

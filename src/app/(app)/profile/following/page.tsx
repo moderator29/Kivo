@@ -104,9 +104,10 @@ export default async function FollowingPage() {
   const followedCompetitions = competitionIds
     .map((id) => competitionMap.get(id))
     .filter((c): c is CompetitionRow => !!c);
-  // Same defensive filter as the three above — profiles are hard-deleted on
-  // the Clerk user.deleted webhook, so a stale follow row is a real
-  // (if rare) case here too, not just a hypothetical.
+  // Same defensive filter as the three above — a profile is hard-deleted
+  // (cascading off auth.users via profiles.auth_user_id) when its owner
+  // deletes their account, so a stale follow row is a real (if rare) case
+  // here too, not just a hypothetical.
   const followingPeople = followingUserIds.map((id) => personMap.get(id)).filter((p): p is PersonRow => !!p);
   const followingPeopleIds = new Set(followingPeople.map((p) => p.id));
   const followerPeople = followerUserIds.map((id) => personMap.get(id)).filter((p): p is PersonRow => !!p);

@@ -1,6 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { createServiceRoleSupabaseClient } from "./supabase/server";
+import { logError } from "./log";
 
 export type RateLimitResult = { ok: true } | { ok: false; error: string };
 
@@ -24,7 +25,17 @@ const CLEANUP_MAX_AGE_SECONDS = 60 * 60 * 24; // 1 day — comfortably past any 
  * through the RLS-gated server client at all.
  *
  * Fails open on infra errors (a Supabase hiccup shouldn't lock users out of
- * the app) but fails closed on the actual over-limit case.
+ * the app) but fails closed on the actual over-limit case. "Infra error"
+ * includes the client *construction*, not just the query:
+ * `createServiceRoleSupabaseClient()` throws synchronously ("supabaseKey is
+ * required.") when SUPABASE_SERVICE_ROLE_KEY is missing, and that throw
+ * happens before any query exists to return an error. checkRateLimit sits on
+ * the first line of real work in essentially every write in the product
+ * (createPost, createComment, setReaction, voteOnPoll, toggleSave,
+ * toggleFollow, submitPrediction, submitFanRating, searchPlatform,
+ * setGameweekRoster, joinFantasyLeague), so an unguarded construction turned
+ * a missing env var into an unhandled Server Action error on every one of
+ * them — the exact opposite of the documented degradation.
  */
 export async function checkRateLimit(
   key: string,
@@ -32,18 +43,34 @@ export async function checkRateLimit(
   maxRequests: number,
   windowSeconds: number,
 ): Promise<RateLimitResult> {
-  const supabase = createServiceRoleSupabaseClient();
+  let supabase: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    supabase = createServiceRoleSupabaseClient();
+  } catch (error) {
+    logError("rateLimit.clientUnavailable", error, { action });
+    return { ok: true };
+  }
+
   const windowStart = new Date(Date.now() - windowSeconds * 1000).toISOString();
 
-  const { count, error: countError } = await supabase
-    .from("rate_limit_events")
-    .select("id", { count: "exact", head: true })
-    .eq("profile_id_or_ip", key)
-    .eq("action", action)
-    .gte("created_at", windowStart);
+  let count: number | null = null;
+  try {
+    const { count: windowCount, error: countError } = await supabase
+      .from("rate_limit_events")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id_or_ip", key)
+      .eq("action", action)
+      .gte("created_at", windowStart);
 
-  if (countError) {
-    console.error("Rate limit check failed, allowing the request through", countError);
+    if (countError) {
+      logError("rateLimit.countFailed", countError, { action });
+      return { ok: true };
+    }
+    count = windowCount;
+  } catch (error) {
+    // A rejected fetch (DNS, TLS, timeout) never reaches `countError` —
+    // supabase-js only surfaces PostgREST-level failures there.
+    logError("rateLimit.countThrew", error, { action });
     return { ok: true };
   }
 
@@ -54,15 +81,22 @@ export async function checkRateLimit(
     };
   }
 
-  const { error: insertError } = await supabase
-    .from("rate_limit_events")
-    .insert({ profile_id_or_ip: key, action });
-  if (insertError) console.error("Failed to record rate limit event", insertError);
+  // Past this point the caller is already allowed through, so nothing below
+  // may change that answer — recording the event and sweeping stale rows are
+  // both best-effort bookkeeping.
+  try {
+    const { error: insertError } = await supabase
+      .from("rate_limit_events")
+      .insert({ profile_id_or_ip: key, action });
+    if (insertError) logError("rateLimit.recordFailed", insertError, { action });
 
-  if (Math.random() < CLEANUP_PROBABILITY) {
-    const staleBefore = new Date(Date.now() - CLEANUP_MAX_AGE_SECONDS * 1000).toISOString();
-    const { error: cleanupError } = await supabase.from("rate_limit_events").delete().lt("created_at", staleBefore);
-    if (cleanupError) console.error("Rate limit table cleanup failed", cleanupError);
+    if (Math.random() < CLEANUP_PROBABILITY) {
+      const staleBefore = new Date(Date.now() - CLEANUP_MAX_AGE_SECONDS * 1000).toISOString();
+      const { error: cleanupError } = await supabase.from("rate_limit_events").delete().lt("created_at", staleBefore);
+      if (cleanupError) logError("rateLimit.cleanupFailed", cleanupError, { action });
+    }
+  } catch (error) {
+    logError("rateLimit.recordThrew", error, { action });
   }
 
   return { ok: true };

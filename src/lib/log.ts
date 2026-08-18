@@ -36,7 +36,7 @@ function serializeError(error: unknown): { errorMessage: string; errorName?: str
 /**
  * Logs a failure with a consistent, structured shape: ISO timestamp, a
  * short `context` tag identifying where it happened (e.g.
- * "clerk-webhook.user.updated", "fantasy.setGameweekRoster"), the error's
+ * "fantasy.setGameweekRoster", "football.syncTodayFixtures"), the error's
  * message/name/stack, and any caller-supplied metadata (profile id, fixture
  * id, etc.) so a log search can filter by them.
  *

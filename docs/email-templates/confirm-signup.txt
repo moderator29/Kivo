@@ -1,0 +1,16 @@
+KIVO — Confirm your account
+
+Enter this code in KIVO to finish creating your account for {{ .Email }}:
+
+  {{ .Token }}
+
+It expires in 1 hour and can only be used once.
+
+Prefer a single tap? This link confirms your account without the code:
+{{ .ConfirmationURL }}
+
+Didn't create a KIVO account? Ignore this email. The address won't be
+registered unless the code or link above is used.
+
+--
+This is an automated security message from KIVO. Please do not reply to it.

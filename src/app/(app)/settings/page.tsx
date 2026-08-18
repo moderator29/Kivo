@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { currentUser } from "@clerk/nextjs/server";
-import { SignOutButton } from "@clerk/nextjs";
 import { CircleUserRound, LogOut, Mail, AtSign } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { effectiveModerationStatus } from "@/lib/moderation";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { FadeIn } from "@/components/ui/fade-in";
-import { getNotificationPreferences, getActiveSessions } from "@/app/(app)/settings/actions";
+import { getNotificationPreferences } from "@/app/(app)/settings/actions";
+import { signOut } from "@/app/(app)/session-actions";
+import { getAuthUser } from "@/lib/auth";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
 import { ModerationStatusPanel } from "@/components/settings/moderation-status-panel";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
 import { ActivityPrivacyToggle } from "@/components/settings/activity-privacy-toggle";
-import { ActiveSessionsPanel } from "@/components/settings/active-sessions-panel";
+import { OtherDevicesSection } from "@/components/settings/other-devices-section";
 import { DeleteAccountSection } from "@/components/settings/delete-account-section";
 import { DataExportSection } from "@/components/settings/data-export-section";
 import { AvatarPicker } from "@/components/settings/avatar-picker";
@@ -38,12 +38,15 @@ export default async function SettingsPage() {
     );
   }
 
-  const [user, notificationPreferences, activeSessions] = await Promise.all([
-    currentUser(),
+  // Email is the one identity field KIVO deliberately does NOT copy into
+  // `profiles` (see ARCHITECTURE.md) — Supabase Auth owns it, so it is read
+  // off the verified auth user at render time rather than from the profile
+  // row. Previously the same value came from Clerk's currentUser().
+  const [authUser, notificationPreferences] = await Promise.all([
+    getAuthUser(),
     getNotificationPreferences(profile.id),
-    getActiveSessions(),
   ]);
-  const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? null;
+  const email = authUser?.email ?? null;
 
   // RECOMMENDATIONS.md item 288: mirrors exactly what ModerationStatusPanel
   // itself renders for (suspended/banned only, lazy-expiry-adjusted — see
@@ -121,8 +124,8 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3 border-t border-hairline-soft py-5">
-          <span className="text-sm font-semibold text-foreground">Active sessions</span>
-          <ActiveSessionsPanel initial={activeSessions.sessions} initialError={activeSessions.error} />
+          <span className="text-sm font-semibold text-foreground">Other devices</span>
+          <OtherDevicesSection />
         </div>
 
         <div className="flex flex-col gap-3 border-t border-hairline-soft pt-5">
@@ -130,12 +133,19 @@ export default async function SettingsPage() {
             <span className="text-sm font-semibold text-foreground">Session</span>
             <span className="text-xs text-foreground-subtle">Sign out of KIVO on this device.</span>
           </div>
-          <SignOutButton redirectUrl="/">
-            <button className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95">
+          {/* A plain form posting to the server action, rather than a client
+              component wrapping a button: the action already redirects, and
+              this way the control still works with JavaScript disabled — one
+              fewer client bundle than the Clerk <SignOutButton> it replaced. */}
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="kivo-glass-sharp flex w-fit items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-foreground transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            >
               <LogOut className="h-4 w-4" strokeWidth={2} />
               Sign out
             </button>
-          </SignOutButton>
+          </form>
         </div>
       </FadeIn>
 

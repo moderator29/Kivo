@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { deleteAccount } from "@/app/(app)/settings/actions";
@@ -9,7 +9,7 @@ import { deleteAccount } from "@/app/(app)/settings/actions";
 const CONFIRM_PHRASE = "DELETE";
 
 export function DeleteAccountSection() {
-  const { signOut } = useAuth();
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +26,13 @@ export function DeleteAccountSection() {
         setError(result.error);
         return;
       }
-      await signOut({ redirectUrl: "/" });
+      // deleteAccount() already cleared this device's session cookie
+      // server-side (the Clerk build signed out from the client instead), so
+      // this only has to navigate. replace() rather than push() so Back can't
+      // return to a settings page belonging to an account that no longer
+      // exists; refresh() drops the cached RSC payload rendered for it.
+      router.replace("/");
+      router.refresh();
     });
   }
 

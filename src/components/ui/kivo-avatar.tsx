@@ -7,7 +7,8 @@ import { CircleUserRound } from "lucide-react";
  * `src` (see resolveAvatarSrc() in src/lib/kivo-assets.ts) rather than a raw
  * profile row, so it works equally for KIVO-native avatars (local
  * public/assets files), a user's own upload (Supabase Storage), and the
- * legacy Clerk-synced avatar_url fallback (img.clerk.com) — three different
+ * legacy avatar_url fallback (img.clerk.com, Clerk-synced before the
+ * 2026-08-18 auth migration and no longer written by anything) — three different
  * hosts, none large enough to benefit from Next's optimizer (same reasoning
  * TeamCrest documents), so `unoptimized` is used unconditionally and no
  * next.config.ts remotePatterns entry is required for any of the three.

@@ -1,0 +1,14 @@
+KIVO — You've been invited
+
+An invitation to KIVO has been created for {{ .Email }}.
+Accept it to set up your account:
+
+{{ .ConfirmationURL }}
+
+This invitation is single use and expires in 24 hours.
+
+Not expecting this? Ignore this email. No account is created unless the
+invitation is accepted.
+
+--
+This is an automated security message from KIVO. Please do not reply to it.

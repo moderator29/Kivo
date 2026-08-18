@@ -144,9 +144,8 @@ export async function GET(request: Request) {
   if (!isAuthorizedCronRequest(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     // Distinguish "nobody has set CRON_SECRET on this deployment yet" (a
     // deploy-config problem worth a loud 500) from "wrong/missing token on an
-    // otherwise-configured deployment" (a real 401) — same distinction the
-    // Clerk webhook route (src/app/api/webhooks/clerk/route.ts) draws for its
-    // own secret. Neither path writes a sync_runs row: an unauthenticated hit
+    // otherwise-configured deployment" (a real 401). Neither path writes a
+    // sync_runs row: an unauthenticated hit
     // never got far enough to make a real decision about anything, and
     // logging one would let an unauthenticated caller pollute Data Health's
     // history for free.

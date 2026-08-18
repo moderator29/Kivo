@@ -31,15 +31,15 @@ const PLAYER_LIMIT = 5000;
 const COMPETITION_LIMIT = 1000;
 
 /**
- * sitemap.xml is excluded from clerkMiddleware()'s matcher (src/proxy.ts —
- * the matcher's negative lookahead skips any dotted path), so this request
- * never gets Clerk's request-scoped auth context. createServerSupabaseClient()
- * would throw here: its accessToken() callback calls Clerk's auth(), which
- * throws when detectClerkMiddleware() finds no middleware ran for the
- * request (see @clerk/nextjs's createGetAuth.js). teams/players/competitions
- * carry no RLS anyway (public football data, same tables every guest-viewable
- * list page already reads unauthenticated), so a plain anon-key client is
- * both correct here and simpler than routing through Clerk.
+ * A plain anon-key client rather than createServerSupabaseClient(), for two
+ * reasons that both still hold under Supabase Auth. sitemap.xml is statically
+ * generated at build time, where there is no request and therefore no cookie
+ * store for the cookie-backed server client to read; and it is excluded from
+ * src/proxy.ts's matcher anyway (the negative lookahead skips any dotted
+ * path), so even at runtime nothing would have refreshed a session for it.
+ * teams/players/competitions carry no RLS regardless — public football data,
+ * the same tables every guest-viewable list page already reads
+ * unauthenticated — so an anon client is both correct here and simpler.
  */
 // Returns null instead of throwing when the env vars aren't set yet — this
 // runs at build time (sitemap.xml is statically generated), so a missing var

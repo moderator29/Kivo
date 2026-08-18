@@ -7,8 +7,8 @@ See `KIVO_BUILD_ACKNOWLEDGEMENT.md` for the full product vision, `DECISIONS.md` 
 ## Stack
 
 - **Framework**: Next.js (App Router, TypeScript, Tailwind v4)
-- **Identity**: Clerk (email + X for MVP)
-- **Application data**: Supabase (Postgres, RLS, authorized via Clerk's native third-party JWT integration — no shared-secret JWT template)
+- **Identity**: Supabase Auth — email one-time code, no password, no social provider (Clerk was removed 2026-08-18, see `DECISIONS.md`)
+- **Application data**: Supabase (Postgres, RLS keyed on `auth.uid()`) — one vendor issues the session JWT and verifies it, so there is no cross-vendor trust to configure
 - **Football data**: provider-agnostic abstraction (`src/lib/football`), currently backed by API-Football's free tier, with a development-only mock adapter so UI work never has to spend API quota; sync is admin-triggered on demand, not continuously polled
 - **AI**: Anthropic Claude, live and grounded in real KIVO data when `ANTHROPIC_API_KEY` is set (`/ai`, `src/app/api/ai/chat/route.ts`)
 
@@ -16,11 +16,11 @@ See `KIVO_BUILD_ACKNOWLEDGEMENT.md` for the full product vision, `DECISIONS.md` 
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Clerk + Supabase values — see ENVIRONMENT.md
+cp .env.example .env.local   # fill in the three Supabase values — see ENVIRONMENT.md
 npm run dev
 ```
 
-The app boots and is fully usable (auth, social, admin) with just Clerk + Supabase configured. Football data, AI, and email are optional — everything degrades to an honest "Coming Soon" or mock state without them. See `ENVIRONMENT.md` for the one manual Supabase↔Clerk dashboard step required before RLS-gated queries will work.
+The app boots and is fully usable (auth, social, admin) with just the Supabase keys configured — there is no manual dashboard step to complete first. Football data, AI, and email are optional; everything degrades to an honest "Coming Soon" or mock state without them.
 
 ## Project structure
 
@@ -46,11 +46,10 @@ src/
     admin/                 — /admin, RBAC-gated, separate shell from the public app
       data-health/, moderation/, users/
     onboarding/            — post-signup handle/profile setup, outside the (app) shell
-    sign-in/, sign-up/     — Clerk-hosted auth flows
+    sign-in/, sign-up/     — KIVO's own email one-time-code auth forms (Supabase Auth)
     about/, privacy/, terms/  — static marketing/legal pages
     api/
       ai/chat/               — AI Copilot chat endpoint (Anthropic), streamed as NDJSON
-      webhooks/clerk/        — Clerk → Supabase profile sync
       health/                — uptime check endpoint
   components/
     layout/, ui/           — app shell, nav, top bar, shared primitives
@@ -67,7 +66,7 @@ src/
     navigation.ts            — single source of truth for primary nav
     notification-registry.ts, notifications.ts, notification-preferences.ts
     fantasy.ts, fantasy-scoring.ts, predictions.ts, rewards.ts, rate-limit.ts, audit.ts
-    profile.ts, admin.ts, clerk.ts, countries.ts, format.ts, reactions.ts, text.ts, utils.ts,
+    profile.ts, admin.ts, auth.ts, auth-actions.ts, countries.ts, format.ts, reactions.ts, text.ts, utils.ts,
     recently-viewed.ts
   hooks/                   — shared client-side hooks (e.g. focus trap)
 supabase/migrations/      — version-controlled SQL, applied via Supabase MCP (34 migrations, 42 tables)

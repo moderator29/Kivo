@@ -1,32 +1,39 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { clerkMiddleware } from "@clerk/nextjs/server";
-import { isClerkConfigured } from "@/lib/clerk";
+import { updateSupabaseSession } from "@/lib/supabase/proxy";
 
-// `createRouteMatcher` + `auth.protect()` here is deprecated by Clerk: matching on
-// req.nextUrl.pathname can diverge from how Next.js actually resolves a request
-// (rewrites, parallel/intercepting routes, trailing slashes, case-sensitivity), which
-// could leave a route that *looks* covered by the matcher reachable unauthenticated.
-// Next.js's own guidance agrees — Proxy/middleware is for optimistic, cookie-only
-// checks, not the real security boundary (node_modules/next/dist/docs/01-app/02-guides/authentication.md,
+// This file is Next 16's Proxy (formerly middleware). Its ONE job is refreshing
+// the Supabase Auth session cookie — it is deliberately not an authorization
+// boundary.
+//
+// Why not gate routes here: matching on req.nextUrl.pathname can diverge from
+// how Next.js actually resolves a request (rewrites, parallel/intercepting
+// routes, trailing slashes, case-sensitivity), which could leave a route that
+// *looks* covered by a matcher reachable unauthenticated. Next.js's own
+// guidance agrees — Proxy is for optimistic, cookie-only checks, not the real
+// security boundary (node_modules/next/dist/docs/01-app/02-guides/authentication.md,
 // "Optimistic checks with Proxy").
 //
-// Real enforcement now lives at the resource level: every protected layout/page calls
-// `auth.protect()` itself (src/app/(app)/layout.tsx, src/app/admin/layout.tsx,
-// src/app/onboarding/page.tsx). clerkMiddleware() is still run here — without it,
-// auth()/auth.protect() have no request-scoped auth context to read and throw when
-// called downstream — so this file keeps that one job and nothing else.
-const withClerk = clerkMiddleware();
+// Real enforcement lives at the resource level: src/app/(app)/layout.tsx
+// redirects to /sign-in when there is no session, src/app/admin/layout.tsx
+// additionally checks role, and src/app/onboarding/page.tsx does its own check.
+// Every one of those verifies the session against Supabase rather than trusting
+// the cookie's contents.
+//
+// The refresh itself, however, can ONLY happen here: Server Components cannot
+// write cookies, so without this a token that expires mid-session is never
+// renewed and the user is silently signed out.
+export default async function proxy(request: NextRequest) {
+  // Without Supabase credentials configured there is no session to refresh and
+  // createServerClient() throws on an empty URL, which would take down even the
+  // public marketing pages. Fall through instead; the resource-level guards
+  // still redirect to /sign-in because there is no session to find.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.next();
+  }
 
-// Without Clerk keys configured, clerkMiddleware() throws on every request —
-// including the public marketing page, which needs no auth at all. Falling through to
-// a no-op keeps the app viewable; protected routes still redirect to /sign-in on their
-// own via isClerkConfigured() in the resource-level guards, since there's no session to
-// check when Clerk has no keys.
-export default isClerkConfigured()
-  ? withClerk
-  : function proxy() {
-      return NextResponse.next();
-    };
+  return updateSupabaseSession(request);
+}
 
 export const config = {
   matcher: ["/((?!_next|.*\\..*).*)", "/(api|trpc)(.*)"],

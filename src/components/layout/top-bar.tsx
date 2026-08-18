@@ -2,7 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { Suspense } from "react";
 import { Bell } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
+import { AccountMenu } from "./account-menu";
+import type { ViewerProfileSummary } from "./app-shell";
 import { getRecentNotifications } from "@/lib/notifications";
 import { NotificationBell } from "./notification-bell";
 import { CommandPalette } from "./command-palette";
@@ -39,11 +40,17 @@ async function NotificationBellData() {
 }
 
 export function TopBar({
-  signedIn,
+  viewer,
   isAdmin = false,
   previewMode = false,
 }: {
-  signedIn: boolean;
+  /** The real signed-in profile, resolved server-side in (app)/layout.tsx —
+   * null for a guest. This replaced a bare `signedIn: boolean` when Clerk's
+   * `<UserButton>` (which fetched its own identity from Clerk's client-side
+   * session) gave way to KIVO's own `<AccountMenu>`, which has to be handed
+   * the profile it renders. Guest vs signed-in is now "is this null", so the
+   * two can never disagree. */
+  viewer: ViewerProfileSummary | null;
   /** Gates the preview-mode toggle — see src/lib/preview-mode.ts. A guest or
    * non-admin never sees this control at all, not even in its "off" state. */
   isAdmin?: boolean;
@@ -70,12 +77,12 @@ export function TopBar({
           changes. The full three-option control still lives in Settings. */}
       <ThemeToggleCompact />
 
-      {signedIn ? (
+      {viewer ? (
         <>
           <Suspense fallback={<NotificationBellFallback />}>
             <NotificationBellData />
           </Suspense>
-          <UserButton />
+          <AccountMenu viewer={viewer} />
         </>
       ) : (
         <Link

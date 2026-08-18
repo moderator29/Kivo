@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { isClerkConfigured } from "@/lib/clerk";
 import { COUNTRY_CODES } from "@/lib/countries";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -160,128 +158,65 @@ export async function updateActivityVisibility(showActivityPublicly: boolean) {
 }
 
 /**
- * RECOMMENDATIONS.md item 289: a real "Active sessions" security panel
- * backed by Clerk's own session API — every field here (status, createdAt,
- * lastActiveAt, and latestActivity's IP-geolocated city/country plus
- * browser/device) is a real value Clerk already tracks per session, never
- * derived or guessed. Dates are serialized to ISO strings (Clerk returns
- * Unix-ms numbers) to match every other timestamp this app passes across the
- * server/client boundary.
- */
-export type ActiveSessionInfo = {
-  id: string;
-  status: string;
-  createdAt: string;
-  lastActiveAt: string;
-  isCurrentDevice: boolean;
-  city: string | null;
-  country: string | null;
-  browserName: string | null;
-  browserVersion: string | null;
-  deviceType: string | null;
-  isMobile: boolean;
-};
-
-export async function getActiveSessions(): Promise<{ error: string | null; sessions: ActiveSessionInfo[] }> {
-  if (!isClerkConfigured()) return { error: "Active sessions are unavailable right now.", sessions: [] };
-
-  const { userId, sessionId } = await auth();
-  if (!userId) return { error: "You must be signed in.", sessions: [] };
-
-  try {
-    const client = await clerkClient();
-    const { data } = await client.sessions.getSessionList({ userId, status: "active", limit: 100 });
-
-    // Current device first, otherwise most-recently-active first — the
-    // device the viewer is looking at this page from is the one they most
-    // want to confirm at a glance, ahead of "everything else" sorted by
-    // recency.
-    const sessions = data
-      .map((session) => ({
-        id: session.id,
-        status: session.status,
-        createdAt: new Date(session.createdAt).toISOString(),
-        lastActiveAt: new Date(session.lastActiveAt).toISOString(),
-        isCurrentDevice: session.id === sessionId,
-        city: session.latestActivity?.city ?? null,
-        country: session.latestActivity?.country ?? null,
-        browserName: session.latestActivity?.browserName ?? null,
-        browserVersion: session.latestActivity?.browserVersion ?? null,
-        deviceType: session.latestActivity?.deviceType ?? null,
-        isMobile: session.latestActivity?.isMobile ?? false,
-      }))
-      .sort((a, b) => {
-        if (a.isCurrentDevice !== b.isCurrentDevice) return a.isCurrentDevice ? -1 : 1;
-        return b.lastActiveAt.localeCompare(a.lastActiveAt);
-      });
-
-    return { error: null, sessions };
-  } catch (error) {
-    console.error("Failed to fetch active sessions", error);
-    return { error: "Couldn't load your active sessions. Try again.", sessions: [] };
-  }
-}
-
-/**
- * Revokes one other device's session. Refuses to touch the session the
- * caller is currently using — the panel also hides that row's button, but
- * this is the real server-side guard, not just a UI nicety — and verifies
- * the target session actually belongs to the caller before revoking it,
- * since sessions.revokeSession() takes a bare session id with no built-in
- * ownership check of its own.
- */
-export async function revokeDeviceSession(targetSessionId: string) {
-  if (!isClerkConfigured()) return { error: "Active sessions are unavailable right now." };
-
-  const { userId, sessionId: currentSessionId } = await auth();
-  if (!userId) return { error: "You must be signed in." };
-
-  if (targetSessionId === currentSessionId) {
-    return { error: "You can't sign out this device from here — use Sign out instead." };
-  }
-
-  const profile = await getOrCreateProfile();
-  if (!profile) return { error: "You must be signed in." };
-
-  const rateLimit = await checkRateLimit(`user:${profile.id}`, "revoke_device_session", 10, 60);
-  if (!rateLimit.ok) return { error: rateLimit.error };
-
-  try {
-    const client = await clerkClient();
-    const session = await client.sessions.getSession(targetSessionId);
-    if (session.userId !== userId) {
-      return { error: "Session not found." };
-    }
-    await client.sessions.revokeSession(targetSessionId);
-  } catch (error) {
-    console.error("Failed to revoke session", error);
-    return { error: "Something went wrong. Try again." };
-  }
-
-  revalidatePath("/settings");
-  return { error: null };
-}
-
-/**
- * Deletes the caller's Clerk user, which in turn fires the existing
- * `user.deleted` webhook (src/app/api/webhooks/clerk/route.ts) that already
- * cascades the Supabase-side cleanup (profiles row + everything FK-cascaded
- * off it). This action's only job is to safely trigger that deletion after
- * the client-side confirmation step — it must never duplicate the cascade.
+ * Deletes the caller's Supabase Auth user. `profiles.auth_user_id` is
+ * `references auth.users (id) on delete cascade`
+ * (supabase/migrations/0053_supabase_auth_identity.sql), so removing the auth
+ * user removes the profile row and — through the existing profile_id FKs —
+ * everything owned by it. That cascade is now the whole deletion path; it used
+ * to be triggered indirectly, by deleting the Clerk user and letting the
+ * `user.deleted` webhook do the Supabase-side work.
+ *
+ * The storage sweep is not optional bookkeeping. Supabase refuses to delete an
+ * auth user who still owns objects in Storage
+ * (https://supabase.com/docs/guides/auth/managing-user-data), and any user who
+ * has ever uploaded their own avatar owns objects in the `avatars` bucket at
+ * `<auth_user_id>/<timestamp>.<ext>` (see avatar-actions.ts). Without this,
+ * deleteUser() would fail for exactly those users — the ones most likely to
+ * have real data worth deleting — and the error would look like an unrelated
+ * server fault. Objects are removed with the service-role client because the
+ * user's own session is about to stop existing.
+ *
+ * Runs entirely on the service-role client, so it is guarded by the
+ * `getUser()` check above it: that call verifies the session against Supabase
+ * rather than trusting a cookie, and every id used below comes from it, never
+ * from client input.
  */
 export async function deleteAccount() {
-  if (!isClerkConfigured()) return { error: "Account deletion is unavailable right now." };
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be signed in." };
 
-  const { userId } = await auth();
-  if (!userId) return { error: "You must be signed in." };
+  const admin = createServiceRoleSupabaseClient();
 
   try {
-    const client = await clerkClient();
-    await client.users.deleteUser(userId);
+    const { data: objects } = await admin.storage.from("avatars").list(user.id);
+    if (objects && objects.length > 0) {
+      const { error: removeError } = await admin.storage
+        .from("avatars")
+        .remove(objects.map((object) => `${user.id}/${object.name}`));
+      if (removeError) {
+        console.error("Failed to remove avatar objects before account deletion", removeError);
+        return { error: "Something went wrong. Try again." };
+      }
+    }
+
+    const { error } = await admin.auth.admin.deleteUser(user.id);
+    if (error) {
+      console.error("Failed to delete Supabase Auth user", error);
+      return { error: "Something went wrong. Try again." };
+    }
   } catch (error) {
-    console.error("Failed to delete Clerk user", error);
+    console.error("Failed to delete account", error);
     return { error: "Something went wrong. Try again." };
   }
+
+  // The session's refresh token dies with the user, but the cookie itself and
+  // the already-issued access token do not — clearing them here is what makes
+  // the redirect that follows land on a genuinely signed-out app rather than
+  // on pages rendering against a user row that no longer exists.
+  await supabase.auth.signOut({ scope: "local" });
 
   return { error: null };
 }

@@ -18,9 +18,9 @@
 // re-rendering the segment"), so that's what the button below uses. See
 // src/app/error.tsx for the same note in more detail.
 
-import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { ErrorReference } from "@/components/ui/error-reference";
 
 export default function AppSegmentError({
   error,
@@ -29,12 +29,6 @@ export default function AppSegmentError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useEffect(() => {
-    // No error-tracking service wired up yet — that's a separate decision.
-    // This at least keeps the failure visible in server/console logs.
-    console.error(error);
-  }, [error]);
-
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-16 text-center">
       <div className="kivo-glass-brand flex w-full max-w-md flex-col items-center gap-7 rounded-3xl px-8 py-12">
@@ -48,6 +42,8 @@ export default function AppSegmentError({
             This page hit a snag loading. Try again, or head back to Home if it keeps happening.
           </p>
         </div>
+
+        <ErrorReference error={error} boundary="app" />
 
         <div className="flex items-center gap-3">
           <button

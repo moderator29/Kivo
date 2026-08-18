@@ -7,7 +7,7 @@
 // error.md, "Global Error"). It REPLACES the root layout when active, so
 // unlike src/app/error.tsx and src/app/(app)/error.tsx it must define its
 // own <html>/<body> tags and pull in whatever global styles/fonts it needs
-// itself — nothing from src/app/layout.tsx (ClerkProvider, next/font
+// itself — nothing from src/app/layout.tsx (the theme provider, next/font
 // loaders, etc.) is available here. Importing globals.css is enough to get
 // KIVO's design tokens (--background, --foreground, .kivo-glass-brand,
 // .kivo-gradient-*) since those are plain CSS custom properties, not
@@ -29,10 +29,10 @@
 // to prefer in most cases. See src/app/error.tsx for the same note in more
 // detail.
 
-import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { ThemeScript } from "@/components/theme/theme-script";
 import { DEFAULT_THEME } from "@/lib/theme";
+import { ErrorReference } from "@/components/ui/error-reference";
 import "./globals.css";
 
 export default function GlobalError({
@@ -42,12 +42,6 @@ export default function GlobalError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useEffect(() => {
-    // No error-tracking service wired up yet — that's a separate decision.
-    // This at least keeps the failure visible in server/console logs.
-    console.error(error);
-  }, [error]);
-
   return (
     <html lang="en" data-theme={DEFAULT_THEME} className="h-full antialiased">
       <head>
@@ -66,6 +60,8 @@ export default function GlobalError({
                 KIVO hit an unexpected error and couldn&apos;t load. Try again, or come back in a moment.
               </p>
             </div>
+
+            <ErrorReference error={error} boundary="global" />
 
             <button
               type="button"

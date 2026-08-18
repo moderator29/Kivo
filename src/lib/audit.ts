@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceRoleSupabaseClient } from "./supabase/server";
 import type { Json } from "./supabase/types";
+import { logError } from "./log";
 
 /**
  * audit_log is the general-purpose sensitive-action trail (distinct from
@@ -20,9 +21,17 @@ export async function logAudit(
   targetType: string,
   metadata: Record<string, Json> = {},
 ) {
-  const supabase = createServiceRoleSupabaseClient();
-  const { error } = await supabase
-    .from("audit_log")
-    .insert({ actor_profile_id: actorProfileId, action, target_type: targetType, metadata });
-  if (error) console.error(`Failed to write audit log entry (${action})`, error);
+  // "Best-effort" has to include the client construction: it throws
+  // synchronously ("supabaseKey is required.") when SUPABASE_SERVICE_ROLE_KEY
+  // is missing, which would let an audit-log failure block the very action it
+  // exists only to record.
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { error } = await supabase
+      .from("audit_log")
+      .insert({ actor_profile_id: actorProfileId, action, target_type: targetType, metadata });
+    if (error) logError("audit.logAudit", error, { action, targetType, actorProfileId });
+  } catch (error) {
+    logError("audit.logAudit", error, { action, targetType, actorProfileId });
+  }
 }

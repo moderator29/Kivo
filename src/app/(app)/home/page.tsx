@@ -21,9 +21,9 @@ function greeting() {
 export const metadata: Metadata = { title: "Home" };
 
 export default async function HomePage() {
-  // Routed through KIVO's own profile rather than calling Clerk directly —
-  // consistent with the rest of the app, and never throws if Clerk/Supabase
-  // aren't configured (see lib/profile.ts), unlike currentUser() would.
+  // Routed through KIVO's own profile rather than reading the auth user
+  // directly — consistent with the rest of the app, and never throws if
+  // Supabase isn't configured for this environment (see lib/profile.ts).
   const profile = await getOrCreateProfile();
   const firstName = profile?.display_name?.split(" ")[0] || profile?.username || "there";
   const aiConfigured = isAiConfigured();

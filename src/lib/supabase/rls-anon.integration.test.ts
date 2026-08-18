@@ -26,18 +26,18 @@ import type { Database } from "./types";
 //     RLS outright (42501), not merely "not returned later".
 //
 // What it CANNOT prove: cross-user isolation between two distinct
-// *authenticated* identities. KIVO uses Supabase's native third-party auth —
-// RLS reads the caller's identity from a Clerk-issued JWT that Supabase
-// verifies against Clerk's JWKS (see private.current_clerk_user_id() in the
-// migration). There is no way to mint a validly-signed Clerk JWT for a
-// synthetic test user from a script without driving a real Clerk sign-in
-// flow, so this file cannot authenticate as "Alice" or "Bob" and therefore
-// cannot exercise `predictions_select_own` / `fantasy_rosters_all_own` /
+// *authenticated* identities. RLS reads the caller's identity from a signed
+// Supabase Auth JWT — `auth.uid()`, resolved to a profile by
+// private.current_profile_id() (see migration 0053). Minting one for a
+// synthetic user means completing a real email-OTP round trip, including
+// reading the code out of an inbox, which a headless test run cannot do. So
+// this file cannot authenticate as "Alice" or "Bob" and therefore cannot
+// exercise `predictions_select_own` / `fantasy_rosters_all_own` /
 // `notifications_select_own` etc. the way a real user's browser would.
 //
 // scripts/verify-rls.sql covers exactly that gap: it exercises the identical
 // Postgres-side mechanism (`set local role authenticated; set local
-// request.jwt.claims = '{"sub": "<clerk_user_id>", ...}'`) that PostgREST
+// request.jwt.claims = '{"sub": "<auth.users.id>", ...}'`) that PostgREST
 // itself uses after verifying a JWT, against two synthetic profiles, and is
 // the primary/more complete half of this task's RLS coverage. Read that
 // file's header comment for the full rationale. This file is the
