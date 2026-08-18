@@ -283,7 +283,41 @@ async function upsertFixture(
   fixture: NormalizedFixture,
   refs: ResolvedFixtureRefs,
   previousStatus: DbFixtureStatus | null,
+  previousScores: { homeScore: number | null; awayScore: number | null } | null,
 ): Promise<void> {
+  // RECOMMENDATIONS.md item 303 ("conflict detection"): a same-provider
+  // sanity check, not a second-provider merge (there's no second source to
+  // reconcile against yet — see DECISIONS.md's provider-failover entry).
+  // Flags, never blocks: the write below still lands either way, since a
+  // false positive here (e.g. a legitimate admin correction) shouldn't drop
+  // real provider data. This only makes an anomaly visible in server logs
+  // (item 204's existing "every failure path is console.error" convention)
+  // instead of it landing silently.
+  if (previousScores) {
+    if (
+      fixture.homeScore !== null &&
+      previousScores.homeScore !== null &&
+      fixture.homeScore < previousScores.homeScore
+    ) {
+      console.warn(
+        `Football sync anomaly: ${provider}:${fixture.providerId} home score decreased ${previousScores.homeScore} -> ${fixture.homeScore} (${fixture.homeTeam.name} v ${fixture.awayTeam.name})`,
+      );
+    }
+    if (
+      fixture.awayScore !== null &&
+      previousScores.awayScore !== null &&
+      fixture.awayScore < previousScores.awayScore
+    ) {
+      console.warn(
+        `Football sync anomaly: ${provider}:${fixture.providerId} away score decreased ${previousScores.awayScore} -> ${fixture.awayScore} (${fixture.homeTeam.name} v ${fixture.awayTeam.name})`,
+      );
+    }
+  }
+  if (previousStatus === "finished" && toDbFixtureStatus(fixture.status) !== "finished") {
+    console.warn(
+      `Football sync anomaly: ${provider}:${fixture.providerId} status regressed from finished to ${fixture.status} (${fixture.homeTeam.name} v ${fixture.awayTeam.name})`,
+    );
+  }
   // p_venue_id/p_home_score/p_away_score/p_home_score_ht/p_away_score_ht/
   // p_minute_elapsed are optional RPC args for the same reason as
   // upsert_venue_with_mapping's p_name — see its comment. Omitting them
@@ -460,14 +494,24 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
   const fixtureProviderIds = Array.from(new Set(fixtures.map((f) => f.providerId)));
   const fixtureMappings = await batchFindMappedIds(supabase, provider.name, "fixture", fixtureProviderIds);
   const priorStatusByKivoId = new Map<string, DbFixtureStatus>();
+  // RECOMMENDATIONS.md item 303 ("conflict detection"): the same batched
+  // lookup above already fetches each known fixture's prior status for
+  // notifications — carrying its scores along too costs nothing extra (same
+  // row, same round trip) and is what upsertFixture below uses for a
+  // same-provider sanity check (a score that would go backward is a real
+  // anomaly signal, never silently written over).
+  const priorScoresByKivoId = new Map<string, { homeScore: number | null; awayScore: number | null }>();
   const knownKivoFixtureIds = Array.from(fixtureMappings.values());
   if (knownKivoFixtureIds.length > 0) {
     const { data: priorRows, error: priorError } = await supabase
       .from("fixtures")
-      .select("id, status")
+      .select("id, status, home_score, away_score")
       .in("id", knownKivoFixtureIds);
     if (priorError) throw priorError;
-    for (const row of priorRows ?? []) priorStatusByKivoId.set(row.id, row.status);
+    for (const row of priorRows ?? []) {
+      priorStatusByKivoId.set(row.id, row.status);
+      priorScoresByKivoId.set(row.id, { homeScore: row.home_score, awayScore: row.away_score });
+    }
   }
 
   let processed = 0;
@@ -491,6 +535,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
 
       const knownKivoId = fixtureMappings.get(fixture.providerId) ?? null;
       const previousStatus = knownKivoId ? (priorStatusByKivoId.get(knownKivoId) ?? null) : null;
+      const previousScores = knownKivoId ? (priorScoresByKivoId.get(knownKivoId) ?? null) : null;
 
       await upsertFixture(
         supabase,
@@ -504,6 +549,7 @@ export async function syncTodayFixtures(triggerSource: "manual" | "cron" = "manu
           venueId,
         },
         previousStatus,
+        previousScores,
       );
       processed += 1;
     } catch (err) {

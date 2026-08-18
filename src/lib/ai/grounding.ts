@@ -36,15 +36,20 @@ export interface GroundingContext {
   disclosureLabel: string | null;
 }
 
-/** One real fact bucket used to build the two labelled sections of the
+/** One real fact bucket used to build the three labelled sections of the
  * summary below (RECOMMENDATIONS.md item 188: provenance chips need the
  * model to be able to tell, unambiguously, which sentences are raw provider
- * facts and which are KIVO's own derived stats — these two arrays are that
- * distinction made structural instead of implicit). */
-type FactLines = { verified: string[]; calculated: string[] };
+ * facts, which are KIVO's own derived stats, and which are an explicit
+ * "not enough data" disclosure — these three arrays are that distinction
+ * made structural instead of implicit). `limited` (item 300) holds the
+ * `isSufficientSample`-gated "too few matches synced" sentences that used to
+ * live inside `calculated` — real uncertainty, present in the data, but
+ * previously invisible as anything other than prose the model may or may not
+ * have surfaced. */
+type FactLines = { verified: string[]; calculated: string[]; limited: string[] };
 
 function emptyFacts(): FactLines {
-  return { verified: [], calculated: [] };
+  return { verified: [], calculated: [], limited: [] };
 }
 
 /**
@@ -209,10 +214,12 @@ export async function buildGroundingContext(
 
   const verified: string[] = [];
   const calculated: string[] = [];
+  const limited: string[] = [];
 
   if (focusResult) {
     verified.push(...focusResult.facts.verified);
     calculated.push(...focusResult.facts.calculated);
+    limited.push(...focusResult.facts.limited);
   }
 
   if (favouriteTeam && favouriteTeamForm) {
@@ -223,7 +230,7 @@ export async function buildGroundingContext(
           `${favouriteTeamForm.goalsScored} scored / ${favouriteTeamForm.goalsConceded} conceded).`,
       );
     } else {
-      verified.push(
+      limited.push(
         `${favouriteTeam.name} has too few finished matches synced (${favouriteTeamForm.sampleSize}) for a reliable form trend — say so rather than guessing if asked about their form.`,
       );
     }
@@ -263,7 +270,7 @@ export async function buildGroundingContext(
           `(based on ${ownGoalTiming.finishedMatchesSample} finished matches synced).`,
       );
     } else {
-      calculated.push(`${own.name} has too few finished matches synced for a reliable goal-timing split — say so if asked.`);
+      limited.push(`${own.name} has too few finished matches synced for a reliable goal-timing split — say so if asked.`);
     }
   }
 
@@ -291,7 +298,7 @@ export async function buildGroundingContext(
           `${form.sequence.join(" ")} (${form.wins}W ${form.draws}D ${form.losses}L).`,
       );
     } else {
-      calculated.push(`${team.name} (followed) has too few finished matches synced (${form.sampleSize}) for a reliable form trend.`);
+      limited.push(`${team.name} (followed) has too few finished matches synced (${form.sampleSize}) for a reliable form trend.`);
     }
   }
   for (const { player, form } of followedPlayerForms) {
@@ -302,7 +309,7 @@ export async function buildGroundingContext(
           `${form.sequence.join(" ")} (${form.wins}W ${form.draws}D ${form.losses}L).`,
       );
     } else {
-      calculated.push(`${displayName} (followed player) has too few synced appearances for a reliable recent-form trend.`);
+      limited.push(`${displayName} (followed player) has too few synced appearances for a reliable recent-form trend.`);
     }
   }
 
@@ -321,13 +328,15 @@ export async function buildGroundingContext(
     );
   }
 
-  // RECOMMENDATIONS.md item 188: the two labelled sections below are what
-  // let the model tag its own claims — see SYSTEM_PROMPT in
+  // RECOMMENDATIONS.md items 188/300: the three labelled sections below are
+  // what let the model tag its own claims — see SYSTEM_PROMPT in
   // /api/ai/chat/route.ts for the exact tagging instruction, and
   // src/components/ai/chat.tsx for how the tags render as chips. A line
   // landing in the wrong bucket would just mislabel a chip, never fabricate
   // data — the underlying facts are identical to what this file always
-  // computed.
+  // computed. KIVO-LIMITED (item 300) makes the existing isSufficientSample
+  // uncertainty sentences a structural third bucket instead of prose folded
+  // into KIVO-CALCULATED that the model may or may not have visibly surfaced.
   const summary = [
     identityLines.join("\n"),
     "",
@@ -336,6 +345,9 @@ export async function buildGroundingContext(
     "",
     "=== KIVO-CALCULATED (derived by KIVO's own Form Engine / Match Intelligence from the verified data above — real, not fabricated, but computed rather than a raw provider fact — cite these with the literal tag [[KIVO-CALCULATED]]) ===",
     calculated.length > 0 ? calculated.join("\n") : "Nothing calculated yet for this conversation.",
+    "",
+    "=== KIVO-LIMITED (explicitly insufficient real data to compute something reliably — a genuine gap, not a fabricated stat — cite these with the literal tag [[KIVO-LIMITED]]) ===",
+    limited.length > 0 ? limited.join("\n") : "No known data-insufficiency gaps for this conversation.",
   ].join("\n");
 
   return {
@@ -395,7 +407,7 @@ async function buildFocusFacts(
               `(${form.wins}W ${form.draws}D ${form.losses}L).`,
           );
         } else {
-          facts.calculated.push(`${team.name} has too few finished matches synced (${form.sampleSize}) for a reliable form trend.`);
+          facts.limited.push(`${team.name} has too few finished matches synced (${form.sampleSize}) for a reliable form trend.`);
         }
       }
     }
@@ -427,7 +439,7 @@ async function buildFocusFacts(
           `${form.sequence.join(" ")} (${form.wins}W ${form.draws}D ${form.losses}L, ${form.goalsScored} scored / ${form.goalsConceded} conceded).`,
       );
     } else {
-      facts.calculated.push(`${team.name} has too few finished matches synced (${form.sampleSize}) for a reliable form trend.`);
+      facts.limited.push(`${team.name} has too few finished matches synced (${form.sampleSize}) for a reliable form trend.`);
     }
 
     return { label: team.name, facts };
@@ -459,7 +471,7 @@ async function buildFocusFacts(
         `(${form.wins}W ${form.draws}D ${form.losses}L).`,
     );
   } else {
-    facts.calculated.push(`${displayName} has too few synced appearances for a reliable recent-form trend.`);
+    facts.limited.push(`${displayName} has too few synced appearances for a reliable recent-form trend.`);
   }
 
   return { label: displayName, facts };

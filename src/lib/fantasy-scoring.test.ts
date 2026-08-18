@@ -7,6 +7,7 @@ import {
   GOAL_POINTS_BY_POSITION,
   OWN_GOAL_POINTS,
   RED_CARD_POINTS,
+  SCORING_MODEL_VERSION,
   YELLOW_CARD_POINTS,
   computePlayerMatchFacts,
   emptyPlayerMatchFacts,
@@ -16,6 +17,19 @@ import {
 
 const STARTING = { isStarting: true, isCaptain: false, doubleAsVice: false } as const;
 const BENCH = { isStarting: false, isCaptain: false, doubleAsVice: false } as const;
+
+// RECOMMENDATIONS.md item 308: a scored gameweek's fantasy_points row is
+// stamped with this constant (see admin/data-health/fantasy-actions.ts) so a
+// future retuning of the point values above doesn't leave previously-scored
+// gameweeks ambiguous about which ruleset produced them. This locks in that
+// the marker exists and stays a real, non-empty string — the same guard
+// rating-engine.test.ts already applies to RATING_MODEL_VERSION.
+describe("SCORING_MODEL_VERSION", () => {
+  it("is a non-empty version string", () => {
+    expect(SCORING_MODEL_VERSION).toBeTruthy();
+    expect(typeof SCORING_MODEL_VERSION).toBe("string");
+  });
+});
 
 describe("scoreRosterSlot", () => {
   it("gives bench players zero points regardless of stats", () => {

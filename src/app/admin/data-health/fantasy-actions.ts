@@ -16,6 +16,7 @@ import {
   computePlayerMatchFacts,
   emptyPlayerMatchFacts,
   scoreRosterSlot,
+  SCORING_MODEL_VERSION,
   type FinishedFixtureFacts,
   type FixtureEventType,
 } from "@/lib/fantasy-scoring";
@@ -433,6 +434,10 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     fantasy_team_id,
     gameweek_id: gameweekId,
     points,
+    // RECOMMENDATIONS.md item 308: stamp the real ruleset version that
+    // produced this row (migration 0052) — see fantasy-scoring.ts's own
+    // doc comment on SCORING_MODEL_VERSION.
+    scoring_model_version: SCORING_MODEL_VERSION,
   }));
 
   const { error: upsertError } = await service

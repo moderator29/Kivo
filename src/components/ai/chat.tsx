@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
-import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info } from "lucide-react";
+import { Sparkles, ArrowUp, SquarePen, Copy, Check, RotateCcw, X, ShieldCheck, Calculator, Info, AlertTriangle } from "lucide-react";
 import kivoCommandArtwork from "../../../public/brand/kivo-artwork-command.webp";
 import { cn } from "@/lib/utils";
 import { BorderBeam } from "@/components/ui/border-beam";
@@ -18,14 +18,15 @@ import { loadConversationMessages, renameConversation, deleteConversation, type 
  * that module is `server-only` and this is a client component. */
 type ChatFocus = { type: "fixture" | "team" | "player"; id: string } | null;
 
-/** RECOMMENDATIONS.md item 188: the exact literal tags the system prompt
- * (`/api/ai/chat/route.ts`) instructs the model to prefix its own claims
- * with — kept in sync with that prompt text by convention, not by a shared
- * constant, since one lives in a server-only route and the other in a
+/** RECOMMENDATIONS.md items 188/300: the exact literal tags the system
+ * prompt (`/api/ai/chat/route.ts`) instructs the model to prefix its own
+ * claims with — kept in sync with that prompt text by convention, not by a
+ * shared constant, since one lives in a server-only route and the other in a
  * client component. */
 const PROVENANCE_VERIFIED = "[[KIVO-VERIFIED]]";
 const PROVENANCE_CALCULATED = "[[KIVO-CALCULATED]]";
-const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\])/g;
+const PROVENANCE_LIMITED = "[[KIVO-LIMITED]]";
+const PROVENANCE_SPLIT_RE = /(\[\[KIVO-VERIFIED\]\]|\[\[KIVO-CALCULATED\]\]|\[\[KIVO-LIMITED\]\])/g;
 
 /** Turns an assistant reply's inline provenance tags into small visible
  * chips instead of raw bracket text — degrades honestly if the model never
@@ -52,6 +53,17 @@ function renderMessageContent(content: string) {
         >
           <Calculator className="h-2.5 w-2.5" strokeWidth={2} />
           KIVO-calculated
+        </span>
+      );
+    }
+    if (part === PROVENANCE_LIMITED) {
+      return (
+        <span
+          key={i}
+          className="mr-1 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-warning/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-warning"
+        >
+          <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2} />
+          Limited data
         </span>
       );
     }

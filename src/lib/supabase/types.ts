@@ -417,6 +417,7 @@ export type Database = {
           gameweek_id: string
           id: string
           points: number
+          scoring_model_version: string | null
           updated_at: string
         }
         Insert: {
@@ -425,6 +426,7 @@ export type Database = {
           gameweek_id: string
           id?: string
           points?: number
+          scoring_model_version?: string | null
           updated_at?: string
         }
         Update: {
@@ -433,6 +435,7 @@ export type Database = {
           gameweek_id?: string
           id?: string
           points?: number
+          scoring_model_version?: string | null
           updated_at?: string
         }
         Relationships: [

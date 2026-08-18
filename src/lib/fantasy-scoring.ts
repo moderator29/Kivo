@@ -55,6 +55,15 @@ import type { Database } from "@/lib/supabase/types";
 
 export type FixtureEventType = Database["public"]["Enums"]["fixture_event_type"];
 
+/** RECOMMENDATIONS.md item 308: mirrors rating-engine.ts's RATING_MODEL_VERSION
+ * pattern — stamped onto every fantasy_points row scoreFantasyGameweek writes
+ * (fantasy_points.scoring_model_version, migration 0052) so a future tuning of
+ * the point values below doesn't leave previously-scored gameweeks ambiguous
+ * about which ruleset actually produced them. Bump this whenever any constant
+ * or the scoring formula in this file changes in a way that would score the
+ * same real match facts differently. */
+export const SCORING_MODEL_VERSION = "1.0";
+
 export const APPEARANCE_POINTS = 2;
 export const ASSIST_POINTS = 3;
 export const CLEAN_SHEET_POINTS = 4;
