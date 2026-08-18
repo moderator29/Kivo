@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -5,6 +6,7 @@ import { notFound } from "next/navigation";
 import { Flame, Award, MapPin, Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { logError } from "@/lib/log";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
@@ -40,13 +42,27 @@ type PublicBadge = {
  * profiles_select_admin) — a plain client query can never resolve
  * username -> profile for anyone but the caller's own row. Resolves through
  * the narrow SECURITY DEFINER RPC instead, same shape as get_public_profiles.
+ *
+ * Wrapped in React's `cache()` for the same reason getOrCreateProfile
+ * (src/lib/profile.ts) and createServerSupabaseClient (src/lib/supabase/
+ * server.ts) are: generateMetadata and the page component below each resolve
+ * the same username in the same request, so without this every profile view
+ * costs two identical round trips (and logged its failures twice).
+ * `cache()` memoizes only within a single request, so nothing goes stale.
+ *
+ * "RPC errored" and "RPC returned no rows" are deliberately *not* collapsed
+ * together. Returning null for both meant a transient database error rendered
+ * "this profile doesn't exist" — a 404 that search engines and shared links
+ * can cache — for a profile that does exist. A real failure throws so the
+ * error boundary tells the visitor the truth ("try again"); only a genuinely
+ * empty result becomes notFound().
  */
-async function getPublicProfile(username: string): Promise<PublicProfile | null> {
+const getPublicProfile = cache(async function getPublicProfile(username: string): Promise<PublicProfile | null> {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.rpc("get_public_profile_by_username", { p_username: username });
   if (error) {
-    console.error("Failed to resolve public profile", error);
-    return null;
+    logError("profile.getPublicProfile", error, { username });
+    throw new Error(`Could not resolve the profile for @${username}`, { cause: error });
   }
   const row = data?.[0];
   return row
@@ -63,7 +79,7 @@ async function getPublicProfile(username: string): Promise<PublicProfile | null>
         country: row.country,
       }
     : null;
-}
+});
 
 export async function generateMetadata({
   params,

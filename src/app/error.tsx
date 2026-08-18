@@ -14,11 +14,11 @@
 // the docs call this out as the one to prefer ("in most cases, you should
 // use retry() instead"), so the "Try again" button below uses it.
 
-import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AlertTriangle } from "lucide-react";
 import kivoLogo from "../../public/brand/kivo-logo-transparent.webp";
+import { ErrorReference } from "@/components/ui/error-reference";
 
 export default function GlobalError({
   error,
@@ -27,12 +27,6 @@ export default function GlobalError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useEffect(() => {
-    // No error-tracking service wired up yet — that's a separate decision.
-    // This at least keeps the failure visible in server/console logs.
-    console.error(error);
-  }, [error]);
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6 text-center">
       <div className="kivo-glass-brand flex w-full max-w-md flex-col items-center gap-7 rounded-3xl px-8 py-12">
@@ -48,6 +42,8 @@ export default function GlobalError({
             An unexpected error interrupted this page. Try again, or head back to Home if it keeps happening.
           </p>
         </div>
+
+        <ErrorReference error={error} boundary="root" />
 
         <div className="flex items-center gap-3">
           <button
