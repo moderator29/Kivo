@@ -1,57 +1,30 @@
-import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, CircleSlash, Trophy, Activity, ShieldCheck, ListChecks, Clock3, ArrowLeftRight, RadioTower } from "lucide-react";
-import { DISPLAY_LOCALE, formatNumber } from "@/lib/format";
-import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { readList } from "@/lib/query-result";
-import { LoadFailed } from "@/components/ui/load-failed";
+import { Database, PlugZap, ListChecks, Gauge } from "lucide-react";
+import { formatNumber } from "@/lib/format";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
-import { reapAbandonedSyncRuns } from "@/lib/football/sync-instrumentation";
 import { FadeIn } from "@/components/ui/fade-in";
-import { staggerDelay } from "@/lib/stagger";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
-import { ScorePredictionsButton } from "@/components/admin/score-predictions-button";
-import { ScoreFantasyGameweekButton } from "@/components/admin/score-fantasy-gameweek-button";
-import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
-import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers-button";
-import { DataQualityPanel } from "@/components/admin/data-quality-panel";
-import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
-import { AutomationStatusPanel } from "@/components/admin/automation-status-panel";
-import { LiveWorkerPanel } from "@/components/admin/live-worker-panel";
-import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
-import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
-import { LocalDateTime } from "@/components/ui/relative-time";
-import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
-import type { Database as DatabaseType } from "@/lib/supabase/types";
-import { TeamMergePanel } from "@/components/admin/team-merge-panel";
-import { ClubCataloguePanel } from "@/components/admin/club-catalogue-panel";
-import { StandingsTransfersPanel } from "@/components/admin/standings-transfers-panel";
-import { CompetitionScopePanel } from "@/components/admin/competition-scope-panel";
 import { PlanCapabilityPanel } from "@/components/admin/plan-capability-panel";
+import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
+import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 
-type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
-
-const STATUS_STYLE: Record<SyncStatus, { icon: typeof CheckCircle2; className: string; label: string }> = {
-  success: { icon: CheckCircle2, className: "border-live/30 bg-live/10 text-live", label: "Success" },
-  partial: { icon: MinusCircle, className: "border-warning/30 bg-warning/10 text-warning", label: "Partial" },
-  failed: { icon: XCircle, className: "border-critical/30 bg-critical/10 text-critical", label: "Failed" },
-  running: { icon: Loader2, className: "border-hairline text-foreground-subtle", label: "Running" },
-  // migration 0044: the cron worker's own no-op decisions (flag off, nothing
-  // live, dedup hit, quota floor) — genuinely not one of the four statuses
-  // above, since no provider call was ever attempted. See
-  // src/app/api/cron/sync-live/route.ts.
-  skipped: { icon: CircleSlash, className: "border-hairline bg-surface-1 text-foreground-subtle", label: "Skipped" },
-};
-
-function formatTimestamp(value: string | null): string {
-  if (!value) return "-";
-  return new Date(value).toLocaleString(DISPLAY_LOCALE, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+/**
+ * Football data → Provider. The first question, and only the first question.
+ *
+ * ADMIN IA PASS 2026-08-19. This route used to be all of Data Health: seventeen
+ * panels, 750 lines, in the order they happened to be written. It is now the
+ * first of four pages, and it holds exactly the things that answer "can KIVO
+ * talk to the provider, and what will that provider serve?" — the connection,
+ * the plan, the season window, the day's quota, and the order syncs have to run
+ * in. What is on file lives on Coverage; whether the pipeline ran lives on
+ * Pipeline; whether what arrived is correct lives on Integrity.
+ *
+ * The segment keeps the `data-health` name because every server action in this
+ * directory is imported by pages six other agents own this pass, and renaming
+ * the segment would move those import paths under them.
+ */
 
 /**
  * RECOMMENDATIONS.md item 61: the sync dependency chain (fixtures unlock
@@ -67,57 +40,46 @@ const SYNC_ORDER_STEPS: { title: string; where: string; requires: string }[] = [
   {
     title: "1. Sync today's fixtures",
     where: '"Sync now" above',
-    requires: "Nothing — this is the entry point. Creates KIVO's competitions, teams, venues and fixtures, each mapped to their provider id.",
+    requires:
+      "Nothing — this is the entry point. Creates KIVO's competitions, teams, venues and fixtures, each mapped to their provider id.",
   },
   {
     title: "2. Sync a team's squad",
-    where: "that team's profile page",
-    requires: "Step 1 first, for a fixture involving that team — a team with no provider mapping yet can't be squad-synced (sync-squads.ts).",
+    where: "Coverage → club catalogue",
+    requires:
+      "Step 1 first, for a fixture involving that team — a team with no provider mapping yet can't be squad-synced (sync-squads.ts).",
   },
   {
     title: "3. Sync a season's standings",
-    where: "that competition's league page",
-    requires: "Step 1 first, for a fixture in that competition — standings need the competition's provider mapping (sync-match-details.ts).",
+    where: "Coverage → league tables",
+    requires:
+      "Step 1 first, for a fixture in that competition — standings need the competition's provider mapping (sync-match-details.ts).",
   },
   {
     title: "4. Sync a player's transfer history",
-    where: "that player's profile page",
-    requires: "Step 2 first, for that player's team — a player only gets a provider mapping via a squad sync (sync-transfers.ts).",
+    where: "Coverage → transfers",
+    requires:
+      "Step 2 first, for that player's team — a player only gets a provider mapping via a squad sync (sync-transfers.ts).",
   },
   {
     title: "5. Sync a fixture's lineups, events, and stats",
     where: "that fixture's Match Centre",
-    requires: "Step 1 first, for that fixture. A side with no squad synced yet has its lineup entries skipped, not auto-synced, unless squad auto-sync is opted into on the fixture's own sync control (RECOMMENDATIONS.md item 59) — that's an extra provider call per unseen team, so it's off by default.",
+    requires:
+      "Step 1 first, for that fixture. A side with no squad synced yet has its lineup entries skipped, not auto-synced, unless squad auto-sync is opted into on the fixture's own sync control (RECOMMENDATIONS.md item 59) — that's an extra provider call per unseen team, so it's off by default.",
   },
 ];
 
-/** RECOMMENDATIONS.md item 62: getFootballDataProvider() only ever runs inside
- * these admin-triggered sync actions (never a public page's render path — see
- * src/lib/football/index.ts and its only callers), so a 429 from API-Football
- * surfaces here, not on a public page. classifyHttpError() in
- * api-football-request.ts already writes an explicit "daily quota exhausted"
- * message into error_message; this just recognizes that text to show a calmer,
- * plain-language summary above the raw technical line instead of only red
- * "failed" styling. */
-function isQuotaExhaustedMessage(message: string): boolean {
-  return message.includes("quota exhausted");
-}
-
-export default async function DataHealthPage() {
+export default async function ProviderHealthPage() {
   const profile = await getOrCreateProfile();
 
   if (!canManageFootballData(profile?.role)) {
     return (
-      <div className="flex flex-col gap-6">
-        <h1 className="text-xl font-semibold text-foreground">Data health</h1>
-        <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          <Lock className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-          <p className="text-sm text-foreground-muted">
-            Football data isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>).
-            This isn&apos;t empty, it&apos;s outside what your access covers.
-          </p>
-        </div>
-      </div>
+      <AdminAccessNotice
+        title="Provider"
+        role={profile?.role}
+        subject="Football data"
+        because="Writing football data and reading sync history are limited to the football data, admin and super-admin roles."
+      />
     );
   }
 
@@ -128,72 +90,18 @@ export default async function DataHealthPage() {
   // provider is connected that the app wouldn't actually construct — e.g.
   // FOOTBALL_DATA_PROVIDER=thesportsdb with only API_FOOTBALL_KEY set correctly still
   // reads as API-Football here, since that's genuinely what getFootballDataProvider()
-  // would fall back to. Also reused by the Admin Overview stat card so the two pages
-  // can never disagree about whether a provider is connected.
+  // would fall back to. Also reused by the Admin Overview so the two pages can never
+  // disagree about whether a provider is connected.
   const { name: activeProviderName, label: activeProviderLabelOrNull } = getActiveProviderStatus();
   const providerConfigured = activeProviderName !== null;
   const activeProviderLabel = activeProviderLabelOrNull ?? "API-Football";
 
   const supabase = createServerSupabaseClient();
 
-  // KN-83: the club list for the merge tool. Bounded — a merge is a targeted
-  // repair, not a bulk operation, and a select of every club in a
-  // fully-synced database would be unusable anyway.
-  const { data: mergeableTeamRows } = await supabase
-    .from("teams")
-    .select("id, name")
-    .order("name", { ascending: true })
-    .limit(200);
-  const mergeableTeams = mergeableTeamRows ?? [];
-  // trigger_source (migration 0044) scopes this to admin-clicked runs only —
-  // the automated cron worker gets its own "Automated worker" section below
-  // instead of crowding this list out. Vercel Cron fires the worker's route
-  // once a minute once deployed, so without this filter a single manual sync
-  // from days ago would already have scrolled off this capped 10-row list.
-  // Close anything a dead process left `running` before drawing this list.
-  // Syncs already reap on start, but this is the screen where a phantom
-  // "Running" spinner actually misleads somebody — the live database carried
-  // seven of them, hours old, on 2026-08-19. See reapAbandonedSyncRuns.
-  // Service-role, not the request-scoped client: the RPC is granted to
-  // service_role only (migration 0116), because closing somebody else's run
-  // row is not something a signed-in session should be able to do.
-  await reapAbandonedSyncRuns(createServiceRoleSupabaseClient());
-  const { data: syncRuns } = await supabase
-    .from("sync_runs")
-    .select(
-      "id, provider, entity_type, status, started_at, finished_at, records_processed, error_message, provider_quota_remaining",
-    )
-    .eq("trigger_source", "manual")
-    .order("started_at", { ascending: false })
-    .limit(10);
-
-  // The automated worker's own recent history — every firing, including every
-  // no-op decision (see src/app/api/cron/sync-live/route.ts's module doc
-  // comment). Kept separate from syncRuns above so an admin can see "is the
-  // worker actually firing, and what did it decide" without it displacing
-  // manual sync history, and vice versa.
-  const { data: cronRuns } = await supabase
-    .from("sync_runs")
-    .select("id, status, started_at, finished_at, records_processed, error_message, provider_quota_remaining")
-    .eq("trigger_source", "cron")
-    .order("started_at", { ascending: false })
-    .limit(8);
-  const latestCronRun = cronRuns?.[0] ?? null;
-  // Vercel Cron fires this worker every minute (vercel.json) — a real gap
-  // meaningfully longer than that between "now" and the worker's last known
-  // check-in means either it isn't deployed/configured correctly, or (for a
-  // very fresh deploy) the first minute just hasn't ticked over yet. 5x the
-  // 1-minute schedule is a deliberately generous margin against ordinary
-  // scheduling jitter/cold starts before this warns anyone.
-  const CRON_STALE_THRESHOLD_MINUTES = 5;
-  const cronMinutesSinceLastRun = latestCronRun ? (new Date().getTime() - new Date(latestCronRun.started_at).getTime()) / 60_000 : null;
-  const cronWorkerIsStale = cronMinutesSinceLastRun !== null && cronMinutesSinceLastRun > CRON_STALE_THRESHOLD_MINUTES;
-
   // RECOMMENDATIONS.md item 53: the provider's own x-ratelimit-requests-remaining
   // header, persisted on whichever sync_runs row last saw a response — real data,
-  // not an estimate. Read separately from the capped 10-row list above since the
-  // most recent run with a known quota isn't necessarily within the last 10 (a run
-  // that failed before any provider call leaves this column null).
+  // not an estimate. A run that failed before any provider call leaves the column
+  // null, so the most recent run and the most recent *reading* are different rows.
   const { data: latestQuotaRun } = await supabase
     .from("sync_runs")
     .select("provider_quota_remaining, started_at")
@@ -202,150 +110,61 @@ export default async function DataHealthPage() {
     .limit(1)
     .maybeSingle();
 
-  // predictions_select_own means an admin's own client can't see other
-  // users' rows, so this count (like the scoring pass itself) goes through
-  // the service-role client — read-only here, just to show an honest number
-  // rather than making the button a mystery click.
-  // The unbounded "fetch every finished fixture id, then filter predictions by
-  // it" read that used to live here is gone: it grew with the season whether or
-  // not anybody had predicted any of it, and PostgREST's `!inner` expresses the
-  // same question as a filter rather than a fetch. Same inversion the settlement
-  // engine itself now makes (src/lib/prediction-settlement.ts).
-
-  /**
-   * Three real numbers off the `predictions` table, not one.
-   *
-   * The single "awaiting scoring" count conflated two states that mean opposite
-   * things, because `points_awarded is null` is true both for a row nothing has
-   * looked at yet *and* for a row KIVO has examined and honestly declined to
-   * settle. So a fixture whose events were never synced showed up here as work
-   * pending forever, and pressing the button changed the number by nothing —
-   * which reads as a broken job rather than as the data gap it is.
-   *
-   * `lastSettledAt` is the one that answers the question this whole page exists
-   * for: not "is settlement configured" but "has it actually run". The daily
-   * sync now calls the same engine the button does, so a timestamp older than a
-   * day means the schedule is not reaching it, regardless of what any
-   * environment variable says.
-   */
-  const predictionService = createServiceRoleSupabaseClient();
-  const finishedPredictions = () =>
-    predictionService
-      .from("predictions")
-      .select("id, fixture:fixtures!inner(status)", { count: "exact", head: true })
-      .eq("fixture.status", "finished");
-
-  const [awaitingResult, unresolvableResult, settledResult, lastSettledResult] = await Promise.all([
-    finishedPredictions().is("resolution", null),
-    finishedPredictions().eq("resolution", "unresolvable"),
-    finishedPredictions().not("points_awarded", "is", null),
-    predictionService
-      .from("predictions")
-      .select("resolved_at")
-      .not("resolved_at", "is", null)
-      .order("resolved_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  const unscoredPredictions = awaitingResult.count ?? 0;
-  const unresolvablePredictions = unresolvableResult.count ?? 0;
-  const settledPredictions = settledResult.count ?? 0;
-  const lastSettledAt = lastSettledResult.data?.resolved_at ?? null;
-
-  // RECOMMENDATIONS.md item 64: transfers is public-read, so a plain client is
-  // enough here (unlike unscoredPredictions above, which needs owner-only RLS
-  // bypassed). Two separate head-count queries rather than one OR'd query so the
-  // number shown is honestly "rows this button can help", not conflated with rows
-  // that are unresolved for some other reason.
-  const { count: unresolvedFromCount } = await supabase
-    .from("transfers")
-    .select("id", { count: "exact", head: true })
-    .is("from_team_id", null)
-    .not("from_team_provider_id", "is", null);
-  const { count: unresolvedToCount } = await supabase
-    .from("transfers")
-    .select("id", { count: "exact", head: true })
-    .is("to_team_id", null)
-    .not("to_team_provider_id", "is", null);
-  const unresolvedTransferSides = (unresolvedFromCount ?? 0) + (unresolvedToCount ?? 0);
-
-  // fantasy_gameweeks is public-read, but fantasy_points is owner-only RLS
-  // (fantasy_points_select_own) — a plain client can't see whether other
-  // teams' gameweeks have been scored, so that check goes through the
-  // service-role client, same rationale as unscoredPredictions above.
-  const { data: recentGameweeks } = await supabase
-    .from("fantasy_gameweeks")
-    .select("id, number, deadline_at, is_current, season:seasons(name, competition:competitions(short_name, name))")
-    .order("deadline_at", { ascending: false })
-    .limit(8);
-
-  const gameweekIds = (recentGameweeks ?? []).map((g) => g.id);
-  let scoredGameweekIds = new Set<string>();
-  if (gameweekIds.length > 0) {
-    const service = createServiceRoleSupabaseClient();
-    const { data: pointsRows } = await service.from("fantasy_points").select("gameweek_id").in("gameweek_id", gameweekIds);
-    scoredGameweekIds = new Set((pointsRows ?? []).map((p) => p.gameweek_id));
-  }
-
-  // Data Health's own list below only ever shows the last 10 runs — this is
-  // the only place any run-level aggregate exists, so it goes over every
-  // sync_runs row rather than reusing that capped list. status/records_processed
-  // for the overall totals below, plus started_at/provider_quota_remaining for
-  // today's quota trend (RECOMMENDATIONS.md item 213).
-  // The most load-bearing read on this page, and the one where `?? []` was
-  // most expensive. Data Health exists to answer "is anything actually
-  // arriving?", and its own documented failure mode is a layer that was
-  // "built, documented, and quietly never running". A failed read here
-  // reported *zero syncs, ever* — the exact signature of that failure — to
-  // the one person whose job is to tell the difference.
-  const runsOutcome = readList(
-    await supabase.from("sync_runs").select("status, records_processed, started_at, provider_quota_remaining"),
-    "admin.dataHealth.syncRuns",
-  );
-  const allRuns = runsOutcome.rows;
-  // Null, not 0, when the read failed: the panel below is suppressed entirely
-  // rather than printing a total nobody can stand behind.
-  const totalRuns = runsOutcome.failed ? null : allRuns.length;
-  const successfulRuns = allRuns.filter((r) => r.status === "success").length;
-  const successRate = totalRuns !== null && totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : null;
-  const totalRecordsProcessed = allRuns.reduce((sum, r) => sum + (r.records_processed ?? 0), 0);
-
-  // Today's quota trend: API-Football's quota resets daily and only counts down
+  // Today's quota trend. API-Football's quota resets daily and only counts down
   // as syncs run, so the highest reading seen today is the best available proxy
-  // for "what today started with" and the lowest is the most depleted (most
+  // for what today started with and the lowest is the most depleted (most
   // recent) reading — both real values off provider_quota_remaining, never
   // estimated. Matches todayIsoDate()'s UTC-day boundary in
-  // src/lib/football/sync.ts.
+  // src/lib/football/sync.ts. Scoped to today in the query rather than filtered
+  // out of every run ever recorded.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const todaysQuotaReadings = allRuns
-    .filter((r) => r.provider_quota_remaining !== null && r.started_at?.slice(0, 10) === todayIso)
-    .map((r) => r.provider_quota_remaining)
+  const { data: todaysQuotaRows } = await supabase
+    .from("sync_runs")
+    .select("provider_quota_remaining")
+    .not("provider_quota_remaining", "is", null)
+    .gte("started_at", `${todayIso}T00:00:00Z`);
+  const todaysReadings = (todaysQuotaRows ?? [])
+    .map((row) => row.provider_quota_remaining)
     .filter((reading): reading is number => reading !== null);
-  const quotaUsedToday =
-    todaysQuotaReadings.length > 0 ? Math.max(...todaysQuotaReadings) - Math.min(...todaysQuotaReadings) : null;
+  const quotaUsedToday = todaysReadings.length > 0 ? Math.max(...todaysReadings) - Math.min(...todaysReadings) : null;
+  const quotaRemaining = latestQuotaRun?.provider_quota_remaining ?? null;
 
   return (
     <div className="flex flex-col gap-8">
-      <FadeIn className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">Data health</h1>
-        <p className="text-sm text-foreground-muted">Football data provider status and sync jobs.</p>
-      </FadeIn>
+      <AdminSectionTabs groupId="football-data" />
 
-      <FadeIn delay={0.08} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
-        <div className="flex items-center gap-3">
+      <AdminPageHeader
+        icon={PlugZap}
+        title="Provider"
+        lede="Whether KIVO can reach the football data provider, what that provider's plan will serve, and how much of today's allowance is left. When a screen in the product is empty, this is the page that says whether waiting will help."
+        cost={
+          providerConfigured
+            ? "Opening this page spends one provider request — the account-status call behind plan and season coverage. Nothing else here costs anything."
+            : undefined
+        }
+        actions={providerConfigured ? <FootballSyncButton /> : undefined}
+      />
+
+      <FadeIn
+        delay={0.06}
+        className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex items-start gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
               providerConfigured ? "bg-live/15" : "bg-surface-2"
             }`}
           >
-            <Database className={`h-5 w-5 ${providerConfigured ? "text-live" : "text-foreground-subtle"}`} strokeWidth={1.75} />
+            <Database
+              className={`h-5 w-5 ${providerConfigured ? "text-live" : "text-foreground-subtle"}`}
+              strokeWidth={1.75}
+            />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
               {providerConfigured ? `${activeProviderLabel} connected` : "No provider connected"}
             </p>
-            <p className="text-xs text-foreground-subtle">
+            <p className="text-xs leading-relaxed text-foreground-subtle">
               {providerConfigured
                 ? activeProviderName === "thesportsdb"
                   ? "FOOTBALL_DATA_PROVIDER=thesportsdb and THE_SPORTS_DB_API_KEY are set. Some sync actions (lineups, events, stats, manager, transfers) aren't supported by this provider — see docs/PROVIDER_ABSTRACTION.md."
@@ -354,399 +173,67 @@ export default async function DataHealthPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {latestQuotaRun && (
-            <span
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                latestQuotaRun.provider_quota_remaining !== null && latestQuotaRun.provider_quota_remaining <= 10
-                  ? "border-warning/30 bg-warning/10 text-warning"
-                  : "border-hairline text-foreground-muted"
-              }`}
-              title="API-Football's own x-ratelimit-requests-remaining header from the most recent sync, not an estimate."
-            >
-              {latestQuotaRun.provider_quota_remaining} request{latestQuotaRun.provider_quota_remaining === 1 ? "" : "s"}{" "}
-              left today
-            </span>
-          )}
-          {providerConfigured && <FootballSyncButton />}
-        </div>
       </FadeIn>
 
-      {/* Immediately under the provider banner on purpose. The banner says a
+      {(quotaRemaining !== null || quotaUsedToday !== null) && (
+        <AdminSection
+          icon={Gauge}
+          title="Today's allowance"
+          note="Both figures come from the provider's own x-ratelimit-requests-remaining header, recorded on the sync run that saw it. Neither is an estimate, and neither is re-requested to display it."
+          delay={0.08}
+        >
+          <FadeIn delay={0.09} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5">
+            <div className="flex flex-col gap-1">
+              <span
+                className={`text-2xl font-semibold ${
+                  quotaRemaining !== null && quotaRemaining <= 10 ? "text-warning" : "text-foreground"
+                }`}
+              >
+                {quotaRemaining === null ? "—" : formatNumber(quotaRemaining)}
+              </span>
+              <span className="text-[11px] text-foreground-subtle">
+                {quotaRemaining === null ? "No reading recorded yet" : "Requests left today"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-2xl font-semibold text-foreground">
+                {quotaUsedToday === null ? "—" : formatNumber(quotaUsedToday)}
+              </span>
+              <span className="text-[11px] text-foreground-subtle">
+                {quotaUsedToday === null ? "Nothing spent today yet" : "Spent today"}
+              </span>
+            </div>
+          </FadeIn>
+        </AdminSection>
+      )}
+
+      {/* Immediately under the connection banner on purpose. The banner says a
           provider is connected, which was true all day on 2026-08-19 while
           every season-scoped sync was being refused and every screen drew the
           refusals as empty tables. "Connected" and "able to serve this season"
           are different facts and this is the panel that separates them. */}
       <PlanCapabilityPanel />
 
-      <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <ListChecks className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Sync order
-        </h2>
-        <p className="text-xs text-foreground-subtle">
-          Every other sync depends on fixtures having run first. Doing them out of order fails with a &ldquo;no
-          provider mapping yet&rdquo; error instead of syncing anything.
-        </p>
-        <ol className="flex flex-col gap-2.5">
-          {SYNC_ORDER_STEPS.map((step) => (
-            <li key={step.title} className="flex flex-col gap-0.5 rounded-xl bg-surface-2 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground">{step.title}</span>
-                <span className="shrink-0 text-[11px] text-foreground-subtle">{step.where}</span>
-              </div>
-              <p className="text-[11px] text-foreground-subtle">{step.requires}</p>
-            </li>
-          ))}
-        </ol>
-      </FadeIn>
-
-      <FadeIn delay={0.1} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              unscoredPredictions > 0 ? "bg-warning/15" : "bg-surface-2"
-            }`}
-          >
-            <Trophy
-              className={`h-5 w-5 ${unscoredPredictions > 0 ? "text-warning" : "text-foreground-subtle"}`}
-              strokeWidth={1.75}
-            />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              {unscoredPredictions > 0
-                ? `${unscoredPredictions} prediction${unscoredPredictions === 1 ? "" : "s"} awaiting scoring`
-                : "All predictions are scored"}
-            </p>
-            <p className="text-xs text-foreground-subtle">
-              {settledPredictions} settled · {unscoredPredictions} awaiting · {unresolvablePredictions} unresolvable.{" "}
-              {lastSettledAt ? (
-                <>
-                  Last run <LocalDateTime iso={lastSettledAt} format="dayTime" />.
-                </>
-              ) : (
-                <>Never run.</>
-              )}
-            </p>
-            <p className="mt-1 text-xs text-foreground-subtle">
-              Runs automatically in the daily sync — this button is for after a manual correction, not instead of the
-              schedule. Scores all six prediction types against real, already-synced data: final scores, match events,
-              team statistics and the Room&apos;s own man-of-the-match vote. A winner pick earns{" "}
-              {CORRECT_PREDICTION_POINTS} points and {CORRECT_PREDICTION_XP} XP; harder types earn more.{" "}
-              <span className="text-warning">Unresolvable</span> means the data a type needs was never synced — those
-              are left explicitly unsettled and cost the user nothing, rather than being marked wrong.
-            </p>
-          </div>
-        </div>
-        <ScorePredictionsButton />
-      </FadeIn>
-
-      {/* RECOMMENDATIONS.md item 64: resolveTeamId in sync-transfers.ts leaves
-          from_team_id/to_team_id null for a club KIVO hadn't synced yet at the time —
-          this surfaces how many transfer sides are still sitting like that, and the
-          zero-quota reconciliation pass that can revisit them now that more teams may
-          have been synced since. */}
-      <FadeIn delay={0.105} className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              unresolvedTransferSides > 0 ? "bg-warning/15" : "bg-surface-2"
-            }`}
-          >
-            <ArrowLeftRight
-              className={`h-5 w-5 ${unresolvedTransferSides > 0 ? "text-warning" : "text-foreground-subtle"}`}
-              strokeWidth={1.75}
-            />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              {unresolvedTransferSides > 0
-                ? `${unresolvedTransferSides} transfer side${unresolvedTransferSides === 1 ? "" : "s"} showing "Club not synced"`
-                : "All synced transfers have resolved clubs"}
-            </p>
-            <p className="text-xs text-foreground-subtle">
-              Re-checks provider_mappings for clubs that weren&apos;t synced yet when their transfer was recorded. No
-              provider quota spent.
-            </p>
-          </div>
-        </div>
-        <ReconcileTransfersButton />
-      </FadeIn>
-
-      <div className="flex flex-col gap-3">
-        <FadeIn delay={0.11} className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Fantasy scoring</h2>
-          <span className="flex items-center gap-1 text-[11px] text-foreground-subtle">
-            <ShieldCheck className="h-3 w-3" strokeWidth={2} />
-            {SCORING_RULES_SUMMARY.length} published rules
-          </span>
-        </FadeIn>
-
-        {!recentGameweeks || recentGameweeks.length === 0 ? (
-          <FadeIn delay={0.12} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            No fantasy gameweeks exist yet. Generate gameweeks from a season on the Fantasy page first.
-          </FadeIn>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {recentGameweeks.map((gw, index) => {
-              const seasonLabel = [gw.season?.competition?.short_name ?? gw.season?.competition?.name, gw.season?.name]
-                .filter(Boolean)
-                .join(" · ");
-              const scored = scoredGameweekIds.has(gw.id);
-              return (
-                <FadeIn
-                  key={gw.id}
-                  delay={0.12 + staggerDelay(index, 0.03)}
-                  className="kivo-glass flex items-center justify-between gap-3 rounded-xl p-4"
-                >
-                  <div>
-                    <p className="text-sm text-foreground">
-                      <span className="font-medium">GW{gw.number}</span>
-                      {seasonLabel ? ` · ${seasonLabel}` : ""}
-                      {gw.is_current && (
-                        <span className="ml-2 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
-                          Current
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-foreground-subtle">
-                      Deadline {formatTimestamp(gw.deadline_at)}
-                      {" · "}
-                      {scored ? "Already scored (re-run to refresh)" : "Not scored yet"}
-                    </p>
-                  </div>
-                  <ScoreFantasyGameweekButton gameweekId={gw.id} />
-                </FadeIn>
-              );
-            })}
-          </div>
-        )}
-
-        <FadeIn delay={0.15} className="kivo-glass rounded-xl p-4 text-xs text-foreground-subtle">
-          <p className="mb-1.5 font-semibold text-foreground-muted">Published scoring rules</p>
-          <ul className="flex flex-col gap-1">
-            {SCORING_RULES_SUMMARY.map((rule) => (
-              <li key={rule}>{rule}</li>
+      <AdminSection
+        icon={ListChecks}
+        title="Sync order"
+        note="Every other sync depends on fixtures having run first. Doing them out of order fails with a “no provider mapping yet” error instead of syncing anything."
+        delay={0.12}
+      >
+        <FadeIn delay={0.13} className="kivo-glass flex flex-col gap-2.5 rounded-2xl p-5">
+          <ol className="flex flex-col gap-2.5">
+            {SYNC_ORDER_STEPS.map((step) => (
+              <li key={step.title} className="flex flex-col gap-1 rounded-xl bg-surface-2 px-3 py-2.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-semibold text-foreground">{step.title}</span>
+                  <span className="shrink-0 text-[11px] text-foreground-subtle">{step.where}</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-foreground-subtle">{step.requires}</p>
+              </li>
             ))}
-          </ul>
+          </ol>
         </FadeIn>
-      </div>
-
-      {runsOutcome.failed && (
-        <LoadFailed
-          tone="section"
-          title="Sync run totals"
-          description="KIVO couldn't read the sync_runs table. Reporting zero runs here would look exactly like a sync layer that has never fired, which is the one thing this page exists to tell apart — so it reports nothing instead. Try again."
-        />
-      )}
-
-      {totalRuns !== null && totalRuns > 0 && (
-        <FadeIn delay={0.13} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5 sm:grid-cols-4 sm:divide-x sm:divide-hairline-soft">
-          <div className="flex flex-col items-center gap-1 text-center">
-            <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
-            <span className="text-lg font-semibold text-foreground">{totalRuns}</span>
-            <span className="text-[11px] text-foreground-subtle">Total syncs</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 text-center">
-            <span
-              className={`text-lg font-semibold ${
-                successRate === null ? "text-foreground" : successRate >= 90 ? "text-live" : successRate >= 60 ? "text-warning" : "text-critical"
-              }`}
-            >
-              {successRate}%
-            </span>
-            <span className="text-[11px] text-foreground-subtle">Success rate</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 text-center">
-            <span className="text-lg font-semibold text-foreground">{formatNumber(totalRecordsProcessed)}</span>
-            <span className="text-[11px] text-foreground-subtle">Records synced</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 text-center">
-            <span className="text-lg font-semibold text-foreground">
-              {quotaUsedToday === null ? "-" : formatNumber(quotaUsedToday)}
-            </span>
-            <span className="text-[11px] text-foreground-subtle">Quota used today</span>
-          </div>
-        </FadeIn>
-      )}
-
-      <div className="flex flex-col gap-3">
-        <FadeIn delay={0.15} className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-              <RadioTower className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-              Automated worker
-            </h2>
-            <p className="text-xs text-foreground-subtle">
-              Vercel Cron fires <code className="text-foreground-muted">/api/cron/sync-live</code> every minute. Every
-              firing is logged below, including no-ops — this is how to see whether it&apos;s actually running.
-            </p>
-          </div>
-          {latestCronRun && (
-            <span
-              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                cronWorkerIsStale ? "border-warning/30 bg-warning/10 text-warning" : "border-live/30 bg-live/10 text-live"
-              }`}
-            >
-              {cronWorkerIsStale ? "Not checking in" : "Checking in on schedule"}
-            </span>
-          )}
-        </FadeIn>
-
-        {!cronRuns || cronRuns.length === 0 ? (
-          <FadeIn delay={0.17} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            No cron firings recorded yet. Vercel Cron only runs against a real deployment — it never fires from local
-            dev, and won&apos;t show anything here until this branch is deployed to Vercel with{" "}
-            <code className="text-foreground-muted">vercel.json</code>&apos;s <code className="text-foreground-muted">crons</code> entry
-            live and <code className="text-foreground-muted">CRON_SECRET</code> set.
-          </FadeIn>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {cronWorkerIsStale && (
-              <FadeIn delay={0.17} className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-                <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                Last check-in was {formatTimestamp(latestCronRun!.started_at)} — more than {CRON_STALE_THRESHOLD_MINUTES}{" "}
-                minutes ago. The schedule fires every minute, so this either means Vercel Cron isn&apos;t invoking it
-                (check the Cron Jobs tab in the Vercel dashboard and that{" "}
-                <code className="text-warning">CRON_SECRET</code> matches), or this is a very fresh deploy that
-                hasn&apos;t had a minute tick over yet.
-              </FadeIn>
-            )}
-            {cronRuns.map((run, index) => {
-              const style = STATUS_STYLE[run.status];
-              const StatusIcon = style.icon;
-              return (
-                <FadeIn
-                  key={run.id}
-                  delay={0.18 + staggerDelay(index, 0.03)}
-                  className="kivo-glass flex items-start justify-between gap-3 rounded-xl p-3"
-                >
-                  <div>
-                    <p className="text-xs text-foreground-subtle">{formatTimestamp(run.started_at)}</p>
-                    <p className="text-xs text-foreground-muted">
-                      {run.error_message ??
-                        (run.records_processed !== null
-                          ? `${run.records_processed} record${run.records_processed === 1 ? "" : "s"} synced`
-                          : null)}
-                      {run.provider_quota_remaining !== null ? ` · ${run.provider_quota_remaining} quota left` : ""}
-                    </p>
-                  </div>
-                  <span
-                    className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${style.className}`}
-                  >
-                    <StatusIcon className={`h-3 w-3 ${run.status === "running" ? "animate-spin" : ""}`} strokeWidth={2} />
-                    {style.label}
-                  </span>
-                </FadeIn>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <FadeIn delay={0.16} className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Recent sync runs</h2>
-            <p className="text-xs text-foreground-subtle">
-              Admin-triggered only (manual &ldquo;Sync now&rdquo;-style actions) — the automated cron worker has its
-              own section above. Prunes history older than 90 days.
-            </p>
-          </div>
-          <PruneSyncRunsButton />
-        </FadeIn>
-
-        {!syncRuns || syncRuns.length === 0 ? (
-          <FadeIn delay={0.2} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            {providerConfigured
-              ? "No syncs have run yet. Use Sync now above to pull today's fixtures."
-              : "No syncs have run yet."}
-          </FadeIn>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {syncRuns.map((run, index) => {
-              const style = STATUS_STYLE[run.status];
-              const StatusIcon = style.icon;
-              return (
-                <FadeIn
-                  key={run.id}
-                  delay={0.2 + staggerDelay(index, 0.05)}
-                  className="kivo-glass flex flex-col gap-2 rounded-xl p-4 transition-colors hover:bg-surface-2"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm text-foreground">
-                        <span className="font-medium">{run.provider}</span> · {run.entity_type}
-                      </p>
-                      <p className="text-xs text-foreground-subtle">
-                        Started {formatTimestamp(run.started_at)}
-                        {run.finished_at ? ` · finished ${formatTimestamp(run.finished_at)}` : ""}
-                        {run.records_processed !== null ? ` · ${run.records_processed} record${run.records_processed === 1 ? "" : "s"}` : ""}
-                        {run.provider_quota_remaining !== null ? ` · ${run.provider_quota_remaining} quota left` : ""}
-                      </p>
-                    </div>
-                    <span
-                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${style.className}`}
-                    >
-                      <StatusIcon className={`h-3 w-3 ${run.status === "running" ? "animate-spin" : ""}`} strokeWidth={2} />
-                      {style.label}
-                    </span>
-                  </div>
-                  {run.error_message && isQuotaExhaustedMessage(run.error_message) && (
-                    // RECOMMENDATIONS.md item 62: no public page calls the provider
-                    // live (see the doc comment on isQuotaExhaustedMessage above), so
-                    // this admin-facing summary is where "today's data is capped
-                    // until tomorrow" actually needs to land.
-                    <p className="flex items-center gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
-                      <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      Today&apos;s data is capped until tomorrow. API-Football&apos;s free daily quota is used up; sync
-                      will work again after it resets.
-                    </p>
-                  )}
-                  {run.error_message && !isQuotaExhaustedMessage(run.error_message) && (
-                    <p className="rounded-lg bg-critical/5 px-3 py-2 text-xs text-critical">{run.error_message}</p>
-                  )}
-                </FadeIn>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Placed above the automation panels rather than below them, because it
-          answers the question that comes first: what is KIVO configured to hold
-          at all. Everything below reports how well the pipeline ran; this
-          reports what the pipeline was pointed at, and a pipeline pointed at
-          one day's fixtures runs perfectly while producing a database of
-          whoever happened to kick off. */}
-      <ClubCataloguePanel />
-
-      <CompetitionScopePanel />
-
-      <StandingsTransfersPanel />
-
-      <AutomationStatusPanel />
-
-      {/* Directly under the "has it ever run" panel, because this is the
-          narrower question that only matters once it has: how much quota
-          automation has spent, on what, and why it is idle right now. */}
-      <LiveWorkerPanel />
-
-      {/* KIVO_NEXT_GEN KN-83. Placed with the other data-integrity tools rather
-          than in its own screen — it is a repair for a specific condition
-          (the same real club synced twice under two providers), and burying it
-          somewhere separate would make it something nobody finds when they
-          need it. */}
-      <TeamMergePanel teams={mergeableTeams} />
-
-      <SyncReliabilityPanel />
-
-      <DataQualityPanel />
-
-      {/* KIVO_NEXT_GEN KN-107: the only forward-looking section on this page —
-          everything above it reports what the pipeline already did. */}
-      <SyncPlannerPanel />
+      </AdminSection>
     </div>
   );
 }

@@ -7,22 +7,29 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Menu, X } from "lucide-react";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
-import { isActiveRoute } from "@/lib/navigation";
-import { ADMIN_NAV as items } from "@/lib/admin-nav";
+import { ADMIN_NAV, ADMIN_NAV_GROUPS, isAdminNavItemActive } from "@/lib/admin-nav";
 import { cn } from "@/lib/utils";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
-// Admin's sidebar is `hidden lg:flex` (see admin/layout.tsx) — below that
-// breakpoint there was no navigation at all, just a bare page with no way to
-// move between Overview/Moderation/Users/Data health short of editing the
-// URL. This is the mobile-drawer counterpart, same grouped-list-with-
-// dividers shape as the just-refreshed main app "More" sheet and settings
-// page, and the same useFocusTrap contract every dialog in this app uses.
-export function AdminMobileNav() {
+/**
+ * Admin's navigation below `lg`, where the sidebar is hidden.
+ *
+ * Two things this now does that it did not. The bar names the page you are on —
+ * on a phone the drawer is closed by definition, so the only thing on screen
+ * used to be the word "KIVO Admin", identical on all nine pages. And the drawer
+ * lists each item with the one line that says what it is for, because the
+ * difference between "Coverage" and "Integrity" is not self-evident from four
+ * words in a list.
+ *
+ * `permitted` is the set of hrefs this role can use — same set the sidebar gets,
+ * resolved once in the layout.
+ */
+export function AdminMobileNav({ permitted }: { permitted: string[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const allowed = new Set(permitted);
 
   useFocusTrap(open, panelRef, () => setOpen(false), { restoreFocusRef: toggleRef });
 
@@ -34,12 +41,20 @@ export function AdminMobileNav() {
     };
   }, [open]);
 
+  // Longest match wins, so /admin/data-health/coverage names itself rather
+  // than being labelled by the /admin item it happens to sit under.
+  const current = ADMIN_NAV.filter((item) => isAdminNavItemActive(pathname, item)).sort(
+    (a, b) => b.href.length - a.href.length,
+  )[0];
+
   return (
     <>
       <div className="kivo-glass-brand sticky top-0 z-30 flex items-center justify-between gap-3 rounded-none px-4 py-3 lg:hidden">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Image src={kivoLogo} alt="" width={28} height={28} className="kivo-ink h-7 w-7 shrink-0" priority />
-          <span className="text-sm font-semibold tracking-tight text-foreground">KIVO Admin</span>
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+            {current ? current.label : "KIVO Admin"}
+          </span>
         </div>
         <button
           ref={toggleRef}
@@ -47,7 +62,7 @@ export function AdminMobileNav() {
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-label="Open admin navigation"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-1 text-foreground-muted transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-1 text-foreground-muted transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           <Menu className="h-5 w-5" strokeWidth={1.75} />
         </button>
@@ -76,7 +91,7 @@ export function AdminMobileNav() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -24, opacity: 0 }}
               transition={{ type: "spring", stiffness: 420, damping: 36 }}
-              className="kivo-glass-brand relative z-10 flex h-full w-[82vw] max-w-xs flex-col gap-6 overflow-y-auto rounded-l-none rounded-r-3xl p-5 pt-[calc(env(safe-area-inset-top)+20px)]"
+              className="kivo-glass-brand relative z-10 flex h-full w-[86vw] max-w-sm flex-col gap-5 overflow-y-auto rounded-l-none rounded-r-3xl p-5 pt-[calc(env(safe-area-inset-top)+20px)]"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -92,35 +107,57 @@ export function AdminMobileNav() {
                 </button>
               </div>
 
-              <div className="flex flex-col">
-                <span className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
-                  Admin
-                </span>
-                <nav aria-label="Admin" className="flex flex-col divide-y divide-hairline-soft rounded-2xl bg-surface-1">
-                  {items.map((item) => {
-                    // Same fix as admin-sidebar.tsx: the root "/admin" item is a
-                    // prefix of every other admin route, so isActiveRoute()'s
-                    // startsWith check would double-highlight it. Root needs an
-                    // exact match instead.
-                    const active = item.href === "/admin" ? pathname === item.href : isActiveRoute(pathname, item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpen(false)}
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "flex min-h-14 items-center gap-3 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
-                          active ? "text-accent" : "text-foreground hover:text-accent",
-                        )}
-                      >
-                        <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
+              <nav aria-label="Admin" className="flex flex-col gap-5">
+                {ADMIN_NAV_GROUPS.map((group) => {
+                  const items = group.items.filter((item) => allowed.has(item.href));
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={group.id} className="flex flex-col">
+                      <span className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground-subtle">
+                        {group.label}
+                      </span>
+                      <div className="flex flex-col divide-y divide-hairline-soft overflow-hidden rounded-2xl bg-surface-1">
+                        {items.map((item) => {
+                          const active = isAdminNavItemActive(pathname, item);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setOpen(false)}
+                              aria-current={active ? "page" : undefined}
+                              className={cn(
+                                "flex min-h-14 items-start gap-3 px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
+                                active ? "bg-surface-2" : "hover:bg-surface-2",
+                              )}
+                            >
+                              <item.icon
+                                className={cn(
+                                  "mt-0.5 h-[18px] w-[18px] shrink-0",
+                                  active ? "text-accent" : "text-foreground-subtle",
+                                )}
+                                strokeWidth={1.75}
+                              />
+                              <span className="flex min-w-0 flex-col gap-0.5">
+                                <span
+                                  className={cn(
+                                    "text-sm font-semibold",
+                                    active ? "text-accent" : "text-foreground",
+                                  )}
+                                >
+                                  {item.label}
+                                </span>
+                                <span className="text-[11px] leading-snug text-foreground-subtle">
+                                  {item.description}
+                                </span>
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </nav>
 
               <div className="mt-auto flex flex-col divide-y divide-hairline-soft rounded-2xl bg-surface-1">
                 <Link

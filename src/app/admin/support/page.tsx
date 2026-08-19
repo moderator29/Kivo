@@ -1,4 +1,5 @@
 import { LifeBuoy, Lock } from "lucide-react";
+import { AdminPageHeader } from "@/components/admin/admin-chrome";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
@@ -47,18 +48,23 @@ export default async function AdminSupportPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <FadeIn className="flex flex-col gap-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
-          <LifeBuoy strokeWidth={1.75} className="h-5 w-5 text-accent" aria-hidden="true" />
-          Support
-        </h1>
-        <p className="text-sm text-foreground-muted">
-          Everything sent from <span className="font-medium text-foreground">/support</span>. KIVO has no password and
-          no social login, so for anyone whose sign-in code never arrives this queue is the only way back in — see{" "}
-          <span className="font-medium text-foreground">docs/ACCOUNT_RECOVERY.md</span> for how to verify and recover
-          an account by hand.
-        </p>
-      </FadeIn>
+      <AdminPageHeader
+        icon={LifeBuoy}
+        title="Support"
+        lede={
+          <>
+            Everything sent from <span className="font-medium text-foreground">/support</span>. KIVO has no password
+            and no social login, so for anyone whose sign-in code never arrives this queue is the only way back in.
+          </>
+        }
+        cost={
+          <>
+            Nothing notifies anybody when a request lands — whoever opens this page is the on-call rota. See{" "}
+            <span className="font-medium text-foreground-muted">docs/ACCOUNT_RECOVERY.md</span> for how to verify and
+            recover an account by hand.
+          </>
+        }
+      />
 
       {!permitted ? (
         // Same discipline as the moderation page: a role that can reach /admin

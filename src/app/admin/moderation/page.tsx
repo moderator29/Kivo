@@ -1,4 +1,4 @@
-import { ShieldAlert, Lock, History } from "lucide-react";
+import { ShieldAlert, History } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { QueryFailedError, readList } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -6,6 +6,7 @@ import { canViewModerationData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
 import { staggerDelay } from "@/lib/stagger";
 import { ReportRow, type ReportPreview } from "@/components/admin/report-row";
+import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
 import type { Database } from "@/lib/supabase/types";
 
 type ModerationTargetType = Database["public"]["Enums"]["moderation_target_type"];
@@ -164,16 +165,12 @@ export default async function ModerationPage() {
 
   if (!canViewModerationData(profile?.role)) {
     return (
-      <div className="flex flex-col gap-6">
-        <h1 className="text-xl font-semibold text-foreground">Moderation queue</h1>
-        <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          <Lock className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-          <p className="text-sm text-foreground-muted">
-            Moderation isn&apos;t part of your role (<span className="text-foreground">{profile?.role}</span>).
-            This isn&apos;t an empty queue, it&apos;s outside what your access covers.
-          </p>
-        </div>
-      </div>
+      <AdminAccessNotice
+        title="Moderation"
+        role={profile?.role}
+        subject="The moderation queue"
+        because="`reports` is readable only by the moderator, content-admin, support-admin, admin and super-admin roles (can_moderate(), migration 0001)."
+      />
     );
   }
 
@@ -208,14 +205,16 @@ export default async function ModerationPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Moderation queue</h1>
-        <p className="text-sm text-foreground-muted">
-          {totalOpenCount > shownOpenCount
+      <AdminPageHeader
+        icon={ShieldAlert}
+        title="Moderation"
+        lede={
+          totalOpenCount > shownOpenCount
             ? `Showing ${shownOpenCount} of ${totalOpenCount} open reports, oldest first.`
-            : `${totalOpenCount} open report${totalOpenCount === 1 ? "" : "s"}, oldest first.`}
-        </p>
-      </FadeIn>
+            : `${totalOpenCount} open report${totalOpenCount === 1 ? "" : "s"}, oldest first.`
+        }
+        cost="Reported content stays visible to everyone until somebody acts on it. Each row shows what was actually reported, and whether it is still live."
+      />
 
       {!openReports || openReports.length === 0 ? (
         <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
@@ -240,13 +239,7 @@ export default async function ModerationPage() {
       )}
 
       {resolvedReports && resolvedReports.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <FadeIn delay={0.55}>
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-              <History className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-              Recently resolved
-            </h2>
-          </FadeIn>
+        <AdminSection icon={History} title="Recently resolved" delay={0.55}>
           <div className="flex flex-col gap-2">
             {resolvedReports.map((report, index) => (
               <FadeIn
@@ -261,7 +254,7 @@ export default async function ModerationPage() {
               </FadeIn>
             ))}
           </div>
-        </div>
+        </AdminSection>
       )}
     </div>
   );
