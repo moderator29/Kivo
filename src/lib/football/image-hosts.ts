@@ -137,3 +137,40 @@ export function remoteImagePatterns(
     hostname,
   }));
 }
+
+/**
+ * The one combination where an unset `FOOTBALL_IMAGE_HOSTS` is a real fault
+ * rather than an unused option — and it currently fails in silence.
+ *
+ * `media.api-sports.io` is built in, so API-Football needs no configuration.
+ * TheSportsDB's badge CDN is not built in and deliberately never will be until
+ * somebody reads the hostname off a real response (see EXTRA_IMAGE_HOSTS_ENV
+ * above). Selecting that provider without setting the host produces a product
+ * where every crest is blocked by KIVO's own Content-Security-Policy and every
+ * optimized image answers 400 — with no error anywhere. The founder sees
+ * missing crests and reasonably concludes the sync did not run, which is the
+ * wrong conclusion and sends the debugging in the wrong direction entirely.
+ *
+ * Returned as a string rather than logged here so both callers can use it: the
+ * build (`next.config.ts`, where the value is actually read) and the running
+ * server (`getFootballDataProvider`, which is where the choice takes effect and
+ * where a founder who did not watch the build log will still see it).
+ *
+ * The redeploy sentence is not padding. This value is read at build time, so
+ * setting it in the dashboard and waiting changes nothing.
+ */
+export function missingImageHostWarning(options: {
+  provider: string | null | undefined;
+  extraHostsRaw: string | null | undefined;
+}): string | null {
+  if (options.provider !== "thesportsdb") return null;
+  if (parseExtraImageHosts(options.extraHostsRaw).length > 0) return null;
+  return (
+    `FOOTBALL_DATA_PROVIDER=thesportsdb but ${EXTRA_IMAGE_HOSTS_ENV} is empty. ` +
+    `Only ${API_FOOTBALL_IMAGE_HOST} is allowed by default, so every crest and player photo ` +
+    `TheSportsDB serves will be blocked by the Content-Security-Policy and return 400 from the ` +
+    `image optimizer — silently, as a missing image rather than an error. ` +
+    `Read the hostname off one real strBadge/strTeamBadge URL, set ${EXTRA_IMAGE_HOSTS_ENV} to it, ` +
+    `and redeploy: this value is read at build time, so saving it without a fresh build changes nothing.`
+  );
+}

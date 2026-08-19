@@ -4,6 +4,7 @@ import {
   footballImageHosts,
   imgSrcOrigins,
   isValidImageHost,
+  missingImageHostWarning,
   parseExtraImageHosts,
   remoteImagePatterns,
 } from "./image-hosts";
@@ -95,5 +96,32 @@ describe("the two host lists next.config.ts builds", () => {
   it("appends the Supabase origin to img-src only when configured", () => {
     expect(imgSrcOrigins({ supabaseOrigin: "https://abc.supabase.co" })).toContain("https://abc.supabase.co");
     expect(imgSrcOrigins({ supabaseOrigin: null }).some((o) => o.includes("supabase"))).toBe(false);
+  });
+});
+
+describe("missingImageHostWarning", () => {
+  it("says nothing for API-Football, whose host is built in", () => {
+    expect(missingImageHostWarning({ provider: "api-football", extraHostsRaw: undefined })).toBeNull();
+    expect(missingImageHostWarning({ provider: undefined, extraHostsRaw: undefined })).toBeNull();
+  });
+
+  it("warns for TheSportsDB with no host configured", () => {
+    const warning = missingImageHostWarning({ provider: "thesportsdb", extraHostsRaw: undefined });
+    expect(warning).toContain("FOOTBALL_IMAGE_HOSTS");
+    // The two things a reader needs and would otherwise have to work out: that
+    // the failure is silent, and that saving the value is not enough.
+    expect(warning).toContain("silently");
+    expect(warning).toContain("redeploy");
+  });
+
+  it("stays quiet once a host is configured", () => {
+    expect(missingImageHostWarning({ provider: "thesportsdb", extraHostsRaw: "r2.example.com" })).toBeNull();
+  });
+
+  it("still warns when the configured value has no usable host in it", () => {
+    // A value that parses to nothing is the same situation as an unset one, and
+    // is the likelier mistake: `https://r2.example.com` looks set and is not.
+    expect(missingImageHostWarning({ provider: "thesportsdb", extraHostsRaw: "https://r2.example.com" })).not.toBeNull();
+    expect(missingImageHostWarning({ provider: "thesportsdb", extraHostsRaw: " , " })).not.toBeNull();
   });
 });
