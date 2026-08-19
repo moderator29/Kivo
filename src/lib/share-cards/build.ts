@@ -362,6 +362,23 @@ export function buildPredictionCard(
   };
 }
 
+/**
+ * The chip a prediction card puts next to its result, or nothing.
+ *
+ * Pure and exported so the rule is testable, because the two bugs it encodes
+ * were both invisible to every test that existed and were found by rendering
+ * a real scored prediction and looking at it:
+ *
+ *   - the unit is POINTS, not XP (`predictions.points_awarded`; XP is five
+ *     times it, see XP_PER_PREDICTION_POINT), and
+ *   - a scored zero earns no chip, because "+0" beside "MISSED" reads as an
+ *     award for being wrong. The zero is not hidden — "MISSED" is the zero.
+ */
+export function predictionPointsChipLabel(pointsAwarded: number | null): string | null {
+  if (pointsAwarded == null || pointsAwarded <= 0) return null;
+  return `+${pointsAwarded} PTS`;
+}
+
 /* ------------------------------------------------------------------ */
 /* 5. Fantasy performance                                              */
 /* ------------------------------------------------------------------ */

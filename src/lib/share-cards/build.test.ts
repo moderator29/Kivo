@@ -8,6 +8,7 @@ import {
   buildPlayerPerformanceCard,
   buildPredictionCard,
   buildTransferCard,
+  predictionPointsChipLabel,
   ordinal,
   stat,
   type LiveScoreFixtureRow,
@@ -189,6 +190,22 @@ describe("buildPredictionCard", () => {
 
     const correct = buildPredictionCard({ predicted_outcome: "home_win", points_awarded: 30 }, baseFixture, profile);
     expect(correct?.outcome).toBe("correct");
+  });
+});
+
+describe("predictionPointsChipLabel", () => {
+  it("names the unit points, not XP — they are different numbers", () => {
+    // predictions.points_awarded is points; XP is five times it. A card that
+    // called 3 points "3 XP" put a real number under the wrong name.
+    expect(predictionPointsChipLabel(3)).toBe("+3 PTS");
+  });
+
+  it("gives a missed prediction no chip rather than an award of nothing", () => {
+    expect(predictionPointsChipLabel(0)).toBeNull();
+  });
+
+  it("gives an unscored prediction no chip", () => {
+    expect(predictionPointsChipLabel(null)).toBeNull();
   });
 });
 

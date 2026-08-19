@@ -34,6 +34,7 @@
  */
 
 import type { ReactElement, ReactNode } from "react";
+import { predictionPointsChipLabel } from "./build";
 import { SHARE_BACKGROUND_LAYERS } from "./backgrounds";
 import { SHARE_CARD_CANVAS, type ShareCardData, type ShareStat, type ShareTeamRef } from "./types";
 
@@ -537,6 +538,7 @@ function playerComparisonBody(
 function predictionBody(data: Extract<ShareCardData, { kind: "prediction" }>, img: ImageResolver): ReactElement {
   const outcomeColor = data.outcome === "correct" ? C.live : data.outcome === "missed" ? C.critical : C.subtle;
   const outcomeLabel = data.outcome === "correct" ? "Called it" : data.outcome === "missed" ? "Missed" : "Awaiting kickoff";
+  const pointsChipLabel = predictionPointsChipLabel(data.pointsAwarded);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, width: INNER_WIDTH }}>
@@ -587,7 +589,20 @@ function predictionBody(data: Extract<ShareCardData, { kind: "prediction" }>, im
         </Text>
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <Chip label={outcomeLabel.toUpperCase()} color={outcomeColor} dot={outcomeColor} />
-          {data.pointsAwarded != null ? <Chip label={`+${data.pointsAwarded} XP`} color={C.gold} /> : <div style={{ display: "none" }} />}
+          {/* Two corrections found by rendering this card against a real
+              scored prediction and looking at it.
+              1. The unit was wrong. `predictions.points_awarded` is prediction
+                 POINTS, not XP — XP is five times it
+                 (XP_PER_PREDICTION_POINT in src/lib/predictions.ts). A card
+                 saying "+3 XP" for a real 3-point win put a real number under
+                 the wrong name, on the one artefact nobody can check against
+                 the app.
+              2. A scored zero was rendering as "+0 XP" next to "MISSED",
+                 which reads as an award for getting it wrong. The zero is
+                 still real and still told — that is what MISSED says. Only a
+                 gain gets a chip, which is also how resultBadge() states it
+                 everywhere else in the product. */}
+          {pointsChipLabel ? <Chip label={pointsChipLabel} color={C.gold} /> : <div style={{ display: "none" }} />}
         </div>
       </Panel>
     </div>
