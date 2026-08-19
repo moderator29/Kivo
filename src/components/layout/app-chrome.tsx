@@ -75,8 +75,14 @@ export function AppChrome({
           tabIndex={-1}
           className={cn(
             "flex flex-1 flex-col focus:outline-none",
-            // Only a tab route has to clear the floating bottom bar.
-            focus ? "pb-0" : "pb-24 lg:pb-0",
+            // Only a tab route has to clear the floating bottom bar — and it
+            // has to clear the home indicator underneath it too. The bar sits
+            // at `env(safe-area-inset-bottom) + 12px` and is about 60px tall,
+            // so a flat 6rem is enough on a flat-bottomed phone and about 10px
+            // short on a notched one: the last row of every list on an iPhone
+            // ends up under the bar. Adding the inset to the padding makes the
+            // two follow the same number instead of one of them guessing.
+            focus ? "pb-0" : "pb-[calc(env(safe-area-inset-bottom)+6rem)] lg:pb-0",
           )}
         >
           {/* Two different movements for two different meanings. A tab route

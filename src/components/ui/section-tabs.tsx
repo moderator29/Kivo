@@ -251,6 +251,31 @@ export function SectionTabs<T extends string>({
           bleed && "px-4 lg:px-0",
         )}
       >
+        {/* One indicator for the whole rail, moved rather than re-rendered per
+            tab. Absolutely positioned inside the scroll CONTENT, so it travels
+            with the tabs when the rail scrolls and needs no correction.
+
+            FIRST in the DOM, and that is load-bearing rather than tidy: both
+            this and the tabs are positioned boxes with no z-index, so paint
+            order is document order. Rendered last, the `pill` indicator — which
+            is an opaque `--surface-raised` fill in light mode — covered the
+            label of the tab it was meant to be highlighting. Dark mode hid it,
+            because the same token is translucent there. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute transition-[transform,width,opacity] duration-300 ease-out motion-reduce:transition-none",
+            tone === "underline"
+              ? "kivo-gradient-prime bottom-0 left-0 h-[3px] rounded-full"
+              : "left-0 top-1 h-[calc(100%-0.5rem)] rounded-xl bg-surface-raised shadow-soft",
+          )}
+          style={{
+            opacity: indicator ? 1 : 0,
+            transform: `translateX(${indicator?.left ?? 0}px)`,
+            width: indicator?.width ?? 0,
+          }}
+        />
+
         {tabs.map((tab) => {
           const active = tab.id === value;
           return (
@@ -303,23 +328,6 @@ export function SectionTabs<T extends string>({
           );
         })}
 
-        {/* One indicator for the whole rail, moved rather than re-rendered per
-            tab. Absolutely positioned inside the scroll CONTENT, so it travels
-            with the tabs when the rail scrolls and needs no correction. */}
-        <span
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute transition-[transform,width,opacity] duration-300 ease-out motion-reduce:transition-none",
-            tone === "underline"
-              ? "kivo-gradient-prime bottom-0 left-0 h-[3px] rounded-full"
-              : "left-0 top-1 h-[calc(100%-0.5rem)] rounded-xl bg-surface-raised shadow-soft",
-          )}
-          style={{
-            opacity: indicator ? 1 : 0,
-            transform: `translateX(${indicator?.left ?? 0}px)`,
-            width: indicator?.width ?? 0,
-          }}
-        />
       </div>
     </div>
   );
