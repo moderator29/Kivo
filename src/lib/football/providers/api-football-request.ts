@@ -8,7 +8,13 @@
  * dependencies, same rationale as normalizers.ts.
  */
 
-export type ApiFootballErrorKind = "rate_limited" | "auth" | "server_error" | "client_error" | "network_error";
+export type ApiFootballErrorKind =
+  | "rate_limited"
+  | "auth"
+  | "plan"
+  | "server_error"
+  | "client_error"
+  | "network_error";
 
 /**
  * API-Football reports account-level and parameter-level problems with HTTP
@@ -46,6 +52,91 @@ export function extractProviderError(json: unknown): { key: string; message: str
   }
   return null;
 }
+
+/**
+ * The seasons a plan refusal says the account CAN see.
+ *
+ * API-Football's refusal carries the answer inside the sentence — "try from
+ * 2022 to 2024" — and that range is the single most actionable fact in the
+ * whole message, because it is exactly what has to go into KIVO's target
+ * season. Parsed out so a surface can offer the year rather than making
+ * somebody read for it. Null when the provider did not name a range; never
+ * guessed, because a wrong range would send an operator to a season that is
+ * also refused.
+ */
+export function parseSupportedSeasonRange(message: string): { from: number; to: number } | null {
+  const match = /from\s+(\d{4})\s+to\s+(\d{4})/i.exec(message);
+  if (!match) return null;
+  const from = Number(match[1]);
+  const to = Number(match[2]);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return null;
+  return { from, to };
+}
+
+/**
+ * Which kind of refusal a 200-with-`errors` response actually is.
+ *
+ * The distinction that matters is between **the account** and **the plan**, and
+ * before this function they were the same kind. A suspended or unverified
+ * account is fixed by going to the provider's dashboard. A plan that does not
+ * cover the season being asked for is fixed by asking for a different season,
+ * which costs nothing and takes a minute — and telling somebody to check their
+ * API key when the real answer is "point KIVO at 2024" costs them a day. The
+ * live database recorded exactly that message under a `client_error` kind
+ * before this existed.
+ *
+ * The provider's `errors` key is the primary signal (`plan`, `access`,
+ * `token`), and the message is a secondary one for the cases where the key is
+ * something generic like `season` but the sentence is unmistakably about the
+ * plan.
+ */
+export function classifyProviderErrorKind(key: string, message: string): ApiFootballErrorKind {
+  const normalizedKey = key.trim().toLowerCase();
+  if (normalizedKey === "plan" || normalizedKey === "subscription") return "plan";
+  // `access` is the account itself — suspended, unverified, or out of plan.
+  // That is an auth problem however it is spelled, and it is the one an
+  // operator can actually fix from the provider's dashboard.
+  if (normalizedKey === "access" || normalizedKey === "token") return "auth";
+  if (/\b(free|current)\s+plans?\b|\bupgrade\s+(your|to a)\b|\bnot\s+(available|included)\s+(in|on|with)\s+your\s+plan\b/i.test(message)) {
+    return "plan";
+  }
+  return "client_error";
+}
+
+/**
+ * Turns a plan refusal into the sentence an operator can act on, keeping the
+ * provider's own words attached.
+ *
+ * Both halves are deliberate. The plain half is what stops a day being lost —
+ * "your plan does not cover this season" is an instruction; "Free plans do not
+ * have access to this season, try from 2022 to 2024" read cold at the bottom of
+ * a sync-run row is a riddle about whose fault it is. The raw half is kept
+ * because KIVO must never present its own paraphrase as if it were the
+ * provider's statement, and because the exact wording is what makes the claim
+ * checkable against the provider's support.
+ */
+export function describePlanRefusal(providerMessage: string, requestedPath: string): string {
+  const range = parseSupportedSeasonRange(providerMessage);
+  const seasonInPath = /[?&]season=(\d{4})/.exec(requestedPath)?.[1] ?? null;
+
+  const asked = seasonInPath ? `season ${seasonInPath}` : "this request";
+  const offer = range
+    ? ` The provider says this plan can serve ${range.from} to ${range.to}.`
+    : "";
+  const fix = range
+    ? ` Set KIVO's target season to a year in that range (Admin -> Data Health -> target season, or ${TARGET_SEASON_ENV_NAME}) and every season-scoped sync starts working, or upgrade the plan to reach the current season.`
+    : " Set KIVO's target season to a year the plan covers (Admin -> Data Health -> target season), or upgrade the plan.";
+
+  return (
+    `Your API-Football plan does not cover ${asked}.${offer}${fix}` +
+    ` The provider's own words: "${providerMessage}"`
+  );
+}
+
+/** Named here rather than imported so this module keeps its deliberate lack of
+ * dependencies (see the file header) — `target-season.ts` owns the variable and
+ * this is only quoting its name in a sentence. */
+const TARGET_SEASON_ENV_NAME = "FOOTBALL_TARGET_SEASON";
 
 export class ApiFootballError extends Error {
   readonly status: number | null;

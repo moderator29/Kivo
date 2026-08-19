@@ -11,11 +11,12 @@ import type {
   NormalizedMatchEvent,
   NormalizedPlayer,
   NormalizedPlayerSeasonStatistics,
+  NormalizedProviderPlan,
   NormalizedStandingRow,
   NormalizedTeamProfile,
+  NormalizedTeamTransfer,
   NormalizedTopScorer,
   NormalizedTransfer,
-  NormalizedTeamTransfer,
 } from "../types";
 
 /**
@@ -700,5 +701,13 @@ export class MockFootballProvider implements FootballDataProvider {
   ): Promise<NormalizedPlayerSeasonStatistics[]> {
     const rows = MOCK_PLAYER_SEASON_STATS[playerProviderId];
     return rows ? rows.map((row) => ({ ...row, season })) : [];
+  }
+
+  /** Null. Every other method here returns invented football, which is what a
+   * mock is for; a plan is not football. A made-up plan name and daily limit
+   * would be read by an admin as facts about a real billing account, and there
+   * is no version of that which is useful. */
+  async getProviderPlan(): Promise<NormalizedProviderPlan | null> {
+    return null;
   }
 }

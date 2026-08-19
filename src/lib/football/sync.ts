@@ -15,6 +15,7 @@ import { batchFindMappedIds } from "./provider-mappings";
 import {
   claimSyncLock,
   flagAbsentFixtures,
+  reapAbandonedSyncRuns,
   markFixturesSeen,
   recordAnomaly,
   recordEntityFailures,
@@ -710,6 +711,13 @@ export async function syncTodayFixtures(
 
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
+
+  // Before opening a new row, close any that a dead process left open. This is
+  // the one place guaranteed to run often enough to matter and cheap enough to
+  // afford: one indexed UPDATE that touches nothing unless a row has been
+  // `running` for a quarter of an hour. See reapAbandonedSyncRuns for why the
+  // `finally` below cannot cover the case this does.
+  await reapAbandonedSyncRuns(supabase);
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")

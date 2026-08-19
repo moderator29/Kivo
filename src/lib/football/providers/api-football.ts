@@ -10,6 +10,7 @@ import type {
   NormalizedManager,
   NormalizedMatchEvent,
   NormalizedPlayer,
+  NormalizedProviderPlan,
   NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
   NormalizedTeamProfile,
@@ -26,7 +27,13 @@ import {
   parseCoverageFlag,
   parseProviderNumber,
 } from "./normalizers";
-import { extractProviderError, ApiFootballError, requestWithRetry } from "./api-football-request";
+import {
+  extractProviderError,
+  ApiFootballError,
+  requestWithRetry,
+  classifyProviderErrorKind,
+  describePlanRefusal,
+} from "./api-football-request";
 import { buildRawResponseSample, type RawResponseSample } from "../raw-response-sample";
 import { parseMatchday } from "../matchday";
 
@@ -83,6 +90,17 @@ const PLAYER_SEASON_CACHE_SECONDS = 21_600;
  * a single day so re-visiting a player's profile never burns fresh quota for data
  * that's already historical fact. */
 const TRANSFERS_CACHE_SECONDS = 172_800;
+/**
+ * `/status` is the one endpoint whose answer changes on every other request
+ * KIVO makes (it carries today's spend), so a long window would make it lie
+ * about the number that matters most. Five minutes is short enough to be
+ * useful on an admin screen somebody is actively watching and long enough that
+ * refreshing that screen does not itself become the thing eating the quota.
+ *
+ * API-Football does not charge for `/status` against the daily allowance, but
+ * this code does not take that on faith — it is cached like everything else.
+ */
+const STATUS_CACHE_SECONDS = 300;
 
 interface ApiFootballSquadResponse {
   response: Array<{
@@ -371,6 +389,23 @@ interface ApiFootballLeaguesResponse {
 }
 
 /** `/injuries?league={id}&season={year}`. */
+/**
+ * `/status` — the account, the subscription and the day's request count, as the
+ * provider itself reports them.
+ *
+ * Read defensively like every other response shape in this file: it is parsed
+ * network JSON and nothing about it is guaranteed. Every field lands as null
+ * rather than a default when absent, because a fabricated "0 requests used" on
+ * an admin screen is worse than an honest blank.
+ */
+interface ApiFootballStatusResponse {
+  response?: {
+    account?: { firstname?: string | null; lastname?: string | null; email?: string | null } | null;
+    subscription?: { plan?: string | null; end?: string | null; active?: boolean | null } | null;
+    requests?: { current?: number | null; limit_day?: number | null } | null;
+  } | null;
+}
+
 interface ApiFootballInjuriesResponse {
   response?: Array<{
     player?: {
@@ -484,15 +519,18 @@ export class ApiFootballProvider implements FootballDataProvider {
       // rather than a green tick over an empty sync.
       const providerError = extractProviderError(json);
       if (providerError) {
-        throw new ApiFootballError(
-          `API-Football refused the request (${providerError.key}): ${providerError.message}`,
-          // `access` is the account itself — suspended, unverified, or out of
-          // plan. That is an auth problem however it is spelled, and it is the
-          // one an operator can actually fix.
-          providerError.key === "access" || providerError.key === "token" ? "auth" : "client_error",
-          response.status,
-          quotaRemaining,
-        );
+        const kind = classifyProviderErrorKind(providerError.key, providerError.message);
+        // A plan refusal is rewritten into an instruction, with the provider's
+        // own sentence kept inside it. This message is what lands in
+        // `sync_runs.error_message` and is the only thing an operator reads
+        // when a sync goes red — "Free plans do not have access to this
+        // season" tells them nothing about what to do next, and the live
+        // database has been carrying exactly that string, unactioned, all day.
+        const message =
+          kind === "plan"
+            ? describePlanRefusal(providerError.message, path)
+            : `API-Football refused the request (${providerError.key}): ${providerError.message}`;
+        throw new ApiFootballError(message, kind, response.status, quotaRemaining);
       }
 
       return json;
@@ -1253,5 +1291,38 @@ export class ApiFootballProvider implements FootballDataProvider {
       });
     }
     return rows;
+  }
+
+  /**
+   * The account behind `API_FOOTBALL_KEY`, in the provider's own words.
+   *
+   * This exists because of one sentence the live database recorded and nothing
+   * in KIVO could explain: "Free plans do not have access to this season, try
+   * from 2022 to 2024." Every season-scoped sync was failing, and the only way
+   * to know why was to read a raw error string at the bottom of a sync run.
+   * `/status` is the provider's answer to "what am I actually paying for", it
+   * takes no season parameter, and it therefore still answers on exactly the
+   * plan whose seasons are refused.
+   *
+   * Nothing here is derived or estimated. A field the provider omits is null.
+   */
+  async getProviderPlan(): Promise<NormalizedProviderPlan | null> {
+    const data = await this.request<ApiFootballStatusResponse>("/status", STATUS_CACHE_SECONDS);
+    const body = data.response;
+    if (!body) return null;
+
+    const name = [body.account?.firstname, body.account?.lastname]
+      .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+      .join(" ");
+    const email = typeof body.account?.email === "string" ? body.account.email : null;
+
+    return {
+      planName: typeof body.subscription?.plan === "string" ? body.subscription.plan : null,
+      active: typeof body.subscription?.active === "boolean" ? body.subscription.active : null,
+      endsAt: typeof body.subscription?.end === "string" ? body.subscription.end : null,
+      requestsToday: parseProviderNumber(body.requests?.current),
+      requestsPerDay: parseProviderNumber(body.requests?.limit_day),
+      accountLabel: name.length > 0 ? name : email,
+    };
   }
 }

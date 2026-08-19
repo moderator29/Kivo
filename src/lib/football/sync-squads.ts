@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
-import { createMapping, findMappedId } from "./provider-mappings";
+import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedManager, NormalizedPlayer } from "./types";
 import { logError } from "@/lib/log";
@@ -144,7 +144,27 @@ export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
     return { status: "failed", recordsProcessed: 0, error: message };
   };
 
-  const teamProviderId = await findMappedId(supabase, provider.name, "team", teamId);
+  /**
+   * `findProviderEntityId`, not `findMappedId`.
+   *
+   * The two helpers run in opposite directions and their arguments have the
+   * same type, so calling the wrong one type-checks and then fails at runtime
+   * with a sentence that blames the data. This call site used `findMappedId`,
+   * which looks up `provider_entity_id = <the value passed>` — and the value
+   * passed is a KIVO uuid. It therefore matched nothing, always, for every
+   * team, and reported "no provider mapping yet, sync its competition's
+   * fixtures first" to an operator who had already done exactly that.
+   *
+   * Verified on the live database: the run that failed at 19:12 on 2026-08-19
+   * was for team f0d51d87-6a61-46e4-9080-e173cf8335c2 (Atletico Madrid), whose
+   * `provider_mappings` row `api-football:team:530` was already there. The
+   * mapping was never missing; the query was asking the wrong column.
+   *
+   * `/players/squads?team=` and `/coachs?team=` carry no season parameter, so
+   * unlike most of this codebase they are NOT blocked by the free plan. This
+   * one line is what has been stopping squads and managers from ever syncing.
+   */
+  const teamProviderId = await findProviderEntityId(supabase, provider.name, "team", teamId);
   if (!teamProviderId) {
     return fail(
       `Team ${teamId} has no ${provider.name} provider mapping yet. Sync its competition's fixtures first.`,

@@ -2,6 +2,58 @@
 
 What's real today, end to end: where football data comes from, how it gets normalized, how it lands in Supabase, and what parts of the "live data" target architecture exist versus don't yet. Companion docs: `docs/PROVIDER_ABSTRACTION.md` (the provider interface and both implementations), `docs/API_FOOTBALL.md` (the primary provider in detail), `docs/API_QUOTA.md` (rate-limit/quota handling), `docs/CACHING_STRATEGY.md` (freshness/TTL), and `docs/LIVE_DATA.md` (Realtime distribution — a separate work stream, not duplicated here).
 
+## The plan gate — read this before diagnosing an empty table
+
+**Established against the live database on 2026-08-19, not inferred.** The
+account this deployment runs against is on a plan that refuses every
+season-scoped endpoint. The provider's own words, recorded in
+`sync_runs.error_message`:
+
+> "Free plans do not have access to this season, try from 2022 to 2024."
+
+API-Football signals this with **HTTP 200 and an `errors` object**, not a 4xx,
+so an unguarded reader turns "the provider refused us" into "there is no
+football". `providers/api-football-request.ts` catches it (`extractProviderError`)
+and, since this pass, classifies it as its own `plan` error kind and rewrites
+the message into an instruction with the provider's sentence kept inside it.
+
+Which endpoints this gates is decided by one thing only — whether the request
+carries a `season` parameter:
+
+| Not season-scoped (works on any plan) | Season-scoped (subject to the plan's season window) |
+|---|---|
+| `/fixtures?date=`, `/fixtures?live=all`, `/fixtures?id=` | `/leagues?season=` (the coverage registry) |
+| `/players/squads?team=`, `/coachs?team=` | `/teams?league=&season=` (club lists) |
+| `/fixtures/{lineups,events,statistics,players}?fixture=` | `/standings?league=&season=` |
+| `/transfers?player=`, `/transfers?team=` | `/injuries`, `/players/topscorers`, `/players?id=&season=` |
+| `/status` | |
+
+That table is why the live database held 705 teams and 354 fixtures and nothing
+else: `/fixtures?date=` was the only season-free endpoint anything had actually
+reached.
+
+**The season is now settable** (`src/lib/football/target-season.ts`, migration
+0115). Precedence: a `provider_season_target` row → `FOOTBALL_TARGET_SEASON` →
+the calendar. The default stays the real current season, and every surface that
+resolves an override states the year and where it came from — KIVO must never
+quietly present a two-year-old season as this one. Admin → Data Health →
+"Plan and season coverage" shows the plan (from `/status`), the target season,
+every endpoint's status with a reason, and the refusals KIVO has actually been
+given, quoted.
+
+## Abandoned sync runs
+
+`sync_runs` rows can be left `running` forever, and the `finally` in
+`syncTodayFixtures` cannot prevent it: `finally` needs a live process, and a
+serverless invocation killed at its duration limit runs none of it. The lease
+in `sync_locks` already survives this because it carries an expiry; the run row
+did not, so Data Health drew phantom in-progress syncs (seven of them on
+2026-08-19). Migration 0116's `reap_abandoned_sync_runs` gives the run row the
+same time-based expiry. It closes a stale run as `failed` with a message saying
+the process ended rather than that the provider refused, and it deliberately
+never writes `last_synced_at` and never invents a `records_processed` — a
+reaped run's outcome is genuinely unknown.
+
 ## The pipeline, as it actually runs
 
 ```
@@ -41,6 +93,32 @@ Every sync is **admin-triggered on demand**, never a cron job or background poll
 `src/lib/football/types.ts` defines `NormalizedFixture`, `NormalizedTeam`, `NormalizedPlayer`, `NormalizedManager`, `NormalizedLineups`, `NormalizedMatchEvent`, `NormalizedFixtureStatistics`, `NormalizedStandingRow`, and `NormalizedTransfer`. Every provider method returns one of these, never a raw vendor shape — the sync layer, and everything downstream of it (routes, server components, the AI Copilot's grounding context), only ever sees these types. This is what makes the TheSportsDB provider a genuine drop-in alternative rather than a parallel system with its own routes/queries: it implements the exact same `FootballDataProvider` interface and returns the exact same normalized types API-Football does.
 
 Each normalized field's doc comment in `types.ts` states plainly when a value can be `null` and why (not reported by the provider vs. not yet fetched vs. genuinely doesn't exist for this fixture) — there is no silent "0 means unknown" convention anywhere in these types.
+
+### Which normalized models exist, and which genuinely do not (audited 2026-08-19)
+
+The founder named fourteen domain models that must be normalized. Audited
+against `src/lib/football/types.ts`, one by one:
+
+| Model | Status |
+|---|---|
+| matches | `NormalizedFixture` |
+| teams | `NormalizedTeam`, `NormalizedTeamProfile` |
+| players | `NormalizedPlayer` |
+| competitions | **No standalone type.** Competition identity travels inside `NormalizedFixture` (`competitionProviderId`/`Name`/`Country`/`season`) and inside `NormalizedCompetitionCoverage`, which is the registry's own model and carries name, country, type and logo. Nothing downstream reads a raw vendor competition shape, so the abstraction holds; a dedicated `NormalizedCompetition` would be a refactor of `NormalizedFixture`, not a gap in provider-independence. |
+| standings | `NormalizedStandingRow` |
+| lineups | `NormalizedLineups`, `NormalizedTeamLineup`, `NormalizedLineupEntry` |
+| events | `NormalizedMatchEvent` |
+| statistics | `NormalizedFixtureStatistics`, `NormalizedFixtureTeamStatistics` |
+| player ratings | **Present, contrary to expectation.** `NormalizedPlayerFixtureStatistics.providerRating` and `NormalizedPlayerSeasonStatistics.providerRating` carry the provider's own 0–10 rating. KIVO's `rating-engine.ts` computes a separate rating and the two are never mixed — the field name says whose opinion it is. |
+| transfers | `NormalizedTransfer`, `NormalizedTeamTransfer` |
+| coaches | `NormalizedManager` |
+| news | **Genuinely absent, and deliberately not invented.** Neither configured provider has a news endpoint: API-Football publishes none, and TheSportsDB's public API has none KIVO could confirm. Adding a `NormalizedNewsItem` with no provider behind it would be a type describing data KIVO cannot obtain — an empty contract that reads as a capability. When a news source is chosen, the model comes with it. |
+| injuries | `NormalizedInjury` |
+| venues | **No standalone type.** Venue identity travels inside `NormalizedFixture` (`venueProviderId`, `venueName`, `venueCity`) and lands in the `venues` table via `sync.ts`'s `upsertVenue`. Same reasoning as competitions: provider-independent already, just not extracted. |
+
+Added this pass: `NormalizedProviderPlan` — the provider's own statement about
+the account (plan name, subscription state, today's request count). Null, never
+a guess, from a provider that publishes no such endpoint.
 
 ## `provider_mappings` — how external IDs become KIVO IDs
 

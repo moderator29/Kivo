@@ -11,11 +11,12 @@ import type {
   NormalizedMatchEvent,
   NormalizedPlayer,
   NormalizedPlayerSeasonStatistics,
+  NormalizedProviderPlan,
   NormalizedStandingRow,
   NormalizedTeamProfile,
+  NormalizedTeamTransfer,
   NormalizedTopScorer,
   NormalizedTransfer,
-  NormalizedTeamTransfer,
 } from "../types";
 import { TheSportsDbError, requestWithRetry } from "./thesportsdb-request";
 import { mapEvent, toIntOrZero, toTheSportsDbSeasonString, type TheSportsDbEvent } from "./thesportsdb-normalizers";
@@ -430,6 +431,21 @@ export class TheSportsDbProvider implements FootballDataProvider {
     throw new Error(
       "TheSportsDbProvider.getPlayerSeasonStatistics: not supported by this provider — TheSportsDB's public API has no per-season player statistics endpoint. Use ApiFootballProvider for season statistics.",
     );
+  }
+
+  /**
+   * Null, not a throw, and not an invented plan.
+   *
+   * TheSportsDB has no account/status endpoint: the key rides in the URL path
+   * and nothing comes back describing the tier it belongs to. Null is the
+   * accurate answer and it lands consumers on "this provider does not report a
+   * plan", which is true. A throw would read as a failure to fetch something
+   * that exists, and a fabricated `{ planName: "Free" }` would be KIVO
+   * asserting a fact about somebody's subscription on no evidence at all —
+   * the same rule `getCompetitionCoverage` follows here for the same reason.
+   */
+  async getProviderPlan(): Promise<NormalizedProviderPlan | null> {
+    return null;
   }
 }
 

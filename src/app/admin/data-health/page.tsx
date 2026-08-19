@@ -6,6 +6,7 @@ import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
+import { reapAbandonedSyncRuns } from "@/lib/football/sync-instrumentation";
 import { FadeIn } from "@/components/ui/fade-in";
 import { staggerDelay } from "@/lib/stagger";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
@@ -26,6 +27,7 @@ import { TeamMergePanel } from "@/components/admin/team-merge-panel";
 import { ClubCataloguePanel } from "@/components/admin/club-catalogue-panel";
 import { StandingsTransfersPanel } from "@/components/admin/standings-transfers-panel";
 import { CompetitionScopePanel } from "@/components/admin/competition-scope-panel";
+import { PlanCapabilityPanel } from "@/components/admin/plan-capability-panel";
 
 type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
 
@@ -148,6 +150,14 @@ export default async function DataHealthPage() {
   // instead of crowding this list out. Vercel Cron fires the worker's route
   // once a minute once deployed, so without this filter a single manual sync
   // from days ago would already have scrolled off this capped 10-row list.
+  // Close anything a dead process left `running` before drawing this list.
+  // Syncs already reap on start, but this is the screen where a phantom
+  // "Running" spinner actually misleads somebody — the live database carried
+  // seven of them, hours old, on 2026-08-19. See reapAbandonedSyncRuns.
+  // Service-role, not the request-scoped client: the RPC is granted to
+  // service_role only (migration 0116), because closing somebody else's run
+  // row is not something a signed-in session should be able to do.
+  await reapAbandonedSyncRuns(createServiceRoleSupabaseClient());
   const { data: syncRuns } = await supabase
     .from("sync_runs")
     .select(
@@ -361,6 +371,13 @@ export default async function DataHealthPage() {
           {providerConfigured && <FootballSyncButton />}
         </div>
       </FadeIn>
+
+      {/* Immediately under the provider banner on purpose. The banner says a
+          provider is connected, which was true all day on 2026-08-19 while
+          every season-scoped sync was being refused and every screen drew the
+          refusals as empty tables. "Connected" and "able to serve this season"
+          are different facts and this is the panel that separates them. */}
+      <PlanCapabilityPanel />
 
       <FadeIn delay={0.09} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
