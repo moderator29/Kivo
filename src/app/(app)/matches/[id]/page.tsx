@@ -118,7 +118,7 @@ export default async function MatchCentrePage({
       .order("minute", { ascending: true }),
     supabase
       .from("lineups")
-      .select("team_id, is_starting, shirt_number, position, formation, player:players(id, full_name, known_as)")
+      .select("team_id, is_starting, shirt_number, position, formation, grid, player:players(id, full_name, known_as)")
       .eq("fixture_id", id),
     supabase
       .from("fixture_statistics")
@@ -547,6 +547,7 @@ export default async function MatchCentrePage({
               shirtNumber: l.shirt_number,
               position: l.position,
               formation: l.formation,
+              grid: l.grid,
               playerId: l.player?.id ?? "",
               playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
             }))}

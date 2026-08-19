@@ -52,6 +52,18 @@ type LineupEntry = {
    * published for this fixture. Same value repeated across every row for
    * this team_id (denormalized, matching how team_id itself repeats). */
   formation: string | null;
+  /** The provider's own formation slot for this player, "row:col", row 1 being
+   * the goalkeeper's line and counting upfield (migration 0081, synced from
+   * /fixtures/lineups at no extra request cost — the response already carries
+   * it). Null for every substitute and whenever the provider omits it.
+   *
+   * Passed through rather than used directly here: it is the only genuinely
+   * positional field the provider publishes, and `buildFixtureHeatmaps` knows
+   * how to read it. Deliberately NOT used to decide left from right anywhere —
+   * whether column 1 is a team's left or its right is unverified, and a pitch
+   * that draws a right-back on the left looks completely authoritative while
+   * being half the time wrong. */
+  grid: string | null;
   playerId: string;
   playerName: string;
 };
