@@ -1,6 +1,5 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -9,7 +8,9 @@ import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { shouldNotify } from "@/lib/notification-preferences";
+import { blockExistsBetween } from "@/lib/blocks";
 import { buildNotification } from "@/lib/notification-payloads";
+import { logError } from "@/lib/log";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -135,6 +136,13 @@ async function notifyComment(
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, recipientId, "social_alerts_enabled"))) return;
+
+  // Migration 0086: a block silences the bell as well as the feed. Checked in
+  // both directions — either party having blocked the other is reason enough
+  // not to write the row — and before the write rather than filtering at read
+  // time, because a notification that was never produced cannot leak that a
+  // block exists.
+  if (await blockExistsBetween(serviceClient, recipientId, commenter.id)) return;
 
   // KN-90: the typed constructor. This producer is the one that most needed
   // it — the actor keys used to be built with a computed property name

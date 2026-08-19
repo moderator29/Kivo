@@ -7,6 +7,7 @@ import { awardBadge, awardXp, evaluateBadgeCriteria, hasBadge } from "@/lib/rewa
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify } from "@/lib/notification-preferences";
+import { blockExistsBetween } from "@/lib/blocks";
 import { fetchPostsPage, type PostListItem } from "./posts";
 import { resolveFeedScope, type SocialFilter } from "@/lib/social-filters";
 import { buildNotification } from "@/lib/notification-payloads";
@@ -364,6 +365,13 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   // recipient who has social_alerts_enabled (or in_app_enabled) off should
   // never get the row in the first place.
   if (!(await shouldNotify(serviceClient, post.author_profile_id, "social_alerts_enabled"))) return;
+
+  // Migration 0086: a block silences the bell as well as the feed. Checked in
+  // both directions — either party having blocked the other is reason enough
+  // not to write the row — and before the write rather than filtering at read
+  // time, because a notification that was never produced cannot leak that a
+  // block exists.
+  if (await blockExistsBetween(serviceClient, post.author_profile_id, liker.id)) return;
 
   // KN-21. Reactions are delete-then-insert, so *changing* one re-notifies, and
   // toggling off and on re-notifies. With a 30-per-60s limit on set_reaction,

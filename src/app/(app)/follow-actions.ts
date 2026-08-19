@@ -1,13 +1,14 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
 import { shouldNotify } from "@/lib/notification-preferences";
+import { blockExistsBetween } from "@/lib/blocks";
 import { buildNotification } from "@/lib/notification-payloads";
+import { logError } from "@/lib/log";
 
 // RECOMMENDATIONS item 175: "user" was already in the follow_target_type
 // enum (0001) and follows_no_self_follow already guards it — nothing
@@ -40,11 +41,21 @@ const TARGET_DETAIL_PATH: Partial<Record<FollowTargetType, string>> = {
  * follows_no_self_follow (migration 0001) already makes self-follow
  * impossible at the DB layer.
  */
-async function notifyNewFollower(followedProfileId: string, follower: { username: string; display_name: string | null }) {
+async function notifyNewFollower(
+  followedProfileId: string,
+  follower: { id: string; username: string; display_name: string | null },
+) {
   const serviceClient = createServiceRoleSupabaseClient();
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, followedProfileId, "social_alerts_enabled"))) return;
+
+  // Migration 0086. `follows_insert_own`'s WITH CHECK already refuses a follow
+  // across a block, so reaching here with one in place should be impossible —
+  // which is exactly why the check is cheap to keep. A silenced bell is the
+  // one failure mode of this feature that a user would never report and never
+  // forgive.
+  if (await blockExistsBetween(serviceClient, followedProfileId, follower.id)) return;
 
   // KN-90: built through the typed constructor rather than an object literal,
   // so a missing or renamed payload field is a type error here instead of a
@@ -82,6 +93,11 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
 
   if (error) {
     logError("follow-actions.toggleFollow", error);
+    // Deliberately the same generic message a real failure gets. A follow
+    // refused by `follows_insert_own`'s block clause (migration 0086) must be
+    // indistinguishable from any other failure — "you can't follow this person
+    // because they blocked you" is precisely the sentence a block must never
+    // produce.
     return { error: "Couldn't update. Try again.", following: currentlyFollowing };
   }
 

@@ -14,6 +14,8 @@ import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import { timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 import { HeadToHeadPanel } from "@/components/profile/head-to-head-panel";
+import { BlockButton } from "@/components/profile/block-button";
+import { viewerHasBlocked } from "@/lib/blocks";
 
 type PublicProfile = {
   id: string;
@@ -142,6 +144,13 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     : { data: null };
   const isFollowingUser = Boolean(followRow);
 
+  // Migration 0086. Only ever the viewer's own half of the relationship —
+  // `blocks_select_own` cannot answer "has this person blocked me", and that
+  // is what stops this page from becoming the one surface where a block
+  // announces itself.
+  const viewerHasBlockedThem =
+    viewer && !isViewerOwnProfile ? await viewerHasBlocked(profile.id) : false;
+
   // The club this profile supports, resolved from the id the RPC now returns
   // (migration 0065). Read back from `teams` rather than trusted blind, same
   // as /profile does, so a club deleted since it was picked renders as no club
@@ -182,13 +191,26 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                 Edit profile
               </Link>
             ) : (
-              <FollowButton
-                targetType="user"
-                targetId={profile.id}
-                initialFollowing={isFollowingUser}
-                signedIn={Boolean(viewer)}
-                size="sm"
-              />
+              <div className="flex items-center gap-1">
+                {/* Hidden entirely once blocked: "follow" is not an action
+                    that means anything toward someone whose posts this viewer
+                    has just told KIVO to stop showing them. */}
+                {!viewerHasBlockedThem && (
+                  <FollowButton
+                    targetType="user"
+                    targetId={profile.id}
+                    initialFollowing={isFollowingUser}
+                    signedIn={Boolean(viewer)}
+                    size="sm"
+                  />
+                )}
+                <BlockButton
+                  targetProfileId={profile.id}
+                  targetName={profile.display_name || `@${profile.username}`}
+                  initialBlocked={viewerHasBlockedThem}
+                  signedIn={Boolean(viewer)}
+                />
+              </div>
             )
           }
         />
