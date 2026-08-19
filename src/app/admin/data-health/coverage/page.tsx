@@ -6,6 +6,7 @@ import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 import { CompetitionScopePanel } from "@/components/admin/competition-scope-panel";
 import { ClubCataloguePanel } from "@/components/admin/club-catalogue-panel";
 import { StandingsTransfersPanel } from "@/components/admin/standings-transfers-panel";
+import { SeasonDataPanel } from "@/components/admin/season-data-panel";
 
 /**
  * Football data → Coverage. What KIVO is pointed at, and how much of it is on
@@ -53,6 +54,9 @@ export default async function CoveragePage() {
       <CompetitionScopePanel />
       <ClubCataloguePanel />
       <StandingsTransfersPanel />
+      {/* Absences and scoring charts last: they are the narrowest of the four,
+          and both depend on the competitions above having been adopted. */}
+      <SeasonDataPanel />
     </div>
   );
 }

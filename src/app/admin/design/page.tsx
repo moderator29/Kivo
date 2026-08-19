@@ -43,11 +43,11 @@ export default function AdminDesignPage() {
           <Palette className="h-4 w-4" strokeWidth={ICON_STROKE} aria-hidden="true" />
           <span className="text-xs font-semibold uppercase tracking-wider">Internal reference</span>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Design system</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Design system</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-foreground-muted">
           Every rule, token, surface tier and motion vocabulary KIVO actually ships. Values are read from
-          the live stylesheet in the theme you are currently in — switch the theme from the top bar to
-          audit the other palette against the same rules.
+          the live stylesheet in the theme you are currently in — switch the theme at the bottom of the
+          admin nav to audit the other palette against the same rules.
         </p>
         <p className="max-w-2xl text-[13px] leading-relaxed text-foreground-subtle">
           Read top to bottom before building a screen. The first three sections are the ones that decide

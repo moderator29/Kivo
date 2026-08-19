@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Menu, X } from "lucide-react";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, isAdminNavItemActive } from "@/lib/admin-nav";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
@@ -159,14 +160,17 @@ export function AdminMobileNav({ permitted }: { permitted: string[] }) {
                 })}
               </nav>
 
-              <div className="mt-auto flex flex-col divide-y divide-hairline-soft rounded-2xl bg-surface-1">
-                <Link
-                  href="/home"
-                  onClick={() => setOpen(false)}
-                  className="flex min-h-14 items-center px-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-                >
-                  ← Back to KIVO
-                </Link>
+              <div className="mt-auto flex flex-col gap-3">
+                <ThemeToggle className="max-w-none" />
+                <div className="flex flex-col divide-y divide-hairline-soft rounded-2xl bg-surface-1">
+                  <Link
+                    href="/home"
+                    onClick={() => setOpen(false)}
+                    className="flex min-h-14 items-center px-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                  >
+                    ← Back to KIVO
+                  </Link>
+                </div>
               </div>
             </motion.div>
           </motion.div>

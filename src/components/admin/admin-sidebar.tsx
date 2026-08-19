@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ADMIN_NAV_GROUPS, isAdminNavItemActive } from "@/lib/admin-nav";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
 
@@ -68,7 +69,13 @@ export function AdminSidebar({ permitted }: { permitted: string[] }) {
           })}
         </nav>
 
-        <div className="mt-auto px-2 pb-1">
+        {/* The design system page tells its reader to "switch the theme from
+            the top bar to audit the other palette" — /admin has no top bar and
+            had no theme control anywhere, so that instruction was unfollowable
+            from the one page that gives it. It also happens to be the control
+            an operator auditing Admin itself in both palettes needs. */}
+        <div className="mt-auto flex flex-col gap-3 px-2 pb-1">
+          <ThemeToggle className="max-w-none" />
           <Link
             href="/home"
             className="flex min-h-10 items-center text-xs text-foreground-subtle transition-colors hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
