@@ -17,6 +17,7 @@ import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -205,6 +206,22 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           before them: it answers "why is that section empty", which is only a
           question once you have seen the empty section. */}
       <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
+
+      {/* Renders nothing when the season has no placed standings rows, which
+          is the honest state for a competition KIVO has fixtures but no table
+          for yet. */}
+      {currentSeason && (
+        <FadeIn delay={0.24} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+          <ShareCardPanel
+            kind="league-table"
+            id={currentSeason.id}
+            shareUrl={`/leagues/${competition.id}`}
+            shareText={`${competition.name} table on KIVO.`}
+            heading="Share the table"
+            description="Pick a background. The preview is the exact image you save."
+          />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.25} className="self-center">
         <Link

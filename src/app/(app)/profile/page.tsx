@@ -12,6 +12,7 @@ import { PostCard } from "@/components/social/post-card";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FadeIn } from "@/components/ui/fade-in";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import {
   PREDICTION_PICK_COLUMNS,
@@ -200,6 +201,17 @@ export default async function ProfilePage({
         {tab === "posts" && <PostsPanel profileId={profile.id} />}
         {tab === "predictions" && <PredictionsPanel profileId={profile.id} />}
         {tab === "badges" && <BadgesPanel profileId={profile.id} />}
+      </FadeIn>
+
+      <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+        <ShareCardPanel
+          kind="profile-achievement"
+          id={profile.id}
+          shareUrl={`/u/${profile.username}`}
+          shareText={`${profile.display_name ?? profile.username} on KIVO.`}
+          heading="Share your profile"
+          description="Only what KIVO can actually count goes on the card. Pick a background."
+        />
       </FadeIn>
     </div>
   );

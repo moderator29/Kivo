@@ -8,6 +8,7 @@ import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-action
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -241,6 +242,20 @@ export default async function FantasyPage({
           carriedForwardFromGameweek={carriedForwardFromGameweek}
         />
       </WidgetErrorBoundary>
+
+      {/* Only a gameweek that has actually been scored produces a card — an
+          unscored week would render as 0 points, which reads as a bad week
+          rather than as "nothing calculated yet". */}
+      <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+        <ShareCardPanel
+          kind="fantasy-performance"
+          id={activeTeam.id}
+          shareUrl="/fantasy"
+          shareText={`${activeTeam.name} on KIVO Fantasy.`}
+          heading="Share your gameweek"
+          description="Pick a background. The preview is the exact image you save."
+        />
+      </div>
     </FadeIn>
   );
 }

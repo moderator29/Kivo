@@ -14,8 +14,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * doesn't exist.
  */
 export function parseUuidParam(id: string): string {
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   return id;
+}
+
+/**
+ * The same shape check without the `notFound()`, for callers that need to
+ * answer "is this a well-formed id?" and then decide themselves — a route
+ * returning 400 rather than a page returning 404, for instance.
+ */
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
 }
 
 /**

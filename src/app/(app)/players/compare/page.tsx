@@ -3,6 +3,7 @@ import Link from "next/link";
 import { GitCompareArrows } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { PlayerComparePicker, type ComparePlayerOption } from "@/components/players/player-compare-picker";
 import { computePlayerMatchStats, type PlayerMatchStats } from "@/lib/football/player-stats";
@@ -177,6 +178,18 @@ export default async function PlayerComparePage({
             for {playerA.name}, and {playerB.stats.appearances} for {playerB.name}. Sync coverage is
             admin-triggered and partial, not a full season record.
           </p>
+
+          {/* Only rows where both players have a real number make it onto the
+              card, so a comparison with nothing in common produces no card. */}
+          <ShareCardPanel
+            kind="player-comparison"
+            id={playerA.id}
+            secondaryId={playerB.id}
+            shareUrl={`/players/compare?a=${playerA.id}&b=${playerB.id}`}
+            shareText={`${playerA.name} vs ${playerB.name} on KIVO.`}
+            heading="Share this comparison"
+            description="Pick a background. The preview is the exact image you save."
+          />
         </FadeIn>
       )}
 

@@ -16,6 +16,7 @@ import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { MatchShareCard } from "@/components/matches/match-share-card";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { YourPredictionCard } from "@/components/matches/your-prediction-card";
 import { PREDICTION_PICK_COLUMNS, pickFromRow } from "@/lib/predictions";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
@@ -282,6 +283,12 @@ export default async function MatchCentrePage({
         })))
       : null;
   const matchUrl = absoluteUrl(`/matches/${fixture.id}`);
+  // The text a native share sheet sends alongside the picture. Built from the
+  // same real fixture row the card is, so the two can never disagree.
+  const shareText =
+    fixture.home_score != null && fixture.away_score != null
+      ? `${fixture.home_team?.name ?? "Home"} ${fixture.home_score} - ${fixture.away_score} ${fixture.away_team?.name ?? "Away"} — on KIVO.`
+      : `${fixture.home_team?.name ?? "Home"} vs ${fixture.away_team?.name ?? "Away"} — on KIVO.`;
 
   return (
     // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
@@ -457,6 +464,27 @@ export default async function MatchCentrePage({
             Share this match
           </h2>
           <MatchShareCard fixtureId={fixture.id} data={shareCardData} matchUrl={matchUrl} />
+
+          {/* The template card above composites this fixture onto one fixed
+              piece of KIVO artwork. These two sit on whichever background the
+              user picks, which is the founder's own instruction for the card
+              set — see src/lib/share-cards/. The prediction panel renders
+              nothing at all unless this viewer actually called this match. */}
+          <ShareCardPanel
+            kind="live-score"
+            id={fixture.id}
+            shareUrl={`/matches/${fixture.id}`}
+            shareText={shareText}
+            heading="Score card"
+            description="Pick a background. The preview is the exact image you save."
+          />
+          <ShareCardPanel
+            kind="prediction"
+            id={fixture.id}
+            shareUrl={`/matches/${fixture.id}`}
+            shareText={shareText}
+            heading="Your call on this match"
+          />
         </FadeIn>
       )}
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ComingSoon } from "@/components/ui/coming-soon";
 import { AiChat } from "@/components/ai/chat";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { getNavItem } from "@/lib/navigation";
 import { isAiConfigured } from "@/lib/ai/client";
 import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
@@ -75,7 +76,26 @@ export default async function AiCopilotPage({
   // narrow fields ever leave sync_runs this way.
   const freshness = await getTransparencyFreshness();
 
+  // The most recent answer this viewer actually received, if there is one.
+  // An insight card carries a real Copilot reply verbatim rather than a fresh
+  // generation — sharing "what KIVO told me" only means anything if it is the
+  // message the sharer read. Nothing is offered until a conversation exists.
+  let latestAnswerId: string | null = null;
+  if (profile && initialConversations.length > 0) {
+    const supabase = createServerSupabaseClient();
+    const { data: latestAnswer } = await supabase
+      .from("ai_messages")
+      .select("id")
+      .eq("conversation_id", initialConversations[0].id)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    latestAnswerId = latestAnswer?.id ?? null;
+  }
+
   return (
+    <>
     <AiChat
       signedIn={viewerIsSignedIn(profile)}
       initialConversations={initialConversations}
@@ -87,5 +107,20 @@ export default async function AiCopilotPage({
       lastSyncedAt={freshness.lastSyncedAt}
       quotaRemaining={freshness.quotaRemaining}
     />
+      {latestAnswerId && (
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 pb-8 lg:px-8">
+          <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+            <ShareCardPanel
+              kind="ai-insight"
+              id={latestAnswerId}
+              shareUrl="/ai"
+              shareText="Asked KIVO's Copilot."
+              heading="Share this answer"
+              description="The card carries the answer you were given, word for word, on whichever background you pick."
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

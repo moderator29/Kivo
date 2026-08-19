@@ -19,6 +19,7 @@ import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FormBadges } from "@/components/teams/form-badges";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
 import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
@@ -446,6 +447,19 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             )}
           </div>
         )}
+      </FadeIn>
+
+      {/* Renders nothing at all if KIVO has no synced numbers for this player
+          — an empty card is not worth offering. */}
+      <FadeIn delay={0.16} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+        <ShareCardPanel
+          kind="player-performance"
+          id={player.id}
+          shareUrl={`/players/${player.id}`}
+          shareText={`${player.known_as ?? player.full_name} on KIVO.`}
+          heading="Share this player"
+          description="Pick a background. The preview is the exact image you save."
+        />
       </FadeIn>
     </div>
   );
