@@ -21,9 +21,22 @@ export function EntityListPage({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    /* `.kivo-page`, not a hand-rolled container. The width matched already
+       (both 42rem); the vertical rhythm did not — `py-8` is 2rem top and
+       bottom where `.kivo-page` is 1.5/2.5rem on a phone and 2/4rem on a
+       desktop. So the five browse pages sat on different spacing to every
+       other route, and their bottom padding was short of the floating bottom
+       bar's clearance. There is a test (src/lib/page-container.test.ts) that
+       exists precisely to stop a page and its loading.tsx drifting apart like
+       this; nothing was checking the pages against each other. */
+    <div className="kivo-page">
       <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+        {/* text-2xl, not text-xl. TYPE_STEPS reserves text-xl for a SECTION
+            title, so this rendered a page heading at the same weight as a
+            panel inside it. The same defect was fixed in PageHeader while the
+            primitives landed; it survived here because these five pages do not
+            use PageHeader. */}
+        <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <p className="text-sm text-foreground-muted">{description}</p>
       </FadeIn>
       {children}
