@@ -2,7 +2,7 @@
 
 import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { getOrCreateFantasyTeam, ensureFantasyPlayerPrices } from "@/lib/fantasy";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -123,6 +123,43 @@ export async function joinFantasyLeague(inviteCode: string) {
 }
 
 /**
+ * The roster writer.
+ *
+ * ## Why these actions write as service_role
+ *
+ * `fantasy_rosters` has no user-facing INSERT/UPDATE/DELETE policy. RLS is
+ * default-deny, so the table is not writable through PostgREST by any
+ * authenticated user at all, and these validated actions are the only writers.
+ *
+ * That is deliberate and it was the only complete answer available. The squad
+ * rules that matter most — the budget, the squad size, the formation, the
+ * per-club cap — are properties of the SET of fifteen rows, not of any row in
+ * it. "This squad costs 99.5 of 100" is unanswerable while looking at one
+ * player, and RLS evaluates `WITH CHECK` per row. A policy carrying ownership
+ * and the deadline (which are per-row facts, and were the previous state) closes
+ * "edit after kickoff" and leaves "field sixteen players, or fifteen strikers,
+ * or £300 of squad" wide open — while looking like the rules were enforced at
+ * the data layer, which is the version that stops people checking.
+ *
+ * ## What that costs, and what replaces it
+ *
+ * The database no longer backstops the ownership check. So the ownership check
+ * here is load-bearing rather than belt-and-braces, and it is written to be
+ * checkable: `profile` comes from the session via `getOrCreateProfile()`, never
+ * from an argument, and it is compared against the team's own
+ * `owner_profile_id` read fresh from the database. A caller cannot influence
+ * either side of that comparison.
+ *
+ * Reads stay on the user's RLS-gated client for the same reason — only the
+ * mutations need the elevated one, and narrowing the elevation to exactly the
+ * statements that require it is the difference between a considered exception
+ * and a habit.
+ */
+function rosterWriter() {
+  return createServiceRoleSupabaseClient();
+}
+
+/**
  * Replaces a team's full 15-player squad for a gameweek. Deadline + budget +
  * formation are all re-checked here against live data (never trusting the
  * client's numbers), with RLS + DB constraints (ownership, captain-xor-vice,
@@ -232,8 +269,10 @@ export async function setGameweekRoster(
     notice = "Your captain left the squad. Pick a new one so their points get doubled.";
   }
 
+  const writer = rosterWriter();
+
   if (toRemove.length > 0) {
-    const { error: removeError } = await supabase
+    const { error: removeError } = await writer
       .from("fantasy_rosters")
       .delete()
       .eq("fantasy_team_id", fantasyTeamId)
@@ -254,7 +293,7 @@ export async function setGameweekRoster(
     is_vice_captain: pick.playerId === viceCaptainId,
   }));
 
-  const { error: upsertError } = await supabase
+  const { error: upsertError } = await writer
     .from("fantasy_rosters")
     .upsert(rows, { onConflict: "fantasy_team_id,gameweek_id,player_id" });
 
@@ -324,10 +363,16 @@ export async function setFantasyCaptain(
   const holderIds = rosterRows
     .filter((r) => (isCaptainRole ? r.is_captain : r.is_vice_captain) && r.id !== target.id)
     .map((r) => r.id);
+
+  // See rosterWriter(): the ownership check above is what authorises this, and
+  // the rows being touched were read through the user's own RLS-gated client,
+  // so `holderIds` and `target.id` can only ever be this team's rows.
+  const writer = rosterWriter();
+
   if (holderIds.length > 0) {
     const { error: clearError } = isCaptainRole
-      ? await supabase.from("fantasy_rosters").update({ is_captain: false }).in("id", holderIds)
-      : await supabase.from("fantasy_rosters").update({ is_vice_captain: false }).in("id", holderIds);
+      ? await writer.from("fantasy_rosters").update({ is_captain: false }).in("id", holderIds)
+      : await writer.from("fantasy_rosters").update({ is_vice_captain: false }).in("id", holderIds);
     if (clearError) {
       logError("fantasy.clearPreviousCaptain", clearError);
       return { error: "Couldn't update captaincy. Try again." };
@@ -335,8 +380,8 @@ export async function setFantasyCaptain(
   }
 
   const { error: setError } = isCaptainRole
-    ? await supabase.from("fantasy_rosters").update({ is_captain: true }).eq("id", target.id)
-    : await supabase.from("fantasy_rosters").update({ is_vice_captain: true }).eq("id", target.id);
+    ? await writer.from("fantasy_rosters").update({ is_captain: true }).eq("id", target.id)
+    : await writer.from("fantasy_rosters").update({ is_vice_captain: true }).eq("id", target.id);
   if (setError) {
     logError("fantasy.setCaptain", setError);
     return { error: "Couldn't update captaincy. Try again." };
