@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { Check } from "lucide-react";
 
@@ -14,10 +13,19 @@ import { Check } from "lucide-react";
  * way to compare two options, and no way to change their mind. Every page
  * using this bar holds the choice locally until this button is pressed.
  *
- * The confirmation is a state, not a toast: after a successful save the button
- * itself says so and a way back to the profile appears next to it, so the flow
- * ends somewhere rather than leaving the user on a form they have finished
- * with.
+ * The confirmation is a state, not a toast: after a successful save the bar
+ * itself says so, and then the form takes the user back where they came from
+ * (`useSaveReturn`, called by each form's own success branch). It used to
+ * offer a "Back to profile" link at that moment instead — which was the
+ * founder's complaint in as many words: "when I click save it should auto save
+ * and take me back to the previous page, not that go back button". A link that
+ * appears after a save is another thing to press at the moment the errand is
+ * already over.
+ *
+ * The confirmation is held on screen for `SAVE_RETURN_DELAY_MS` before the
+ * navigation, so "Saved" is something the user reads rather than something
+ * that happens behind a page transition. The page's own back control is
+ * untouched and still leaves without saving.
  */
 export function ProfileSaveBar({
   pending,
@@ -25,16 +33,12 @@ export function ProfileSaveBar({
   saved,
   error,
   label = "Save",
-  backHref = "/profile",
-  backLabel = "Back to profile",
 }: {
   pending: boolean;
   disabled: boolean;
   saved: boolean;
   error: string | null;
   label?: string;
-  backHref?: string;
-  backLabel?: string;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -67,15 +71,6 @@ export function ProfileSaveBar({
       >
         {pending ? "Saving…" : label}
       </button>
-
-      {saved && (
-        <Link
-          href={backHref}
-          className="kivo-focus text-center text-xs font-semibold text-foreground-muted hover:text-foreground"
-        >
-          {backLabel}
-        </Link>
-      )}
     </div>
   );
 }

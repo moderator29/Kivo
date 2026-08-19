@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateDisplayName } from "@/app/(app)/profile/actions";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
+import { useSaveReturn } from "@/hooks/use-save-return";
 
 /** Mirrors `profiles_display_name_length` (migration 0065) and the same cap in
  * the server action — the field simply cannot hold more than the column will. */
@@ -13,6 +14,9 @@ export function NameEditor({ displayName }: { displayName: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  // The founder's ask: a save ends the errand. See useSaveReturn — the
+  // destination is the one the back control names, and the control stays.
+  const returnToCaller = useSaveReturn();
 
   const trimmed = value.trim();
   const unchanged = trimmed === (displayName ?? "").trim();
@@ -25,7 +29,10 @@ export function NameEditor({ displayName }: { displayName: string | null }) {
         startTransition(async () => {
           const result = await updateDisplayName(trimmed);
           if (result.error) setError(result.error);
-          else setSaved(true);
+          else {
+            setSaved(true);
+            returnToCaller();
+          }
         });
       }}
     >
