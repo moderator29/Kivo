@@ -4,12 +4,6 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getActiveProviderStatus } from "@/lib/football";
-import { getCompetitionCapability } from "@/lib/football/coverage-registry";
-import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
-import { triggerTopScorersSync } from "@/app/admin/data-health/provider-data-actions";
 
 /**
  * A competition's scoring chart.
@@ -29,22 +23,30 @@ import { triggerTopScorersSync } from "@/app/admin/data-health/provider-data-act
  * empty chart is either unsynced, unsupported by the data source for this
  * competition, or unestablished — and the coverage registry is what makes the
  * middle one sayable.
+ *
+ * ## The sync control that used to live here is in Admin
+ *
+ * ADMIN IA PASS 2026-08-19. This panel carried a role-gated "Sync scoring
+ * chart" button. The gating was correct; the placement was not. A fan reading a
+ * league table should not share the page with ingestion controls, and a founder
+ * reviewing his own product could not tell which half of the screen the public
+ * sees. The button now lives on /admin/data-health/coverage, per competition,
+ * with its provider cost stated before it is pressed — which the inline version
+ * never did. Nothing a fan could see has been removed: the chart, the ordering
+ * and the one-line empty state are unchanged.
  */
 const TOP_SCORER_LIMIT = 10;
 
 export async function TopScorersPanel({
-  competitionId,
   seasonId,
   seasonLabel,
 }: {
-  competitionId: string;
   /** Null when no current season is set — there is then nothing to chart, and
    * the panel says exactly that rather than showing last season's. */
   seasonId: string | null;
   seasonLabel: string | null;
 }) {
   const supabase = createServerSupabaseClient();
-  const { name: providerName } = getActiveProviderStatus();
 
   const { data: rows } = seasonId
     ? await supabase
@@ -58,18 +60,6 @@ export async function TopScorersPanel({
     : { data: null };
 
   const scorers = rows ?? [];
-
-  const verdict =
-    scorers.length === 0 && providerName
-      ? await getCompetitionCapability(supabase, providerName, competitionId, "topScorers")
-      : null;
-
-  // The sync is offered where the gap is noticed, the same way squads and
-  // standings already are — but never when the provider has said it publishes
-  // no chart here, because a button that cannot work is worse than no button.
-  const profile = await getOrCreateProfile();
-  const canSync =
-    profile !== null && canManageFootballData(profile.role) && seasonId !== null && verdict !== "unsupported";
 
   return (
     <FadeIn delay={0.18} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
@@ -129,21 +119,10 @@ export async function TopScorersPanel({
         // FRONTEND SWEEP: a fan gets one sentence. The three-way verdict split
         // (unsupported / supported / unknown) is a fact about KIVO's coverage
         // registry, not about football, and printing it made every quiet section
-        // read as a system report. The distinction still exists and still drives
-        // the admin-only control below, which is the only reader it helps.
+        // read as a system report. That distinction still exists — it is what
+        // Admin's own coverage panel is built on — but it is not football, so it
+        // is not here.
         <p className="text-sm text-foreground-muted">No scoring chart for this competition yet.</p>
-      )}
-
-      {canSync && (
-        <InlineSyncButton
-          label="Sync scoring chart"
-          action={triggerTopScorersSync.bind(null, competitionId, undefined)}
-          hint={
-            verdict === "unknown"
-              ? "Coverage for this source is unread — sync the coverage registry first to know whether this can fill."
-              : undefined
-          }
-        />
       )}
     </FadeIn>
   );
