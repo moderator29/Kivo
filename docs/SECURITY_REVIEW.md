@@ -184,7 +184,7 @@ ownership-only so members can rename their team — which would otherwise leave
 column may not change" (a `WITH CHECK` sees only the new row), so it is a
 trigger, and it **raises** rather than silently dropping the change.
 
-### F4 — MEDIUM — Every rate limit in KIVO is bypassable *(systemic; fix proposed, not applied)*
+### F4 — MEDIUM — Every rate limit in KIVO is bypassable *(systemic; **fixed in `0103`** for posts, comments, reactions and reports)*
 
 `consume_rate_limit` (0066) is granted to `service_role` only, and
 `rate_limit_events` has RLS on with zero policies. Both are correct and
@@ -219,10 +219,60 @@ create policy posts_insert_own on posts
   );
 ```
 
-**Not applied.** The threshold has to agree with `checkRateLimit`'s or
-legitimate users get a failure the UI has no message for, and `/social` is
-another agent's surface. Needs an index on `posts (author_profile_id,
-created_at desc)` before it goes anywhere near production.
+**Applied in `0103`**, with three changes to the sketch above, each of which
+came out of the objection the sketch itself raises.
+
+*The threshold does not have to agree with `checkRateLimit`'s — it has to be
+unreachable by anyone who passed it.* That is the reframe the whole fix turns
+on. A ceiling set near the product limit is a second opinion about what a
+reasonable user does, and the two copies will eventually disagree about a
+legitimate request. A ceiling set an order of magnitude above it cannot: 60
+posts a minute against the action's 5, 60 comments against 5, 300 reactions
+against 30, 100 reports per five minutes against 10. A user who passed
+`checkRateLimit` can never trip these, so no user ever sees a database error the
+UI has no message for — and the only caller who can reach them is one who
+skipped the action entirely, which is exactly the caller this finding is about.
+It follows that **changing `checkRateLimit` does not require changing `0103`.**
+
+*RESTRICTIVE policies rather than a rewrite of `posts_insert_own`.* Permissive
+policies are OR-ed, so folding the ceiling into the existing policy leaves it
+one future `create policy` away from being silently reopened. `posts_insert_own`
+has also now been rewritten by three migrations (0045, 0047, 0095) for three
+unrelated reasons; a fourth concern in it makes the next rewrite riskier. The
+restrictive policies are AND-ed with whatever the permissive set decides, own
+nothing else, and cannot be turned off by adding a policy.
+
+*A `private` SECURITY DEFINER counter rather than an inline subquery.* An inline
+`select count(*) from posts ...` inside a policy is evaluated with RLS applied
+to that read, so the count is only as complete as `posts_select_public` happens
+to be — and that policy is not static; it already filters shadow-muted authors
+and blocked profiles. A count that quietly shrinks when an unrelated SELECT
+policy grows is a backstop that quietly stops backstopping. The counters read as
+owner, take no arguments, derive the profile from `private.current_profile_id()`
+and return a boolean, so there is no input that could point one at another
+account.
+
+The composite indexes the sketch asks for are in the same migration
+(`idx_posts_author_created_at` and its three siblings), created before the
+policies.
+
+**Confirmed by execution, unlike the rest of this document.** The mechanism was
+run end-to-end inside a transaction that was then aborted, against a scratch
+table carrying the identical shape — a RESTRICTIVE `INSERT` policy whose
+`WITH CHECK` calls a SECURITY DEFINER counter over the same table — with the
+ceiling lowered to 3 so the boundary was reachable, and with `set local role
+authenticated` so RLS actually applied. That last part is the trap: the first
+attempt ran as `postgres`, which bypasses RLS, and passed all four inserts — a
+probe that forgets it will report a working policy that does nothing. Result:
+3 inserts under the ceiling succeeded, the 4th was refused with `42501`. Nothing
+was written to any real table.
+
+Still open, deliberately: `poll_votes`, `saves`, `follows`, `blocks`,
+`fan_ratings` and `predictions`. Each is bounded by a unique constraint that
+caps the damage at one row per target rather than unbounded rows — a follow
+flood is capped by the number of teams that exist — so they are a different and
+much smaller shape of problem than free-text content, and they are not covered
+by `0103`.
 
 ### F5 — MEDIUM — An MOTM poll could name players who were not in the match *(mine; fixed)*
 
@@ -548,7 +598,7 @@ a written baseline.
 | Move a fantasy team into another league | **Was open via `PATCH`, now closed** by `trg_fantasy_teams_league_id_immutable`. F3. |
 | Unauthorized admin access | **Sound.** Layout redirect plus per-action role re-check. |
 | Deep link to something you may not see | **Sound** on the paths checked: fantasy league context and prediction league standings both verify ownership/membership inside the RPC; private profiles are honoured by `show_activity_publicly`; `predictions_select_own` hides other users' picks and every cross-user number goes through a narrow aggregate. |
-| Rate limits | **Present and well-tuned in the actions; absent at the boundary.** F4, F7, F8, F9. |
+| Rate limits | **Present and well-tuned in the actions; now backstopped at the boundary for posts, comments, reactions and reports** by `0103`. F4, F7, F8, F9. |
 | Poll votes outside a window | **No gap, because there is no rule.** KIVO polls never close, so there is no window for a policy to be missing. Worth recording that MOTM predictions lock at kickoff while the poll that settles them is voted on afterwards — so a predictor can vote on their own prediction, as one vote among the `MIN_MOTM_VOTES` (5) minimum, and cannot swing a tie because a tie resolves to *unresolvable* rather than to a winner. |
 | Logout / login persistence | **Not covered by this review.** Multi-account session handling was being actively rewritten by another agent while this ran, and reviewing a moving target would produce findings about code that no longer exists. Should be re-run once that lands. |
 
@@ -563,6 +613,6 @@ writing junk into the founder's database.
 
 The two HIGH findings are unambiguous from the policy text alone — a predicate
 that is not in the policy cannot be enforced by it. F3 is equally unambiguous.
-F4's specific thresholds and F8's storage growth would need a real write to
-demonstrate, and are left unconfirmed by design; the reproduction for F8 is
+F8's storage growth would need a real write to demonstrate, and is left
+unconfirmed by design; the reproduction for F8 is
 "call `uploadAvatar` twice and list the bucket — there will be two objects."
