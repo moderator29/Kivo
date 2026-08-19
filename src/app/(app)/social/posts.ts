@@ -120,6 +120,20 @@ export async function fetchPostsPage(
     teamId?: string;
     postIds?: string[];
     /**
+     * Every post by one author, newest first — the body of a public profile.
+     *
+     * `/u/[username]` showed a person's XP and their badges and not one word
+     * they had ever written, which is a strange thing for a football community
+     * to do: it offered a Follow button above a page that never said what
+     * following them would get you. This is the same feed query, the same
+     * cards, the same reaction/poll/fixture joins, filtered to one author.
+     *
+     * Combines with the cursor below, so a profile pages exactly the way the
+     * feed does. Shadow-muted and blocked authors are still handled by
+     * `posts_select_public` (0045/0086) rather than by anything here.
+     */
+    authorProfileId?: string;
+    /**
      * KIVO_NEXT_GEN KN-94. Keyset cursor: the `created_at`/`id` of the last
      * post already shown. When present it replaces offset paging entirely for
      * the general feed.
@@ -325,6 +339,7 @@ export async function fetchPostsPage(
       query = query.eq("is_system", false);
     }
     if (followedAuthorIds) query = query.in("author_profile_id", followedAuthorIds);
+    if (options?.authorProfileId) query = query.eq("author_profile_id", options.authorProfileId);
 
     const { data: rows, error } = await query;
     if (error) {

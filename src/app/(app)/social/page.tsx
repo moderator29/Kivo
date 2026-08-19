@@ -9,6 +9,7 @@ import { SocialFeed } from "@/components/social/social-feed";
 import { PageHeader } from "@/components/layout/page-header";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
+import { TabPanel } from "@/components/ui/section-tabs";
 import { parseSocialFilter, resolveFeedScope, SOCIAL_FILTER_LABELS } from "@/lib/social-filters";
 import { fetchPostsPage } from "./posts";
 import { fetchTrendingRooms } from "./trending";
@@ -82,47 +83,71 @@ export default async function SocialPage({
         </FadeIn>
       )}
 
-      {scope.kind === "unavailable" ? (
-        <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
-          {scope.missing === "rival" ? (
-            <ShieldHalf className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
-          ) : (
-            <Users className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
-          )}
-          <p className="text-sm font-semibold text-foreground">
-            {scope.missing === "rival" ? "You haven't named a rival yet." : "You haven't picked a club yet."}
-          </p>
-          <p className="max-w-sm text-xs text-foreground-subtle">
-            {scope.missing === "rival"
-              ? "KIVO holds no list of which clubs are rivals — this feed shows posts from fans of the one club you name, and nothing until you name it."
-              : "Club mates shows posts from other fans of the club you support. Tell KIVO which one that is and this feed fills up on its own."}
-          </p>
-          <Link
-            href={scope.missing === "rival" ? "/settings/clubs" : "/profile/club"}
-            className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
-          >
-            {scope.missing === "rival" ? "Name your rival" : "Pick your club"}
-          </Link>
-        </FadeIn>
-      ) : (
-        // key remounts SocialFeed when the filter changes: its `posts` state is
-        // seeded once via useState(initialPosts), so without a key tied to the
-        // filter, clicking a tab re-renders this server component with
-        // correctly-filtered `posts` while the mounted client feed keeps
-        // showing its stale list.
-        <WidgetErrorBoundary context="socialFeed" label="The feed">
-          <SocialFeed
-            key={filter}
-            initialPosts={posts}
-            initialHasMore={hasMore}
-            signedIn={Boolean(profile)}
-            filter={filter}
-            emptyLabel={SOCIAL_FILTER_LABELS[filter]}
-            scrollToPostId={targetPostId ?? null}
-            initialOffset={pageOne.length}
-          />
-        </WidgetErrorBoundary>
-      )}
+      {/* The panel the rail above owns. Only wired up when the rail is on
+          screen: `aria-labelledby` pointing at a tab a guest never gets is
+          worse than no wiring at all. */}
+      <FeedRegion signedIn={Boolean(profile)} filter={filter}>
+        {scope.kind === "unavailable" ? (
+          <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
+            {scope.missing === "rival" ? (
+              <ShieldHalf className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
+            ) : (
+              <Users className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
+            )}
+            <p className="text-sm font-semibold text-foreground">
+              {scope.missing === "rival" ? "You haven't named a rival yet." : "You haven't picked a club yet."}
+            </p>
+            <p className="max-w-sm text-xs text-foreground-subtle">
+              {scope.missing === "rival"
+                ? "KIVO holds no list of which clubs are rivals — this feed shows posts from fans of the one club you name, and nothing until you name it."
+                : "Club mates shows posts from other fans of the club you support. Tell KIVO which one that is and this feed fills up on its own."}
+            </p>
+            <Link
+              href={scope.missing === "rival" ? "/settings/clubs" : "/profile/club"}
+              className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
+            >
+              {scope.missing === "rival" ? "Name your rival" : "Pick your club"}
+            </Link>
+          </FadeIn>
+        ) : (
+          // key remounts SocialFeed when the filter changes: its `posts` state is
+          // seeded once via useState(initialPosts), so without a key tied to the
+          // filter, clicking a tab re-renders this server component with
+          // correctly-filtered `posts` while the mounted client feed keeps
+          // showing its stale list.
+          <WidgetErrorBoundary context="socialFeed" label="The feed">
+            <SocialFeed
+              key={filter}
+              initialPosts={posts}
+              initialHasMore={hasMore}
+              signedIn={Boolean(profile)}
+              filter={filter}
+              emptyLabel={SOCIAL_FILTER_LABELS[filter]}
+              scrollToPostId={targetPostId ?? null}
+              initialOffset={pageOne.length}
+            />
+          </WidgetErrorBoundary>
+        )}
+      </FeedRegion>
     </div>
+  );
+}
+
+/** The feed and its two honest alternatives, wrapped in the tab rail's panel
+ * when there is a rail to belong to. */
+function FeedRegion({
+  signedIn,
+  filter,
+  children,
+}: {
+  signedIn: boolean;
+  filter: string;
+  children: React.ReactNode;
+}) {
+  if (!signedIn) return <>{children}</>;
+  return (
+    <TabPanel idPrefix="social-feed" tab={filter} active>
+      {children}
+    </TabPanel>
   );
 }
