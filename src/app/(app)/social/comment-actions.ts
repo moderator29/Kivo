@@ -7,7 +7,7 @@ import { awardBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { shouldNotify } from "@/lib/notification-preferences";
+import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
 import { blockExistsBetween } from "@/lib/blocks";
 import { buildNotification } from "@/lib/notification-payloads";
 import { logError } from "@/lib/log";
@@ -171,7 +171,9 @@ async function notifyComment(
           replier_display_name: commenter.display_name,
         });
 
-  const { error } = await serviceClient.from("notifications").insert(notification);
+  const { error } = await serviceClient
+    .from("notifications")
+    .insert(await withQuietHours(serviceClient, notification, "social_alerts_enabled"));
   if (error) logError("social.comment-actions.createCommentNotification", error);
 }
 

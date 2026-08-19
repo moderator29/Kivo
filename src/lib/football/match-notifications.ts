@@ -3,7 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { EVENT_LABEL, isGoalEventType, isPenaltyEventType, isRedCardEventType } from "./event-labels";
-import { filterNotifiable, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
+import { resolveNotifiableRecipients, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
+import { breaksThroughQuietHours } from "@/lib/notification-registry";
 import { buildNotification } from "@/lib/notification-payloads";
 
 // RECOMMENDATIONS.md item 285: every notification type this file produces
@@ -96,8 +97,20 @@ async function insertNotifications(
   const ids = Array.from(new Set(profileIds));
   if (ids.length === 0) return;
 
-  const rows = (await filterNotifiable(supabase, ids, column)).map(build);
-  if (rows.length === 0) return;
+  // Migration 0088. One resolution per audience, not per recipient: the same
+  // chunked query that answers "may this person be notified" also answers
+  // "are they in their quiet hours right now", because both are read at the
+  // same moment by the same producer over the same people.
+  const recipients = await resolveNotifiableRecipients(supabase, ids, column);
+  if (recipients.length === 0) return;
+
+  const rows = recipients.map((recipient) => {
+    const row = build(recipient.profileId);
+    // The row is written either way — quiet hours defer the interruption, not
+    // the information. `quiet_until` only holds it back from the unread badge,
+    // and a high-priority type ignores the window entirely.
+    return breaksThroughQuietHours(row.type) ? row : { ...row, quiet_until: recipient.quietUntil };
+  });
 
   const { error } = await supabase.from("notifications").insert(rows);
   if (error) logError("football.match-notifications.matchNotificationsInsertNotification", error);

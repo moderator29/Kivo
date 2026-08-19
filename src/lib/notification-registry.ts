@@ -318,6 +318,54 @@ export const NOTIFICATION_GROUPS = [
 
 export type NotificationGroupId = (typeof NOTIFICATION_GROUPS)[number]["id"];
 
+/**
+ * Priority, as a property of the type rather than of the row.
+ *
+ * The founding brief asks for priority levels. It is deliberately not a
+ * database column: every row of a given type has the same priority, forever,
+ * so storing it would duplicate a fact that already has a home here and invite
+ * two rows of one type to disagree. Migration 0088's `notifications.quiet_until`
+ * stores the *consequence* instead — a high-priority notification is written
+ * with a null `quiet_until`, which is what "breaks through quiet hours"
+ * actually means.
+ *
+ * Only three levels, and the line between them is drawn on one question: what
+ * does the person lose by not being told until morning?
+ *
+ *   high    Something with a deadline, or something about their account. Miss
+ *           a fantasy deadline and the gameweek is gone; a moderation outcome
+ *           is about their standing on the platform. These two are the only
+ *           notifications in KIVO where "read it eight hours later" has a real
+ *           cost, so they are the only two that break through.
+ *   normal  Football. A goal matters, and it also keeps until morning — the
+ *           match will still have finished the same way.
+ *   low     Social acknowledgement. A like is pleasant and nothing is lost by
+ *           reading it later.
+ *
+ * A type not listed is `normal`, which is the honest default for something
+ * whose urgency nobody has thought about yet.
+ */
+export type NotificationPriority = "low" | "normal" | "high";
+
+const PRIORITY_OVERRIDES: Partial<Record<NotificationType, NotificationPriority>> = {
+  fantasy_deadline: "high",
+  moderation_outcome: "high",
+  post_like: "low",
+  new_follower: "low",
+};
+
+export function notificationPriority(type: string): NotificationPriority {
+  return isKnownType(type) ? (PRIORITY_OVERRIDES[type] ?? "normal") : "normal";
+}
+
+/** Whether a notification of this type ignores the recipient's quiet hours.
+ * The one and only consumer of priority today — kept as its own named
+ * function so the rule is a sentence rather than a comparison scattered
+ * across producers. */
+export function breaksThroughQuietHours(type: string): boolean {
+  return notificationPriority(type) === "high";
+}
+
 /** Narrowing for a `?type=` search param, so an unknown or hand-typed value
  * falls back to "everything" rather than filtering the list down to nothing. */
 export function notificationGroup(id: string | undefined): (typeof NOTIFICATION_GROUPS)[number] | null {

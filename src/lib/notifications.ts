@@ -22,7 +22,14 @@ export async function getRecentNotifications(): Promise<{ notifications: Notific
       .from("notifications")
       .select("*", { count: "exact", head: true })
       .eq("profile_id", profile.id)
-      .is("read_at", null),
+      .is("read_at", null)
+      // Migration 0088. The badge is the only thing in KIVO that interrupts
+      // anybody, so it is the only thing quiet hours act on. A row produced
+      // inside the recipient's quiet window is still in the list below, still
+      // unread, and simply does not tap them on the shoulder until the window
+      // ends — at which point everything from that window appears together,
+      // because they all carry the same `quiet_until`.
+      .or(`quiet_until.is.null,quiet_until.lte.${new Date().toISOString()}`),
   ]);
 
   // Migration 0086: the bell is filtered the same way /notifications is —

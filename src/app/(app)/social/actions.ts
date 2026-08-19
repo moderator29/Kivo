@@ -6,7 +6,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp, evaluateBadgeCriteria, hasBadge } from "@/lib/rewards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
-import { shouldNotify } from "@/lib/notification-preferences";
+import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
 import { blockExistsBetween } from "@/lib/blocks";
 import { fetchPostsPage, type PostListItem } from "./posts";
 import { resolveFeedScope, type SocialFilter } from "@/lib/social-filters";
@@ -416,13 +416,20 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   // fixture_id (nullable) lets the bell/notifications page route back to the
   // fixture's Match Centre Room tab for a room post, vs. /social for a
   // general one — see notificationHref() in lib/notification-registry.ts.
+  // Migration 0088: written either way, but held back from the unread badge
+  // until this author's quiet window ends. A like is the lowest-priority thing
+  // KIVO produces — if anything should wait until morning, it is this.
   const { error } = await serviceClient.from("notifications").insert(
-    buildNotification(post.author_profile_id, "post_like", {
-      post_id: postId,
-      fixture_id: post.fixture_id,
-      liker_username: liker.username,
-      liker_display_name: liker.display_name,
-    }),
+    await withQuietHours(
+      serviceClient,
+      buildNotification(post.author_profile_id, "post_like", {
+        post_id: postId,
+        fixture_id: post.fixture_id,
+        liker_username: liker.username,
+        liker_display_name: liker.display_name,
+      }),
+      "social_alerts_enabled",
+    ),
   );
 
   if (error) logError("social.createLikeNotification", error);

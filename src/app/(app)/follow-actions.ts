@@ -5,7 +5,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
-import { shouldNotify } from "@/lib/notification-preferences";
+import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
 import { blockExistsBetween } from "@/lib/blocks";
 import { buildNotification } from "@/lib/notification-payloads";
 import { logError } from "@/lib/log";
@@ -61,10 +61,14 @@ async function notifyNewFollower(
   // so a missing or renamed payload field is a type error here instead of a
   // notification that renders fine and links nowhere.
   const { error } = await serviceClient.from("notifications").insert(
-    buildNotification(followedProfileId, "new_follower", {
-      follower_username: follower.username,
-      follower_display_name: follower.display_name,
-    }),
+    await withQuietHours(
+      serviceClient,
+      buildNotification(followedProfileId, "new_follower", {
+        follower_username: follower.username,
+        follower_display_name: follower.display_name,
+      }),
+      "social_alerts_enabled",
+    ),
   );
   if (error) logError("follow-actions.createNewFollowerNotification", error);
 }

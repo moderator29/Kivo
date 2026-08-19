@@ -1418,6 +1418,9 @@ export type Database = {
           prediction_alerts_enabled: boolean
           profile_id: string
           push_enabled: boolean
+          quiet_hours_enabled: boolean
+          quiet_hours_end: string
+          quiet_hours_start: string
           social_alerts_enabled: boolean
           updated_at: string
         }
@@ -1431,6 +1434,9 @@ export type Database = {
           prediction_alerts_enabled?: boolean
           profile_id: string
           push_enabled?: boolean
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
           social_alerts_enabled?: boolean
           updated_at?: string
         }
@@ -1444,6 +1450,9 @@ export type Database = {
           prediction_alerts_enabled?: boolean
           profile_id?: string
           push_enabled?: boolean
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
           social_alerts_enabled?: boolean
           updated_at?: string
         }
@@ -1463,6 +1472,7 @@ export type Database = {
           id: string
           payload: Json
           profile_id: string
+          quiet_until: string | null
           read_at: string | null
           type: string
         }
@@ -1471,6 +1481,7 @@ export type Database = {
           id?: string
           payload?: Json
           profile_id: string
+          quiet_until?: string | null
           read_at?: string | null
           type: string
         }
@@ -1479,6 +1490,7 @@ export type Database = {
           id?: string
           payload?: Json
           profile_id?: string
+          quiet_until?: string | null
           read_at?: string | null
           type?: string
         }
