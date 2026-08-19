@@ -161,6 +161,10 @@ export function useRealtimeRoomPosts(fixtureId: string, initialPosts: RoomPost[]
               poll:
                 options && options.length > 0
                   ? {
+                      // The realtime INSERT payload carries the whole posts
+                      // row, poll_kind included — so a templated poll arrives
+                      // in the Room already knowing what it is asking.
+                      kind: inserted.poll_kind ?? null,
                       options: options.map((option) => ({
                         id: option.id,
                         label: option.label,

@@ -47,7 +47,7 @@ import { RetryableError } from "@/components/ui/retryable-error";
 
 const EXTRA_TYPES: PredictionType[] = ["correct_score", "total_goals", "first_scorer", "cards_corners", "motm"];
 
-type PanelState = {
+export type PanelState = {
   candidates: PredictionCandidate[];
   homeTeamId: string;
   awayTeamId: string;
@@ -94,10 +94,6 @@ export function PredictionTypesPanel({
     const next = !open;
     setOpen(next);
     if (next && !state && !loading) void load();
-  }
-
-  function pickFor(type: PredictionType): PredictionPick | null {
-    return state?.picks.find((pick) => pick.type === type) ?? null;
   }
 
   function save(submission: PredictionSubmission) {
@@ -162,20 +158,16 @@ export function PredictionTypesPanel({
 
               {error && <RetryableError message={error} retrying={loading || saving} onRetry={() => void load()} />}
 
-              {state &&
-                EXTRA_TYPES.map((type) => (
-                  <TypeGroup
-                    key={type}
-                    type={type}
-                    pick={pickFor(type)}
-                    state={state}
-                    homeTeamName={homeTeamName}
-                    awayTeamName={awayTeamName}
-                    disabled={locked || saving || !signedIn}
-                    onSave={save}
-                    onClear={() => remove(type)}
-                  />
-                ))}
+              {state && (
+                <PredictionTypeGroups
+                  state={state}
+                  homeTeamName={homeTeamName}
+                  awayTeamName={awayTeamName}
+                  disabled={locked || saving || !signedIn}
+                  onSave={save}
+                  onClear={remove}
+                />
+              )}
 
               {state && locked && (
                 <p className="text-[11px] text-foreground-subtle">
@@ -190,6 +182,49 @@ export function PredictionTypesPanel({
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * The five groups, given already-loaded state.
+ *
+ * Split out from the panel above so the loading, error and lock behaviour
+ * lives in one place and the rendering lives in another — which also means a
+ * preview harness can render the real controls against mock props without a
+ * database round trip, rather than a second near-copy of them existing
+ * somewhere to be screenshotted.
+ */
+export function PredictionTypeGroups({
+  state,
+  homeTeamName,
+  awayTeamName,
+  disabled,
+  onSave,
+  onClear,
+}: {
+  state: PanelState;
+  homeTeamName: string;
+  awayTeamName: string;
+  disabled: boolean;
+  onSave: (submission: PredictionSubmission) => void;
+  onClear: (type: PredictionType) => void;
+}) {
+  return (
+    <>
+      {EXTRA_TYPES.map((type) => (
+        <TypeGroup
+          key={type}
+          type={type}
+          pick={state.picks.find((pick) => pick.type === type) ?? null}
+          state={state}
+          homeTeamName={homeTeamName}
+          awayTeamName={awayTeamName}
+          disabled={disabled}
+          onSave={onSave}
+          onClear={() => onClear(type)}
+        />
+      ))}
+    </>
   );
 }
 

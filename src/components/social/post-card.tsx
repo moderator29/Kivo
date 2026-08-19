@@ -18,7 +18,8 @@ import { useIsClamped } from "@/hooks/use-clamped";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { RetryableError } from "@/components/ui/retryable-error";
 import type { ReactionType } from "@/lib/reactions";
-import type { PollSummary, PostFixture } from "@/app/(app)/social/posts";
+import type { PollOption, PollSummary, PostFixture } from "@/app/(app)/social/posts";
+import { POLL_KIND_LABEL } from "@/lib/match-room-polls";
 import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/components/ui/relative-time";
 
@@ -104,6 +105,28 @@ function PostBody({ body }: { body: string }) {
  * voteOnPoll, which is delete-then-insert server-side. Optimistic update
  * with rollback on error, same shape as PredictionCard's handlePick.
  */
+/** How many options a poll shows before it asks to be expanded. Six fits a
+ * 390px Room post without dominating it, and is comfortably more than the
+ * 2-4 a freeform poll can ever have — so this only ever affects a templated
+ * ballot. */
+const VISIBLE_POLL_OPTIONS = 6;
+
+/**
+ * The top options by real vote count, plus the viewer's own pick if it did not
+ * make that cut.
+ *
+ * The second half matters more than the first. A voter whose choice is
+ * twelfth on a twenty-two-name ballot would otherwise open the poll and see
+ * no trace of the vote they cast, which reads as the vote having been lost.
+ */
+function collapsePollOptions(poll: PollSummary): PollOption[] {
+  const byVotes = [...poll.options].sort((a, b) => b.voteCount - a.voteCount);
+  const top = byVotes.slice(0, VISIBLE_POLL_OPTIONS);
+  if (!poll.viewerOptionId || top.some((option) => option.id === poll.viewerOptionId)) return top;
+  const own = poll.options.find((option) => option.id === poll.viewerOptionId);
+  return own ? [...top.slice(0, VISIBLE_POLL_OPTIONS - 1), own] : top;
+}
+
 function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSummary; signedIn: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -115,6 +138,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
   // at all — the rollback puts the poll back the way it was, so without this
   // there is nothing left on screen saying what the user had picked.
   const [failedOptionId, setFailedOptionId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   function handleVote(optionId: string) {
     if (!signedIn) {
@@ -127,6 +151,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
     const previous = localPoll;
     const previousOptionId = localPoll.viewerOptionId;
     setLocalPoll((current) => ({
+      ...current,
       resultsUnavailable: current.resultsUnavailable,
       totalVotes: previousOptionId ? current.totalVotes : current.totalVotes + 1,
       viewerOptionId: optionId,
@@ -148,9 +173,23 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
 
   const total = localPoll.totalVotes;
 
+  // A man-of-the-match ballot seeded from two real starting XIs is twenty-two
+  // options. Showing all of them by default turns a Room post into a page, so
+  // the list opens at the top few and expands — sorted by real votes so the
+  // collapsed view is the room's actual answer rather than shirt-number order.
+  // Nothing is hidden permanently, and the count below always reflects every
+  // option, not the visible slice.
+  const longList = localPoll.options.length > VISIBLE_POLL_OPTIONS;
+  const ordered = longList && !expanded ? collapsePollOptions(localPoll) : localPoll.options;
+
   return (
     <div className="flex flex-col gap-2">
-      {localPoll.options.map((option) => {
+      {localPoll.kind && (
+        <span className="flex w-fit items-center gap-1 rounded-lg border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+          {POLL_KIND_LABEL[localPoll.kind]}
+        </span>
+      )}
+      {ordered.map((option) => {
         // A failed get_poll_results leaves every count at 0. Rendering "0%"
         // from that would be inventing a number, so the bar stays empty and
         // the percentage is simply not shown (see PollSummary.resultsUnavailable).
@@ -185,6 +224,17 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
           </button>
         );
       })}
+      {longList && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="kivo-focus w-fit rounded-lg px-1 py-0.5 text-[11px] font-medium text-accent transition-colors hover:text-foreground"
+        >
+          {expanded
+            ? "Show fewer"
+            : `Show all ${localPoll.options.length} option${localPoll.options.length === 1 ? "" : "s"}`}
+        </button>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-foreground-subtle">
           {localPoll.resultsUnavailable ? "Couldn't load results" : `${total} vote${total === 1 ? "" : "s"}`}

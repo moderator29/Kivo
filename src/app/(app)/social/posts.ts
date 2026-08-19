@@ -11,8 +11,19 @@ import { logError } from "@/lib/log";
 export const SOCIAL_PAGE_SIZE = 20;
 
 export type PollOption = { id: string; label: string; position: number; voteCount: number };
+
+/** Migration 0078's templated kinds. Null for a freeform poll somebody typed
+ * — which is most of them, and is not a lesser kind of poll, just an
+ * unstructured one. */
+export type PollKind = "motm" | "referee_decision";
+
 export type PollSummary = {
   options: PollOption[];
+  /** What question this poll is asking, when KIVO seeded it from a template.
+   * A Room's man-of-the-match vote is the only thing a MOTM *prediction* can
+   * be settled against (see src/lib/predictions.ts), so it has to be
+   * identifiable as one long after it was posted. */
+  kind: PollKind | null;
   totalVotes: number;
   viewerOptionId: string | null;
   /** True when `get_poll_results` failed for this post, as opposed to the
@@ -149,6 +160,7 @@ export async function fetchPostsPage(
     created_at: string;
     author_profile_id: string;
     is_system: boolean;
+    poll_kind: PollKind | null;
     fixture: {
       id: string;
       kickoff_at: string;
@@ -166,7 +178,7 @@ export async function fetchPostsPage(
     } | null;
   };
 
-  const POST_SELECT = `id, body, created_at, author_profile_id, is_system,
+  const POST_SELECT = `id, body, created_at, author_profile_id, is_system, poll_kind,
      fixture:fixtures(
        id, kickoff_at, status, home_score, away_score,
        home_team:teams!fixtures_home_team_id_fkey(name, short_name, crest_url),
@@ -445,6 +457,7 @@ export async function fetchPostsPage(
       const voteCountByOption = new Map((results ?? []).map((r) => [r.option_id, r.vote_count]));
       const poll: PollSummary | null = options
         ? {
+            kind: post.poll_kind,
             options: options.map((option) => ({
               id: option.id,
               label: option.label,
