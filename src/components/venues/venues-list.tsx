@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import Link from "next/link";
 import { MapPin, Search } from "lucide-react";
 import { formatNumber } from "@/lib/format";
-import { StaggeredList } from "@/components/ui/staggered-list";
-import { staggerDelay } from "@/lib/stagger";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
+import { EmptyState } from "@/components/ui/empty-state";
 import { CappedListFooter } from "@/components/ui/capped-list-footer";
 import { CAPPED_LIST_STEP, nextVisibleCount } from "@/lib/capped-list";
 
@@ -24,6 +23,11 @@ export type VenueListItem = {
  * plain substring filter over the already-loaded page is enough — no new
  * server action, offset pagination, or debounce needed, unlike `/players`'
  * server-side search over a much larger table.
+ *
+ * One surface with hairline rows rather than a card per ground, for the same
+ * reason `LeaguesList` changed: `CONTAINER_ROLES.row` in
+ * src/lib/design-system.ts, and the fact that five hundred stacked glass boxes
+ * is what "looks like an AI-generated dashboard" is describing.
  */
 export function VenuesList({ venues }: { venues: VenueListItem[] }) {
   const [query, setQuery] = useState("");
@@ -51,46 +55,45 @@ export function VenuesList({ venues }: { venues: VenueListItem[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={2} />
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle"
+          strokeWidth={1.75}
+        />
         <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search venues…"
           aria-label="Search venues"
-          className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
+          className="kivo-field kivo-focus h-11 w-full pl-10 pr-3 text-sm outline-none"
         />
       </div>
 
       {filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-foreground-muted">No venues match &quot;{query}&quot;.</p>
-      ) : (
-        <StaggeredList
-          items={shown}
-          keyExtractor={(venue) => venue.id}
-          delay={(index) => staggerDelay(index % 60, 0.02)}
-          className="flex flex-col gap-2"
-          renderItem={(venue) => (
-            <Link
-              href={`/venues/${venue.id}`}
-              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
-                <MapPin className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium text-foreground">{venue.name ?? "Unnamed venue"}</span>
-                <span className="truncate text-xs text-foreground-subtle">
-                  {[venue.city, venue.country].filter(Boolean).join(", ") || "-"}
-                </span>
-              </div>
-              {venue.capacity && (
-                <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground-subtle">
-                  {formatNumber(venue.capacity)}
-                </span>
-              )}
-            </Link>
-          )}
+        <EmptyState
+          icon={Search}
+          tone="section"
+          title="Nothing matched"
+          description={`No ground here is called \u201c${query.trim()}\u201d. Try the city instead, or a shorter word.`}
         />
+      ) : (
+        <ListSurface>
+          {shown.map((venue) => (
+            <ListRow
+              key={venue.id}
+              href={`/venues/${venue.id}`}
+              leading={
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2">
+                  <MapPin className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+                </span>
+              }
+              title={venue.name ?? "Unnamed venue"}
+              // No dash when a ground has neither a city nor a country. A "-"
+              // in the place a city goes reads as a fact about the ground.
+              subtitle={[venue.city, venue.country].filter(Boolean).join(", ") || undefined}
+              trailing={venue.capacity ? formatNumber(venue.capacity) : undefined}
+            />
+          ))}
+        </ListSurface>
       )}
 
       <CappedListFooter visible={shown.length} total={filtered.length} onShowMore={showMore} label="venues" />
