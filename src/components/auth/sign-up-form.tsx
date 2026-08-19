@@ -149,9 +149,14 @@ export function SignUpForm({
     setNotice(null);
 
     startTransition(async () => {
+      // Returns on failure, and ALSO returns undefined-then-redirects when the
+      // project has email confirmation switched off (see signUpWithPassword) —
+      // in which case this line never resumes, because the account is already
+      // signed in and the navigation has happened.
       const result = await signUpWithPassword(
         { email, fullName, username, password, confirmPassword, country, agreed },
         redirectTo,
+        addAccount,
       );
       if (result) {
         fail(result.error, result.field ?? null);

@@ -319,7 +319,11 @@ export async function checkUsernameAvailability(username: string): Promise<Usern
  * unconditional "already have an account? sign in instead" line — shown to
  * everybody, so it reveals nothing.
  */
-export async function signUpWithPassword(input: SignUpInput, redirectTo?: string): Promise<AuthActionResult | undefined> {
+export async function signUpWithPassword(
+  input: SignUpInput,
+  redirectTo?: string,
+  addAccount?: boolean,
+): Promise<AuthActionResult | undefined> {
   if (!isAuthConfigured()) {
     return { error: "Sign-up isn't configured in this environment yet." };
   }
@@ -382,8 +386,21 @@ export async function signUpWithPassword(input: SignUpInput, redirectTo?: string
   const callback = new URL("/auth/callback", await requestOrigin());
   if (next) callback.searchParams.set("next", next);
 
+  // Reserved BEFORE the call, for the same reason the code path does it: if
+  // there is nowhere to keep the session this one might replace, say so now,
+  // while the current account is still signed in. `signUp` does not return a
+  // session when the project confirms emails — verified in
+  // @supabase/auth-js, which only calls `_saveSession` when one comes back —
+  // so on the normal path this reservation costs nothing and is simply unused.
+  let outgoing: OutgoingSession | null = null;
+  if (addAccount) {
+    const reserved = await reserveSlotForOutgoingSession();
+    if (reserved.error) return reserved.error;
+    outgoing = reserved.outgoing;
+  }
+
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -396,6 +413,24 @@ export async function signUpWithPassword(input: SignUpInput, redirectTo?: string
   });
 
   if (error) return describeAuthError(error, "sign-up");
+
+  // NO CODE IS COMING, and the form must not sit waiting for one.
+  //
+  // Supabase returns a live session from `signUp` when the project has
+  // "Confirm email" switched OFF — the account is created and signed in on the
+  // spot. That is a dashboard setting this repository cannot read, so it is
+  // handled rather than assumed: a session in hand means land the user now.
+  // Without this branch, an environment with confirmation off would show the
+  // "check your email" screen forever, for a mail that was never sent — the
+  // exact class of dead end this whole rewrite exists to remove.
+  //
+  // With confirmation ON (the current project's setting, and the one the
+  // founder asked for) there is no session here, this returns undefined, and
+  // the form advances to the code step as designed.
+  if (data.session) {
+    await keepReplacedSession(outgoing, data.user?.id);
+    return landAfterAuthentication(redirectTo, Boolean(addAccount));
+  }
   return undefined;
 }
 

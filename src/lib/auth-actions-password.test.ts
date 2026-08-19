@@ -25,7 +25,11 @@ let signUpError: unknown = null;
 let signInError: unknown = null;
 let resetError: unknown = null;
 
-const signUp = vi.fn(async () => ({ data: { user: { id: "user-new" } }, error: signUpError }));
+let signUpSession: { access_token: string } | null = null;
+const signUp = vi.fn(async () => ({
+  data: { user: { id: "user-new" }, session: signUpSession },
+  error: signUpError,
+}));
 const signInWithPasswordCall = vi.fn(async () => ({ data: { user: { id: "user-new" } }, error: signInError }));
 const resetPasswordForEmail = vi.fn(async () => ({ data: {}, error: resetError }));
 const rpc = vi.fn(async () => usernameAnswer);
@@ -99,6 +103,7 @@ async function catchRedirect<T>(run: () => Promise<T>) {
 beforeEach(() => {
   usernameAnswer = { data: true, error: null };
   signUpError = null;
+  signUpSession = null;
   signInError = null;
   resetError = null;
   signUp.mockClear();
@@ -179,6 +184,29 @@ describe("signUpWithPassword — every rule re-checked on the server", () => {
 
     expect(await signUpWithPassword(validSignUp())).toBeUndefined();
     expect(signUp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("signUpWithPassword — when the project does not confirm emails", () => {
+  it("signs the new account straight in instead of waiting for a code that is never sent", async () => {
+    // "Confirm email" is a dashboard setting this repository cannot read, and
+    // with it OFF Supabase returns a live session from signUp. Showing the
+    // "check your email" screen then would strand the user forever on a mail
+    // that was never sent.
+    signUpSession = { access_token: "access-new" };
+
+    const { redirectedTo } = await catchRedirect(() => signUpWithPassword(validSignUp()));
+
+    expect(redirectedTo).toBe("/home");
+  });
+
+  it("advances to the code step when Supabase returns no session, which is the confirmed-email default", async () => {
+    signUpSession = null;
+
+    const { result, redirectedTo } = await catchRedirect(() => signUpWithPassword(validSignUp()));
+
+    expect(result).toBeUndefined();
+    expect(redirectedTo).toBeNull();
   });
 });
 
