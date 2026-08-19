@@ -6,6 +6,8 @@ import { BarChart3, Plus, X, PenSquare } from "lucide-react";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { motion } from "motion/react";
 import { createPost, createPoll } from "@/app/(app)/social/actions";
+import { MatchAttachPicker } from "@/components/social/match-attach-picker";
+import type { AttachableMatch } from "@/app/(app)/social/compose/matches";
 import { cn } from "@/lib/utils";
 
 const MAX_LENGTH = 2000;
@@ -34,12 +36,23 @@ const MAX_POLL_OPTION_LENGTH = 80;
 export function ComposeForm({
   avatarUrl,
   username,
+  matches,
+  matchesFailed,
+  initialMatch = null,
 }: {
   avatarUrl: string | null;
   username: string;
+  /** Fixtures whose Match Room genuinely accepts posts right now — see
+   * fetchAttachableMatches. Empty is a real answer and the picker says so. */
+  matches: AttachableMatch[];
+  matchesFailed: boolean;
+  /** Pre-attached from `?match=<id>`, so "post about this match" from a
+   * fixture page opens the composer with the subject already set. */
+  initialMatch?: AttachableMatch | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"post" | "poll">("post");
+  const [match, setMatch] = useState<AttachableMatch | null>(initialMatch);
   const [body, setBody] = useState("");
   const [options, setOptions] = useState(["", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +74,11 @@ export function ComposeForm({
             setError(result.error);
             return;
           }
-          // Back to the feed the post now belongs to, with the server's copy of
-          // it — never an optimistic card this page invented.
-          router.push("/social");
+          // Back to where the post now lives, with the server's copy of it —
+          // never an optimistic card this page invented. A post about a match
+          // belongs in that match's room, and landing there is the difference
+          // between "posted" and "you are in the conversation".
+          router.push(match ? `/matches/${match.id}?tab=room` : "/social");
           router.refresh();
         });
       }}
@@ -102,6 +117,17 @@ export function ComposeForm({
         ))}
       </div>
 
+      {/* The subject before the take. `fixture_id` is the field `createPost`
+          and `createPoll` have always read (see actions.ts) — this is simply
+          the first UI outside a Match Room that sets it. */}
+      {match && <input type="hidden" name="fixture_id" value={match.id} />}
+      <MatchAttachPicker
+        matches={matches}
+        failed={matchesFailed}
+        selected={match}
+        onSelect={setMatch}
+      />
+
       {/* The writing area takes whatever height is left. A composer whose
           field is three lines tall on a 844px screen is the cramped thing this
           page was built to stop being. */}
@@ -116,7 +142,15 @@ export function ComposeForm({
             maxLength={MAX_LENGTH}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder={mode === "poll" ? "Ask something…" : "What's your take?"}
+            placeholder={
+              mode === "poll"
+                ? match
+                  ? `Ask the ${shortMatchLabel(match)} room…`
+                  : "Ask something…"
+                : match
+                  ? `Your take on ${shortMatchLabel(match)}?`
+                  : "What's your take?"
+            }
             className={cn(
               "w-full resize-none bg-transparent text-base leading-relaxed text-foreground placeholder:text-foreground-subtle focus:outline-none",
               mode === "poll" ? "min-h-24" : "min-h-40 flex-1",
@@ -204,4 +238,10 @@ export function ComposeForm({
       )}
     </form>
   );
+}
+
+/** The scoreboard shorthand for a fixture, for the composer's own copy. Falls
+ * back to the full club name rather than abbreviating one KIVO was not given. */
+function shortMatchLabel(match: AttachableMatch): string {
+  return `${match.homeShortName || match.homeName} v ${match.awayShortName || match.awayName}`;
 }
