@@ -102,7 +102,7 @@ Before real signups. Supabase's built-in sender delivers the code but is rate-li
 
 ### 4.4 The email template
 
-Supabase Auth sends a Magic Link by default and only sends a six-digit code if the template contains `{{ .Token }}`. KIVO's sign-in is code-entry only. A wrong template sends a link where the UI expects a code.
+Supabase Auth sends a Magic Link by default and only sends a six-digit code if the template contains `{{ .Token }}`. KIVO's sign-up, its secondary code sign-in and its password reset all expect a code, so **Confirm signup, Magic Link and Reset Password** each need the token. A wrong template sends a link where the UI expects a code.
 
 ---
 

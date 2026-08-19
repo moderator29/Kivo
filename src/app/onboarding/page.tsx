@@ -55,6 +55,16 @@ export default async function OnboardingPage() {
 
       <OnboardingFlow
         defaultUsername={profile.username}
+        // Identity is collected on /sign-up now, BEFORE verification, so this
+        // is normally false and the flow's username step never renders — the
+        // rework's whole point was not to re-ask for something already given.
+        // It is still computed rather than hard-coded because a generated
+        // handle is a real state: accounts made before the sign-up form
+        // collected one still exist, and a chosen handle can lose a race to
+        // another sign-up between the form checking it and the email being
+        // verified, in which case resolveViewerProfile() provisions the
+        // placeholder (src/lib/profile.ts). Both land here needing to pick.
+        needsUsername={profile.username.startsWith("user_")}
         availableTeams={teamsOutcome.rows}
         // The KIVO avatar this profile was assigned at creation
         // (randomKivoAvatarId, in getOrCreateProfile) — passed so the

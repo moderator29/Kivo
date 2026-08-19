@@ -118,10 +118,34 @@ notification work says so rather than implying more.
 accounts gets several allowances."
 
 This is not an oversight in the rate limiter — it is a direct consequence of the
-auth model. KIVO signs people in with an emailed one-time code and stores no
-password. **There is no credential, device binding, or payment instrument that
-could tie two profiles to one human**, and the multi-account switcher makes
+auth model. **The only thing KIVO verifies about a person is that they can read
+one email address**, and email addresses are free and unlimited. Nothing in the
+sign-up flow ties two profiles to one human, and the multi-account switcher makes
 holding several accounts on one phone an explicitly supported feature.
+
+> **Corrected 2026-08-19.** This paragraph used to give the reason as "KIVO signs
+> people in with an emailed one-time code and stores no password", and KIVO now
+> has passwords (`DECISIONS.md`, "KIVO has passwords again"). The conclusion is
+> unchanged — but the old reason was wrong even before passwords arrived, and it
+> is worth saying why rather than just swapping the sentence.
+>
+> **A password is not an identity.** It proves the person knows a secret, not
+> that they are one particular human. One person can hold ten passwords for ten
+> addresses as easily as they can hold ten mailboxes. So adding passwords moved
+> nothing at all here: the binding was never missing *because* there was no
+> credential, it was missing because the credential is chosen by the user and
+> attaches to an address they can create again in thirty seconds.
+>
+> The 2026-08-19 sign-up form also now collects a **country**. That is
+> self-declared and unverified, and it is not a binding either. Nothing about it
+> may be used to argue this constraint has weakened.
+>
+> What *would* actually bind a profile to a human is a factor the user cannot
+> mint on demand: a phone number verified by SMS, a government ID check, or a
+> payment instrument. KIVO has none of these, and adding one is a product
+> decision with real cost — in the launch market a phone-number wall would
+> exclude real users to stop a problem that, per the containment below, does not
+> cost anything today.
 
 **Do not** propose device fingerprinting or IP-based linking as the fix; both
 were considered and both are worse than the problem — they punish shared

@@ -17,8 +17,8 @@ import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { CountUp } from "@/components/ui/count-up";
 import { useDeviceTimeZone } from "@/lib/use-device-timezone";
+import { USERNAME_PATTERN, normalizeUsername } from "@/lib/auth-shared";
 
-const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 const AVAILABILITY_DEBOUNCE_MS = 450;
 
 type Team = {
@@ -28,15 +28,47 @@ type Team = {
   crest_url: string | null;
 };
 
-// The four pageable slides of the carousel, in order. "success" isn't part
-// of this list on purpose — it's a one-way completion screen reached only
-// after a real server round trip, not something a dot represents or you can
-// page back into (there's nothing to "go back" to once the badge/XP are
-// actually on the ledger).
+// The pageable slides of the carousel, in order. "success" isn't part of this
+// list on purpose — it's a one-way completion screen reached only after a real
+// server round trip, not something a dot represents or you can page back into
+// (there's nothing to "go back" to once the badge/XP are actually on the
+// ledger).
+//
+// "username" is now CONDITIONAL — see `needsUsername` below.
 type Step = "intro" | "username" | "team" | "clubs" | "alerts";
 type FlowStep = Step | "success";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+/**
+ * Which slides this particular person sees, in order.
+ *
+ * Pulled out of the component and exported so it can be tested directly,
+ * because the two conditions are easy to get subtly wrong and the cost of
+ * getting them wrong is invisible: a flow that asks a brand-new user for a
+ * handle they already chose on /sign-up, or a "back" button pointing at a slide
+ * that is not in the flow.
+ *
+ * - `needsUsername` — sign-up collects the handle before verification now, so
+ *   this is normally false. See the prop's own note on OnboardingFlow for the
+ *   two real cases where it is true.
+ * - `hasTeams` — the club steps only exist when there is real synced football
+ *   to pick from. An empty picker is a dead end, not a personalisation step.
+ */
+export function onboardingSteps({
+  needsUsername,
+  hasTeams,
+}: {
+  needsUsername: boolean;
+  hasTeams: boolean;
+}): Step[] {
+  return [
+    "intro",
+    ...(needsUsername ? (["username"] as const) : []),
+    ...(hasTeams ? (["team", "clubs"] as const) : []),
+    "alerts",
+  ];
+}
 
 /**
  * Editorial, image-led onboarding carousel: one large hero visual, one bold
@@ -49,10 +81,27 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  */
 export function OnboardingFlow({
   defaultUsername,
+  needsUsername,
   availableTeams,
   avatarSrc,
 }: {
   defaultUsername: string;
+  /**
+   * Whether this profile still carries the machine-generated `user_xxxxxxxxxx`
+   * handle it was provisioned with, rather than one its owner chose.
+   *
+   * Sign-up now collects the handle BEFORE verification, so for anybody who
+   * arrives through /sign-up this is false and the username step never renders
+   * — asking again for something already given is the dead step the rework
+   * exists to remove. It is not deleted outright because there are two real
+   * ways to hold an account with a generated handle: an account created before
+   * the sign-up form collected one (the platform has such accounts today), and
+   * a sign-up whose chosen handle was claimed by somebody else in the window
+   * between the form checking it and the email being verified — in which case
+   * resolveViewerProfile() falls back to the placeholder and this is where the
+   * user is asked to pick again. Deleting the step would strand both.
+   */
+  needsUsername: boolean;
   availableTeams: Team[];
   avatarSrc: string | null;
 }) {
@@ -64,9 +113,10 @@ export function OnboardingFlow({
   // undiscovered in Settings. The club-picking steps only exist when there are
   // real clubs to pick — an unsynced database gets the short flow, not an empty
   // grid.
-  const steps: Step[] = hasTeams
-    ? ["intro", "username", "team", "clubs", "alerts"]
-    : ["intro", "username", "alerts"];
+  const steps = onboardingSteps({ needsUsername, hasTeams });
+  /** Where "Get started" goes: whatever is actually next, rather than a
+   *  hard-coded "username" that may not be in this flow at all. */
+  const firstStepAfterIntro: Step = steps[1];
 
   const [step, setStep] = useState<FlowStep>("intro");
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -109,7 +159,7 @@ export function OnboardingFlow({
     // useless "Match the requested format". Showing the user the exact
     // string that will be saved removes the contradiction entirely: there is
     // no invalid state to report, because uppercase is folded on the way in.
-    const value = rawValue.toLowerCase();
+    const value = normalizeUsername(rawValue);
     setUsernameValue(value);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
@@ -146,11 +196,13 @@ export function OnboardingFlow({
     setStep(next);
   }
 
+  /** One source of truth for "the step before this one": derived from `steps`
+   *  rather than hand-written, so the conditional username and club steps can
+   *  never leave a back button pointing at a slide that isn't in the flow. */
   function handleBack() {
-    if (step === "username") goTo("intro", -1);
-    else if (step === "team") goTo("username", -1);
-    else if (step === "clubs") goTo("team", -1);
-    else if (step === "alerts") goTo(hasTeams ? "clubs" : "username", -1);
+    if (step === "success") return;
+    const index = steps.indexOf(step);
+    if (index > 0) goTo(steps[index - 1], -1);
   }
 
   function handleUsernameSubmit(formData: FormData) {
@@ -230,7 +282,7 @@ export function OnboardingFlow({
           exit={{ opacity: 0, x: direction * -24 }}
           transition={{ duration: 0.32, ease: EASE }}
         >
-          {step === "intro" && <IntroPanel onNext={() => goTo("username", 1)} />}
+          {step === "intro" && <IntroPanel onNext={() => goTo(firstStepAfterIntro, 1)} />}
 
           {step === "username" && (
             <UsernamePanel
@@ -419,9 +471,14 @@ export function IntroPanel({ onNext }: { onNext: () => void }) {
         <h1 className="max-w-xs text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           Football, one real home.
         </h1>
+        {/* Deliberately does not promise a step count: the flow is now
+            different lengths for different people (the handle step only appears
+            for an account that hasn't got one, the club steps only when there
+            are real clubs to pick), and a promise of "two quick steps" that the
+            dots then contradict is a small lie the very first screen tells. */}
         <p className="max-w-xs text-sm text-foreground-muted">
-          Scores, Match Rooms, fantasy and an AI Copilot — grounded in KIVO&apos;s own verified data. Two
-          quick steps and you&apos;re in.
+          Scores, Match Rooms, fantasy and an AI Copilot — grounded in KIVO&apos;s own verified data. A
+          couple of questions and you&apos;re in.
         </p>
       </div>
       <PillButton onClick={onNext}>
@@ -470,7 +527,9 @@ export function UsernamePanel({
             required
             minLength={3}
             maxLength={24}
-            pattern="[a-z0-9_]+"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoFocus
             value={usernameValue}
             onChange={(e) => onUsernameChange(e.target.value)}

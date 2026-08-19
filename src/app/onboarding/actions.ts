@@ -6,6 +6,11 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { awardBadge, awardXp, type AwardedBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { isSupportedTimeZone } from "@/lib/timezone";
+// The one definition of what a KIVO handle is, shared with /sign-up's form and
+// its Server Action. This file used to keep its own copy of the same regex and
+// its own inline `.trim().toLowerCase()`; two copies of a validation rule is
+// how the rule drifts.
+import { USERNAME_PATTERN, normalizeUsername } from "@/lib/auth-shared";
 import { logError } from "@/lib/log";
 
 const ONBOARDING_COMPLETE_XP = 10;
@@ -37,8 +42,6 @@ export type OnboardingCompletion = {
   avatarSrc: string | null;
 };
 
-const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
-
 /**
  * Debounced as-you-type availability check for the username step below —
  * lets the form tell a user their handle is taken before they hit Continue
@@ -53,7 +56,7 @@ const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
  * positive/negative.
  */
 export async function checkUsername(username: string): Promise<{ available: boolean | null }> {
-  const trimmed = username.trim().toLowerCase();
+  const trimmed = normalizeUsername(username);
   if (!USERNAME_PATTERN.test(trimmed)) {
     return { available: null };
   }
@@ -84,9 +87,7 @@ export async function checkUsername(username: string): Promise<{ available: bool
  * actually completes the flow, after the optional team step.
  */
 export async function saveUsernameStep(formData: FormData): Promise<{ error: string | null }> {
-  const username = String(formData.get("username") ?? "")
-    .trim()
-    .toLowerCase();
+  const username = normalizeUsername(String(formData.get("username") ?? ""));
 
   if (!USERNAME_PATTERN.test(username)) {
     return { error: "Username must be 3-24 characters: lowercase letters, numbers and underscores only." };

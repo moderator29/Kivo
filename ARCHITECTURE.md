@@ -27,7 +27,7 @@ Football APIs   AI (Anthropic)     Resend
 
 Supabase answers both "who are you" and "what does KIVO know about you and what can you do." A single vendor issues the session JWT and verifies it — there is no cross-vendor trust relationship, no JWKS registration step, and no second identity system holding a copy of the user. RLS policies key off `auth.uid()`. See `DECISIONS.md` (2026-08-18) for why Clerk was removed and what that cost and bought.
 
-Sign-in is **email one-time code only**: the browser calls `signInWithOtp({ email })` to have Supabase mail a six-digit code, then `verifyOtp({ email, token, type: "email" })` to redeem it into a session. No password is ever collected, stored, reset, or leaked — there is no password in this system to compromise. Social sign-in (X/Google/Apple) is a provider toggle away but is not enabled.
+Sign-in is **email and password** (`signInWithPassword`), with an emailed six-digit code (`signInWithOtp` / `verifyOtp`) kept as an explicitly secondary route and `resetPasswordForEmail` behind `/forgot-password`. Sign-up collects full name, username, password, country and a Privacy/Terms agreement in one form *before* Supabase's confirmation code, and carries that identity across verification as user metadata which `resolveViewerProfile()` re-validates and writes. Every call runs in a Server Action so the session cookie is written by the same response that redirects. Passwords arrived on 2026-08-19 and reversed the passwordless design this paragraph used to describe — `DECISIONS.md`, "KIVO has passwords again", carries the reasoning and the costs. Social sign-in (X/Google/Apple) is a provider toggle away but is not enabled.
 
 ## Request-time profile guarantee
 

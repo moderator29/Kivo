@@ -2,7 +2,19 @@
 
 **Who this is for**: whoever is on support duty for KIVO. It is the operator half of `/support` and `/admin/support`, built for `KIVO_NEXT_GEN.md` KN-118.
 
-**Why it has to exist at all.** KIVO has exactly one sign-in factor: a six-digit code emailed to one address (migration `0053`). No password, no social login, no second factor, no recovery codes. That is a deliberate, defensible choice — but it means the failure mode is total. If the email does not arrive, the user is not inconvenienced, they are locked out permanently, and no amount of retrying will change that. There is no self-service path back. A person has to do it.
+**Why it has to exist at all.** KIVO verifies exactly one thing about a person: that they can read one email address. Since 2026-08-19 there is also a password (`DECISIONS.md`, "KIVO has passwords again"), and that genuinely helps a returning user — signing in with a password they know needs no email at all. But it does not change the shape of this runbook, because **every way of getting a password in the first place, or getting a new one, goes through the same inbox**:
+
+| Situation | Self-service? |
+| --- | --- |
+| Returning user who knows their password | **Yes** — no email involved. This is what passwords bought. |
+| Forgotten password | Only if the reset email arrives (`/forgot-password`) |
+| Account created before passwords existed | Only if a sign-in code or a reset email arrives |
+| Creating an account at all | Only if the confirmation email arrives |
+| Email address unreachable, in any of the above | **No.** A person has to do it. |
+
+There is still no second factor, no social login and no recovery codes. So the last row is still a permanent lockout with no self-service path back, and that is what everything below is for.
+
+**One thing did get better, and support should know it**: a user who says "I can't sign in" now has *two* self-service things to try before this document applies — the password, and Forgot password — where previously they had one. Ask which they have tried before escalating.
 
 Everything below is procedure a human follows. None of it is automated, and nothing in the codebase pretends otherwise.
 
@@ -27,7 +39,7 @@ Most `sign_in` requests are one of four things, in rough order of frequency:
 
 **This is an identity decision, not a technical one.** Changing which email owns an account hands somebody else's data to whoever asked. Do not do it on the strength of a plausible-sounding message.
 
-**Before touching anything, establish that the requester is the account holder.** With no password there is no secret to check, so identity has to come from facts only the owner would know. Ask for several, and require them to agree:
+**Before touching anything, establish that the requester is the account holder.** A password is not usable as the secret to check here — the person asking for help is, by definition, the person who cannot produce it, and asking anyone to send you a password is a habit no support process should teach. So identity still has to come from facts only the owner would know. Ask for several, and require them to agree:
 
 - the exact display name and username on the account,
 - roughly when they signed up,

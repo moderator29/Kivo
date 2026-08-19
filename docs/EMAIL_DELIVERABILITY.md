@@ -4,7 +4,21 @@
 
 ## Why this is a blocker and not a nice-to-have
 
-KIVO has exactly one way in: a six-digit code emailed to one address. No password, no social login, no recovery factor (migration `0053`, `DECISIONS.md` "Auth re-platformed"). Every other product treats email deliverability as a quality problem — a receipt that arrives late, a digest that lands in spam. Here it is the product's **only** door. An email that does not arrive is not a degraded experience; it is a user who cannot use KIVO at all, ever, and who has no way to tell the difference between "my mail is broken" and "this app is broken."
+> **Rewritten 2026-08-19.** This document used to open with "KIVO has exactly one way in: a six-digit code emailed to one address. No password, no social login, no recovery factor." That is no longer true — KIVO has passwords (`DECISIONS.md`, "KIVO has passwords again"). The conclusion did not change, but the reasoning behind it did, and a runbook arguing from a fact that stopped being true is worse than no runbook.
+
+KIVO now has two ways in — an email and password, and a six-digit code as the secondary option — plus a password reset. **Email is still on the critical path for every one of them**, and for two of the three it is the *only* path:
+
+| What the user is doing | Needs an email to arrive? |
+| --- | --- |
+| Creating an account | **Yes, always.** Supabase's confirmation code is the only way to finish a sign-up. |
+| Signing in with a password they know | No. This is what passwords bought. |
+| Signing in with a code | **Yes.** |
+| Resetting a forgotten password | **Yes.** |
+| Setting a first password on a pre-password account | **Yes** — either route (a sign-in code, or Forgot password) goes through the inbox. |
+
+So what changed is the *shape* of the risk, not its size. Before, a mail failure locked out everybody on every visit. Now it locks out **everybody who is new, and everybody who has forgotten their password** — which on a launch-day cohort is most of the traffic, and which is precisely the moment a first impression is formed. A person who cannot sign in has no way to tell the difference between "my mail is broken" and "this app is broken."
+
+There is now one genuine improvement worth naming, because it changes what "degraded" means: a returning user with a password is unaffected by a mail outage entirely. That is why passwords were worth the threat model they brought with them. It is not a reason to leave SMTP unconfigured.
 
 That asymmetry is why this document exists and why the work below should happen before the first real cohort, not after the first complaint.
 
@@ -15,7 +29,8 @@ That asymmetry is why this document exists and why the work below should happen 
 - **Supabase's built-in sender does deliver.** There is a real account on the project, created today, on a real `@gmail.com` address, with a `profiles` row provisioned by `getOrCreateProfile()`. So the OTP path works end to end at least once, to at least one large consumer mailbox. That is worth knowing, because it rules out "the flow is broken" as an explanation for any delivery problem you hit next.
 - **It will not scale, and Supabase says so.** The built-in sender is documented as being for development, and is throttled to a handful of messages per hour **per project**, shared across every auth email type. A launch day where thirty people sign up in an hour does not partly work — it stops, and the people it stops are indistinguishable to themselves from people whose mail bounced. `describeAuthError` in `src/lib/auth-actions.ts` already handles `over_email_send_rate_limit` honestly, but "we are throttled" is a bad first impression to have built a good error message for.
 - **No custom SMTP is configured**, and nothing in this repository can verify that it is — SMTP settings live in the Supabase dashboard, not in any file or env var here. Treat any claim in any document that says otherwise as unverified.
-- **The templates are ready.** `docs/email-templates/` carries twelve files (HTML and text) and its `README.md` has the install steps. Read that README before touching the dashboard: which template Supabase sends depends on whether the address has signed up before, and **both** Confirm signup and Magic Link must contain `{{ .Token }}` or new users get a link with no code in it.
+- **The templates are ready.** `docs/email-templates/` carries twelve files (HTML and text) and its `README.md` has the install steps. Read that README before touching the dashboard: which template Supabase sends depends on whether the address has signed up before, and **three** templates must contain `{{ .Token }}` — Confirm signup (sign-up), Magic Link (the code sign-in), and Reset Password (the forgotten-password code). A template missing it produces a link and no code, and a user staring at a code screen for a code that was never sent.
+- **Three auth emails now exist, not two.** Password reset (`resetPasswordForEmail`) sends the Reset Password template and is subject to exactly the same project-wide throttle as the other two. Budget for it: a launch cohort generates reset traffic almost immediately.
 - **Nothing has been tested against a real delivered email from this session.** The sandbox this was written in blocks `*.supabase.co` outright. Everything above about delivery comes from database state, not from an inbox.
 
 ## What to do, in order

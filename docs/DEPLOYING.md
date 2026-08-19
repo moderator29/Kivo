@@ -99,22 +99,48 @@ This endpoint is also the right URL to point an uptime monitor at.
 
 ---
 
-## Step 4 — Sign in, and make sure the code email arrives
+## Step 4 — Create your account, and make sure the confirmation email arrives
 
-Go to `https://your-domain/sign-up` and enter your email.
+Go to `https://your-domain/sign-up`. The form asks for everything at once:
+email, full name, username, password, confirm password, country (Nigeria is
+preselected) and a tick to agree to the Privacy Policy and Terms. Then it emails
+you a six-digit code.
 
-**KIVO's only sign-in method is a six-digit code.** Supabase sends a *magic
-link* by default and only sends a code if the Magic Link email template
-contains `{{ .Token }}` (Supabase → Authentication → Email Templates). If you
-receive a link instead of six digits, that template is the reason.
+**Three email templates must contain `{{ .Token }}`** (Supabase →
+Authentication → Email Templates), or you receive a link with no code in it
+while KIVO waits for a code that was never sent:
+
+| Template | Sent when |
+| --- | --- |
+| **Confirm signup** | Creating an account |
+| **Magic Link** | Signing in with a code instead of a password |
+| **Reset Password** | Forgot password |
+
+`docs/email-templates/` carries KIVO-branded versions of all of them with the
+token already in place, and its `README.md` has the copy-paste steps.
 
 If no mail arrives at all, Supabase's built-in sender is rate-limited to a
-handful of messages per hour. Fine for this step; not fine for real users —
-see step 9 and `docs/EMAIL_DELIVERABILITY.md`.
+handful of messages per hour, project-wide, shared across all three. Fine for
+this step; not fine for real users — see step 9 and
+`docs/EMAIL_DELIVERABILITY.md`.
 
-You will land in onboarding. On an empty database it will ask for a username
-and a notification preference and skip the club-picking steps entirely, because
-there are no clubs to pick yet. That is correct behaviour, not a broken screen.
+You will land in onboarding. It does **not** ask for a username any more — you
+gave one before verifying — so on an empty database it asks only for a
+notification preference and skips the club-picking steps entirely, because there
+are no clubs to pick yet. That is correct behaviour, not a broken screen.
+
+### If your account was created before passwords existed
+
+It has no password, and `signInWithPassword` will tell you your email or
+password is wrong — which is the truth, and deliberately does not distinguish
+"no such account" from "wrong password". Two ways in, both working:
+
+- **/sign-in → "Email me a 6-digit code instead"** — the pre-password path,
+  still there and still supported.
+- **/forgot-password** — works for an account that has never had a password.
+  It mails a six-digit code, and you set your first password with it.
+
+Either one signs you in. Use the second if you want a password from then on.
 
 ---
 
@@ -256,9 +282,40 @@ and the reasoning matters if you are on a free tier.
 
 | Step | Skip it and… |
 | --- | --- |
-| Custom SMTP (Supabase → Authentication → SMTP) | Sign-in codes are rate-limited to a handful per hour, project-wide. With email codes as the only way in, an email that does not arrive is a user who cannot use KIVO at all. Runbook: `docs/EMAIL_DELIVERABILITY.md` |
+| **Leaked password protection** (see below) | KIVO accepts passwords that are already published in breach corpora. This is the single highest-value five-second action on this page now that KIVO has passwords |
+| Custom SMTP (Supabase → Authentication → SMTP) | Auth mail is rate-limited to a handful per hour, project-wide, across sign-up codes, sign-in codes and password resets. Nobody new can create an account and nobody can recover a forgotten password. Runbook: `docs/EMAIL_DELIVERABILITY.md` |
 | `ANTHROPIC_API_KEY` | `/ai` stays an honest "Coming Soon". Nothing else is affected |
 | Uptime monitor on `/api/health` | Nothing tells you the site is down except a person |
+
+### Turn on leaked password protection — founder action, cannot be done from code
+
+**Supabase → Authentication → Sign In / Providers → Email → "Prevent use of
+leaked passwords"**, then Save.
+(Direct path: `/dashboard/project/<ref>/auth/providers`, expand **Email**.)
+
+Verified against the live project on 2026-08-19: Supabase's own security advisor
+reports `auth_leaked_password_protection` as **disabled**. That was a footnote
+while KIVO had no passwords. It is not one now.
+
+What it does: on every sign-up and password change, Supabase checks the password
+against HaveIBeenPwned using a k-anonymity range query — a five-character prefix
+of the hash goes out, never the password and never the full hash. A password that
+appears in a known breach is refused.
+
+Why it matters more than a longer minimum length: the passwords that actually
+lose accounts are not short, they are *reused*. KIVO's own rules already require
+ten characters with a letter and a number, and `hunter2024!` passes all three
+while sitting in every credential-stuffing list in existence. The rate limits in
+`src/lib/auth-actions.ts` slow an attacker down; this stops the guess from being
+worth making.
+
+There is nothing to deploy afterwards. KIVO already handles the refusal: the
+`weak_password` branch of `describeAuthError` turns it into *"That password has
+appeared in a known data breach. Choose a different one."*
+
+> Everything in this repository that could enforce this already does. This one
+> is a dashboard toggle with no file, no env var and no migration behind it,
+> which is exactly why it is written down here instead of assumed.
 
 ---
 
