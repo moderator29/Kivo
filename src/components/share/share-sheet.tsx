@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { Check, Copy, Download, Loader2, Plus, Share2 } from "lucide-react";
 import { uploadBackground } from "@/app/(app)/profile/background-actions";
@@ -82,6 +82,31 @@ export function ShareSheet({
   if (secondaryId) params.set("b", secondaryId);
   const cardUrl = `/api/share-card?${params.toString()}`;
   const fileName = `kivo-${slugify(title)}.png`;
+
+  /**
+   * Settles the preview from the element itself at attach time.
+   *
+   * Found in a browser, not in the code: the first `<img>` is server-rendered,
+   * so the browser can finish loading it *before* React attaches `onLoad`
+   * during hydration — and a load event that has already happened is never
+   * delivered. The sheet then sits at `opacity-40` with a spinner over a card
+   * that has actually finished, permanently. Probed directly: `complete: true`,
+   * `naturalWidth: 1080`, `className: "… opacity-40"`, spinner still mounted.
+   * It bites hardest on exactly the fast paths — a warm route, a cached card.
+   *
+   * `cardUrl` is in the dependency list on purpose: React re-runs the callback
+   * whenever it changes, which also covers the case where the next background
+   * is already in the browser cache and completes before a load event can be
+   * observed. When the new URL genuinely has to be fetched, `complete` is false
+   * here and `onLoad`/`onError` take it from there as normal.
+   */
+  const settleFromElement = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (!img || !img.complete) return;
+      setSettledUrl({ url: cardUrl, failed: img.naturalWidth === 0 });
+    },
+    [cardUrl],
+  );
 
   const rendering = settledUrl?.url !== cardUrl;
   const renderFailed = settledUrl?.url === cardUrl && settledUrl.failed;
@@ -199,6 +224,7 @@ export function ShareSheet({
             be the image route's own bytes, unoptimised and uncached, so that
             what is previewed is exactly what gets saved. */}
         <img
+          ref={settleFromElement}
           src={cardUrl}
           alt={`${title} preview`}
           className={`h-full w-full object-cover transition-opacity duration-300 ${rendering ? "opacity-40" : "opacity-100"}`}
