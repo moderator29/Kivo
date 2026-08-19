@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
+import { extractProviderError,
   ApiFootballError,
   classifyHttpError,
   isRetryable,
@@ -259,5 +259,49 @@ describe("requestWithRetry", () => {
 
     expect(err).toBeInstanceOf(ApiFootballError);
     expect(err.quotaRemaining).toBe(3);
+  });
+});
+
+describe("extractProviderError", () => {
+  it("reads the real suspended-account body that shipped a silent empty sync", () => {
+    // Captured verbatim from the live project's sync_runs.raw_response_sample
+    // on 2026-08-19. HTTP 200, results 0, empty response array — which is
+    // exactly what a quiet day with no matches looks like.
+    const body = {
+      get: "fixtures",
+      parameters: { date: "2026-08-19" },
+      errors: { access: "Your account is suspended, check on https://dashboard.api-football.com." },
+      results: 0,
+      paging: { current: 1, total: 1 },
+      response: [],
+    };
+    expect(extractProviderError(body)).toEqual({
+      key: "access",
+      message: "Your account is suspended, check on https://dashboard.api-football.com.",
+    });
+  });
+
+  it("treats a successful call's empty errors array as no error", () => {
+    expect(extractProviderError({ errors: [], results: 12, response: [{}] })).toBeNull();
+  });
+
+  it("returns null rather than throwing on shapes the provider never documented", () => {
+    expect(extractProviderError(null)).toBeNull();
+    expect(extractProviderError(undefined)).toBeNull();
+    expect(extractProviderError("not json")).toBeNull();
+    expect(extractProviderError({})).toBeNull();
+    expect(extractProviderError({ errors: null })).toBeNull();
+    expect(extractProviderError({ errors: {} })).toBeNull();
+    // A key present but blank is not a message worth surfacing.
+    expect(extractProviderError({ errors: { access: "   " } })).toBeNull();
+    // Non-string values are ignored rather than stringified into noise.
+    expect(extractProviderError({ errors: { rateLimit: 42 } })).toBeNull();
+  });
+
+  it("reads an errors array, which some endpoints use instead of an object", () => {
+    expect(extractProviderError({ errors: ["Plan does not allow this endpoint."] })).toEqual({
+      key: "0",
+      message: "Plan does not allow this endpoint.",
+    });
   });
 });
