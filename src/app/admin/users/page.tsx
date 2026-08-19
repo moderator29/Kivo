@@ -1,6 +1,8 @@
 import { Lock } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewUserData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -58,7 +60,7 @@ export default async function AdminUsersPage() {
 
   const supabase = createServerSupabaseClient();
   const USER_ROW_LIMIT = 100;
-  const [{ data: users }, { count: totalCount }] = await Promise.all([
+  const [usersResult, { count: totalCount }] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, username, display_name, role, created_at, moderation_status, moderation_reason, moderation_expires_at")
@@ -66,7 +68,13 @@ export default async function AdminUsersPage() {
       .limit(USER_ROW_LIMIT),
     supabase.from("profiles").select("id", { count: "exact", head: true }),
   ]);
-  const shownCount = users?.length ?? 0;
+  // An admin reads this table to answer "who is on KIVO". An empty one is a
+  // real answer on a new deployment, which is exactly what makes a failed
+  // read dangerous here: it reports zero users to the one person whose job is
+  // to notice that something is wrong.
+  const usersOutcome = readList(usersResult, "admin.users");
+  const users = usersOutcome.rows;
+  const shownCount = users.length;
   const total = totalCount ?? shownCount;
 
   return (
@@ -80,6 +88,13 @@ export default async function AdminUsersPage() {
         </p>
       </FadeIn>
 
+      {usersOutcome.failed ? (
+        <LoadFailed
+          tone="section"
+          title="The user list"
+          description="KIVO couldn't read the profiles table. This is not the same as there being no users — try again."
+        />
+      ) : (
       <FadeIn delay={0.08} className="kivo-glass-brand overflow-x-auto rounded-2xl">
         <table className="w-full text-left text-sm">
           <thead>
@@ -92,7 +107,7 @@ export default async function AdminUsersPage() {
             </tr>
           </thead>
           <tbody>
-            {(users ?? []).map((user) => (
+            {users.map((user) => (
               <tr key={user.id} className="border-b border-hairline-soft transition-colors last:border-0 hover:bg-surface-2">
                 <td className="px-4 py-3 font-medium text-foreground">{user.username}</td>
                 <td className="px-4 py-3 text-foreground-muted">{user.display_name ?? "-"}</td>
@@ -114,7 +129,7 @@ export default async function AdminUsersPage() {
                 </td>
               </tr>
             ))}
-            {(!users || users.length === 0) && (
+            {users.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-foreground-muted">
                   No users yet.
@@ -124,6 +139,7 @@ export default async function AdminUsersPage() {
           </tbody>
         </table>
       </FadeIn>
+      )}
     </div>
   );
 }

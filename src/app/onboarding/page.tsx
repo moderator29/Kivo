@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
@@ -28,11 +29,21 @@ export default async function OnboardingPage() {
   // pick from — an empty picker on a brand-new environment would be a dead
   // end, not a personalization step.
   const supabase = createServerSupabaseClient();
-  const { data: teams } = await supabase
-    .from("teams")
-    .select("id, name, short_name, crest_url")
-    .order("name", { ascending: true })
-    .limit(60);
+  // Deliberately tolerant, and it is the uncomfortable call on this page.
+  // OnboardingFlow drops the two club steps when this list is empty, so a
+  // failed read silently costs a first-time user the club-picking questions —
+  // recoverable in Settings, but only once they know to look. The alternative
+  // is worse: blocking the one flow that stands between a new account and the
+  // app, on a transient read. So it degrades, and it logs, rather than
+  // vanishing into a `??`.
+  const teamsOutcome = readList(
+    await supabase
+      .from("teams")
+      .select("id, name, short_name, crest_url")
+      .order("name", { ascending: true })
+      .limit(60),
+    "onboarding.teams",
+  );
 
   return (
     <div className="relative flex min-h-screen flex-col items-center overflow-hidden bg-background px-4 py-8">
@@ -44,7 +55,7 @@ export default async function OnboardingPage() {
 
       <OnboardingFlow
         defaultUsername={profile.username}
-        availableTeams={teams ?? []}
+        availableTeams={teamsOutcome.rows}
         // The KIVO avatar this profile was assigned at creation
         // (randomKivoAvatarId, in getOrCreateProfile) — passed so the
         // completion screen can show the user their own real avatar even if

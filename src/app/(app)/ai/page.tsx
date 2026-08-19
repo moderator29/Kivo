@@ -7,6 +7,7 @@ import { isAiConfigured } from "@/lib/ai/client";
 import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
 import { getTransparencyFreshness } from "@/lib/football/last-synced";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import type { ConversationSummary } from "./actions";
@@ -54,13 +55,20 @@ export default async function AiCopilotPage({
   let initialConversations: ConversationSummary[] = [];
   if (profile) {
     const supabase = createServerSupabaseClient();
-    const { data } = await supabase
-      .from("ai_conversations")
-      .select("id, title, updated_at")
-      .eq("profile_id", profile.id)
-      .order("updated_at", { ascending: false })
-      .limit(50);
-    initialConversations = data ?? [];
+    // Tolerant: the Copilot is usable with no history at all, so a failed
+    // read costs the sidebar rather than the page. Routed through readList so
+    // it is logged — a silently empty conversation list looks exactly like a
+    // first visit, and that is worth being able to find afterwards.
+    const conversationsOutcome = readList(
+      await supabase
+        .from("ai_conversations")
+        .select("id, title, updated_at")
+        .eq("profile_id", profile.id)
+        .order("updated_at", { ascending: false })
+        .limit(50),
+      "ai.conversations",
+    );
+    initialConversations = conversationsOutcome.rows;
   }
 
   // RECOMMENDATIONS.md item 183: buildGroundingContext already computes

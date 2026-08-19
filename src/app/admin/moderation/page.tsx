@@ -1,5 +1,6 @@
 import { ShieldAlert, Lock, History } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { QueryFailedError, readList } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canViewModerationData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -32,27 +33,48 @@ async function resolvePreviews(
   const commentIds = reports.filter((r) => r.target_type === "comment").map((r) => r.target_id);
   const profileIds = reports.filter((r) => r.target_type === "profile").map((r) => r.target_id);
 
-  const [{ data: posts }, { data: comments }, { data: profiles }] = await Promise.all([
+  const [postsResult, commentsResult, profilesResult] = await Promise.all([
     postIds.length
       ? supabase
           .from("posts")
           .select("id, body, author:profiles!posts_author_profile_id_fkey(username, display_name)")
           .in("id", postIds)
-      : Promise.resolve({ data: [] as never[] }),
+      : Promise.resolve({ data: [] as never[], error: null }),
     commentIds.length
       ? supabase
           .from("comments")
           .select("id, body, author:profiles!comments_author_profile_id_fkey(username, display_name)")
           .in("id", commentIds)
-      : Promise.resolve({ data: [] as never[] }),
+      : Promise.resolve({ data: [] as never[], error: null }),
     profileIds.length
       ? supabase.from("profiles").select("id, username, display_name, bio").in("id", profileIds)
-      : Promise.resolve({ data: [] as never[] }),
+      : Promise.resolve({ data: [] as never[], error: null }),
   ]);
 
-  const postById = new Map((posts ?? []).map((p) => [p.id, p]));
-  const commentById = new Map((comments ?? []).map((c) => [c.id, c]));
-  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+  // These three decide whether each queued report is shown as live content or
+  // as a snapshot of something already deleted. A failed read used to resolve
+  // to "not found", which this function then reports as `live: false` — so a
+  // moderator would be told the post they are judging has already been taken
+  // down, when it is still up and still visible to everyone.
+  //
+  // There is no honest partial answer here, so this throws to the route's
+  // error boundary rather than rendering a queue whose liveness column is
+  // quietly wrong. A moderation queue that admits it could not load is
+  // strictly better than one that mislabels what it is showing.
+  const postsOutcome = readList(postsResult, "admin.moderation.posts");
+  const commentsOutcome = readList(commentsResult, "admin.moderation.comments");
+  const profilesOutcome = readList(profilesResult, "admin.moderation.profiles");
+
+  if (postsOutcome.failed || commentsOutcome.failed || profilesOutcome.failed) {
+    throw new QueryFailedError(
+      "admin.moderation.previews",
+      "could not read the reported content, so live and already-deleted cannot be told apart",
+    );
+  }
+
+  const postById = new Map(postsOutcome.rows.map((p) => [p.id, p]));
+  const commentById = new Map(commentsOutcome.rows.map((c) => [c.id, c]));
+  const profileById = new Map(profilesOutcome.rows.map((p) => [p.id, p]));
 
   const previews = new Map<string, ReportPreview>();
 
