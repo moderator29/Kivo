@@ -4,7 +4,15 @@ import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { ArrowLeftRight, CircleSlash, RectangleVertical, ScanEye, Volleyball, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  CircleSlash,
+  RectangleVertical,
+  ScanEye,
+  Volleyball,
+  type LucideIcon,
+} from "lucide-react";
 import { EVENT_LABEL, isGoalEventType } from "@/lib/football/event-labels";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
@@ -96,10 +104,11 @@ type MatchCentreTabsProps = {
   fixtureId: string;
   homeTeamId: string;
   awayTeamId: string;
-  /** Real team names (`fixtures.home_team`/`away_team` join in the page),
-   * used only for the Heatmap tab's per-side labels ("<name>'s on-pitch
-   * movement") — every other tab already resolves team identity from
-   * `standings`/`lineups` rows themselves. */
+  /** Real team names (`fixtures.home_team`/`away_team` join in the page).
+   * Needed by every tab that has to say which club a number or an event
+   * belongs to and cannot get it from its own rows: the Timeline's two sides,
+   * the Stats rows' screen-reader alternatives, the Heatmap's per-side labels.
+   * Standings and Lineups still resolve team identity from their own rows. */
   homeTeamName: string;
   awayTeamName: string;
   events: MatchEvent[];
@@ -785,7 +794,11 @@ function HeatmapTab({
   );
 }
 
-const STAT_ROWS: { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string }[] = [
+type StatRow = { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string };
+
+/** The eleven a fan scans first. Deliberately short: a long undifferentiated
+ * list is how a match report stops being read. */
+const STAT_ROWS: StatRow[] = [
   { key: "possessionPct", label: "Possession", suffix: "%" },
   { key: "shotsTotal", label: "Shots" },
   { key: "shotsOnTarget", label: "Shots on target" },
@@ -799,14 +812,109 @@ const STAT_ROWS: { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?:
   { key: "expectedGoals", label: "xG" },
 ];
 
+/**
+ * Six columns KIVO has been syncing into `fixture_statistics` and storing on
+ * every fixture without ever putting one of them on screen. The whole shot
+ * breakdown — where the shots came from and what stopped them — and the raw
+ * pass counts underneath the accuracy percentage were all sitting in the
+ * database, already paid for in API quota, and unreadable.
+ *
+ * They go behind a disclosure rather than into the list above, which is the
+ * directive's "progressive disclosure for advanced analytics" rather than a
+ * compromise: a fan checking possession and shots should not have to scroll
+ * past a pass-completion count to do it, and a fan who wants to know that
+ * fourteen of the eighteen shots came from outside the box should not have to
+ * leave for another app.
+ */
+const ADVANCED_STAT_ROWS: StatRow[] = [
+  { key: "shotsInsideBox", label: "Shots inside box" },
+  { key: "shotsOutsideBox", label: "Shots outside box" },
+  { key: "shotsOffTarget", label: "Shots off target" },
+  { key: "shotsBlocked", label: "Shots blocked" },
+  { key: "passesTotal", label: "Passes" },
+  { key: "passesAccurate", label: "Accurate passes" },
+];
+
+function StatComparisonRow({
+  row,
+  homeVal,
+  awayVal,
+  homeTeamName,
+  awayTeamName,
+}: {
+  row: StatRow;
+  homeVal: number | null;
+  awayVal: number | null;
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
+  // KIVO_NEXT_GEN KN-7: a missing statistic used to be coerced to 0
+  // (`homeVal ?? 0`) purely so the comparison bar had a number to divide
+  // by. The numeric label correctly rendered "-", so the row said "not
+  // reported" in text and drew a confident 100%/0% split right underneath
+  // it. That is routine, not exotic: `fixture_statistics.expected_goals`
+  // is nullable by design because API-Football's free tier often reports
+  // xG for one side and not the other. A fabricated visual claim in the
+  // most screenshot-prone section of the app is the same class of error
+  // as a fabricated number — the bar simply has nothing to compare, so it
+  // renders as one flat neutral rail rather than a split.
+  const total = homeVal !== null && awayVal !== null ? homeVal + awayVal : null;
+  const homePct = total !== null && total > 0 ? ((homeVal ?? 0) / total) * 100 : 50;
+  const suffix = row.suffix ?? "";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {/* Read linearly, the visual row is "12 Shots 8" — three numbers and a
+          word, with nothing saying which club owns which end. The directive
+          asks for accessible charts with textual alternatives; this is that
+          alternative, and it names the clubs. The visible row is then hidden
+          from assistive tech so the same fact isn't announced twice. */}
+      <span className="sr-only">
+        {row.label}: {homeTeamName} {homeVal === null ? "not reported" : `${homeVal}${suffix}`}, {awayTeamName}{" "}
+        {awayVal === null ? "not reported" : `${awayVal}${suffix}`}
+        {total === null ? ". Only reported for one side, so there is nothing to compare." : ""}
+      </span>
+
+      <div aria-hidden className="flex items-center justify-between text-xs">
+        <span className="w-12 text-left font-semibold text-foreground">
+          {homeVal ?? "-"}
+          {homeVal !== null ? suffix : ""}
+        </span>
+        <span className="text-foreground-subtle">{row.label}</span>
+        <span className="w-12 text-right font-semibold text-foreground">
+          {awayVal ?? "-"}
+          {awayVal !== null ? suffix : ""}
+        </span>
+      </div>
+
+      {total !== null ? (
+        <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
+          <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
+          <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
+        </div>
+      ) : (
+        <div
+          aria-hidden
+          className="h-1.5 rounded-full bg-surface-inset"
+          title={`${row.label} was only reported for one side, so there is nothing to compare.`}
+        />
+      )}
+    </div>
+  );
+}
+
 function StatsTab({
   stats,
   homeTeamId,
   awayTeamId,
+  homeTeamName,
+  awayTeamName,
 }: {
   stats: TeamStats[];
   homeTeamId: string;
   awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
 }) {
   const home = stats.find((s) => s.teamId === homeTeamId);
   const away = stats.find((s) => s.teamId === awayTeamId);
@@ -815,52 +923,45 @@ function StatsTab({
     return <EmptyState message="Stats haven't been synced yet for this fixture." />;
   }
 
-  const rows = STAT_ROWS.filter((row) => home?.[row.key] != null || away?.[row.key] != null);
+  const hasValue = (row: StatRow) => home?.[row.key] != null || away?.[row.key] != null;
+  const rows = STAT_ROWS.filter(hasValue);
+  const advancedRows = ADVANCED_STAT_ROWS.filter(hasValue);
+
+  function renderRow(row: StatRow) {
+    return (
+      <StatComparisonRow
+        key={row.key}
+        row={row}
+        homeVal={home?.[row.key] ?? null}
+        awayVal={away?.[row.key] ?? null}
+        homeTeamName={homeTeamName}
+        awayTeamName={awayTeamName}
+      />
+    );
+  }
 
   return (
-    <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-4">
-      {rows.map((row) => {
-        const homeVal = home?.[row.key] ?? null;
-        const awayVal = away?.[row.key] ?? null;
-        // KIVO_NEXT_GEN KN-7: a missing statistic used to be coerced to 0
-        // (`homeVal ?? 0`) purely so the comparison bar had a number to divide
-        // by. The numeric label correctly rendered "-", so the row said "not
-        // reported" in text and drew a confident 100%/0% split right underneath
-        // it. That is routine, not exotic: `fixture_statistics.expected_goals`
-        // is nullable by design because API-Football's free tier often reports
-        // xG for one side and not the other. A fabricated visual claim in the
-        // most screenshot-prone section of the app is the same class of error
-        // as a fabricated number — the bar simply has nothing to compare, so it
-        // renders as one flat neutral rail rather than a split.
-        const total = homeVal !== null && awayVal !== null ? homeVal + awayVal : null;
-        const homePct = total !== null && total > 0 ? ((homeVal ?? 0) / total) * 100 : 50;
-        return (
-          <div key={row.key} className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="w-12 text-left font-semibold text-foreground">
-                {homeVal ?? "-"}
-                {homeVal !== null ? row.suffix ?? "" : ""}
-              </span>
-              <span className="text-foreground-subtle">{row.label}</span>
-              <span className="w-12 text-right font-semibold text-foreground">
-                {awayVal ?? "-"}
-                {awayVal !== null ? row.suffix ?? "" : ""}
-              </span>
-            </div>
-            {total !== null ? (
-              <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
-                <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
-                <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
-              </div>
-            ) : (
-              <div
-                className="h-1.5 rounded-full bg-surface-inset"
-                title={`${row.label} was only reported for one side, so there is nothing to compare.`}
-              />
-            )}
-          </div>
-        );
-      })}
+    <div className="flex flex-col gap-3">
+      <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-4">{rows.map(renderRow)}</div>
+
+      {/* Only offered when the provider actually reported at least one of
+          them for this fixture — an empty disclosure that opens onto nothing
+          is worse than no disclosure. A native <details> rather than a
+          hand-rolled toggle: keyboard operation, the open/closed state and
+          the expanded announcement all come for free and correctly. */}
+      {advancedRows.length > 0 && (
+        <details className="kivo-glass group rounded-2xl p-4 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+            Advanced
+            <ChevronDown
+              aria-hidden
+              className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+              strokeWidth={1.75}
+            />
+          </summary>
+          <div className="flex flex-col gap-4 pt-4">{advancedRows.map(renderRow)}</div>
+        </details>
+      )}
     </div>
   );
 }
@@ -1143,7 +1244,15 @@ function MatchCentreTabsInner({
             awayTeamName={awayTeamName}
           />
         )}
-        {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+        {active === "Stats" && (
+          <StatsTab
+            stats={stats}
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+          />
+        )}
         {active === "Lineups" && (
           <LineupsTab
             homeTeamId={homeTeamId}
