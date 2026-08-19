@@ -269,6 +269,22 @@ export interface NormalizedTransfer {
 }
 
 /**
+ * A transfer as the team-scoped endpoint reports it: the move, plus enough
+ * about the player to create a `players` row for one KIVO has never seen.
+ *
+ * `playerName` is the provider's own display string and is the only name
+ * available here — the team transfers endpoint carries no date of birth,
+ * nationality, position or photo. A player row created from this is therefore
+ * a real player with a real name and nothing else, which a later squad sync
+ * fills in under the same never-clobber-with-null rule upsertPlayer already
+ * applies. That is strictly better than the alternative KIVO shipped until
+ * now, which was no transfer history at all.
+ */
+export interface NormalizedTeamTransfer extends NormalizedTransfer {
+  playerName: string;
+}
+
+/**
  * One player's own statistics for one fixture, as reported by a per-fixture
  * player-statistics endpoint (API-Football: `/fixtures/players?fixture={id}`).
  *
@@ -532,6 +548,21 @@ export interface FootballDataProvider {
    * (see AGENTS.md: no rumour/reported tier exists on the free tier). Newest-first is
    * not guaranteed by the provider; sync-transfers.ts does not assume an order. */
   getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]>;
+  /**
+   * Every recorded transfer involving one club, in ONE request.
+   *
+   * This exists because `getPlayerTransfers` is per player, and a club's squad
+   * is twenty-five of them. On a hundred-requests-a-day tier, filling a single
+   * club's transfer history one player at a time costs a quarter of the day's
+   * entire allowance — which is why KIVO's transfers table was empty: not
+   * because the sync was broken, but because nothing could afford to call it.
+   *
+   * Returns each move with the player it belongs to, because the caller has to
+   * be able to create a player row for somebody KIVO has never synced a squad
+   * for. A transfer whose player cannot be named is not returned at all rather
+   * than attached to an unnamed row.
+   */
+  getTeamTransfers(teamProviderId: string): Promise<NormalizedTeamTransfer[]>;
   /**
    * Per-player statistics for one fixture. Null when the provider has nothing
    * published for this fixture — which on a restricted plan or an uncovered

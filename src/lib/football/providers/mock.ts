@@ -15,6 +15,7 @@ import type {
   NormalizedTeamProfile,
   NormalizedTopScorer,
   NormalizedTransfer,
+  NormalizedTeamTransfer,
 } from "../types";
 
 /**
@@ -200,6 +201,17 @@ const MOCK_STANDINGS: NormalizedStandingRow[] = [
     points: 20,
   },
 ];
+
+/** The name MOCK_SQUADS records for a provider player id, or null. Reads the
+ * squads rather than keeping a second name table, so the mock cannot name the
+ * same player two different ways depending on which method asked. */
+function mockPlayerName(playerProviderId: string): string | null {
+  for (const squad of Object.values(MOCK_SQUADS)) {
+    const player = squad.find((p) => p.providerId === playerProviderId);
+    if (player) return player.knownAs ?? player.fullName;
+  }
+  return null;
+}
 
 /** Real-shaped mock transfer history for mock-player-4 (Kelechi Uzo) — deliberately
  * covers all four known transfer_type buckets plus one "N/A" fee to exercise the
@@ -624,6 +636,28 @@ export class MockFootballProvider implements FootballDataProvider {
 
   async getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]> {
     return MOCK_TRANSFERS[playerProviderId] ?? [];
+  }
+
+  /**
+   * The team-scoped view of the same fixture data, assembled from MOCK_TRANSFERS
+   * rather than from a second hand-written table — so the mock cannot disagree
+   * with itself about a move depending on which way it was asked.
+   *
+   * A player's name comes from MOCK_PLAYERS where the mock knows one, and the
+   * entry is dropped where it does not, mirroring the real adapter's rule that
+   * an unnamed player yields no transfer row.
+   */
+  async getTeamTransfers(teamProviderId: string): Promise<NormalizedTeamTransfer[]> {
+    const out: NormalizedTeamTransfer[] = [];
+    for (const [playerProviderId, transfers] of Object.entries(MOCK_TRANSFERS)) {
+      const playerName = mockPlayerName(playerProviderId);
+      if (!playerName) continue;
+      for (const transfer of transfers) {
+        if (transfer.fromTeamProviderId !== teamProviderId && transfer.toTeamProviderId !== teamProviderId) continue;
+        out.push({ ...transfer, playerName });
+      }
+    }
+    return out;
   }
 
   async getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null> {
