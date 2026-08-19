@@ -43,7 +43,10 @@ export function DesktopSidebar({
   const pathname = usePathname();
   const homeItem = NAV_ITEMS.find((item) => item.id === "home");
   const searchItem = NAV_ITEMS.find((item) => item.id === "search");
-  const groups = buildNavGroups({ isAdmin });
+  // Excluded because the pinned search row below already carries it. Without
+  // this, search appeared twice in the sidebar — once as the action row with
+  // the ⌘K hint, and again as an ordinary row inside Shortcuts.
+  const groups = buildNavGroups({ isAdmin, exclude: ["search"] });
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-hairline-soft bg-surface-3/60 px-3 py-6 lg:flex">

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Compass, Search, ShieldCheck } from "lucide-react";
+import { Compass, ShieldCheck } from "lucide-react";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { FadeIn } from "@/components/ui/fade-in";
 import { DiscoverCard } from "@/components/discover/discover-card";
+import { SearchSurface } from "@/components/search/search-surface";
+import { getPopularTeams } from "@/app/(app)/search-actions";
 import { getNavItem } from "@/lib/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { staggerDelay } from "@/lib/stagger";
@@ -26,6 +28,7 @@ export default async function DiscoverPage() {
     { count: transferCount },
     { count: managerCount },
     { count: venueCount },
+    popularTeams,
   ] = await Promise.all([
     supabase.from("competitions").select("id", { count: "exact", head: true }),
     supabase.from("teams").select("id", { count: "exact", head: true }),
@@ -33,6 +36,7 @@ export default async function DiscoverPage() {
     supabase.from("transfers").select("id", { count: "exact", head: true }),
     supabase.from("managers").select("id", { count: "exact", head: true }),
     supabase.from("venues").select("id", { count: "exact", head: true }),
+    getPopularTeams(),
   ]);
 
   const leagues = competitionCount ?? 0;
@@ -41,6 +45,10 @@ export default async function DiscoverPage() {
   const transfers = transferCount ?? 0;
   const managers = managerCount ?? 0;
   const venues = venueCount ?? 0;
+
+  // The search field's own coverage, built from the counts this page already
+  // had to run — no second round of head-counts for the same five tables.
+  const coverage = { teams, players, competitions: leagues, managers, venues };
 
   if (leagues === 0 && teams === 0 && players === 0 && transfers === 0 && managers === 0 && venues === 0) {
     return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />;
@@ -114,23 +122,27 @@ export default async function DiscoverPage() {
         </div>
       </FadeIn>
 
-      {/* The directive asks for global search to always be easy to reach, and
-          the one page whose entire job is browsing had no way into it. On a
-          phone this is the shortest path to search that exists outside the
-          nav drawer. */}
+      {/* A real field, not a link to one.
+          
+          The founder moved search out of the HEADER; that was never an
+          instruction to make it hard to find. Discover's entire job is
+          browsing, and a fan who does not yet know what they are looking for
+          lands here — so the field belongs here, working, at the top of the
+          page. It is the same `SearchSurface` /search renders and the same
+          `searchPlatform` action ⌘K calls, in its inline variant: no
+          autofocus (this page has content someone may have come for, and a
+          keyboard springing up over it on a phone is hostile), no URL
+          rewriting, and nothing rendered below it until someone types —
+          because the zero state for this field is the grid underneath it. */}
       <FadeIn delay={0.06}>
-        <Link
-          href="/search"
-          className="kivo-glass kivo-glass-interactive flex items-center gap-3 rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-        >
-          <Search className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
-          <span className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">Search KIVO</span>
-            <span className="text-xs text-foreground-muted">
-              Find a club, player, competition or fixture by name.
-            </span>
-          </span>
-        </Link>
+        <SearchSurface
+          variant="inline"
+          initialQuery=""
+          initialResults={[]}
+          initialError={null}
+          popularTeams={popularTeams}
+          coverage={coverage}
+        />
       </FadeIn>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

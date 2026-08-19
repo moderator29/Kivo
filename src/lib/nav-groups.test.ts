@@ -51,6 +51,35 @@ describe("NAV_GROUPS", () => {
     expect(dangling, "a group listing an unknown id silently drops it").toEqual([]);
   });
 
+  /**
+   * Both shells now pin `search` above the groups as an action (the drawer
+   * added it; the sidebar always had it and was rendering it twice), and both
+   * pass `exclude: ["search"]` so it does not also appear as an ordinary row.
+   * Excluding an id at a call site is only safe while something else renders
+   * it — an exclusion with no pin is exactly how `/managers` and `/venues`
+   * became unreachable. This asserts the exclusion is survivable: the entry
+   * still exists in NAV_GROUPS (so a shell that pins nothing still shows it),
+   * and excluding it empties no group.
+   */
+  it("survives a shell excluding a pinned id without orphaning anything", () => {
+    const PINNED_BY_A_SHELL = ["search"];
+
+    for (const id of PINNED_BY_A_SHELL) {
+      expect(
+        NAV_GROUPS.some((group) => group.ids.includes(id)),
+        `${id} is excluded by a shell but listed in no group — a shell that stops pinning it would lose it entirely`,
+      ).toBe(true);
+    }
+
+    const before = buildNavGroups().length;
+    const after = buildNavGroups({ exclude: PINNED_BY_A_SHELL });
+    expect(after.length, "excluding a pinned id emptied a whole group").toBe(before);
+    for (const group of after) {
+      expect(group.items.length, `group "${group.label}" resolved to nothing once pinned ids were excluded`).toBeGreaterThan(0);
+    }
+    expect(after.flatMap((group) => group.items).some((item) => PINNED_BY_A_SHELL.includes(item.id))).toBe(false);
+  });
+
   it("resolves every group to at least one real item", () => {
     for (const group of buildNavGroups()) {
       expect(group.items.length, `group "${group.label}" resolved to nothing`).toBeGreaterThan(0);

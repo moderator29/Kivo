@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "motion/react";
-import { Menu, UserRound, Copy, Check, Plus, UsersRound } from "lucide-react";
+import { Menu, UserRound, Copy, Check, Plus, UsersRound, Search } from "lucide-react";
 import { isActiveRoute, NAV_ITEMS, type NavItem } from "@/lib/navigation";
 import { buildNavGroups } from "@/lib/nav-groups";
 import { getViewerNavStats, type ViewerNavStats } from "@/app/(app)/nav-actions";
@@ -77,13 +77,19 @@ export function NavDrawer({
   }
 
   const homeItem = NAV_ITEMS.find((item) => item.id === "home");
+  const searchItem = NAV_ITEMS.find((item) => item.id === "search");
   // Deliberately the complete set, bottom-bar destinations included. Hiding
   // the four tabs left "Watch" holding one item and "Community" holding one
   // item — group headings over lists of one, which read as a bug — and it made
   // the drawer a different map from the desktop sidebar. A menu is an index of
   // the product; a destination appearing both here and in the tab bar is how
   // every app with both surfaces works.
-  const groups = buildNavGroups({ isAdmin });
+  // Search is pinned above the groups as an action rather than listed inside
+  // Shortcuts, so it is excluded here — otherwise it would appear twice in
+  // one panel. NAV_GROUPS itself is untouched: it is the single point of
+  // failure that makes /managers and /venues reachable at all, and the way to
+  // move one entry is to exclude it at the call site, not to rewrite the map.
+  const groups = buildNavGroups({ isAdmin, exclude: ["search"] });
 
   useFocusTrap(open, panelRef, () => setOpen(false), { restoreFocusRef: triggerRef });
 
@@ -201,6 +207,27 @@ export function NavDrawer({
                   viewerProfile ? "border-t border-hairline-soft pt-4" : "pt-[calc(env(safe-area-inset-top)+1rem)]",
                 )}
               >
+                {/* An action, not a destination, and above the groups for the
+                    same reason the desktop sidebar puts it there: on a phone
+                    there is no ⌘K, so this row is the only deliberate way into
+                    search that exists, and it was previously the fourth-from-
+                    last row of the last group in a scrolling panel. */}
+                {searchItem && (
+                  <Link
+                    href={searchItem.href}
+                    aria-current={isActiveRoute(pathname, searchItem.href) ? "page" : undefined}
+                    className="kivo-glass kivo-focus mb-2 flex items-center gap-3 rounded-2xl px-3.5 py-3 transition-colors hover:bg-surface-2"
+                  >
+                    <Search className="h-[18px] w-[18px] shrink-0 text-accent" strokeWidth={1.75} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium text-foreground">Search KIVO</span>
+                      <span className="truncate text-[11px] text-foreground-subtle">
+                        Clubs, players, competitions, managers, venues
+                      </span>
+                    </span>
+                  </Link>
+                )}
+
                 {homeItem && <DrawerRow item={homeItem} pathname={pathname} aiConfigured={aiConfigured} />}
                 {groups.map((group) => (
                   <div key={group.label} className="flex flex-col">

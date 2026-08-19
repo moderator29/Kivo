@@ -9,6 +9,7 @@ import { SEARCH_TYPE_META, SEARCH_TYPE_ORDER, searchResultHref } from "./search-
 import { TeamCrest } from "@/components/ui/team-crest";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { searchEmptyExplanation, type SearchCoverage } from "@/lib/search-coverage";
 import {
   clearRecentSearches,
   loadRecentSearches,
@@ -50,12 +51,29 @@ export function SearchSurface({
   initialResults,
   initialError,
   popularTeams,
+  coverage,
+  variant = "page",
 }: {
   initialQuery: string;
   initialResults: SearchResult[];
   initialError: string | null;
   popularTeams: PopularTeam[];
+  /** What the index actually holds, so an empty result can explain itself
+   * with real numbers instead of implying the query was misspelled. */
+  coverage: SearchCoverage;
+  /**
+   * `"page"` is /search: autofocused, owns the URL, and fills its zero state
+   * with recents, popular clubs and browse links.
+   *
+   * `"inline"` is Discover, where this sits at the top of a page that is
+   * *already* a browse surface. It does not steal focus on arrival, does not
+   * rewrite Discover's URL, and renders nothing at all until someone types —
+   * the zero state below it is the Discover grid itself, and repeating the
+   * browse links above it would be the same list twice.
+   */
+  variant?: "page" | "inline";
 }) {
+  const inline = variant === "inline";
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchResult[]>(initialResults);
   const [error, setError] = useState<string | null>(initialError);
@@ -104,15 +122,21 @@ export function SearchSurface({
         // the results are already client state, so a full navigation would
         // only re-fetch what is on screen. History is replaced, not pushed,
         // so Back leaves search rather than walking every prefix typed.
-        const url = new URL(window.location.href);
-        url.searchParams.set("q", trimmed);
-        window.history.replaceState(null, "", url.toString());
+        //
+        // Only on /search. Writing ?q= onto /discover would produce a URL
+        // that renders the browse hub with a query string it does not honour
+        // on load — a link that lies about where it lands.
+        if (!inline) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("q", trimmed);
+          window.history.replaceState(null, "", url.toString());
+        }
       });
     }, 200);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [trimmed]);
+  }, [trimmed, inline]);
 
   const remember = useCallback(() => {
     setRecent(saveRecentSearch(trimmed));
@@ -121,6 +145,7 @@ export function SearchSurface({
   function clearQuery() {
     setQuery("");
     inputRef.current?.focus();
+    if (inline) return;
     const url = new URL(window.location.href);
     url.searchParams.delete("q");
     window.history.replaceState(null, "", url.toString());
@@ -143,13 +168,15 @@ export function SearchSurface({
           type="search"
           // The one field on a page called Search: focusing it on arrival is
           // what the person came for, and there is nothing above it to scroll
-          // past on a phone.
-          autoFocus
+          // past on a phone. On Discover it must NOT steal focus — the page
+          // has a heading and a grid the person may well have come for, and a
+          // keyboard springing up over them on a phone is hostile.
+          autoFocus={!inline}
           enterKeyHint="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Search KIVO"
-          placeholder="Teams, players, competitions, managers, venues"
+          placeholder={inline ? "Search clubs, players, competitions…" : "Teams, players, competitions, managers, venues"}
           className="min-w-0 flex-1 bg-transparent text-base text-foreground placeholder:text-foreground-subtle focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
         />
         {query.length > 0 && (
@@ -165,6 +192,7 @@ export function SearchSurface({
       </div>
 
       {trimmed.length < 2 ? (
+        inline ? null : (
         <div className="flex flex-col gap-6">
           {recent.length > 0 && (
             <Section
@@ -244,6 +272,7 @@ export function SearchSurface({
             </ul>
           </Section>
         </div>
+        )
       ) : searching ? (
         <div className="flex flex-col gap-2" role="status" aria-label="Searching">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -264,8 +293,8 @@ export function SearchSurface({
         <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-12 text-center">
           <Search className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground">No matches for &ldquo;{trimmed}&rdquo;.</p>
-          <p className="max-w-xs text-xs text-foreground-subtle">
-            KIVO only searches what has actually been synced — if a club is missing, it has not landed yet.
+          <p className="max-w-sm text-xs leading-relaxed text-foreground-subtle">
+            {searchEmptyExplanation(coverage)}
           </p>
         </div>
       ) : (
