@@ -12,7 +12,7 @@ import { TopScorersPanel } from "@/components/football/top-scorers-panel";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { MatchList, MatchListRow } from "@/components/matches/match-list";
 import { CompetitionHeader } from "@/components/leagues/competition-header";
-import { CompetitionTabs, type CompetitionSection } from "@/components/leagues/competition-tabs";
+import { PanelTabs, type PanelTab } from "@/components/ui/panel-tabs";
 import { CompetitionClubs, type CompetitionClub } from "@/components/leagues/competition-clubs";
 import { StandingsTable } from "@/components/standings/standings-table";
 import { StandingsEmpty } from "@/components/standings/standings-empty";
@@ -311,7 +311,7 @@ export default async function LeagueDetailPage({
 
   const hasTable = groups.some((group) => group.rows.length > 0);
 
-  const sections: CompetitionSection[] = [
+  const sections: PanelTab[] = [
     {
       id: "table",
       label: "Table",
@@ -415,7 +415,7 @@ export default async function LeagueDetailPage({
         activeSeasonId={seasonId}
       />
 
-      <CompetitionTabs sections={sections} />
+      <PanelTabs tabs={sections} ariaLabel="Competition sections" idPrefix="competition" />
 
       {/* Below the tabs, not inside one: sharing the table and KIVO's own
           coverage report are both about the page rather than sections of it.

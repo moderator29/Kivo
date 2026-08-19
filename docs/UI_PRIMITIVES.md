@@ -49,6 +49,42 @@ export type SectionTab<T extends string = string> = {
 };
 ```
 
+### `PanelTabs` — the rail for a server-rendered page
+
+`@/components/ui/panel-tabs` — `PanelTabs`, `type PanelTab`.
+
+`SectionTabs` is controlled and `useTabParam` is a hook, so neither can be
+called from a Server Component. Most of KIVO's tabbed pages ARE server
+components whose panels are server-rendered — a league table, a squad list, a
+fixture list, each with its own data read. `PanelTabs` is the glue: every panel
+arrives as an already-rendered `ReactNode`, and the only thing shipped to the
+browser is the rail itself. A league table stays server-rendered and costs zero
+client JavaScript.
+
+```tsx
+const tabs: PanelTab[] = [
+  { id: "table", label: "Table", content: <StandingsTable … /> },
+  { id: "fixtures", label: "Fixtures", count: 12, content: <MatchList … /> },
+];
+
+<PanelTabs tabs={tabs} ariaLabel="Competition sections" idPrefix="competition" />
+```
+
+It handles two cases callers kept getting wrong: **zero tabs renders nothing**,
+and **one tab renders its panel with no rail** — a rail with a single
+destination is a label the reader cannot act on. Its Suspense fallback draws
+the real rail with the first tab selected, so the boundary costs no spinner and
+no reflow.
+
+`PanelTab` omits `icon` for the reason immediately below.
+
+**This component exists because it was written twice.** The club/player pages
+and the competition page each grew their own version of this glue on the same
+night, independently, and both authors were right that it was too thin to
+extract — which is exactly how a codebase ends up with two of something. The
+props that were "missing" were `ariaLabel` and `idPrefix`, and they cost four
+lines. If you are about to write a third, add a prop here instead.
+
 **`icon` cannot cross a server/client boundary.** A `LucideIcon` is a function
 component, and a Server Component cannot pass a function as a prop into a Client
 Component — so a server-rendered page that builds its `tabs` array server-side
