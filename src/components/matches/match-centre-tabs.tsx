@@ -27,6 +27,7 @@ import type { PositionalObservation } from "@/lib/football/positional-types";
 import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { useRealtimeFixtureEvents } from "@/hooks/use-realtime-fixture-events";
+import { resolveEventSide, resolveTabFromSlug, type EventSide } from "@/lib/football/match-timeline";
 
 export type MatchEvent = {
   id: string;
@@ -193,15 +194,8 @@ function tabSlug(tab: Tab): string {
  * rather than silently falling back to whatever tab happens to be first. */
 const LEGACY_TAB_SLUGS: Record<string, Tab> = { details: "Timeline" };
 
-/** Falls back to the *first visible* tab, not to a fixed one: with the data
- * tabs collapsed, `?tab=stats` names a tab that isn't on screen, and landing
- * on a tab the strip doesn't show would leave nothing highlighted. */
 function tabFromSlug(slug: string | null, visible: readonly Tab[]): Tab {
-  const direct = visible.find((tab) => tabSlug(tab) === slug);
-  if (direct) return direct;
-  const legacy = slug ? LEGACY_TAB_SLUGS[slug] : undefined;
-  if (legacy && visible.includes(legacy)) return legacy;
-  return visible[0];
+  return resolveTabFromSlug(slug, visible, tabSlug, LEGACY_TAB_SLUGS);
 }
 
 function PlayerNameLink({ playerId, playerName, className }: { playerId: string; playerName: string; className?: string }) {
@@ -288,13 +282,6 @@ function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] 
  * which is how every football timeline a fan has ever read is laid out, and
  * the minute runs down the middle so the two columns stay comparable.
  */
-
-/** Which side of the spine an event belongs on. `null` for the case that
- * should not happen but must not crash the tab: a `team_id` matching neither
- * club on the fixture (a mid-season club merge, a re-keyed provider id). Those
- * render centred and full-width rather than being silently dropped — a real
- * event KIVO stored should still be visible even when its side is unresolved. */
-type EventSide = "home" | "away" | null;
 
 const EVENT_ICON: Record<keyof typeof EVENT_LABEL, LucideIcon> = {
   goal: Volleyball,
@@ -431,12 +418,6 @@ function TimelineTab({
     return <EmptyState message="No match events synced yet. The timeline appears once this fixture's details have been synced." />;
   }
 
-  function sideOf(teamId: string): EventSide {
-    if (teamId && teamId === homeTeamId) return "home";
-    if (teamId && teamId === awayTeamId) return "away";
-    return null;
-  }
-
   return (
     <div className="flex flex-col gap-3">
       {/* Which column is which club, said once at the top rather than
@@ -463,7 +444,7 @@ function TimelineTab({
         />
 
         {events.map((event, index) => {
-          const side = sideOf(event.teamId);
+          const side = resolveEventSide(event.teamId, homeTeamId, awayTeamId);
           return (
             <motion.div
               key={event.id}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
 import type { MatchEvent } from "@/components/matches/match-centre-tabs";
+import { compareTimelineEvents } from "@/lib/football/match-timeline";
 
 type FixtureEventsRow = Database["public"]["Tables"]["fixture_events"]["Row"];
 
@@ -55,20 +56,6 @@ type FixtureEventsRow = Database["public"]["Tables"]["fixture_events"]["Row"];
  * still lands with a null name rather than being dropped: a goal on the
  * timeline with an unnamed scorer is worth strictly more than no goal at all.
  */
-
-/** Ordering has to match the server's (`order("minute", ascending: true)`) or a
- * live arrival would land in a different place than it occupies after the next
- * navigation. `added_time` breaks the tie inside a minute — 90+4 comes after
- * 90 — and the id breaks it for two events genuinely stamped the same minute
- * and added time, which is arbitrary but stable: the same two events never
- * swap places between renders, or between this list and the server's. */
-function compareEvents(a: MatchEvent, b: MatchEvent): number {
-  if (a.minute !== b.minute) return a.minute - b.minute;
-  const aAdded = a.addedTime ?? 0;
-  const bAdded = b.addedTime ?? 0;
-  if (aAdded !== bAdded) return aAdded - bAdded;
-  return a.id.localeCompare(b.id);
-}
 
 export function useRealtimeFixtureEvents(
   fixtureId: string,
@@ -140,7 +127,7 @@ export function useRealtimeFixtureEvents(
       if (cancelled) return;
       setEvents((prev) => {
         const without = prev.filter((e) => e.id !== event.id);
-        return [...without, event].sort(compareEvents);
+        return [...without, event].sort(compareTimelineEvents);
       });
       setLiveIds((prev) => new Set(prev).add(event.id));
     }
