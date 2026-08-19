@@ -3,6 +3,8 @@ import { isUuid } from "@/lib/params";
 import Link from "next/link";
 import { Trophy, History, Users, MapPin } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { QueryFailedError, readList, readRow } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TeamComparePicker, type CompareTeamOption } from "@/components/teams/team-compare-picker";
@@ -46,7 +48,7 @@ type TeamCompareData = {
 async function getTeamCompareData(supabase: Supabase, id: string): Promise<TeamCompareData | null> {
   if (!isUuid(id)) return null;
 
-  const [{ data: team }, { data: standingsRows }, { data: recent }, { count: squadCount }] = await Promise.all([
+  const [teamResult, standingsResult, recentResult, { count: squadCount }] = await Promise.all([
     supabase
       .from("teams")
       .select(`id, name, short_name, country, crest_url, venue:venues(name, city)`)
@@ -69,11 +71,27 @@ async function getTeamCompareData(supabase: Supabase, id: string): Promise<TeamC
     supabase.from("players").select("id", { count: "exact", head: true }).eq("current_team_id", id),
   ]);
 
+  // `readRow`, so the caller's "no such team" branch is only ever reached
+  // because the team really is absent.
+  const team = readRow(teamResult, "teamsCompare.team");
   if (!team) return null;
 
-  const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
+  // Same reasoning as the player comparison: a club rendered with no league
+  // position and no form beside one with both does not read as missing data,
+  // it reads as a club having a terrible season. A comparison is the one shape
+  // where partial data is actively worse than none.
+  const standings = readList(standingsResult, "teamsCompare.standings");
+  const recentForm = readList(recentResult, "teamsCompare.recentForm");
+  if (standings.failed || recentForm.failed) {
+    throw new QueryFailedError(
+      "teamsCompare.record",
+      "could not read one club's record, and half a comparison reads as a verdict",
+    );
+  }
 
-  const form: FormResult[] = (recent ?? [])
+  const currentStanding = standings.rows.find((s) => s.season?.is_current) ?? null;
+
+  const form: FormResult[] = recentForm.rows
     .map((fixture): FormResult | null => {
       if (fixture.home_score === null || fixture.away_score === null) return null;
       const isHome = fixture.home_team_id === id;
@@ -198,12 +216,23 @@ export default async function TeamComparePage({
     );
   }
 
-  const { data: teamsRaw } = await supabase
-    .from("teams")
-    .select("id, name, short_name, country")
-    .order("name", { ascending: true });
+  const teamsOutcome = readList(
+    await supabase.from("teams").select("id, name, short_name, country").order("name", { ascending: true }),
+    "teamsCompare.pickerOptions",
+  );
 
-  const teamOptions: CompareTeamOption[] = (teamsRaw ?? []).map((t) => ({
+  if (teamsOutcome.failed) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 lg:px-8">
+        <LoadFailed
+          title="The club list"
+          description="KIVO couldn't read the clubs available to compare. An empty picker here would look like KIVO covering no football at all — try again."
+        />
+      </div>
+    );
+  }
+
+  const teamOptions: CompareTeamOption[] = teamsOutcome.rows.map((t) => ({
     id: t.id,
     name: t.name,
     shortName: t.short_name,

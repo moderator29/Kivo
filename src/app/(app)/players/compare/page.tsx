@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GitCompareArrows } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { QueryFailedError, readList, readRow } from "@/lib/query-result";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
@@ -25,7 +26,7 @@ type PlayerCompareData = {
 };
 
 async function getPlayerCompareData(supabase: Supabase, id: string): Promise<PlayerCompareData | null> {
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: assistEventRows }] = await Promise.all([
+  const [playerResult, lineupsResult, eventsResult, assistEventsResult] = await Promise.all([
     supabase
       .from("players")
       .select("id, full_name, known_as, position, photo_url, current_team:teams(name, crest_url)")
@@ -40,7 +41,27 @@ async function getPlayerCompareData(supabase: Supabase, id: string): Promise<Pla
     supabase.from("fixture_events").select("event_type").eq("related_player_id", id),
   ]);
 
+  // `readRow` rather than a destructure: the caller turns `null` into "no such
+  // player", and a failed lookup is a fact about the request, not about
+  // whether the player exists.
+  const player = readRow(playerResult, "playersCompare.player");
   if (!player) return null;
+
+  // The three stat reads throw rather than degrade, and on this page in
+  // particular that is the only honest option. A comparison is a claim about
+  // two things *relative to each other*: a failed read on one side renders it
+  // with zero appearances, zero goals and zero assists beside a real record,
+  // which does not read as missing data — it reads as a verdict. There is no
+  // version of a half-loaded comparison that is better than none.
+  const lineups = readList(lineupsResult, "playersCompare.lineups");
+  const events = readList(eventsResult, "playersCompare.events");
+  const assists = readList(assistEventsResult, "playersCompare.assists");
+  if (lineups.failed || events.failed || assists.failed) {
+    throw new QueryFailedError(
+      "playersCompare.stats",
+      "could not read one player's record, and half a comparison reads as a verdict",
+    );
+  }
 
   return {
     id: player.id,
@@ -49,7 +70,7 @@ async function getPlayerCompareData(supabase: Supabase, id: string): Promise<Pla
     position: player.position,
     teamName: player.current_team?.name ?? null,
     teamCrestUrl: player.current_team?.crest_url ?? null,
-    stats: computePlayerMatchStats(lineupRows ?? [], eventRows ?? [], assistEventRows ?? []),
+    stats: computePlayerMatchStats(lineups.rows, events.rows, assists.rows),
   };
 }
 
