@@ -348,7 +348,20 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
 
   if (!post || post.author_profile_id === liker.id) return;
 
-  const serviceClient = createServiceRoleSupabaseClient();
+  // Best-effort, and the client construction has to be inside the guard.
+  // `createServiceRoleSupabaseClient()` throws synchronously ("supabaseKey is
+  // required.") when SUPABASE_SERVICE_ROLE_KEY is absent — and this runs
+  // *after* the real write has already committed, so an unguarded throw turned
+  // a successful reaction into a Server Action error. The user was told it
+  // failed, and it had not: they retry, and undo the thing that worked. A
+  // missing notification is the honest cost of a missing key; a lie about
+  // whether the reaction landed is not.
+  let serviceClient: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    serviceClient = createServiceRoleSupabaseClient();
+  } catch {
+    return;
+  }
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after — a
   // recipient who has social_alerts_enabled (or in_app_enabled) off should

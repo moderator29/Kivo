@@ -45,7 +45,20 @@ async function notifyNewFollower(
   followedProfileId: string,
   follower: { id: string; username: string; display_name: string | null },
 ) {
-  const serviceClient = createServiceRoleSupabaseClient();
+  // Best-effort, and the client construction has to be inside the guard.
+  // `createServiceRoleSupabaseClient()` throws synchronously ("supabaseKey is
+  // required.") when SUPABASE_SERVICE_ROLE_KEY is absent — and this runs
+  // *after* the real write has already committed, so an unguarded throw turned
+  // a successful follow into a Server Action error. The user was told it
+  // failed, and it had not: they retry, and undo the thing that worked. A
+  // missing notification is the honest cost of a missing key; a lie about
+  // whether the follow landed is not.
+  let serviceClient: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    serviceClient = createServiceRoleSupabaseClient();
+  } catch {
+    return;
+  }
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, followedProfileId, "social_alerts_enabled"))) return;

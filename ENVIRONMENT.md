@@ -2,6 +2,8 @@
 
 Every variable KIVO reads, why it exists, and where to get it. Never commit real values — `.env.local` is gitignored; `.env.example` holds names only.
 
+> **Deploying for the first time? Read `docs/DEPLOYING.md` first, and keep this open beside it.** This file is the reference — one entry per variable. That one is the sequence: what to do, in the order you will do it, what to expect after each step, and which steps are optional. It also carries the step that appears nowhere in this file and nowhere in the product — **making your own account an admin**, which cannot be done from inside KIVO, and without which `/admin` silently redirects you to `/home`.
+
 ---
 
 ## ⚠️ Waiting on you right now (2026-08-18)
@@ -13,7 +15,7 @@ Football data now arrives three different ways. **One of them needs nothing and 
 | | Needs from you | Effect |
 |---|---|---|
 | **On-demand freshness** | Nothing — live on the next deploy of the current code | A page load on stale data triggers a sync after the response. Not live scores |
-| **Daily baseline** | Paste the `crons` block below into `vercel.json` | Fixtures, clubs, competitions and five league tables, once a day |
+| **Daily baseline** | ~~Paste the `crons` block below into `vercel.json`~~ — **already committed and verified 2026-08-19.** What it still needs is `CRON_SECRET` set in Vercel | Fixtures, clubs, competitions and five league tables, once a day |
 | **Once-a-minute worker** | Two Supabase Vault secrets + `FOOTBALL_LIVE_POLLING_ENABLED=true` | Real live scores |
 
 ```json
@@ -34,6 +36,8 @@ Football data now arrives three different ways. **One of them needs nothing and 
 select vault.create_secret('https://<your-kivo-domain>', 'kivo_app_base_url');
 select vault.create_secret('<the same value as CRON_SECRET in Vercel>', 'kivo_cron_secret');
 ```
+
+**`vercel.json` already contains exactly the `crons` block shown further up** — there is nothing to paste; it is reproduced here so you can confirm what is deployed. **What it still needs from you is `CRON_SECRET`.** Without it KIVO itself rejects the scheduled call with `500 {"error":"CRON_SECRET is not configured"}`, writes no `sync_runs` row, and Data Health reports "Never run" — which is true, and looks identical to the cron never having been deployed. `docs/DEPLOYING.md` step 7 has the one curl that tells those apart.
 
 `0 5 * * *` is **once a day**, which is what the Hobby plan permits — the entry that previously blocked every deployment was `* * * * *`. Full detail in "How football data arrives" below, and in `docs/LIVE_DATA.md`.
 

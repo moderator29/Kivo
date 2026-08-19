@@ -462,7 +462,30 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
    */
   const triggerSource: SyncTriggerSource = mode === "daily" ? "daily" : "cron";
 
-  const supabase = createServiceRoleSupabaseClient();
+  // The same posture as the CRON_SECRET branch above, and for a sharper
+  // reason. `createServiceRoleSupabaseClient()` throws *synchronously*
+  // ("supabaseKey is required.") when SUPABASE_SERVICE_ROLE_KEY is absent or
+  // was never copied into this environment. Unguarded, that throw escaped the
+  // route entirely: Vercel's scheduled call got a bare 500 with no body, no
+  // `sync_runs` row was written, and Data Health's automation panel therefore
+  // reported "Never run" — which is *true*, and indistinguishable from
+  // "CRON_SECRET is missing", from "vercel.json was never deployed", and from
+  // "this plan does not run crons". Three unrelated causes, one symptom, on
+  // the one surface built specifically to stop that happening.
+  //
+  // Verified by running the built app with the key absent: `GET
+  // /api/cron/sync-daily` with a valid bearer token returned 500 with an empty
+  // body and logged `supabaseKey is required.` A deployment problem must name
+  // itself.
+  let supabase: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    supabase = createServiceRoleSupabaseClient();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is not configured" },
+      { status: 500 },
+    );
+  }
   // Sync, side-effect-free — never constructs a provider client or spends
   // quota just to label a log row (see its doc comment in src/lib/football/index.ts).
   const { name: activeProviderName } = getActiveProviderStatus();
