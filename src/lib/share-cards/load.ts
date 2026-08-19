@@ -75,15 +75,23 @@ async function loadFixture(supabase: Client, fixtureId: string): Promise<LiveSco
  * The nulls here are the load-bearing part. `appearances` is null when the
  * player has no synced lineup rows *at all* (nothing is known), and `0` when
  * they have rows but none against a played fixture (something is known and it
- * is zero). Same for goals against events. `assists` is always null: KIVO's
- * `fixture_event_type` enum has no assist member, because the synced provider
- * feed does not carry one — so an assists number would have to be invented,
- * and the card simply has no assists tile.
+ * is zero). Same for goals against events.
+ *
+ * **Assists are now real** (2026-08-19). An earlier version of this comment
+ * said KIVO had no assist data because `fixture_event_type` has no `assist`
+ * member — that was wrong, and the correction matters: API-Football puts the
+ * assister on the goal event itself, and `sync-match-details.ts` has always
+ * mapped it to `fixture_events.related_player_id`. `fantasy-scoring.ts` has
+ * been awarding points from it the whole time. It is counted here from the
+ * same rows the goals come from, so a card's goals and assists always span the
+ * same set of matches — see computePlayerMatchStats for why the per-match
+ * statistics table is deliberately not the source.
  */
 async function loadPlayerTotals(supabase: Client, playerId: string): Promise<PlayerTotals> {
-  const [{ data: lineupRows }, { data: eventRows }] = await Promise.all([
+  const [{ data: lineupRows }, { data: eventRows }, { data: assistEventRows }] = await Promise.all([
     supabase.from("lineups").select("is_starting, fixture:fixtures(status)").eq("player_id", playerId),
     supabase.from("fixture_events").select("event_type").eq("player_id", playerId),
+    supabase.from("fixture_events").select("event_type").eq("related_player_id", playerId),
   ]);
 
   const lineups = (lineupRows ?? []) as unknown as { is_starting: boolean; fixture: { status: Database["public"]["Enums"]["fixture_status"] } | null }[];
@@ -92,7 +100,8 @@ async function loadPlayerTotals(supabase: Client, playerId: string): Promise<Pla
   const hasLineupData = lineups.length > 0;
   const hasEventData = events.length > 0 || hasLineupData;
 
-  const totals = computePlayerMatchStats(lineups, events);
+  const assistEvents = (assistEventRows ?? []) as { event_type: Database["public"]["Enums"]["fixture_event_type"] }[];
+  const totals = computePlayerMatchStats(lineups, events, assistEvents);
 
   return {
     appearances: hasLineupData ? totals.appearances : null,
@@ -100,7 +109,10 @@ async function loadPlayerTotals(supabase: Client, playerId: string): Promise<Pla
     // A player with a played appearance and no goal events really did score
     // none; a player with nothing synced has no number.
     goals: hasEventData ? totals.goals : null,
-    assists: null,
+    // Same gate as goals, and for the same reason: both are counted off
+    // `fixture_events`, so "this player has appeared in matches KIVO synced"
+    // is what makes a zero here meaningful rather than merely absent.
+    assists: hasEventData ? totals.assists : null,
     yellowCards: hasEventData ? totals.yellowCards : null,
     redCards: hasEventData ? totals.redCards : null,
   };

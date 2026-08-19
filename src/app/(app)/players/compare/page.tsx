@@ -25,7 +25,7 @@ type PlayerCompareData = {
 };
 
 async function getPlayerCompareData(supabase: Supabase, id: string): Promise<PlayerCompareData | null> {
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }] = await Promise.all([
+  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: assistEventRows }] = await Promise.all([
     supabase
       .from("players")
       .select("id, full_name, known_as, position, photo_url, current_team:teams(name, crest_url)")
@@ -33,6 +33,11 @@ async function getPlayerCompareData(supabase: Supabase, id: string): Promise<Pla
       .maybeSingle(),
     supabase.from("lineups").select("is_starting, fixture:fixtures(status)").eq("player_id", id),
     supabase.from("fixture_events").select("event_type").eq("player_id", id),
+    // The assister is `related_player_id` on the goal event itself — the same
+    // field fantasy scoring awards from, and counted over the same
+    // `fixture_events` rows as the goals above so both columns span one set of
+    // matches. See computePlayerMatchStats.
+    supabase.from("fixture_events").select("event_type").eq("related_player_id", id),
   ]);
 
   if (!player) return null;
@@ -44,7 +49,7 @@ async function getPlayerCompareData(supabase: Supabase, id: string): Promise<Pla
     position: player.position,
     teamName: player.current_team?.name ?? null,
     teamCrestUrl: player.current_team?.crest_url ?? null,
-    stats: computePlayerMatchStats(lineupRows ?? [], eventRows ?? []),
+    stats: computePlayerMatchStats(lineupRows ?? [], eventRows ?? [], assistEventRows ?? []),
   };
 }
 
@@ -169,6 +174,11 @@ export default async function PlayerComparePage({
             <StatRow label="Appearances" a={playerA.stats.appearances} b={playerB.stats.appearances} />
             <StatRow label="Starts" a={playerA.stats.starts} b={playerB.stats.starts} />
             <StatRow label="Goals" a={playerA.stats.goals} b={playerB.stats.goals} />
+            {/* Both sides or neither: a row with one blank column invites the
+                reader to read the blank as a zero. */}
+            {playerA.stats.assists !== null && playerB.stats.assists !== null && (
+              <StatRow label="Assists" a={playerA.stats.assists} b={playerB.stats.assists} />
+            )}
             <StatRow label="Yellow cards" a={playerA.stats.yellowCards} b={playerB.stats.yellowCards} />
             <StatRow label="Red cards" a={playerA.stats.redCards} b={playerB.stats.redCards} />
           </div>

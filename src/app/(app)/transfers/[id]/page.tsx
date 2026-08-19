@@ -324,11 +324,15 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
               <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-foreground-subtle">
                 {playerName}&apos;s record
               </span>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {/* Assists are dropped rather than zeroed when unknown, and the
+                  wide grid follows the real cell count so the row never ends
+                  in a single orphaned tile. */}
+              <div className={`grid grid-cols-3 gap-2 ${record.assists !== null ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
                 {[
                   { label: "Apps", value: record.appearances },
                   { label: "Starts", value: record.starts },
                   { label: "Goals", value: record.goals },
+                  ...(record.assists !== null ? [{ label: "Assists", value: record.assists }] : []),
                   { label: "Yellow", value: record.yellowCards },
                   { label: "Red", value: record.redCards },
                 ].map((cell) => (

@@ -116,9 +116,19 @@ describe("buildPlayerPerformanceCard", () => {
     expect(card?.stats.find((s) => s.label === "Goals")?.value).toBe("0");
   });
 
-  it("never shows assists, because KIVO has no assist data to show", () => {
-    const card = buildPlayerPerformanceCard(player("Anyone"), { ...emptyTotals, goals: 3 }, "window");
-    expect(card?.stats.some((s) => s.label === "Assists")).toBe(false);
+  it("shows assists when they are known and omits them when they are not", () => {
+    // Assists became real on 2026-08-19 — they were always on the goal event
+    // as `related_player_id`, which fantasy scoring had been using all along.
+    // The rule is unchanged though: a null is an omission, not a zero.
+    const known = buildPlayerPerformanceCard(
+      player("Anyone"),
+      { ...emptyTotals, goals: 3, assists: 0 },
+      "window",
+    );
+    expect(known?.stats.find((s) => s.label === "Assists")?.value).toBe("0");
+
+    const unknown = buildPlayerPerformanceCard(player("Anyone"), { ...emptyTotals, goals: 3 }, "window");
+    expect(unknown?.stats.some((s) => s.label === "Assists")).toBe(false);
   });
 });
 

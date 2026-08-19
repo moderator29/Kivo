@@ -198,6 +198,9 @@ export type PlayerTotals = {
   appearances: number | null;
   starts: number | null;
   goals: number | null;
+  /** Real, from the assister recorded on each goal event
+   * (`fixture_events.related_player_id`). Null means the loader did not query
+   * assists, which is not the same as a player who has none. */
   assists: number | null;
   yellowCards: number | null;
   redCards: number | null;

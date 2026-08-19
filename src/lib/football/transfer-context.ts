@@ -59,6 +59,10 @@ export type PlayerRecord = {
   appearances: number;
   starts: number;
   goals: number;
+  /** Null only when the caller did not query assist rows; this one always
+   * does, so in practice it is a real count. Typed nullable because
+   * `PlayerMatchStats` is, and narrowing it here would be a lie by cast. */
+  assists: number | null;
   yellowCards: number;
   redCards: number;
 };
@@ -147,9 +151,12 @@ async function loadTimeline(
 }
 
 async function loadPlayerRecord(supabase: Client, playerId: string): Promise<PlayerRecord | null> {
-  const [{ data: lineupRows }, { data: eventRows }] = await Promise.all([
+  const [{ data: lineupRows }, { data: eventRows }, { data: assistEventRows }] = await Promise.all([
     supabase.from("lineups").select("is_starting, fixture:fixtures(status)").eq("player_id", playerId),
     supabase.from("fixture_events").select("event_type").eq("player_id", playerId),
+    // The assister on a goal, from `related_player_id` — see
+    // computePlayerMatchStats for why this and not the per-match stats table.
+    supabase.from("fixture_events").select("event_type").eq("related_player_id", playerId),
   ]);
 
   const lineups = (lineupRows ?? []) as unknown as {
@@ -164,6 +171,7 @@ async function loadPlayerRecord(supabase: Client, playerId: string): Promise<Pla
   return computePlayerMatchStats(
     lineups,
     (eventRows ?? []) as { event_type: Database["public"]["Enums"]["fixture_event_type"] }[],
+    (assistEventRows ?? []) as { event_type: Database["public"]["Enums"]["fixture_event_type"] }[],
   );
 }
 

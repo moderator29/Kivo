@@ -86,6 +86,27 @@ See `docs/HEATMAP_ENGINE.md` for what may and may not be built on top of that.
   registry rather than attempted everywhere — see `KIVO_NEXT_GEN.md` KN-144.
 - `photo` **is** mapped through on `getSquad` — it's real data already fetched and paid for in quota on every call, unlike dateOfBirth/nationality which would cost an additional per-player request.
 
+## Assists: where they actually come from
+
+Recorded because this was got wrong once, in writing — `RECOMMENDATIONS.md` item 328 claimed KIVO had no assist data anywhere. It was wrong, and the correction is worth more than the original claim.
+
+There is **no `assist` member in KIVO's `fixture_event_type` enum**, which is what that claim was really observing. But API-Football does not model an assist as an event. It attaches the assister to the goal:
+
+```
+GET /fixtures/events?fixture={id}
+  response[].player  -> { id, name }   the scorer
+  response[].assist  -> { id, name }   the assister
+```
+
+`normalizers.ts` maps that second object to `relatedPlayerProviderId`/`relatedPlayerName`, and `sync-match-details.ts` resolves it into `fixture_events.related_player_id`. That column has carried real assists since the first version of the sync, and `src/lib/fantasy-scoring.ts` has been awarding `ASSIST_POINTS` from it the whole time — so the data was not merely present, it was already in production use while a backlog item said it did not exist.
+
+**Two cautions, both load-bearing:**
+
+1. `assist` is populated on **substitution** events too, where it means the player coming *on*. Counting "events where `related_player_id` is me" without filtering by event type reads every substitute appearance as an assist. `ASSISTED_GOAL_EVENT_TYPES` in `src/lib/football/player-stats.ts` is that filter, and it matches exactly what fantasy scoring credits (`goal`, `penalty_goal`) so the two cannot disagree about one player's total. An own goal has no assister.
+2. There is a **second, different** assist number: `fixture_player_statistics.assists`, from `/fixtures/players`. It is equally real and is deliberately *not* the source for a player's career total, because it exists only for competitions with per-player coverage while goals are counted from `fixture_events` across everything synced. Mixing them would render "Goals 12 · Assists 2" where the 12 spans a season and the 2 spans the three matches that had per-player stats — two true numbers forming a false pair. The rule is one source per stat pair, stated at the point of computation.
+
+Surfaces showing the `related_player_id` count today: the player page, the player comparison page, the transfer page's player record, and the player and comparison share cards.
+
 ## Quota and retry handling
 
 See `docs/API_QUOTA.md` for the full write-up. In short: every response's `x-ratelimit-requests-remaining` header is parsed and surfaced; a 429 never retries; a network error or 5xx gets exactly one jittered retry; any other 4xx (bad key, bad params) never retries.
