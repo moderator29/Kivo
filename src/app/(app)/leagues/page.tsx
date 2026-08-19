@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { NoDataYet } from "@/components/ui/no-data-yet";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { readList } from "@/lib/query-result";
 import { EntityListPage } from "@/components/ui/entity-list-page";
 import { LeaguesList } from "@/components/leagues/leagues-list";
 import { getNavItem } from "@/lib/navigation";
@@ -26,13 +28,22 @@ export default async function LeaguesPage({
 
   // One extra row beyond what's asked for, so "hasMore" reads straight off the
   // response instead of costing a second count query.
-  const { data } = await supabase
-    .from("competitions")
-    .select(LEAGUE_LIST_SELECT)
-    .order("name", { ascending: true })
-    .range(0, loadedCount);
+  const outcome = readList(
+    await supabase
+      .from("competitions")
+      .select(LEAGUE_LIST_SELECT)
+      .order("name", { ascending: true })
+      .range(0, loadedCount),
+    "leagues.list",
+  );
 
-  const rows = data ?? [];
+  // "Nothing synced yet" and "the read failed" are different facts and a
+  // reader acts on them differently — one means wait, the other means retry.
+  if (outcome.failed) {
+    return <LoadFailed title="Leagues" icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} />;
+  }
+
+  const rows = outcome.rows;
   const leagues = rows.slice(0, loadedCount).map(mapCompetitionRow);
   const hasMore = rows.length > loadedCount;
 

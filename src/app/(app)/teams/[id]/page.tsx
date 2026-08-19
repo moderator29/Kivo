@@ -36,6 +36,7 @@ import { summarizeGoalTiming } from "@/lib/football/goal-timing";
 import { resultFor, type FormResult } from "@/lib/football/results";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { parseUuidParam } from "@/lib/params";
+import { readRow } from "@/lib/query-result";
 import { calculateAge, formatDate, formatNumber } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
@@ -160,7 +161,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const profile = await getOrCreateProfile();
 
   const [
-    { data: team },
+    teamResult,
     { data: standingsRows },
     { data: squad },
     { data: managers },
@@ -292,6 +293,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     getLastSyncedAt(["transfer"]),
   ]);
 
+  // Same rule as every other detail page: a read that failed throws to the
+  // error boundary rather than claiming the club does not exist.
+  const team = readRow(teamResult, "teams.detail");
   if (!team) notFound();
 
   const isFollowing = followRow !== null;

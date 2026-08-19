@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { UserRound } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { NoDataYet } from "@/components/ui/no-data-yet";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { readList } from "@/lib/query-result";
 import { EntityListPage } from "@/components/ui/entity-list-page";
 import { ManagersList } from "@/components/managers/managers-list";
 
@@ -17,13 +19,24 @@ const MANAGERS_LIMIT = 500;
 export default async function ManagersPage() {
   const supabase = createServerSupabaseClient();
 
-  const { data: managers } = await supabase
-    .from("managers")
-    .select("id, full_name, nationality, current_team:teams(id, name, short_name, crest_url)")
-    .order("full_name", { ascending: true })
-    .limit(MANAGERS_LIMIT);
+  const outcome = readList(
+    await supabase
+      .from("managers")
+      .select("id, full_name, nationality, current_team:teams(id, name, short_name, crest_url)")
+      .order("full_name", { ascending: true })
+      .limit(MANAGERS_LIMIT),
+    "managers.list",
+  );
 
-  if (!managers || managers.length === 0) {
+  // A read that failed says nothing about how many managers KIVO has synced,
+  // so it must not borrow the empty state's explanation for why there are none.
+  if (outcome.failed) {
+    return <LoadFailed title="Managers" icon={<UserRound className="h-6 w-6" strokeWidth={1.75} />} />;
+  }
+
+  const managers = outcome.rows;
+
+  if (managers.length === 0) {
     return (
       <NoDataYet
         icon={<UserRound className="h-6 w-6" strokeWidth={1.75} />}

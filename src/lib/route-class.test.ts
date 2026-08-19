@@ -118,7 +118,7 @@ describe("backTargetFor", () => {
     },
   );
 
-  it.each(["/ai", "/discover", "/search", "/notifications", "/news", "/fantasy", "/settings"])(
+  it.each(["/ai", "/discover", "/search", "/notifications", "/news", "/highlights", "/fantasy", "/settings"])(
     "falls back to Home for the top-level surface %s",
     (path) => {
       expect(backTargetFor(path)).toEqual({ href: "/home", label: "Home" });

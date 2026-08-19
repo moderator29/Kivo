@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AiCopilotLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-8 lg:px-8">
+    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-8 lg:px-8" label="Loading AI Copilot">
       <div className="flex items-center gap-2">
         <Skeleton className="h-8 w-8 shrink-0 rounded-xl" />
         <Skeleton className="h-5 w-28" />
@@ -15,6 +16,6 @@ export default function AiCopilotLoading() {
       </div>
 
       <Skeleton className="h-12 w-full shrink-0 rounded-2xl" />
-    </div>
+    </PageSkeleton>
   );
 }

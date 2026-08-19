@@ -7,6 +7,8 @@ import { Flame, Award, Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { logError } from "@/lib/log";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
@@ -113,12 +115,18 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   if (!profile) notFound();
 
   const supabase = createServerSupabaseClient();
-  const [viewer, { data: statsRows }] = await Promise.all([
+  const [viewer, statsResult] = await Promise.all([
     getOrCreateProfile(),
     supabase.rpc("get_public_profile_stats", { p_profile_id: profile.id }),
   ]);
 
-  const stats = statsRows?.[0] ?? null;
+  // The identity above already refuses to collapse "RPC errored" into "no such
+  // profile". The same distinction has to hold one level down: this read
+  // failing used to fall through to `?? 0` and `?? []`, which renders "0 XP"
+  // and "No badges earned yet" — two confident, wrong statements about a real
+  // person's record. A failed read reports itself instead.
+  const statsOutcome = readList(statsResult, "profile.publicStats");
+  const stats = statsOutcome.rows[0] ?? null;
   // RECOMMENDATIONS.md item 286: get_public_profile_stats (migration 0048)
   // returns is_public = false with total_xp/badges already zeroed when the
   // profile owner has opted out via Settings — defaults true so a null/
@@ -216,7 +224,14 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         />
       </FadeIn>
 
-      {isPublic ? (
+      {statsOutcome.failed ? (
+        <LoadFailed
+          title="This profile's XP and badges"
+          tone="section"
+          icon={<Flame className="h-6 w-6" strokeWidth={1.75} />}
+          description="KIVO couldn't read this person's record just now. Rather than show you a zero that isn't theirs, here's the truth — try again."
+        />
+      ) : isPublic ? (
         <>
           <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
             <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
@@ -236,7 +251,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
             {badges.length === 0 ? (
               <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-                No badges earned yet.
+                No badges earned yet. Badges arrive for predicting, posting and turning up on matchday.
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

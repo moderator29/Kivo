@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { NoDataYet } from "@/components/ui/no-data-yet";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { readList } from "@/lib/query-result";
 import { EntityListPage } from "@/components/ui/entity-list-page";
 import { TeamsGrid } from "@/components/teams/teams-grid";
 import { getNavItem } from "@/lib/navigation";
@@ -29,13 +31,24 @@ export default async function TeamsPage({
 
   // Fetches one extra row beyond what's asked for so "hasMore" can be read
   // directly off the response rather than costing a second count query.
-  const { data } = await supabase
-    .from("teams")
-    .select(TEAM_LIST_SELECT)
-    .order("name", { ascending: true })
-    .range(0, loadedCount);
+  const outcome = readList(
+    await supabase
+      .from("teams")
+      .select(TEAM_LIST_SELECT)
+      .order("name", { ascending: true })
+      .range(0, loadedCount),
+    "teams.list",
+  );
 
-  const rows = data ?? [];
+  // A failed read is not an empty table, and must never be shown as one: the
+  // empty state below tells the user KIVO simply hasn't synced these clubs
+  // yet and that nothing is broken, which is exactly wrong when the query
+  // fell over. See src/lib/query-result.ts.
+  if (outcome.failed) {
+    return <LoadFailed title="Teams" icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} />;
+  }
+
+  const rows = outcome.rows;
   const teams = rows.slice(0, loadedCount).map(mapTeamRow);
   const hasMore = rows.length > loadedCount;
 

@@ -3,8 +3,10 @@
 Every screen in KIVO you can tap *into* has one way back out, and it is the
 same control everywhere: `<BackLink>` in `src/components/ui/back-link.tsx`.
 
-This document is the survey behind that claim — every route in `src/app/`,
-which of three categories it falls in, and where its back control lands. It is
+This document is the survey behind that claim — all sixty-nine routes in
+`src/app/`, which of three categories each falls in, and where its back control
+lands. It is checked against the filesystem, not from memory: every `page.tsx`
+under `src/app/` has a row below. It is
 the reference for adding the next route: decide the category, and the wiring
 follows from it with nothing new to design.
 
@@ -139,6 +141,7 @@ than anywhere else.
 | `/discover` | B · inner | `FocusHeader` | Home |
 | `/fantasy` | B · inner | `FocusHeader` | Home |
 | `/fantasy/browse` | B · inner | `FocusHeader` | Fantasy |
+| `/highlights` | B · inner | `FocusHeader` | Home |
 | `/leagues` | B · inner | `FocusHeader` | Discover |
 | `/leagues/[id]` | B · inner | `FocusHeader` | Leagues |
 | `/managers` | B · inner | `FocusHeader` | Home |
@@ -232,7 +235,7 @@ to sign-in would not be a back control.
 | `error.tsx` (root, `(app)`, `/admin`) | Already ends in a "Back to Home" / "Back to Overview" call to action, which is the recovery step, not navigation. |
 | `not-found.tsx` (root, `(app)`) | Same — the page *is* the dead end, and its CTA is the way out. |
 | Nav drawer, bottom sheets, command palette | Overlays with a close button, a backdrop click and Escape, all through `useFocusTrap`. A back control inside one would compete with three existing dismiss paths. |
-| `/zz-timeline-preview` | An untracked local preview route belonging to another workstream, not part of the product. |
+| `zz-*` scratch routes | Untracked local preview routes that agents create to render a component in isolation and then delete. Never part of the product, never shipped, and deliberately absent from the tables above — if one is in your working tree it is somebody's harness, not a screen. |
 
 ---
 

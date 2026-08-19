@@ -5,7 +5,9 @@ import { formatNumber } from "@/lib/format";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
 import { MatchRow } from "@/components/matches/match-row";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { parseUuidParam } from "@/lib/params";
+import { readList, readOptionalRow, readRow } from "@/lib/query-result";
 
 // RECOMMENDATIONS.md item 166: how many of a venue's fixtures to show —
 // same "Small" scope as the rest of this batch, so a plain limit rather
@@ -15,7 +17,12 @@ const VENUE_FIXTURES_LIMIT = 20;
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = createServerSupabaseClient();
-  const { data: venue } = await supabase.from("venues").select("name, city").eq("id", id).maybeSingle();
+  // Metadata must never take a page down, so a failed read degrades to the
+  // generic title here rather than throwing — logged all the same.
+  const venue = readOptionalRow(
+    await supabase.from("venues").select("name, city").eq("id", id).maybeSingle(),
+    "venues.metadata",
+  );
   const name = venue?.name;
   if (!venue || !name) return { title: "Venue" };
 
@@ -33,7 +40,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   const id = parseUuidParam(rawId);
   const supabase = createServerSupabaseClient();
 
-  const [{ data: venue }, { data: fixtures }] = await Promise.all([
+  const [venueResult, fixturesResult] = await Promise.all([
     supabase.from("venues").select("id, name, city, country, capacity").eq("id", id).maybeSingle(),
     supabase
       .from("fixtures")
@@ -48,7 +55,16 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
       .limit(VENUE_FIXTURES_LIMIT),
   ]);
 
+  // readRow throws when the lookup *failed* and returns null only when the
+  // venue genuinely is not there. Without that split a dropped connection
+  // rendered "Offside. That doesn't exist." about a stadium that exists — a
+  // 404 is a claim about the world, and this page used to make it on a guess.
+  const venue = readRow(venueResult, "venues.detail");
   if (!venue) notFound();
+
+  // The fixture list is beside the venue, not the venue itself: a failure here
+  // shows the section's own state rather than taking the page down.
+  const fixturesOutcome = readList(fixturesResult, "venues.fixtures");
 
   const metaParts = [venue.city, venue.country].filter(Boolean);
 
@@ -76,15 +92,18 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <CalendarClock className="h-4 w-4 text-accent" strokeWidth={1.75} />
           Fixtures at this venue
         </h2>
-        {fixtures && fixtures.length > 0 ? (
+        {fixturesOutcome.failed ? (
+          <LoadFailed title="Fixtures at this venue" tone="section" icon={<CalendarClock className="h-6 w-6" strokeWidth={1.75} />} />
+        ) : fixturesOutcome.rows.length > 0 ? (
           <div className="flex flex-col gap-2">
-            {fixtures.map((fixture) => (
+            {fixturesOutcome.rows.map((fixture) => (
               <MatchRow key={fixture.id} fixture={fixture} />
             ))}
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No fixtures synced at this venue yet.
+            No fixtures synced at this venue yet. They appear here as KIVO syncs the competitions played at this
+            ground.
           </div>
         )}
       </FadeIn>

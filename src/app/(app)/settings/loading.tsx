@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SettingsLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <PageSkeleton label="Loading Settings">
       <Skeleton className="h-5 w-24" />
 
       <div className="kivo-glass flex flex-col rounded-3xl p-5">
@@ -13,6 +14,6 @@ export default function SettingsLoading() {
           </div>
         ))}
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

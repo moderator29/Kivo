@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function TransparencyLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 lg:px-8">
+    <PageSkeleton className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 lg:px-8" label="Loading Transparency">
       <div className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-6">
         <Skeleton className="h-12 w-12 shrink-0 rounded-2xl" />
         <div className="flex flex-1 flex-col gap-2">
@@ -25,6 +26,6 @@ export default function TransparencyLoading() {
         <Skeleton className="mb-4 h-3.5 w-24" />
         <Skeleton className="h-4 w-56" />
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MatchDetailLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading this match">
       <div className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <Skeleton className="h-3 w-32" />
@@ -33,6 +34,6 @@ export default function MatchDetailLoading() {
           <Skeleton key={i} className="h-12 w-full rounded-xl" />
         ))}
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

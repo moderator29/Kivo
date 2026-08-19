@@ -15,6 +15,7 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { readRow } from "@/lib/query-result";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
 import { TopScorersPanel } from "@/components/football/top-scorers-panel";
@@ -45,7 +46,7 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: competition }, isFollowing, standingsLastSyncedAt] = await Promise.all([
+  const [competitionResult, isFollowing, standingsLastSyncedAt] = await Promise.all([
     supabase
       .from("competitions")
       .select("id, name, short_name, country, logo_url, seasons(id, name, is_current)")
@@ -65,6 +66,10 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
     getLastSyncedAt(["standing"]),
   ]);
 
+  // A failed read is not a missing competition. readRow throws so the route's
+  // error boundary handles it, and only a genuinely absent row reaches
+  // notFound() — see src/lib/query-result.ts.
+  const competition = readRow(competitionResult, "leagues.detail");
   if (!competition) notFound();
 
   const currentSeason = competition.seasons?.find((s) => s.is_current) ?? competition.seasons?.[0];
