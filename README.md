@@ -2,7 +2,7 @@
 
 Football's next-generation fan operating system — live football data, an AI Copilot grounded in real data, a native social layer, fantasy, and predictions, built as one product rather than bolted-together features.
 
-See `KIVO_BUILD_ACKNOWLEDGEMENT.md` for the full product vision, `DECISIONS.md` for why the stack looks the way it does, and `RECOMMENDATIONS.md` for the current audit-based backlog (a from-scratch read of the whole codebase, not a running log — it supersedes an earlier competitive-research log that lived at this same path, preserved in git history at commit `e515a6d`).
+See `BUILD_PLAN.md` for what is built, what is next and what is deliberately not being built; `KIVO_BUILD_ACKNOWLEDGEMENT.md` for the full product vision, `DECISIONS.md` for why the stack looks the way it does, and `RECOMMENDATIONS.md` for the current audit-based backlog (a from-scratch read of the whole codebase, not a running log — it supersedes an earlier competitive-research log that lived at this same path, preserved in git history at commit `e515a6d`).
 
 ## Stack
 
@@ -11,6 +11,27 @@ See `KIVO_BUILD_ACKNOWLEDGEMENT.md` for the full product vision, `DECISIONS.md` 
 - **Application data**: Supabase (Postgres, RLS keyed on `auth.uid()`) — one vendor issues the session JWT and verifies it, so there is no cross-vendor trust to configure
 - **Football data**: provider-agnostic abstraction (`src/lib/football`), currently backed by API-Football's free tier, with a development-only mock adapter so UI work never has to spend API quota; sync is admin-triggered on demand, not continuously polled
 - **AI**: Anthropic Claude, live and grounded in real KIVO data when `ANTHROPIC_API_KEY` is set (`/ai`, `src/app/api/ai/chat/route.ts`)
+
+## Documentation
+
+Top-level documents, each written from the code rather than from a plan:
+
+| | |
+|---|---|
+| `BUILD_PLAN.md` | What is built, what is next, what is deliberately not being built |
+| `ARCHITECTURE.md` | How the pieces fit together |
+| `API.md` | Route handlers, Server Actions, database functions, provider calls |
+| `SOCIAL.md` | Posts, Match Rooms, polls, blocks, trending, fan sentiment |
+| `NOTIFICATIONS.md` | Every type and producer, quiet hours, priority, and the batching that does not exist |
+| `SECURITY.md` | Auth, RLS, `SECURITY DEFINER` discipline, privacy, open items |
+| `DEPLOYMENT.md` | Getting a commit to production, and what only the founder can do |
+| `ENVIRONMENT.md` | Every variable KIVO reads and what it switches on |
+| `DECISIONS.md` | The calls with real consequences, and why |
+| `BUILD_STATUS.md` | Living per-feature state |
+| `RECOMMENDATIONS.md` | The numbered backlog |
+| `HANDOFF.md` | Entry point for whoever picks this up next |
+
+Topic-level documents live in `docs/`.
 
 ## Getting started
 
