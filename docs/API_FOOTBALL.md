@@ -21,12 +21,69 @@ Base URL: `https://v3.football.api-sports.io`. Auth: `x-apisports-key` request h
 | `getMatchEvents` | `GET /fixtures/events?fixture={id}` | Synthesizes a stable composite id per event — the endpoint has no native one |
 | `getFixtureStatistics` | `GET /fixtures/statistics?fixture={id}` | Null when not published yet or the competition tier doesn't report them |
 | `getPlayerTransfers` | `GET /transfers?player={id}` | Confirmed/real moves only — no rumour tier exists on any API-Football plan |
+| `getFixturePlayerStatistics` | `GET /fixtures/players?fixture={id}` | Per-player match numbers. **Counts only — no coordinates.** Null when nothing is published |
+| `getCompetitionCoverage` | `GET /leagues?season={year}` | The coverage registry's source. See below |
+| `getInjuries` | `GET /injuries?league={id}&season={year}` | Availability is competition-dependent — ask the coverage registry first |
+| `getTopScorers` | `GET /players/topscorers?league={id}&season={year}` | Provider's own ranking, stored as sent |
+| `getPlayerSeasonStatistics` | `GET /players?id={id}&season={year}` | One entry per competition the player appeared in |
+
+## The coverage registry — the provider's own answer to "can this ever fill?"
+
+`GET /leagues?season={year}` returns, per competition per season, a `coverage`
+object stating which of API-Football's own endpoints will actually return
+something for it: `fixtures.events`, `fixtures.lineups`,
+`fixtures.statistics_fixtures`, `fixtures.statistics_players`, `standings`,
+`players`, `top_scorers`, `top_assists`, `top_cards`, `injuries`,
+`predictions`, `odds`.
+
+This is the single highest-value request on the whole API for a product whose
+problem is empty tabs, because it is the only one that returns a **capability**
+rather than data — and it costs one request for every competition at once. It
+is stored in `provider_coverage` (migration 0082) and read through
+`src/lib/football/coverage-registry.ts`.
+
+Every flag is stored as a **nullable** boolean, and the three states are
+genuinely different:
+
+- `true` — the provider supports it. An empty tab means unsynced.
+- `false` — the provider does not. No amount of syncing will ever fill it.
+- `null` — the provider stated nothing. KIVO does not know.
+
+`null` must never render or behave as `false`. Every quota-spending sync asks
+the registry and skips **only** on a definite `false`; `null` attempts once and
+lets the response be the evidence. A sync that skipped on unknown would mean a
+KIVO that has not yet refreshed its registry silently stops fetching
+everything.
+
+## The coordinate question, answered once
+
+**No API-Football endpoint on any plan returns pitch coordinates.**
+`/fixtures/events` is a minute-stamped list; `/fixtures/players` is counts, with
+no `touches` field. The only positional field the API publishes anywhere is
+`grid` on `/fixtures/lineups`' `startXI` entries — a `"row:col"` formation slot,
+which says where a player *lined up*, not where they went. It is mapped through
+to `NormalizedLineupEntry.grid` and stored on `lineups.grid`, because it arrives
+free on a request KIVO already makes.
+
+See `docs/HEATMAP_ENGINE.md` for what may and may not be built on top of that.
 
 ## Known free-tier gaps (confirmed by reading the actual response shape, not assumed)
 
 - `getSquad` returns id/name/age/number/position/photo only — **no date of birth, no nationality**. Full profiles live behind a separate, heavier per-player-per-season endpoint (`/players?id=&season=`) that isn't called here, because fetching it for a whole squad would burn the entire daily quota in a couple of teams. `dateOfBirth`/`nationality` are left `null` rather than estimated from `age`.
 - No player market value field exists anywhere on any endpoint (checked directly against the response shape, not inferred).
-- Injuries, referees, per-match individual player stats, and xG on most competitions are not available on the free tier.
+- Referees are not available.
+- **Injuries and per-match individual player statistics were recorded here as
+  free-tier-unavailable.** That was not re-verified in the build that added them
+  (this environment cannot reach api-football.com), and it is deliberately not
+  treated as settled either way: both are now implemented, and both ask the
+  coverage registry per competition before spending a request. The registry is
+  the provider's own statement about exactly this, so the question resolves
+  itself the first time it is synced against a live key rather than being
+  guessed at here.
+- **xG** is parsed from `/fixtures/statistics` into
+  `fixture_statistics.expected_goals` when the competition reports it, and left
+  null when it does not. Surfacing it more prominently should be gated on the
+  registry rather than attempted everywhere — see `KIVO_NEXT_GEN.md` KN-144.
 - `photo` **is** mapped through on `getSquad` — it's real data already fetched and paid for in quota on every call, unlike dateOfBirth/nationality which would cost an additional per-player request.
 
 ## Quota and retry handling
@@ -44,3 +101,8 @@ See `docs/CACHING_STRATEGY.md` for the full reasoning — summarized here for re
 | Lineups / events / statistics | 120s | Can change mid-match, but never zero — protects against a busy admin screen re-triggering a sync repeatedly |
 | Standings | 3,600s (1 hour) | Settles slowly outside matchdays |
 | Transfers | 172,800s (2 days) | Append-only, historical fact once recorded |
+| Per-player match stats | 120s | Same clock as the team statistics beside them, so a player line can never disagree with the team line above it |
+| Coverage (`/leagues`) | 604,800s (1 week) | What a provider *supports* changes when a season rolls over, not during one — and this is the largest response on the API |
+| Injuries | 21,600s (6 hours) | The one thing here that genuinely moves within a day, but never so urgently that a six-hour-old report misleads |
+| Top scorers | 21,600s (6 hours) | Only moves when matches are played |
+| Player season stats | 21,600s (6 hours) | Changes at most once per matchday |

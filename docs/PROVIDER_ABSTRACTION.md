@@ -17,6 +17,11 @@ interface FootballDataProvider {
   getMatchEvents(fixtureProviderId: string): Promise<NormalizedMatchEvent[]>;
   getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null>;
   getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]>;
+  getFixturePlayerStatistics(fixtureProviderId: string): Promise<NormalizedFixturePlayerStatistics | null>;
+  getCompetitionCoverage(season: number): Promise<NormalizedCompetitionCoverage[]>;
+  getInjuries(competitionProviderId: string, season: number): Promise<NormalizedInjury[]>;
+  getTopScorers(competitionProviderId: string, season: number): Promise<NormalizedTopScorer[]>;
+  getPlayerSeasonStatistics(playerProviderId: string, season: number): Promise<NormalizedPlayerSeasonStatistics[]>;
 }
 ```
 
@@ -50,9 +55,16 @@ If `FOOTBALL_DATA_PROVIDER=thesportsdb` is set but `THE_SPORTS_DB_API_KEY` is no
 | `getMatchEvents` | Real (`/fixtures/events`) | **Not supported** — timeline endpoint's shape/free-tier availability not confirmed; throws |
 | `getFixtureStatistics` | Real (`/fixtures/statistics`) | **Not supported** — stats endpoint's shape/free-tier availability not confirmed; throws |
 | `getPlayerTransfers` | Real (`/transfers?player=`), confirmed-only, no rumour tier | **Not supported** — TheSportsDB's public API has no transfer-history endpoint at all |
+| `getFixturePlayerStatistics` | Real (`/fixtures/players`) — counts only, **no coordinates on any plan** | **Not supported** — no confirmed per-player match-statistics endpoint; throws |
+| `getCompetitionCoverage` | Real (`/leagues`'s per-season `coverage` object) | **Empty array, not a throw** — see below |
+| `getInjuries` | Real (`/injuries`) | **Not supported** — throws |
+| `getTopScorers` | Real (`/players/topscorers`) | **Not supported** — throws |
+| `getPlayerSeasonStatistics` | Real (`/players?id=&season=`), one entry per competition | **Not supported** — throws |
 | `getQuotaRemaining` | Real (`x-ratelimit-requests-remaining` response header) | Always `null` — TheSportsDB sends no quota header on any response |
 
-"Not supported" methods throw a clear, provider-named `Error` (e.g. `"TheSportsDbProvider.getLineups: not supported by this provider..."`) rather than returning an empty result that could be misread as "this fixture genuinely has no lineup" — a thrown error and an honest empty result mean different things, and callers should be able to tell them apart. See `src/lib/football/providers/thesportsdb.ts`'s per-method doc comments for the exact reasoning and sourcing behind each "not supported" call.
+**`getCompetitionCoverage` is the one deliberate exception to the throwing rule**, and it inverts it for a reason. Everywhere else, throwing is what keeps "this provider has no such data category" distinguishable from "this query genuinely found nothing". The coverage registry's own contract is the opposite: an absent flag means *KIVO does not know*, and an empty result is exactly how a provider says it publishes no capability declaration. TheSportsDB publishes none, so returning nothing is the accurate answer — it lands consumers on "unknown", which is true, rather than on "unsupported", which would be KIVO asserting a limitation on TheSportsDB's behalf for every competition at once. See `docs/API_FOOTBALL.md` for the registry's three-state model and `src/lib/football/coverage-registry.ts` for the rule that a sync skips only on a definite `false`.
+
+The other "not supported" methods throw a clear, provider-named `Error` (e.g. `"TheSportsDbProvider.getLineups: not supported by this provider..."`) rather than returning an empty result that could be misread as "this fixture genuinely has no lineup" — a thrown error and an honest empty result mean different things, and callers should be able to tell them apart. See `src/lib/football/providers/thesportsdb.ts`'s per-method doc comments for the exact reasoning and sourcing behind each "not supported" call.
 
 ## Why TheSportsDB's shape wasn't guessed at for the unsupported methods
 
