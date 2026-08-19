@@ -191,6 +191,13 @@ const MOCK_STANDINGS: NormalizedStandingRow[] = [
     goalsFor: 20,
     goalsAgainst: 8,
     points: 23,
+    // A real provider-shaped zone phrase, so a table's qualification colouring
+    // and legend can be built and reviewed without live data. Deliberately
+    // written the way a provider writes it — free text, competition-specific —
+    // rather than as a tidy enum value the real feed would never send.
+    zoneDescription: "Promotion - CAF Champions League (Group Stage)",
+    groupLabel: null,
+    form: "WWDLW",
   },
   {
     provider: "mock",
@@ -203,6 +210,13 @@ const MOCK_STANDINGS: NormalizedStandingRow[] = [
     goalsFor: 17,
     goalsAgainst: 10,
     points: 20,
+    // Null on purpose, and the more important of the two fixtures: most rows in
+    // most tables carry no zone at all, and a renderer must show nothing there
+    // rather than implying mid-table safety. A mock where every row had a zone
+    // would let that bug ship.
+    zoneDescription: null,
+    groupLabel: null,
+    form: "LWWDL",
   },
 ];
 

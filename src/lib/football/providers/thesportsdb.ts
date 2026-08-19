@@ -218,6 +218,13 @@ export class TheSportsDbProvider implements FootballDataProvider {
       goalsFor: toIntOrZero(row.intGoalsFor),
       goalsAgainst: toIntOrZero(row.intGoalsAgainst),
       points: toIntOrZero(row.intPoints),
+      // TheSportsDB's lookuptable response carries no qualification zone, no
+      // group and no form string. Null rather than an empty string: "this
+      // provider does not report it" must not render as "this club is in no
+      // zone" or "this club has played no matches".
+      zoneDescription: null,
+      groupLabel: null,
+      form: null,
     }));
   }
 
