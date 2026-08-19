@@ -64,14 +64,16 @@ export function TopBar({
   isAdmin?: boolean;
   aiConfigured?: boolean;
 }) {
-  // `min-h` from --kivo-header-h rather than a height that falls out of
-  // whatever happens to be inside: anything sticking directly under this
-  // header (`<SectionTabs sticky>`) offsets itself by that variable, and the
-  // two drifting apart shows up as a tab rail that either hides beneath the
-  // header or floats a stripe of scrolling content under it. min-, not fixed,
-  // so a taller child still fits rather than being clipped.
+  // The height comes from --kivo-header-h rather than falling out of whatever
+  // the tallest child happens to be. That is what lets anything sticking
+  // directly under this header (`<SectionTabs sticky>`) offset by the variable
+  // and land exactly on the seam — measured, this bar was 65px on a phone
+  // (the 44px drawer button) and 61px on a desktop (the 40px bell), so a
+  // single guessed offset could not have been right on both. The vertical
+  // padding goes with it: `items-center` inside a fixed height already
+  // centres, and padding on top of a set height only fights it.
   return (
-    <header className="sticky top-0 z-20 flex min-h-[var(--kivo-header-h)] items-center border-b border-hairline-soft bg-background/80 px-4 py-2.5 backdrop-blur-xl lg:px-8">
+    <header className="sticky top-0 z-20 flex h-[var(--kivo-header-h)] items-center border-b border-hairline-soft bg-background/80 px-4 backdrop-blur-xl lg:px-8">
       {/* Founder's placement: top-left, where the logo used to sit. Hidden on
           desktop, where the sidebar is permanently open and a menu button
           would open a menu that is already on screen. */}

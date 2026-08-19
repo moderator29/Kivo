@@ -1,17 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LocalDateTime } from "@/components/ui/relative-time";
-import { Shield } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
-import { triggerStandingsSync } from "@/app/admin/data-health/actions";
-import { FadeIn } from "@/components/ui/fade-in";
-import { FollowButton } from "@/components/ui/follow-button";
-import { TeamCrest } from "@/components/ui/team-crest";
-import { CompetitionLogo } from "@/components/ui/competition-logo";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
@@ -20,7 +11,86 @@ import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
 import { TopScorersPanel } from "@/components/football/top-scorers-panel";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
-import { competitionMetaLine } from "@/lib/football/competition-label";
+import { MatchList, MatchListRow } from "@/components/matches/match-list";
+import { CompetitionHeader } from "@/components/leagues/competition-header";
+import { CompetitionTabs, type CompetitionSection } from "@/components/leagues/competition-tabs";
+import { CompetitionClubs, type CompetitionClub } from "@/components/leagues/competition-clubs";
+import { StandingsTable } from "@/components/standings/standings-table";
+import { StandingsEmpty } from "@/components/standings/standings-empty";
+import { buildStandingsGroups, computeStandingsForm, type StandingsSnapshotRow } from "@/lib/football/standings-table";
+import { resolveFixtureResult } from "@/lib/football/form-engine";
+import type { FormResult } from "@/lib/football/results";
+import type { FixtureStatus } from "@/lib/football/fixture-status";
+
+/**
+ * A competition's page.
+ *
+ * Rebuilt around one idea the previous version did not have: a competition is
+ * not a stack of every section KIVO could render, it is a **table** with the
+ * rest of the season a tap away. The old page scrolled through standings,
+ * fixtures, results, scorers and a coverage matrix in one column, so a reader
+ * on a phone met an empty table and then kept scrolling past four more
+ * headings to find out whether anything on the page had content. Every
+ * reference product puts these behind one tab rail, and KIVO now has exactly
+ * one of those (`SectionTabs`, docs/UI_PRIMITIVES.md) — the same rail Match
+ * Centre and the team pages use.
+ *
+ * ## Sections are built from what exists
+ *
+ * A tab is omitted rather than rendered empty, per the rail's own contract:
+ * a competition with no finished matches has no Results tab at all, which is
+ * a truer statement than a Results tab containing a shrug.
+ *
+ * **The table is the exception, and deliberately.** It is always the first
+ * tab, even with no rows, because "there is no table" is the single thing a
+ * fan most wants to know about a competition, and hiding the section would
+ * turn a plain fact into a mystery. Its empty state says which of three
+ * football reasons applies and offers the fixtures in one tap.
+ *
+ * ## Nothing here is addressed to staff
+ *
+ * The empty table used to carry a "Sync standings" button for admins. It was
+ * correctly role-gated and it was still in the wrong place: a competition page
+ * is a fan's page, and a control a fan cannot use is one more piece of the
+ * product talking about itself. The bulk version lives in the admin area,
+ * where the person who can act on it already is. What the block says to a fan
+ * — that there is no table, and why in football terms — is unchanged.
+ *
+ * ## Everything on this page is a row KIVO holds
+ *
+ * No position is derived, no zone is inferred from a rank, no scorer is
+ * invented and no club is added to round a league out to its expected size.
+ * The two derivations that do happen — goal difference, and a club's movement
+ * since it last played — are arithmetic over stored rows, and the second is
+ * read from `standings_snapshots`, which is a record of what KIVO showed at
+ * the time.
+ */
+
+/** How many fixtures each list shows. Enough to read a run of the season
+ * without turning a tab into an archive. */
+const FIXTURE_LIMIT = 20;
+
+/**
+ * How many finished fixtures the form guide reads. A form column needs five
+ * results per club, so a 20-club league needs roughly ten rounds — 200
+ * fixtures is comfortably past that for every league KIVO covers, and it is a
+ * hard bound rather than "the season", which for a 380-match league would be
+ * a large read for one column of five letters.
+ */
+const FORM_FIXTURE_LIMIT = 200;
+
+/**
+ * How many of a season's fixtures the club list is derived from, **ordered
+ * from the start of the season**. Every club in a competition appears within
+ * its first couple of rounds, so the earliest fixtures are the cheapest
+ * complete answer to "who is in this".
+ */
+const CLUB_FIXTURE_LIMIT = 200;
+
+/** Snapshots read per season for the movement column. Append-only and written
+ * only when a table actually changed (migration 0072), so a season's worth for
+ * a 20-club league is in the hundreds. */
+const SNAPSHOT_LIMIT = 1200;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -69,8 +139,6 @@ export default async function LeagueDetailPage({
           .eq("followed_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
-    // RECOMMENDATIONS.md item 60: standings sync writes entity_type 'standing'
-    // (see syncStandings in src/lib/football/sync-match-details.ts).
     getLastSyncedAt(["standing"]),
   ]);
 
@@ -80,279 +148,306 @@ export default async function LeagueDetailPage({
   const competition = readRow(competitionResult, "leagues.detail");
   if (!competition) notFound();
 
-  // Newest first, so the switcher reads the way a fan thinks about seasons and
-  // "the first one" is a sensible fallback rather than whatever the join
-  // happened to return. `provider_year` is not selected here, so ordering is by
-  // the season's own name, which the provider writes as the "2025/26" span.
+  // Newest first, so the switcher reads the way a fan thinks about seasons.
   const seasons = [...(competition.seasons ?? [])].sort((left, right) => right.name.localeCompare(left.name));
-
   const currentSeason = seasons.find((s) => s.is_current) ?? seasons[0];
 
   // `?season=` may only ever name a season belonging to THIS competition.
   // Anything else — another competition's season, a deleted one, a hand-edited
   // id — falls back to the current season rather than rendering one
-  // competition's table under another's name and logo. That is the same class
-  // of error as pairing two numbers whose scopes differ: every figure would be
-  // real, and the page around them would be wrong about what they describe.
+  // competition's table under another's name and logo.
   const activeSeason = seasons.find((s) => s.id === requestedSeasonId) ?? currentSeason;
+  const seasonId = activeSeason?.id ?? null;
 
-  const { data: standings } = activeSeason
-    ? await supabase
-        .from("standings")
-        .select("team_id, played, won, drawn, lost, goals_for, goals_against, points, position, team:teams(id, name, crest_url)")
-        .eq("season_id", activeSeason.id)
-        .order("position", { ascending: true })
-    : { data: null };
+  const [
+    standingsResult,
+    upcomingResult,
+    resultsResult,
+    snapshotsResult,
+    formFixturesResult,
+    clubFixturesResult,
+    seasonFixtureCount,
+    playedFixtureCount,
+  ] = seasonId
+    ? await Promise.all([
+        supabase
+          .from("standings")
+          .select(
+            "team_id, played, won, drawn, lost, goals_for, goals_against, points, position, zone_description, group_label, team:teams(id, name, crest_url)",
+          )
+          .eq("season_id", seasonId)
+          .order("position", { ascending: true }),
+        supabase
+          .from("fixtures")
+          .select(
+            `id, kickoff_at, status, home_score, away_score, minute_elapsed,
+             home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
+             away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
+          )
+          .eq("season_id", seasonId)
+          .in("status", ["scheduled", "live", "halftime"])
+          .order("kickoff_at", { ascending: true })
+          .limit(FIXTURE_LIMIT),
+        // Finished only — a postponed or abandoned match has no result to
+        // report, and listing one under "Results" with a blank score would
+        // invite the reader to supply their own.
+        supabase
+          .from("fixtures")
+          .select(
+            `id, kickoff_at, status, home_score, away_score,
+             home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
+             away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
+          )
+          .eq("season_id", seasonId)
+          .eq("status", "finished")
+          .not("home_score", "is", null)
+          .not("away_score", "is", null)
+          .order("kickoff_at", { ascending: false })
+          .limit(FIXTURE_LIMIT),
+        supabase
+          .from("standings_snapshots")
+          .select("team_id, position, played")
+          .eq("season_id", seasonId)
+          .order("captured_at", { ascending: false })
+          .limit(SNAPSHOT_LIMIT),
+        supabase
+          .from("fixtures")
+          .select("id, kickoff_at, status, home_score, away_score, home_team_id, away_team_id")
+          .eq("season_id", seasonId)
+          .eq("status", "finished")
+          .order("kickoff_at", { ascending: false })
+          .limit(FORM_FIXTURE_LIMIT),
+        supabase
+          .from("fixtures")
+          .select(
+            `home_team:teams!fixtures_home_team_id_fkey(id, name, crest_url),
+             away_team:teams!fixtures_away_team_id_fkey(id, name, crest_url)`,
+          )
+          .eq("season_id", seasonId)
+          .order("kickoff_at", { ascending: true })
+          .limit(CLUB_FIXTURE_LIMIT),
+        supabase
+          .from("fixtures")
+          .select("id", { count: "exact", head: true })
+          .eq("season_id", seasonId)
+          .then(({ count }) => count ?? 0),
+        supabase
+          .from("fixtures")
+          .select("id", { count: "exact", head: true })
+          .eq("season_id", seasonId)
+          .eq("status", "finished")
+          .then(({ count }) => count ?? 0),
+      ])
+    : [null, null, null, null, null, null, 0, 0];
 
-  const { data: upcoming } = activeSeason
-    ? await supabase
-        .from("fixtures")
-        .select(
-          `id, kickoff_at, home_team:teams!fixtures_home_team_id_fkey(name, crest_url), away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
-        )
-        .eq("season_id", activeSeason.id)
-        .eq("status", "scheduled")
-        .gt("kickoff_at", new Date().toISOString())
-        .order("kickoff_at", { ascending: true })
-        .limit(10)
-    : { data: null };
+  const standingsRows = standingsResult?.data ?? [];
+  const upcoming = upcomingResult?.data ?? [];
+  const results = resultsResult?.data ?? [];
 
-  // Results: the other half of a season, and the page only ever showed
-  // fixtures that hadn't happened. Finished only — a postponed or abandoned
-  // match has no result to report, and listing one under "Results" with a
-  // blank score would invite the reader to supply their own.
-  const { data: results } = activeSeason
-    ? await supabase
-        .from("fixtures")
-        .select(
-          `id, kickoff_at, home_score, away_score, home_team:teams!fixtures_home_team_id_fkey(name, crest_url), away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
-        )
-        .eq("season_id", activeSeason.id)
-        .eq("status", "finished")
-        .not("home_score", "is", null)
-        .not("away_score", "is", null)
-        .order("kickoff_at", { ascending: false })
-        .limit(10)
-    : { data: null };
+  // Newest-first snapshots, bucketed per club, so `movementSinceLastPlayed`
+  // can walk back to the table as it stood before that club's latest result.
+  const snapshotsByTeamId = new Map<string, StandingsSnapshotRow[]>();
+  for (const snapshot of snapshotsResult?.data ?? []) {
+    const bucket = snapshotsByTeamId.get(snapshot.team_id);
+    const entry = { teamId: snapshot.team_id, position: snapshot.position, played: snapshot.played };
+    if (bucket) bucket.push(entry);
+    else snapshotsByTeamId.set(snapshot.team_id, [entry]);
+  }
 
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <TrackView type="league" id={competition.id} name={competition.name} imageUrl={competition.logo_url} />
-      <div className="flex items-center gap-3">
-        <FadeIn delay={0} className="shrink-0">
-          <CompetitionLogo logoUrl={competition.logo_url} name={competition.name} size={36} />
-        </FadeIn>
-        <FadeIn delay={0.05} className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold text-foreground">{competition.name}</h1>
-          {/* A null country is missing metadata, not evidence that this is an
-              international competition, so it prints nothing. With neither a
-              country nor a season, the whole line is omitted. */}
-          {competitionMetaLine([competition.country, activeSeason?.name]) && (
-            <p className="text-xs text-foreground-subtle">
-              {competitionMetaLine([competition.country, activeSeason?.name])}
-            </p>
-          )}
-        </FadeIn>
-        <FadeIn delay={0.1}>
-          <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={viewerIsSignedIn(profile)} />
-        </FadeIn>
-      </div>
+  // KIVO's own form guide, from finished fixtures it holds. Kept separate from
+  // the form string the source publishes alongside the table (`standings.form`,
+  // migration 0117): that string states no orientation, and rendering "WWLDW"
+  // backwards turns a winning run into a losing one while looking entirely
+  // plausible. Fixtures carry kickoff times, so this ordering cannot be wrong.
+  const formByTeamId = new Map<string, FormResult[]>();
+  const finishedFixtures = formFixturesResult?.data ?? [];
+  for (const row of standingsRows) {
+    const own = finishedFixtures
+      .map((fixture) => resolveFixtureResult(fixture, row.team_id))
+      .filter((resolved): resolved is NonNullable<typeof resolved> => resolved !== null);
+    if (own.length > 0) formByTeamId.set(row.team_id, computeStandingsForm(own));
+  }
 
-      {/* Only when there is genuinely something to switch between. One synced
-          season renders no control, because a picker with a single option is
-          chrome pretending to be a choice. Plain links rather than a client
-          control: the whole page is server-rendered per season, so each season
-          gets a real URL that can be shared and opened in a new tab. */}
-      {seasons.length > 1 && (
-        <FadeIn delay={0.13} className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Season</h2>
-          <div
-            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-            role="group"
-            aria-label="Season"
-          >
-            {seasons.map((season) => {
-              const isActive = season.id === activeSeason?.id;
-              return (
-                <Link
-                  key={season.id}
-                  href={`/leagues/${competition.id}?season=${season.id}`}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`kivo-focus shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    isActive
-                      ? "bg-accent text-on-accent"
-                      : "kivo-glass-sharp text-foreground-muted hover:text-foreground"
-                  }`}
-                >
-                  {season.name}
-                  {season.is_current && !isActive ? " · now" : ""}
-                </Link>
-              );
-            })}
-          </div>
-        </FadeIn>
-      )}
+  const groups = buildStandingsGroups({
+    rows: standingsRows.map((row) => ({
+      teamId: row.team_id,
+      team: row.team
+        ? { id: row.team.id, name: row.team.name, crestUrl: row.team.crest_url }
+        : null,
+      position: row.position,
+      played: row.played,
+      won: row.won,
+      drawn: row.drawn,
+      lost: row.lost,
+      goalsFor: row.goals_for,
+      goalsAgainst: row.goals_against,
+      points: row.points,
+      zoneDescription: row.zone_description,
+      groupLabel: row.group_label,
+    })),
+    snapshotsByTeamId,
+    formByTeamId,
+  });
 
-      <FadeIn delay={0.15} className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Standings</h2>
-          <LastSyncedNote timestamp={standingsLastSyncedAt} />
-        </div>
-        {!standings || standings.length === 0 ? (
-          <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            No table for this competition yet.
-            {activeSeason && canManageFootballData(profile?.role) && (
-              <InlineSyncButton
-                label="Sync standings"
-                action={triggerStandingsSync.bind(null, activeSeason.id)}
-                hint="Needs this competition's fixtures first, so it has a mapping."
-              />
-            )}
-          </div>
-        ) : (
-          // Real `<table>` with `scope="col"` headers (RECOMMENDATIONS.md item
-          // 150): this used to be a grid of `<span>`s, which carries no
-          // row/column relationships for assistive tech. The team name is now
-          // the one link per row (its own tab stop with a clean accessible
-          // name) rather than the whole row, since a screen reader announcing
-          // every stat column as part of one giant link's name is worse, not
-          // better.
-          <div className="kivo-glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[34rem] border-collapse text-xs">
-              <thead>
-                <tr className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-                  <th scope="col" className="px-3 py-2 text-left font-semibold">#</th>
-                  <th scope="col" className="py-2 text-left font-semibold">Team</th>
-                  <th scope="col" className="py-2 text-right font-semibold">P</th>
-                  <th scope="col" className="py-2 text-right font-semibold">W</th>
-                  <th scope="col" className="py-2 text-right font-semibold">D</th>
-                  <th scope="col" className="py-2 text-right font-semibold">L</th>
-                  <th scope="col" className="py-2 text-right font-semibold">GD</th>
-                  <th scope="col" className="px-3 py-2 text-right font-semibold">Pts</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {standings.map((row) => (
-                  <tr key={row.team_id} className="transition-colors hover:bg-surface-2">
-                    <td className="px-3 py-2 text-foreground-subtle">{row.position ?? "-"}</td>
-                    <td className="max-w-0 py-2 text-foreground">
-                      {row.team?.id ? (
-                        <Link
-                          href={`/teams/${row.team.id}`}
-                          className="flex items-center gap-2 truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-                        >
-                          <TeamCrest crestUrl={row.team.crest_url} name={row.team.name} size={16} />
-                          <span className="truncate">{row.team.name}</span>
-                        </Link>
-                      ) : (
-                        <span className="flex items-center gap-2 truncate">
-                          <Shield className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-                          <span className="truncate">Unknown team</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right text-foreground-muted">{row.played}</td>
-                    <td className="py-2 text-right text-foreground-muted">{row.won}</td>
-                    <td className="py-2 text-right text-foreground-muted">{row.drawn}</td>
-                    <td className="py-2 text-right text-foreground-muted">{row.lost}</td>
-                    <td className="py-2 text-right text-foreground-muted">{row.goals_for - row.goals_against}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-foreground">{row.points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </FadeIn>
+  // Clubs: the table when there is one (it is the competition's own list), and
+  // the season's own fixtures otherwise. Never padded to a league's expected
+  // size — a season KIVO holds half a fixture list for shows half a league,
+  // which is true, rather than a full one with invented members.
+  const clubsById = new Map<string, CompetitionClub>();
+  for (const row of standingsRows) {
+    if (row.team) {
+      clubsById.set(row.team.id, { id: row.team.id, name: row.team.name, crestUrl: row.team.crest_url });
+    }
+  }
+  if (clubsById.size === 0) {
+    for (const fixture of clubFixturesResult?.data ?? []) {
+      for (const team of [fixture.home_team, fixture.away_team]) {
+        if (team && !clubsById.has(team.id)) {
+          clubsById.set(team.id, { id: team.id, name: team.name, crestUrl: team.crest_url });
+        }
+      }
+    }
+  }
+  const clubs = [...clubsById.values()].sort((left, right) => left.name.localeCompare(right.name));
 
-      <FadeIn delay={0.2} className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Upcoming fixtures</h2>
-        {!upcoming || upcoming.length === 0 ? (
-          <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            Nothing scheduled in this competition right now.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {upcoming.map((fixture) => (
-              <div key={fixture.id} className="kivo-glass flex items-center justify-between gap-3 rounded-xl p-3 text-sm">
-                <span className="truncate text-foreground">
-                  {fixture.home_team?.name ?? "Home"} vs {fixture.away_team?.name ?? "Away"}
-                </span>
-                <span className="shrink-0 text-xs text-foreground-subtle">
-                  <LocalDateTime iso={fixture.kickoff_at} format="dayTime" />
-                </span>
+  const hasTable = groups.some((group) => group.rows.length > 0);
+
+  const sections: CompetitionSection[] = [
+    {
+      id: "table",
+      label: "Table",
+      content: hasTable ? (
+        <StandingsTable
+          groups={groups}
+          footnote={
+            standingsLastSyncedAt ? (
+              <div className="flex justify-end px-1">
+                <LastSyncedNote timestamp={standingsLastSyncedAt} />
               </div>
-            ))}
-          </div>
-        )}
-      </FadeIn>
-
-      {/* Results sit after the fixtures list: a league page is read forwards
-          first ("who plays next") and backwards second. Rendered only when
-          there is a real finished match with a real score — an empty
-          "Results" heading on a season that has not kicked off yet says
-          nothing the fixtures list above has not already said. */}
-      {results && results.length > 0 && (
-        <FadeIn delay={0.21} className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Latest results</h2>
-          <div className="flex flex-col gap-2">
-            {results.map((fixture) => (
+            ) : null
+          }
+        />
+      ) : (
+        <StandingsEmpty
+          seasonLabel={activeSeason?.name ?? null}
+          fixtureCount={seasonFixtureCount}
+          playedCount={playedFixtureCount}
+          action={
+            upcoming.length > 0 ? (
               <Link
-                key={fixture.id}
-                href={`/matches/${fixture.id}`}
-                className="kivo-glass kivo-focus flex items-center justify-between gap-3 rounded-xl p-3 text-sm transition-colors hover:bg-surface-2"
+                href={`/leagues/${competition.id}?${seasonQuery(seasonId, seasons.length)}tab=fixtures`}
+                className="kivo-glass-sharp kivo-focus flex h-11 items-center rounded-xl px-4 text-xs font-semibold text-foreground"
               >
-                <span className="min-w-0 flex-1 truncate text-foreground">
-                  {fixture.home_team?.name ?? "Home"} vs {fixture.away_team?.name ?? "Away"}
-                </span>
-                <span className="shrink-0 font-semibold tabular-nums text-foreground">
-                  {fixture.home_score} - {fixture.away_score}
-                </span>
-                <span className="shrink-0 text-xs text-foreground-subtle">
-                  <LocalDateTime iso={fixture.kickoff_at} format="dayTime" />
-                </span>
+                See the fixtures
               </Link>
-            ))}
-          </div>
-        </FadeIn>
-      )}
+            ) : null
+          }
+        />
+      ),
+    },
+  ];
 
-      {/* Before the coverage panel, because it is content rather than an
-          explanation of missing content — and its own empty state already names
-          which of "not synced", "this source can't", and "not established" it
-          is, using the same registry the panel below reads. */}
+  if (upcoming.length > 0) {
+    sections.push({
+      id: "fixtures",
+      label: "Fixtures",
+      count: upcoming.length,
+      content: (
+        <MatchList>
+          {upcoming.map((fixture) => (
+            <MatchListRow key={fixture.id} fixture={{ ...fixture, status: fixture.status as FixtureStatus }} />
+          ))}
+        </MatchList>
+      ),
+    });
+  }
+
+  if (results.length > 0) {
+    sections.push({
+      id: "results",
+      label: "Results",
+      count: results.length,
+      content: (
+        <MatchList>
+          {results.map((fixture) => (
+            <MatchListRow
+              key={fixture.id}
+              fixture={{ ...fixture, status: fixture.status as FixtureStatus, minute_elapsed: null }}
+            />
+          ))}
+        </MatchList>
+      ),
+    });
+  }
+
+  // The scoring chart carries its own empty state, and that state distinguishes
+  // "nobody has asked for it" from "this source publishes none here" — so
+  // unlike the fixture lists it is worth a tab even when it has no rows.
+  sections.push({
+    id: "scorers",
+    label: "Scorers",
+    content: (
       <TopScorersPanel
         competitionId={competition.id}
-        seasonId={activeSeason?.id ?? null}
+        seasonId={seasonId}
         seasonLabel={activeSeason?.name ?? null}
       />
+    ),
+  });
 
-      {/* KIVO_NEXT_GEN KN-103. Placed after the table and fixtures rather than
-          before them: it answers "why is that section empty", which is only a
-          question once you have seen the empty section. */}
-      {/* Deliberately the CURRENT season, not the one being viewed: this panel
-          answers "what can this source do for this competition now", which
-          does not change because the reader is looking at an older table. */}
-      <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
+  if (clubs.length > 0) {
+    sections.push({
+      id: "clubs",
+      label: "Clubs",
+      count: clubs.length,
+      content: <CompetitionClubs clubs={clubs} />,
+    });
+  }
 
-      {/* Renders nothing when the season has no placed standings rows, which
-          is the honest state for a competition KIVO has fixtures but no table
-          for yet. */}
-      {activeSeason && (
-        <FadeIn delay={0.24} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
-          <ShareCardPanel
-            kind="league-table"
-            id={activeSeason.id}
-            // The card has to be the season on screen. Sharing the current
-            // season's table from a page showing 2023/24 would be a real table
-            // under the wrong year.
-            shareUrl={`/leagues/${competition.id}?season=${activeSeason.id}`}
-            shareText={`${competition.name} table on KIVO.`}
-            heading="Share the table"
-            description="Pick a background. The preview is the exact image you save."
-          />
-        </FadeIn>
+  return (
+    <div className="kivo-page">
+      <TrackView type="league" id={competition.id} name={competition.name} imageUrl={competition.logo_url} />
+
+      <CompetitionHeader
+        competitionId={competition.id}
+        name={competition.name}
+        logoUrl={competition.logo_url}
+        country={competition.country}
+        seasonLabel={activeSeason?.name ?? null}
+        isFollowing={isFollowing}
+        viewerSignedIn={viewerIsSignedIn(profile)}
+        seasons={seasons.map((season) => ({ id: season.id, name: season.name, isCurrent: season.is_current }))}
+        activeSeasonId={seasonId}
+      />
+
+      <CompetitionTabs sections={sections} />
+
+      {/* Below the tabs, not inside one: sharing the table and KIVO's own
+          coverage report are both about the page rather than sections of it.
+          The coverage panel gates itself to admins and renders nothing for a
+          fan — see its own note on why a build report does not belong on a
+          competition page. */}
+      {seasonId && hasTable && (
+        <ShareCardPanel
+          kind="league-table"
+          id={seasonId}
+          // The card has to be the season on screen. Sharing the current
+          // season's table from a page showing 2023/24 would be a real table
+          // under the wrong year.
+          shareUrl={`/leagues/${competition.id}?season=${seasonId}`}
+          shareText={`${competition.name} table on KIVO.`}
+          heading="Share the table"
+          description="Pick a background. The preview is the exact image you save."
+        />
       )}
+
+      <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
     </div>
   );
+}
+
+/** Keeps `?season=` on a link that also sets `?tab=`, but only when the
+ * competition genuinely has more than one season to be on. */
+function seasonQuery(seasonId: string | null, seasonCount: number): string {
+  return seasonId && seasonCount > 1 ? `season=${seasonId}&` : "";
 }

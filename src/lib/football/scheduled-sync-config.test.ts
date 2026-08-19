@@ -21,6 +21,28 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
  * asserts the route's deployment contract, not the sync itself.
  */
 
+/**
+ * A longer timeout than the 5s default, and the reason is structural rather
+ * than "this machine is slow".
+ *
+ * Every test here calls `vi.resetModules()` and then dynamically re-imports
+ * `./scheduled-sync`, because the thing under test is how the route reads
+ * environment variables AT MODULE LOAD — and there is no way to re-read those
+ * without rebuilding the module graph. So each of the five tests pays for a
+ * fresh transform of the route and everything it imports.
+ *
+ * That costs ~1.5s on an idle machine and comfortably over 5s on a loaded one.
+ * It failed exactly that way during a merge run while several builds were
+ * running on the same box: 5011ms against a 5000ms limit.
+ *
+ * Raising the limit rather than trimming the work is deliberate. The
+ * re-import IS the test — mocking it away would leave these five assertions
+ * checking a module that had already captured the wrong environment. A test
+ * that only passes on an idle machine is a green build that isn't, and CI
+ * runners are never idle.
+ */
+vi.setConfig({ testTimeout: 30_000 });
+
 const createServiceRoleSupabaseClientMock = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
