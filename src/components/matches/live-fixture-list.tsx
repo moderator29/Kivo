@@ -1,12 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Shirt } from "lucide-react";
-import { TeamCrest } from "@/components/ui/team-crest";
-import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
-import { isLiveStatus } from "@/lib/football/fixture-status";
+import { MatchList, MatchListRowContent } from "@/components/matches/match-list";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
 import {
   rankCompetitionGroups,
@@ -53,7 +50,6 @@ export type LiveListFixture = {
  */
 export function FixtureGroups({
   fixtures,
-  showLiveDot = true,
   fantasyMatchCounts,
   rankingSignals = NO_COMPETITION_RANKING_SIGNALS,
   signedIn = false,
@@ -63,7 +59,6 @@ export function FixtureGroups({
    * (in addition to its live-coloured score text). Defaults on. Pass false
    * from a "Live now" section that already carries its own live indicator
    * (e.g. a header Radio icon) — the dot would be redundant there. */
-  showLiveDot?: boolean;
   /** RECOMMENDATIONS.md item 297: fixture id -> real count of the viewer's
    * own fantasy players named in that fixture's lineups (see live/page.tsx's
    * own doc comment for the full join). Omitted entirely for a guest — a
@@ -97,16 +92,15 @@ export function FixtureGroups({
             signedIn={signedIn}
             density="compact"
           />
-          <div className="flex flex-col divide-y divide-hairline-soft">
+          <MatchList>
             {group.fixtures.map((fixture) => (
               <FixtureRowCard
                 key={fixture.id}
                 fixture={fixture}
-                showLiveDot={showLiveDot}
                 fantasyPlayerCount={fantasyMatchCounts?.[fixture.id] ?? 0}
               />
             ))}
-          </div>
+          </MatchList>
         </div>
       ))}
     </div>
@@ -115,16 +109,11 @@ export function FixtureGroups({
 
 function FixtureRowCard({
   fixture,
-  showLiveDot,
   fantasyPlayerCount,
 }: {
   fixture: LiveListFixture;
-  showLiveDot: boolean;
   fantasyPlayerCount: number;
 }) {
-  const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-  const live = isLiveStatus(fixture.status);
-
   // Brief highlight when this row's live-relevant fields change via
   // Realtime, so a score/minute update has some on-screen cue beyond the
   // text silently swapping — especially noticeable with several live rows
@@ -146,46 +135,35 @@ function FixtureRowCard({
     // `layout` (RECOMMENDATIONS.md item 269) so a fixture that moves within
     // its group — e.g. `groupFixturesByCompetition`'s output reordering as
     // scores/statuses change — animates (a FLIP transform) instead of
-    // silently jumping to its new position. The plain wrapping `motion.div`
-    // exists only so `layout` has a real element to measure/animate;
-    // `<Link>` keeps every visual class and stays the actual click target.
-    <motion.div layout transition={{ duration: 0.35, ease: EASE }}>
-      <Link
-        href={`/matches/${fixture.id}`}
-        className={`flex flex-col gap-2 rounded-xl px-2 py-2 transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${flash ? "kivo-row-flash" : ""}`}
-      >
-        <div className="flex items-center justify-end">
-          <FixtureStatusBadge
-            status={fixture.status}
-            kickoffAt={fixture.kickoff_at}
-            showLiveDot={showLiveDot}
-            minuteElapsed={fixture.minute_elapsed}
-          />
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-            <span className="line-clamp-2 break-words text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
-          </div>
-          <span className={`shrink-0 text-sm font-semibold ${live ? "text-live" : "text-foreground"}`}>
-            {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-          </span>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-            <span className="line-clamp-2 break-words text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
-            <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
-          </div>
-        </div>
-        {/* RECOMMENDATIONS.md item 297: a real, signed-in-only personalization
-            signal — omitted entirely rather than shown as "0 of your fantasy
-            players", same "render nothing below a real floor" convention as
-            HeadToHeadCard/MatchVerdictCard elsewhere in the app. */}
-        {fantasyPlayerCount > 0 && (
-          <div className="flex items-center gap-1.5 text-[11px] text-accent">
-            <Shirt className="h-3 w-3 shrink-0" strokeWidth={2} />
-            {fantasyPlayerCount} of your fantasy player{fantasyPlayerCount === 1 ? "" : "s"} {fantasyPlayerCount === 1 ? "is" : "are"} in this match
-          </div>
-        )}
-      </Link>
-    </motion.div>
+    // silently jumping to its new position.
+    //
+    // FRONTEND SWEEP: the row itself is now `MatchListRowContent`, the same one
+    // /matches renders, so a live match and a scheduled one finally look like
+    // two states of one thing rather than two components. This wrapper keeps
+    // only what is genuinely /live's: the FLIP animation and the update flash.
+    // It is a `motion.li` and not a `motion.div` because `MatchList` is a real
+    // `<ul>` — a div here would be invalid list markup.
+    <motion.li
+      layout
+      transition={{ duration: 0.35, ease: EASE }}
+      className={`relative ${flash ? "kivo-row-flash" : ""}`}
+    >
+      <MatchListRowContent
+        fixture={fixture}
+        meta={
+          /* RECOMMENDATIONS.md item 297: a real, signed-in-only personalization
+             signal — omitted entirely rather than shown as "0 of your fantasy
+             players", same "render nothing below a real floor" convention as
+             HeadToHeadCard/MatchVerdictCard elsewhere in the app. */
+          fantasyPlayerCount > 0 ? (
+            <span className="flex items-center gap-1.5 text-[11px] text-accent">
+              <Shirt className="h-3 w-3 shrink-0" strokeWidth={2} />
+              {fantasyPlayerCount} of your fantasy player{fantasyPlayerCount === 1 ? "" : "s"}{" "}
+              {fantasyPlayerCount === 1 ? "is" : "are"} in this match
+            </span>
+          ) : undefined
+        }
+      />
+    </motion.li>
   );
 }

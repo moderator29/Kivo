@@ -27,12 +27,12 @@ export function HeadToHeadCard({ teamA, teamB, record }: { teamA: TeamRef; teamB
 
       {total === 0 ? (
         <p className="text-sm text-foreground-muted">
-          KIVO has no synced meetings yet between {teamA.name} and {teamB.name}.
+          {teamA.name} and {teamB.name} haven&apos;t met in a match KIVO has on record.
         </p>
       ) : total < MIN_MEANINGFUL_SAMPLE ? (
         <p className="text-sm text-foreground-muted">
-          KIVO has synced only {total} meeting{total === 1 ? "" : "s"} between {teamA.name} and {teamB.name} so far
-          ({record.teamAWins}-{record.draws}-{record.teamBWins}). Too few to call a real record.
+          Just {total} meeting{total === 1 ? "" : "s"} between {teamA.name} and {teamB.name} on record
+          ({record.teamAWins}-{record.draws}-{record.teamBWins}) — too few to read a head-to-head from.
         </p>
       ) : (
         <>
@@ -55,7 +55,7 @@ export function HeadToHeadCard({ teamA, teamB, record }: { teamA: TeamRef; teamB
             </div>
           </div>
           <p className="text-center text-xs text-foreground-subtle">
-            Aggregate score {record.teamAGoals}-{record.teamBGoals}, from {total} synced meeting
+            Aggregate score {record.teamAGoals}-{record.teamBGoals}, from {total} meeting
             {total === 1 ? "" : "s"}.
           </p>
         </>

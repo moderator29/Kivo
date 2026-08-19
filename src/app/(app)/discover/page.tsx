@@ -51,7 +51,7 @@ export default async function DiscoverPage() {
   const coverage = { teams, players, competitions: leagues, managers, venues };
 
   if (leagues === 0 && teams === 0 && players === 0 && transfers === 0 && managers === 0 && venues === 0) {
-    return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing synced yet."} />;
+    return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing to show here yet."} />;
   }
 
   const surfaces = [
@@ -60,7 +60,7 @@ export default async function DiscoverPage() {
       icon: "/assets/icons/navigation/leagues.webp",
       label: "Leagues",
       count: leagues,
-      countLabel: leagues === 1 ? "competition synced" : "competitions synced",
+      countLabel: leagues === 1 ? "competition" : "competitions",
       description: "Browse every competition KIVO tracks, from top-flight leagues to cup competitions.",
     },
     {
@@ -68,31 +68,31 @@ export default async function DiscoverPage() {
       icon: "/assets/icons/navigation/teams.webp",
       label: "Teams",
       count: teams,
-      countLabel: teams === 1 ? "team synced" : "teams synced",
-      description: "Club pages with squads, form and fixtures for every team synced into KIVO.",
+      countLabel: teams === 1 ? "club" : "clubs",
+      description: "Squads, form and fixtures for every club on KIVO.",
     },
     {
       href: "/players",
       icon: "/assets/icons/navigation/players.webp",
       label: "Players",
       count: players,
-      countLabel: players === 1 ? "player synced" : "players synced",
-      description: "Profiles, stats and career details for every player in the KIVO database.",
+      countLabel: players === 1 ? "player" : "players",
+      description: "Profiles, numbers and career history, player by player.",
     },
     {
       href: "/transfers",
       icon: "/assets/icons/navigation/transfers.webp",
       label: "Transfers",
       count: transfers,
-      countLabel: transfers === 1 ? "transfer synced" : "transfers synced",
-      description: "Confirmed transfers for players synced so far, not the full transfer market.",
+      countLabel: transfers === 1 ? "transfer" : "transfers",
+      description: "Confirmed moves — the deals that are done, not the rumours.",
     },
     {
       href: "/managers",
       icon: "/assets/icons/misc/managers.webp",
       label: "Managers",
       count: managers,
-      countLabel: managers === 1 ? "manager synced" : "managers synced",
+      countLabel: managers === 1 ? "manager" : "managers",
       description: "The people in the dugout, and the clubs KIVO has them at.",
     },
     {
@@ -100,12 +100,12 @@ export default async function DiscoverPage() {
       icon: "/assets/icons/misc/stadiums.webp",
       label: "Venues",
       count: venues,
-      countLabel: venues === 1 ? "venue synced" : "venues synced",
-      description: "Grounds, cities and capacities for the stadiums KIVO has fixtures at.",
+      countLabel: venues === 1 ? "venue" : "venues",
+      description: "Grounds, cities and capacities for the stadiums the football is played at.",
     },
   // A surface with nothing behind it is a dead end dressed as a destination,
-  // so an entity list KIVO has not synced a single row of is left off the hub
-  // entirely rather than shown reading "0 synced".
+  // so an entity list without a single row is left off the hub entirely rather
+  // than shown reading "0".
   ].filter((surface) => surface.count > 0);
 
   return (
@@ -117,7 +117,7 @@ export default async function DiscoverPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-foreground">Discover</h1>
           <p className="text-sm text-foreground-muted">
-            Browse everything KIVO has synced. Leagues, clubs, players and transfers, all in one place.
+            Leagues, clubs, players and transfers — all in one place.
           </p>
         </div>
       </FadeIn>
@@ -170,7 +170,7 @@ export default async function DiscoverPage() {
           <ShieldCheck className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
           <span className="flex flex-col">
             <span className="text-sm font-medium text-foreground">What KIVO knows</span>
-            <span className="text-xs text-foreground-muted">See exactly what&apos;s synced right now, and how fresh it is.</span>
+            <span className="text-xs text-foreground-muted">Exactly what KIVO has right now, and how fresh it is.</span>
           </span>
         </Link>
       </FadeIn>

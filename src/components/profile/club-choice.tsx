@@ -181,7 +181,7 @@ export function ClubChoice({
         <ShieldHalf className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
         <p className="text-sm font-semibold text-foreground">No clubs yet</p>
         <p className="max-w-xs text-xs leading-relaxed text-foreground-muted">
-          KIVO has not synced any football data yet, so there are no clubs to choose from. Once competitions are
+          There are no clubs to choose from just yet. Once competitions are
           live this is where you pick the one you support.
         </p>
       </div>

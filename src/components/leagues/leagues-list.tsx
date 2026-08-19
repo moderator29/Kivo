@@ -48,14 +48,14 @@ export function LeaguesList({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter loaded leagues…"
+          placeholder="Filter competitions…"
           aria-label="Filter leagues"
           className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
         />
       </div>
 
       {filteredLeagues.length === 0 ? (
-        <p className="py-10 text-center text-sm text-foreground-muted">No loaded leagues match &quot;{query}&quot;.</p>
+        <p className="py-10 text-center text-sm text-foreground-muted">No competitions match &quot;{query}&quot;.</p>
       ) : (
         <StaggeredList
           items={filteredLeagues}
@@ -82,7 +82,7 @@ export function LeaguesList({
                           for all of them — a claim about the competition, not
                           a note that KIVO does not know. See
                           competitionMetaLine. */}
-                      {competitionMetaLine([league.country, "No season synced yet"])}
+                      {competitionMetaLine([league.country, "No season yet"])}
                     </span>
                   </div>
                 </div>

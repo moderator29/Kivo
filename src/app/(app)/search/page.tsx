@@ -32,7 +32,7 @@ export default async function SearchPage({
 
   return (
     <div className="kivo-page">
-      <PageHeader title="Search" description="Everything KIVO has synced — clubs, players, competitions, managers and venues." />
+      <PageHeader title="Search" description="Clubs, players, competitions, managers and venues — all in one place." />
       <SearchSurface
         initialQuery={initialQuery}
         initialResults={results}

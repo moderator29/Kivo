@@ -349,25 +349,23 @@ function OverviewTab({
       </div>
 
       {/* Two different sentences, because they are two different facts and a
-          fan acts on them differently: "not synced yet" means wait, and "the
-          provider does not publish this for this competition" means stop
-          waiting. The second is only ever said on the provider's own authority
-          — see `competitionCoverage`. */}
+          fan acts on them differently: "not there yet" means wait, and "this
+          competition doesn't carry it" means stop waiting. The second is only
+          ever said on the data source's own authority — see
+          `competitionCoverage`. */}
       {unsupported.length > 0 ? (
         <p className="px-1 text-xs leading-relaxed text-foreground-muted">
-          {`KIVO's football provider doesn't publish ${formatAreaList(unsupported)} for this competition, so ${
+          {`KIVO doesn't have ${formatAreaList(unsupported)} for this competition, so ${
             unsupported.length === 1 ? "that tab" : "those tabs"
           } won't fill however long you wait.`}{" "}
-          {unsupported.length < 3
-            ? "Whatever it does publish appears here as its own tab once this fixture has been synced. "
-            : ""}
+          {unsupported.length < 3 ? "Whatever KIVO does have appears here as its own tab. " : ""}
           The Room is open now.
         </p>
       ) : (
         <p className="px-1 text-xs leading-relaxed text-foreground-muted">
           {started
-            ? "Timeline, stats and lineups for this match haven't been synced yet. They'll appear here as their own tabs the moment they land."
-            : "Timeline, stats and lineups appear here as their own tabs once this fixture has been synced — usually around kick-off."}{" "}
+            ? "Timeline, stats and lineups aren't available for this match yet. They'll appear here as their own tabs the moment they do."
+            : "Timeline, stats and lineups appear here as their own tabs, usually around kick-off."}{" "}
           The Room is open now.
         </p>
       )}
@@ -544,7 +542,7 @@ function TimelineTab({
     // asserted the second, so a real goalless game was reported as missing
     // data. Say both, and say which one KIVO cannot rule out.
     return (
-      <EmptyState message="No goals, cards or substitutions on record for this match. Either nothing happened worth recording, or this fixture's details haven't been synced yet — KIVO can't tell those apart from here." />
+      <EmptyState message="No goals, cards or substitutions on record for this match." />
     );
   }
 
@@ -738,7 +736,7 @@ function LineupsTab({
   viewerFantasyRoster: ViewerFantasyRosterEntry[];
 }) {
   if (lineups.length === 0) {
-    return <EmptyState message="Lineups haven't been synced yet for this fixture." />;
+    return <EmptyState message="Lineups aren't available for this match yet." />;
   }
 
   const rosterByPlayerId = new Map(viewerFantasyRoster.map((r) => [r.playerId, r.isCaptain]));
@@ -849,7 +847,7 @@ function LineupsTab({
       {!drawPitches && (home.starters.length > 0 || away.starters.length > 0) && (
         <p className="text-[11px] leading-relaxed text-foreground-subtle">
           Both sides are shown as lists: a positioned pitch is only drawn when every starter on{" "}
-          <em>both</em> teams has a real synced position, and one of these lineups doesn&apos;t yet. Showing one pitch
+          <em>both</em> teams has a real recorded position, and one of these lineups doesn&apos;t yet. Showing one pitch
           and one list would suggest KIVO knows more about one team&apos;s shape than the other.
         </p>
       )}
@@ -983,7 +981,7 @@ function StatsTab({
   const away = stats.find((s) => s.teamId === awayTeamId);
 
   if (!home && !away) {
-    return <EmptyState message="Stats haven't been synced yet for this fixture." />;
+    return <EmptyState message="Statistics aren't available for this match yet." />;
   }
 
   const hasValue = (row: StatRow) => home?.[row.key] != null || away?.[row.key] != null;
@@ -1031,7 +1029,7 @@ function StatsTab({
 
 function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: StandingsRow[]; homeTeamId: string; awayTeamId: string }) {
   if (standings.length === 0) {
-    return <EmptyState message="Standings haven't been synced yet for this competition." />;
+    return <EmptyState message="No table for this competition yet." />;
   }
   // Real `<table>` with `scope="col"` headers (RECOMMENDATIONS.md item 150):
   // this used to be a grid of `<span>`s, which carries no row/column
@@ -1268,7 +1266,7 @@ function MatchCentreTabsInner({
           other three. */}
       {(active === "Overview" || active === "Timeline" || active === "Stats" || active === "Lineups") && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1">
-          <LastSyncedNote timestamp={detailsLastSyncedAt} label="Match details synced" />
+          <LastSyncedNote timestamp={detailsLastSyncedAt} />
           {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
         </div>
       )}

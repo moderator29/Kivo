@@ -278,7 +278,7 @@ export default async function FantasyPage({
       {showGenerateGameweeks && (
         <div className="kivo-glass mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-2xl p-4">
           <p className="text-xs text-foreground-subtle">
-            No gameweek is open for this season yet. Generate gameweeks from the season&apos;s synced fixtures.
+            No gameweek is open for this season yet.
           </p>
           <InlineSyncButton label="Generate gameweeks" action={generateFantasyGameweeks.bind(null, league.season_id)} />
         </div>

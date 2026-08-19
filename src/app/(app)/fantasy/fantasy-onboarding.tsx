@@ -85,8 +85,8 @@ function CreateLeagueCard({ availableSeasons }: { availableSeasons: SeasonOption
 
       {disabled ? (
         <p className="rounded-xl bg-surface-2 px-3 py-3 text-xs leading-relaxed text-foreground-subtle">
-          No active season yet. Fantasy leagues need a season to attach to. Check back once this season&apos;s
-          competition calendar is synced.
+          No active season yet. Fantasy leagues need a season to attach to — check back once the new campaign is
+          under way.
         </p>
       ) : (
         <>

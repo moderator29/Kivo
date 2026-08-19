@@ -28,6 +28,20 @@ import { triggerCoverageSync } from "@/app/admin/data-health/provider-data-actio
  * checked. Saying "not established" is the only honest thing to render when
  * nothing has been established, and it resolves itself the first time the
  * registry is synced.
+ *
+ * FRONTEND SWEEP 2026-08-19 — ADMIN ONLY, and that is the whole change here.
+ *
+ * Every word above is true and this panel is genuinely well built. It was also
+ * rendered, in full, at the bottom of a public competition page: a four-state
+ * matrix of KIVO's ingestion status, the data source's name, the phrase "syncing
+ * more often won't produce it", and a note on when the coverage registry was last
+ * read. A fan who came to see a league table was being handed a build report.
+ *
+ * The honest answer a fan is owed for an empty section is one sentence, and each
+ * section now gives it ("No table for this competition yet"). The four-state
+ * breakdown answers a different question — "should an operator go and fetch
+ * this, and would it even work" — which only an operator can act on. So it stays,
+ * unchanged and complete, for the reader it was written for.
  */
 const STATE_STYLE = {
   present: { icon: CheckCircle2, className: "text-live", label: "Have it" },
@@ -43,25 +57,25 @@ export async function CompetitionCoveragePanel({
   competitionId: string;
   currentSeasonId: string | null;
 }) {
-  const coverage = await getCompetitionCoverage(competitionId, currentSeasonId);
-
-  // The registry sync is a single provider request that answers this question
-  // for EVERY competition at once, which is why the button is offered here — at
-  // the exact moment an admin is looking at a row that says "not established"
-  // — rather than only buried on Data Health.
+  // The gate, before the query. A fan never sees this panel, so a fan never pays
+  // for the read either.
   const profile = await getOrCreateProfile();
   const canSync = profile !== null && canManageFootballData(profile.role);
+  if (!canSync) return null;
+
+  const coverage = await getCompetitionCoverage(competitionId, currentSeasonId);
 
   return (
     <FadeIn className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          What KIVO has for this competition
+          Coverage · admin only
         </h2>
         <p className="text-xs text-foreground-subtle">
-          Counted from KIVO&apos;s own database right now. An empty section below says which of three things it is:
-          nobody has synced it yet, the current data source doesn&apos;t publish it for this competition, or KIVO
-          hasn&apos;t established which of those it is.
+          Staff view. Counted from KIVO&apos;s own database right now — a visitor sees none of this panel, only the
+          one-line empty state each section carries. An empty section is one of three things: nobody has synced it
+          yet, the current data source doesn&apos;t publish it for this competition, or KIVO hasn&apos;t established
+          which of those it is.
         </p>
       </div>
 

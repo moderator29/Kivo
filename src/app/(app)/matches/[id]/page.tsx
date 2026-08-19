@@ -444,7 +444,7 @@ export default async function MatchCentrePage({
           )}
         </div>
 
-        <LastSyncedNote timestamp={fixturesLastSyncedAt} label="Score and status synced" />
+        <LastSyncedNote timestamp={fixturesLastSyncedAt} />
 
         <div className="flex items-center justify-between gap-3">
           <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">

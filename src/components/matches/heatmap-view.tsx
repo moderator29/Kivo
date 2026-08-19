@@ -124,7 +124,7 @@ function basisSentence(
   usedPlayerStatistics: boolean,
 ): string {
   if (heatmap.derivation === "tracked") {
-    return `Built from ${heatmap.totalActions.toLocaleString("en-GB")} tracked on-pitch positions recorded by ${heatmap.sourcesUsed.join(", ") || "the positional data provider"}.`;
+    return `Built from ${heatmap.totalActions.toLocaleString("en-GB")} recorded on-pitch positions.`;
   }
 
   const anchorBasis = subject.anchor?.basis ?? "no positional basis";
@@ -248,9 +248,8 @@ export function HeatmapView({ heatmaps, homeTeamName, awayTeamName }: HeatmapVie
             )}
           </div>
           <p className="text-[11px] leading-relaxed text-foreground-subtle">
-            KIVO has no positional-tracking provider, and no football data source publishes pitch coordinates on this
-            plan. These shapes are built from where each player lined up and what the match record contains — read
-            them as a picture of a role, not of movement.
+            KIVO doesn&apos;t have tracking data for this match. These shapes are built from where each player lined
+            up and what the match record contains — read them as a picture of a role, not of movement.
           </p>
         </div>
 
@@ -430,7 +429,7 @@ export function HeatmapView({ heatmaps, homeTeamName, awayTeamName }: HeatmapVie
               <p className="text-sm text-foreground">Nothing recorded for {subject.playerName} in this period</p>
               <p className="mt-1 text-xs text-foreground-subtle">
                 {heatmap.actionsWithoutPeriod > 0
-                  ? `KIVO holds ${heatmap.actionsWithoutPeriod.toLocaleString("en-GB")} recorded actions for this player that the provider reports as a match total, with no half attached — so they can only be shown under Full match.`
+                  ? `${heatmap.actionsWithoutPeriod.toLocaleString("en-GB")} recorded actions for this player carry no half, only a match total — so they can only be shown under Full match.`
                   : "Switch period, or pick another player."}
               </p>
             </div>
@@ -529,10 +528,10 @@ function HeatmapEmptyState({ reason, teamName }: { reason: "nothing-synced" | "n
       <div className="relative flex flex-col gap-1.5">
         {reason === "nothing-synced" ? (
           <>
-            <p className="text-sm font-medium text-foreground">No lineup synced for this match yet</p>
+            <p className="text-sm font-medium text-foreground">No lineup for this match yet</p>
             <p className="max-w-xs text-xs leading-relaxed text-foreground-subtle">
-              A heatmap starts from who played and where they lined up. Once this match&apos;s lineup is synced, this
-              fills in on its own.
+              A heatmap starts from who played and where they lined up. Once the lineup lands, this fills in on its
+              own.
             </p>
           </>
         ) : (

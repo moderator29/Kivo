@@ -8,7 +8,7 @@ import { staggerDelay } from "@/lib/stagger";
 
 export const metadata: Metadata = {
   title: "What KIVO knows",
-  description: "Exactly what football data KIVO has synced right now, and when it was last refreshed.",
+  description: "Exactly how much football KIVO has on record right now, and when it was last updated.",
 };
 
 // RECOMMENDATIONS.md item 176: "a 'what KIVO knows' transparency page" — the
@@ -52,14 +52,14 @@ export default async function TransparencyPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold text-foreground">What KIVO knows</h1>
           <p className="text-sm text-foreground-muted">
-            KIVO never invents football data. Here is exactly what has been synced from the provider so far, and how
-            fresh it is.
+            KIVO never invents football data. Here is exactly what it has on record right now, counted live, and
+            how fresh it is.
           </p>
         </div>
       </FadeIn>
 
       <FadeIn delay={staggerDelay(1, 0.06)} className="kivo-glass rounded-2xl p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-foreground-subtle">Real rows synced</h2>
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-foreground-subtle">On record</h2>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {rows.map((row) => (
             <div key={row.table} className="flex flex-col gap-1">
@@ -73,25 +73,22 @@ export default async function TransparencyPage() {
       <FadeIn delay={staggerDelay(2, 0.06)} className="kivo-glass rounded-2xl p-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-foreground-subtle">Freshness</h2>
         <div className="flex flex-col gap-3 text-sm">
+          {/* FRONTEND SWEEP: the request-quota readout that used to sit here
+              ("Provider requests remaining today: 47") is an operations metric.
+              It tells a fan nothing they can act on and everything about how
+              KIVO is plumbed, and it already exists — with far more context —
+              on admin Data Health, which is the reader it was written for. What
+              a fan came to this page for is the two facts below: how much is
+              here, and how current it is. */}
           <p className="text-foreground-muted">
-            Last successful sync:{" "}
+            Last updated:{" "}
             <span className="font-medium text-foreground">
-              {freshness.lastSyncedAt ? timeAgo(freshness.lastSyncedAt) : "Nothing synced yet"}
+              {freshness.lastSyncedAt ? `${timeAgo(freshness.lastSyncedAt)} ago` : "not yet"}
             </span>
           </p>
-          <p className="text-foreground-muted">
-            {freshness.quotaRemaining !== null
-              ? (
-                <>
-                  Provider requests remaining today:{" "}
-                  <span className="font-medium text-foreground">{freshness.quotaRemaining}</span>
-                </>
-              )
-              : "Provider quota: not yet reported by a sync run."}
-          </p>
           <p className="text-xs text-foreground-subtle">
-            KIVO syncs on demand, not on a schedule — there is no live polling, so this page reflects the most recent
-            time someone triggered a sync, not real-time provider state.
+            KIVO refreshes when a football page is opened and the data behind it is already stale, rather than
+            continuously — so a match in progress can be a little behind the ground.
           </p>
         </div>
       </FadeIn>

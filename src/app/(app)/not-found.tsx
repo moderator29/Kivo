@@ -20,7 +20,7 @@ export default function AppNotFound() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold text-foreground">Offside. That doesn&apos;t exist.</h1>
         <p className="max-w-md text-sm text-foreground-muted">
-          Whatever you were looking for isn&apos;t here, might&apos;ve moved, or was never synced. Try search, or
+          Whatever you were looking for isn&apos;t here, or it might have moved. Try search, or
           pick somewhere to go.
         </p>
       </div>

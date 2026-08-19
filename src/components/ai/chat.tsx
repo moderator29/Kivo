@@ -134,7 +134,6 @@ export function AiChat({
   focusLabel = null,
   groundingSummary = "",
   lastSyncedAt = null,
-  quotaRemaining = null,
 }: {
   signedIn: boolean;
   initialConversations?: ConversationSummary[];
@@ -154,7 +153,6 @@ export function AiChat({
    * below unmodified. */
   groundingSummary?: string;
   lastSyncedAt?: string | null;
-  quotaRemaining?: number | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -460,7 +458,7 @@ export function AiChat({
   // say so up front, before the user even asks.
   const inputPlaceholder = hasSyncedFixtures
     ? "Ask KIVO's AI Copilot…"
-    : "Ask about football knowledge. Today's fixtures aren't synced yet…";
+    : "Ask about football. KIVO has no fixtures for today…";
   // Dots show only until the assistant's reply actually starts streaming —
   // once the last message is the (growing) assistant bubble, that bubble is
   // itself the "it's working" signal.
@@ -537,17 +535,15 @@ export function AiChat({
           >
             <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">What KIVO knows right now</p>
-              <p className="text-xs text-foreground-muted">
-                Last provider sync:{" "}
-                {lastSyncedAt ? (
-                  <RelativeTime iso={lastSyncedAt} className="text-foreground" />
-                ) : (
-                  <span className="text-foreground">nothing synced yet</span>
-                )}
-                {" · "}
-                Provider quota remaining today:{" "}
-                <span className="text-foreground">{quotaRemaining !== null ? quotaRemaining : "not yet reported"}</span>
-              </p>
+              {/* FRONTEND SWEEP: the daily request-quota figure that used to sit
+                  on this line is an operations metric — it says nothing about
+                  whether an answer can be trusted, which is the only question
+                  this panel exists to answer. It lives on admin Data Health. */}
+              {lastSyncedAt && (
+                <p className="text-xs text-foreground-muted">
+                  Last updated <RelativeTime iso={lastSyncedAt} className="text-foreground" />
+                </p>
+              )}
               <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface-inset p-3 text-[11px] leading-relaxed text-foreground-muted">
                 {groundingSummary || "No grounding context available."}
               </pre>
@@ -604,8 +600,8 @@ export function AiChat({
               className="kivo-glass flex flex-col gap-3 rounded-2xl p-5"
             >
               <p className="text-sm text-foreground-muted">
-                Ask me anything about football. I only state facts KIVO has actually verified. If the data isn&apos;t
-                synced yet, I&apos;ll say so instead of guessing.
+                Ask me anything about football. I only state facts KIVO has actually verified — if I don&apos;t have
+                something, I&apos;ll say so instead of guessing.
               </p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((s, i) => (

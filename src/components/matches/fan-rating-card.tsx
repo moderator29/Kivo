@@ -101,7 +101,7 @@ export function FanRatingCard({ fixtureId, signedIn, initialRating, ratingCount,
     <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Rate this match</h2>
-        <span className="text-[11px] text-foreground-subtle">Fan opinion, not a provider rating</span>
+        <span className="text-[11px] text-foreground-subtle">Fans&apos; verdict, not a pundit&apos;s</span>
       </div>
 
       <div

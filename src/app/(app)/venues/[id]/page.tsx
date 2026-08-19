@@ -4,7 +4,7 @@ import { MapPin, Users2, CalendarClock } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
-import { MatchRow } from "@/components/matches/match-row";
+import { MatchRowList } from "@/components/matches/match-row";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { parseUuidParam } from "@/lib/params";
 import { readList, readOptionalRow, readRow } from "@/lib/query-result";
@@ -83,7 +83,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
 
         <FadeIn delay={0.1} className="mt-4 flex items-center gap-2 text-sm text-foreground-muted">
           <Users2 className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-          {venue.capacity ? `Capacity ${formatNumber(venue.capacity)}` : "Capacity not yet synced"}
+          {venue.capacity ? `Capacity ${formatNumber(venue.capacity)}` : "Capacity not listed"}
         </FadeIn>
       </div>
 
@@ -95,15 +95,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         {fixturesOutcome.failed ? (
           <LoadFailed title="Fixtures at this venue" tone="section" icon={<CalendarClock className="h-6 w-6" strokeWidth={1.75} />} />
         ) : fixturesOutcome.rows.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {fixturesOutcome.rows.map((fixture) => (
-              <MatchRow key={fixture.id} fixture={fixture} />
-            ))}
-          </div>
+          <MatchRowList fixtures={fixturesOutcome.rows} />
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No fixtures synced at this venue yet. They appear here as KIVO syncs the competitions played at this
-            ground.
+            No matches at this ground yet.
           </div>
         )}
       </FadeIn>

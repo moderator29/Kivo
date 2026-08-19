@@ -88,12 +88,12 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
           By competition
         </h2>
         <p className="text-sm text-foreground-muted">
-          No season statistics synced for this player yet. Only you can see this section.
+          No season-by-season breakdown for this player yet. Only you can see this section.
         </p>
         <InlineSyncButton
           label="Sync season statistics"
           action={triggerPlayerSeasonStatisticsSync.bind(null, playerId, undefined)}
-          hint="Requires this player's squad to have been synced first."
+          hint="Requires this player's club squad first."
         />
       </FadeIn>
     );
@@ -253,8 +253,8 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
 
       {anyUnlinked && (
         <p className="text-[11px] leading-relaxed text-foreground-subtle">
-          Some competitions above aren&apos;t linked because KIVO hasn&apos;t synced them yet. Their numbers are real
-          and complete — leaving the rows out would have made this career look smaller than it is.
+          Some competitions above aren&apos;t linked to a page on KIVO yet. Their numbers are real and complete —
+          leaving the rows out would have made this career look smaller than it is.
         </p>
       )}
     </FadeIn>

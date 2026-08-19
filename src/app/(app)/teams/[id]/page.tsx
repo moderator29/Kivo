@@ -92,7 +92,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
   }
 
   return (
-    <div className="kivo-glass flex items-center justify-between gap-3 rounded-2xl p-4">
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="w-4 shrink-0 text-[11px] font-semibold uppercase text-foreground-subtle">
           {isHome ? "H" : "A"}
@@ -130,7 +130,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
           </span>
         )}
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -382,7 +382,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     .filter((result): result is FormResult => result !== null);
 
   const finishedMatches = finishedMatchesCount ?? 0;
-  const matchSampleLabel = `Based on ${finishedMatches} finished match${finishedMatches === 1 ? "" : "es"} KIVO has synced for ${team.name}.`;
+  const matchSampleLabel = `From ${finishedMatches} completed match${finishedMatches === 1 ? "" : "es"}.`;
 
   // RECOMMENDATIONS.md item 162: goal-timing distribution. RECOMMENDATIONS.md
   // item 226: this used to aggregate goalEvents inline, a second copy of the
@@ -476,7 +476,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           ) : (
             <div className="mt-4 flex items-center gap-2 text-xs text-foreground-subtle">
               <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              <span>Venue not yet synced</span>
+              <span>Home ground not listed</span>
             </div>
           )}
         </FadeIn>
@@ -576,7 +576,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
             )}
           </div>
         ) : (
-          <p className="text-sm text-foreground-muted">Standings not yet synced for this team.</p>
+          <p className="text-sm text-foreground-muted">No league table for this club yet.</p>
         )}
       </FadeIn>
 
@@ -604,7 +604,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </Link>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No manager on record yet.
+            Manager not listed.
           </div>
         )}
       </FadeIn>
@@ -654,12 +654,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </div>
         ) : (
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            Squad not yet synced for this team.
+            The squad list for this club isn&apos;t available yet.
             {canManageFootballData(profile?.role) && (
               <InlineSyncButton
                 label="Sync squad"
                 action={triggerTeamSquadSync.bind(null, team.id)}
-                hint="Needs this team's fixtures synced first, so it has a provider mapping to sync against."
+                hint="Needs this club's fixtures first, so it has a mapping to pull a squad against."
               />
             )}
           </div>
@@ -672,10 +672,16 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           Upcoming fixtures
         </h2>
         {upcoming && upcoming.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {upcoming.map((fixture) => (
-              <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
-            ))}
+          // FRONTEND SWEEP: one surface, hairline-divided rows — not one card
+          // per fixture. Same rule MatchList applies to /matches; the row here
+          // stays team-relative because that IS the information this list
+          // carries, and only the container changes.
+          <div className="kivo-glass overflow-hidden rounded-2xl">
+            <ul className="flex flex-col divide-y divide-hairline-soft">
+              {upcoming.map((fixture) => (
+                <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
+              ))}
+            </ul>
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
@@ -695,14 +701,20 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           {recentForm.length > 0 && <FormBadges form={recentForm} />}
         </div>
         {recent && recent.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {recent.map((fixture) => (
-              <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
-            ))}
+          // FRONTEND SWEEP: one surface, hairline-divided rows — not one card
+          // per fixture. Same rule MatchList applies to /matches; the row here
+          // stays team-relative because that IS the information this list
+          // carries, and only the container changes.
+          <div className="kivo-glass overflow-hidden rounded-2xl">
+            <ul className="flex flex-col divide-y divide-hairline-soft">
+              {recent.map((fixture) => (
+                <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
+              ))}
+            </ul>
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No results synced yet.
+            No results yet.
           </div>
         )}
       </FadeIn>
@@ -724,7 +736,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             {finishedMatches > 0
               ? `No goals recorded yet for this team. ${matchSampleLabel}`
-              : "No finished matches synced yet for this team."}
+              : "No completed matches for this club yet."}
           </div>
         )}
       </FadeIn>
@@ -769,7 +781,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             {finishedMatches > 0
               ? `No cards recorded yet for this team. ${matchSampleLabel}`
-              : "No finished matches synced yet for this team."}
+              : "No completed matches for this club yet."}
           </div>
         )}
       </FadeIn>
@@ -842,7 +854,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No transfer activity synced for this club yet.
+            No transfer activity recorded for this club yet.
           </div>
         )}
       </FadeIn>

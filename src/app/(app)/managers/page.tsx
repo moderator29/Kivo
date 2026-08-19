@@ -41,13 +41,13 @@ export default async function ManagersPage() {
       <NoDataYet
         icon={<UserRound className="h-6 w-6" strokeWidth={1.75} />}
         title="Managers"
-        description="No managers synced yet. Managers come in alongside a team's squad sync."
+        description="No managers to show yet. Check back soon."
       />
     );
   }
 
   return (
-    <EntityListPage title="Managers" description="Managers synced alongside each team's squad.">
+    <EntityListPage title="Managers" description="The people in the dugout, club by club.">
       <ManagersList managers={managers} />
     </EntityListPage>
   );

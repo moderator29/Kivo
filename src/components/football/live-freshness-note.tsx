@@ -52,7 +52,7 @@ export async function LiveFreshnessNote({ className = "" }: { className?: string
 
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
-      <LastSyncedNote timestamp={lastSyncedAt} label="Scores updated" />
+      <LastSyncedNote timestamp={lastSyncedAt} />
       {exhausted ? (
         <span className="flex items-start gap-1.5 text-[11px] leading-relaxed text-warning">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />

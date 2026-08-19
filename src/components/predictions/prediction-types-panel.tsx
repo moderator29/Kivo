@@ -276,7 +276,7 @@ function TypeGroup({
       {squadMissing ? (
         <p className="flex items-start gap-1.5 text-[11px] text-warning">
           <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
-          KIVO hasn&apos;t synced either squad for this match yet, so there are no real players to pick from.
+          Neither squad is available for this match yet, so there are no players to pick from.
         </p>
       ) : (
         <>

@@ -60,7 +60,6 @@ function competitionOptions(fixtures: LiveListFixture[]): CompetitionFilterOptio
 export function LiveCentreSections({
   fixtures,
   fantasyMatchCounts,
-  providerLabel,
   rankingSignals,
   signedIn,
 }: {
@@ -79,7 +78,6 @@ export function LiveCentreSections({
    * selects between two real implementations — a hardcoded vendor name in
    * user-facing copy is the same class of error as a fabricated stat.
    */
-  providerLabel: string | null;
 }) {
   const all = useRealtimeFixtures(fixtures);
 
@@ -110,7 +108,7 @@ export function LiveCentreSections({
       <FadeIn className="flex items-start justify-between gap-3">
         <p className="text-sm text-foreground-muted">
           {live.length > 0
-            ? `Matches in progress right now${providerLabel ? `, synced from ${providerLabel}` : ""}.`
+            ? "Matches in progress right now."
             : "Nothing in play right now. Here's what's on today."}
         </p>
         <CompetitionFilter
@@ -134,7 +132,6 @@ export function LiveCentreSections({
               page. */}
           <FixtureGroups
             fixtures={live}
-            showLiveDot={false}
             fantasyMatchCounts={fantasyMatchCounts}
             rankingSignals={rankingSignals}
             signedIn={signedIn}

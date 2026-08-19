@@ -141,7 +141,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
             {team.venueCity ? `, ${team.venueCity}` : ""}
           </p>
         ) : (
-          <p className="text-[11px] text-foreground-subtle">Venue not yet synced</p>
+          <p className="text-[11px] text-foreground-subtle">Home ground not listed</p>
         )}
       </div>
 
@@ -171,7 +171,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
             </div>
           </>
         ) : (
-          <p className="text-sm text-foreground-muted">Not synced yet.</p>
+          <p className="text-sm text-foreground-muted">Not available yet.</p>
         )}
       </div>
 
@@ -183,7 +183,7 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
             <span className="font-semibold text-foreground">{team.squadCount}</span> players on record
           </>
         ) : (
-          "Not synced yet."
+          "Not available yet."
         )}
       </p>
     </div>
@@ -204,7 +204,7 @@ export default async function TeamComparePage({
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
         <p className="text-sm text-foreground-muted">
-          Comparing teams needs at least two synced clubs. Check back once more teams are synced.
+          Comparing needs at least two clubs. Check back soon.
         </p>
         <Link
           href="/teams"
@@ -299,7 +299,7 @@ export default async function TeamComparePage({
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn>
         <h1 className="text-xl font-semibold text-foreground">Compare teams</h1>
-        <p className="text-sm text-foreground-muted">Real, synced data side by side. No AI, no guesswork.</p>
+        <p className="text-sm text-foreground-muted">Two clubs, side by side. Real numbers, no guesswork.</p>
       </FadeIn>
 
       <FadeIn delay={0.08}>
@@ -357,7 +357,7 @@ export default async function TeamComparePage({
               <Users className="h-3 w-3" strokeWidth={2} />
               Squad size
             </div>
-            <p>All figures come from KIVO&apos;s synced football data. Nothing here is estimated or AI-generated.</p>
+            <p>Every figure here is a real recorded result. Nothing is estimated or AI-generated.</p>
           </FadeIn>
         </>
       )}

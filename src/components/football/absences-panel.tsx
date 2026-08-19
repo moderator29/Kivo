@@ -46,7 +46,7 @@ type AbsenceStatus = keyof typeof STATUS_STYLE;
 
 export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; teamName: string }) {
   const supabase = createServerSupabaseClient();
-  const { name: providerName, label: providerLabel } = getActiveProviderStatus();
+  const { name: providerName } = getActiveProviderStatus();
 
   const [{ data: rows }, { data: latestFixture }] = await Promise.all([
     supabase
@@ -146,18 +146,15 @@ export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; 
             })}
           </ul>
           <p className="text-[11px] leading-relaxed text-foreground-subtle">
-            As reported by {providerLabel ?? "the connected data source"}. KIVO doesn&apos;t estimate return dates —
-            no data source publishes one.
+            KIVO doesn&apos;t estimate return dates — only clubs know those.
           </p>
         </>
       ) : (
-        <p className="text-sm text-foreground-muted">
-          {verdict === "unsupported"
-            ? `${providerLabel ?? "The current data source"} doesn't publish absence reports for ${teamName}'s competition, so this section can't fill.`
-            : verdict === "supported"
-              ? `No absences have been synced for ${teamName} yet.`
-              : `No absences synced for ${teamName}, and KIVO hasn't established whether ${providerLabel ?? "the current data source"} publishes them for this competition.`}
-        </p>
+        // FRONTEND SWEEP: one sentence for a fan, same reasoning as
+        // top-scorers-panel. Note what this deliberately does NOT say: "no
+        // absences" is not "everyone is fit". The absence of a report is not
+        // evidence of a clean bill of health, and KIVO must not imply it is.
+        <p className="text-sm text-foreground-muted">No injury or suspension list for {teamName} right now.</p>
       )}
 
       {canSync && latestFixture?.competition_id && (
@@ -180,7 +177,6 @@ export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; 
  */
 export async function PlayerAbsenceNote({ playerId }: { playerId: string }) {
   const supabase = createServerSupabaseClient();
-  const { label: providerLabel } = getActiveProviderStatus();
 
   const { data: row } = await supabase
     .from("injuries")
@@ -209,8 +205,6 @@ export async function PlayerAbsenceNote({ playerId }: { playerId: string }) {
               <LocalDateTime iso={`${row.reported_on}T12:00:00Z`} format="dayTime" />
             </>
           )}
-          {" · "}
-          {providerLabel ?? "connected data source"}
         </span>
       </div>
     </div>
