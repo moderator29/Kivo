@@ -25,6 +25,7 @@ import type { Database as DatabaseType } from "@/lib/supabase/types";
 import { TeamMergePanel } from "@/components/admin/team-merge-panel";
 import { ClubCataloguePanel } from "@/components/admin/club-catalogue-panel";
 import { StandingsTransfersPanel } from "@/components/admin/standings-transfers-panel";
+import { CompetitionScopePanel } from "@/components/admin/competition-scope-panel";
 
 type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
 
@@ -703,6 +704,8 @@ export default async function DataHealthPage() {
           one day's fixtures runs perfectly while producing a database of
           whoever happened to kick off. */}
       <ClubCataloguePanel />
+
+      <CompetitionScopePanel />
 
       <StandingsTransfersPanel />
 

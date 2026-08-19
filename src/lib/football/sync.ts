@@ -7,7 +7,7 @@ import { getFootballDataProvider } from "./index";
 import type { FixtureStatus, NormalizedFixture, NormalizedTeam } from "./types";
 import { notifyFixtureStatusChange, type FixtureStatusChangeInput } from "./match-notifications";
 import { createAsyncMemo, createKeyedSerializer, mapWithConcurrency } from "@/lib/concurrency";
-import { getSyncedCompetitionProviderIds } from "./competitions-config";
+import { resolveSyncedCompetitionProviderIds } from "./competition-scope";
 // KIVO_NEXT_GEN KN-12: batchFindMappedIds used to live privately in this file.
 // sync-match-details.ts is now a second caller, so it moved to the shared
 // provider-mappings module (and gained chunking on the way).
@@ -830,7 +830,13 @@ export async function syncTodayFixtures(
     // The provider name is passed because the default list is API-Football's
     // own numbering and means something else entirely under another provider's
     // ids.
-    const syncedCompetitionIds = getSyncedCompetitionProviderIds(provider.name);
+    // Resolved against `competition_scope` first (migration 0114), so an
+    // operator can add a competition by picking it out of the provider's own
+    // registry rather than by anyone typing a league id — and falls back to
+    // the env var and then the shipped default exactly as before. A failed
+    // read returns the static scope, never an empty one: an empty allowlist
+    // would scope every sync to zero and read as "there is no football".
+    const syncedCompetitionIds = await resolveSyncedCompetitionProviderIds(supabase, provider.name);
     const fixturesBeforeScoping = fixtures.length;
     if (syncedCompetitionIds) {
       fixtures = fixtures.filter((f) => syncedCompetitionIds.has(f.competitionProviderId));

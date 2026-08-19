@@ -249,6 +249,33 @@ export type Database = {
           },
         ]
       }
+      competition_scope: {
+        Row: {
+          added_at: string
+          country: string | null
+          label: string | null
+          position: number
+          provider: string
+          provider_entity_id: string
+        }
+        Insert: {
+          added_at?: string
+          country?: string | null
+          label?: string | null
+          position: number
+          provider: string
+          provider_entity_id: string
+        }
+        Update: {
+          added_at?: string
+          country?: string | null
+          label?: string | null
+          position?: number
+          provider?: string
+          provider_entity_id?: string
+        }
+        Relationships: []
+      }
       competition_teams: {
         Row: {
           competition_id: string
