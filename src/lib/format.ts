@@ -57,6 +57,10 @@ export const DATE_TIME_FORMATS = {
   full: { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
   /** "Sat, 14 Aug, 10:30" — a fantasy/prediction deadline. */
   deadline: { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+  /** "Sat 14 Aug" — a calendar day with no time, for a kickoff whose time is
+   * already printed next to it (a club page's next-match block prints the two
+   * on separate lines, and repeating "10:30" under "10:30" helps nobody). */
+  dayMonth: { weekday: "short", day: "numeric", month: "short" },
 } satisfies Record<string, Intl.DateTimeFormatOptions>;
 
 export type DateTimeFormatName = keyof typeof DATE_TIME_FORMATS;
