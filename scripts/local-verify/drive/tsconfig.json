@@ -4,7 +4,8 @@
     "paths": {
       "@/*": ["../../../src/*"],
       "server-only": ["./empty.ts"],
-      "next/headers": ["./next-headers-stub.ts"]
+      "next/headers": ["./next-headers-stub.ts"],
+      "next/cache": ["./next-cache-stub.ts"]
     }
   }
 }
