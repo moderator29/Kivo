@@ -1,6 +1,4 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 
 interface NoDataYetProps {
@@ -12,67 +10,46 @@ interface NoDataYetProps {
   title: string;
   description: string;
   /**
-   * KIVO_NEXT_GEN KN-115. On by default, and the default is the point.
-   *
-   * Set false only for an empty state whose emptiness is genuinely about the
-   * *viewer* rather than about KIVO's coverage — "you haven't saved anything
-   * yet" is not the data pipeline's fault and explaining the pipeline there
-   * would be a non-sequitur.
+   * An optional real next step: "See tomorrow's matches", "Browse competitions".
+   * An empty state that offers a way onward stops being a dead end, which is
+   * the whole difference between a considered one and an apology.
    */
-  explainCoverage?: boolean;
+  action?: ReactNode;
 }
 
 /**
- * The honest counterpart to `ComingSoon` for a feature that is fully built
- * but whose backing table is currently empty (nothing synced yet). Reuses
- * `ComingSoon`'s general shape — icon, title, description, centered — but
- * drops the "Coming soon" eyebrow, the 3D manifest art, the gradient glow
- * and the glass card, and shrinks the vertical padding, so it reads as a
- * quiet, temporary lull rather than a feature that hasn't shipped.
- * See RECOMMENDATIONS.md item 72.
+ * The empty state for a feature that is fully built but has nothing to show yet.
  *
- * KIVO_NEXT_GEN KN-115: it now also says *why*, in one line, everywhere.
+ * FRONTEND SWEEP 2026-08-19 — this component used to end with a paragraph, on by
+ * default, explaining KIVO's data pipeline to whoever hit it: that coverage is
+ * built one competition at a time from a verified provider, never scraped, and
+ * that an empty section "means KIVO hasn't synced this yet, not that something is
+ * broken". Plus a link to /transparency.
  *
- * A dozen surfaces each independently said "nothing synced yet" and stopped
- * there. Individually each was honest; together they read as a product that is
- * broken, because nowhere did anything explain that KIVO's coverage is
- * deliberately built one competition at a time rather than scraped wholesale.
- * That is a real product position — it is the reason KIVO can promise it never
- * invents football data — and stating it turns a wall of apparent emptiness
- * into a stated intent.
+ * That paragraph was written in good faith and it is the single clearest example
+ * of the problem this sweep exists to fix. A football fan opening a club page does
+ * not have a mental model of KIVO's ingestion strategy, has not asked for one, and
+ * cannot act on it. Handing them one does not read as honesty — it reads as a
+ * product apologising for itself, on a dozen surfaces at once, which is precisely
+ * why the app felt broken rather than merely early. Sofascore does not explain its
+ * backend on an empty tab; it says "No data" and gets out of the way.
  *
- * Deliberately part of this shared component rather than a first-run banner or
- * a dismissible tip: it appears exactly where the question occurs to someone,
- * needs no stored dismissal state, and disappears on its own the moment there
- * is data. `/transparency` is the page that then shows exactly what KIVO does
- * have, counted for real — so this is a route into a fact, not reassurance.
+ * So: icon, one title, one football-native line, and an optional way onward.
+ * The `/transparency` page still exists and still counts everything for real, for
+ * the reader who genuinely wants it — it is now somewhere you go, not something
+ * you are handed while looking for a squad list.
  */
-export function NoDataYet({ icon, title, description, explainCoverage = true }: NoDataYetProps) {
+export function NoDataYet({ icon, title, description, action }: NoDataYetProps) {
   return (
     <FadeIn className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-1 text-foreground-subtle">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-hairline-soft bg-surface-1 text-foreground-subtle">
         {icon}
       </div>
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-base font-semibold text-foreground">{title}</h1>
-        <p className="max-w-xs text-sm text-foreground-muted">{description}</p>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
+        <p className="max-w-[34ch] text-sm leading-relaxed text-foreground-muted">{description}</p>
       </div>
-      {explainCoverage && (
-        <div className="flex max-w-sm flex-col items-center gap-2">
-          <p className="text-xs leading-relaxed text-foreground-subtle">
-            KIVO builds its football data one competition at a time, from a verified provider — never scraped, never
-            filled in with estimates. Coverage starts empty and grows as competitions are switched on, so an empty
-            section here means KIVO hasn&apos;t synced this yet, not that something is broken.
-          </p>
-          <Link
-            href="/transparency"
-            className="inline-flex items-center gap-1 rounded text-xs font-medium text-accent transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-          >
-            See exactly what KIVO has
-            <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
-          </Link>
-        </div>
-      )}
+      {action}
     </FadeIn>
   );
 }

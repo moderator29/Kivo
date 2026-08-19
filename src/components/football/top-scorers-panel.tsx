@@ -105,7 +105,7 @@ export async function TopScorersPanel({
                 )}
                 <span className="flex items-center gap-1.5 truncate text-[11px] text-foreground-subtle">
                   {row.team && <TeamCrest crestUrl={row.team.crest_url} name={row.team.name} size={12} />}
-                  {row.team?.name ?? "Club not synced"}
+                  {row.team?.name ?? "Club not listed"}
                   {/* Only stated when the provider actually reported it. A
                       missing appearance count is left out rather than shown as
                       zero, which would read as "never played". */}
@@ -126,15 +126,12 @@ export async function TopScorersPanel({
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-foreground-muted">
-          {!seasonId
-            ? "No current season is set for this competition yet, so there's no chart to show."
-            : verdict === "unsupported"
-              ? `${providerLabel ?? "The current data source"} doesn't publish a scoring chart for this competition, so this section can't fill.`
-              : verdict === "supported"
-                ? "No scoring chart has been synced for this season yet."
-                : `No scoring chart synced yet, and KIVO hasn't established whether ${providerLabel ?? "the current data source"} publishes one for this competition.`}
-        </p>
+        // FRONTEND SWEEP: a fan gets one sentence. The three-way verdict split
+        // (unsupported / supported / unknown) is a fact about KIVO's coverage
+        // registry, not about football, and printing it made every quiet section
+        // read as a system report. The distinction still exists and still drives
+        // the admin-only control below, which is the only reader it helps.
+        <p className="text-sm text-foreground-muted">No scoring chart for this competition yet.</p>
       )}
 
       {canSync && (
@@ -143,7 +140,7 @@ export async function TopScorersPanel({
           action={triggerTopScorersSync.bind(null, competitionId, undefined)}
           hint={
             verdict === "unknown"
-              ? "KIVO hasn't read this source's coverage yet — sync the coverage registry first to know whether this can fill."
+              ? "Coverage for this source is unread — sync the coverage registry first to know whether this can fill."
               : undefined
           }
         />

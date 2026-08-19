@@ -88,7 +88,7 @@ export const NAV_ITEMS: NavItem[] = [
     // Reached only when KIVO holds no fixtures at all, for any date — /live
     // checks which of the two empty states it is in and writes the "quiet day"
     // sentence itself.
-    emptyDescription: "KIVO hasn't synced any fixtures yet, so there's nothing to show live.",
+    emptyDescription: "No match is in play right now — live scores appear here the moment one kicks off.",
   },
   {
     id: "matches",
@@ -96,7 +96,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/matches",
     icon: CalendarDays,
     status: "live",
-    emptyDescription: "No fixtures synced yet. Check back soon.",
+    emptyDescription: "No fixtures to show yet. Check back soon.",
   },
   {
     id: "discover",
@@ -104,7 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/discover",
     icon: Compass,
     status: "live",
-    emptyDescription: "Nothing synced yet across leagues, teams, players or transfers. Check back soon.",
+    emptyDescription: "Nothing to explore just yet. Check back soon.",
   },
   { id: "social", label: "Social", href: "/social", icon: Users, status: "live" },
   // Search stopped being a field wedged into the top bar and became a real
@@ -119,7 +119,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/predictions",
     icon: Target,
     status: "live",
-    emptyDescription: "No upcoming fixtures synced yet to predict on.",
+    emptyDescription: "No upcoming matches to predict on yet.",
   },
   {
     id: "transfers",
@@ -127,7 +127,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/transfers",
     icon: ArrowLeftRight,
     status: "live",
-    emptyDescription: "No transfers synced yet.",
+    emptyDescription: "No transfers to show yet.",
   },
   {
     id: "news",
@@ -174,7 +174,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/teams",
     icon: Shield,
     status: "live",
-    emptyDescription: "No teams synced yet. Check back soon.",
+    emptyDescription: "No clubs to show yet. Check back soon.",
   },
   {
     id: "players",
@@ -182,7 +182,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/players",
     icon: UserRound,
     status: "live",
-    emptyDescription: "No players synced yet. Check back soon.",
+    emptyDescription: "No players to show yet. Check back soon.",
   },
   {
     id: "leagues",
@@ -190,7 +190,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/leagues",
     icon: ListOrdered,
     status: "live",
-    emptyDescription: "No competitions synced yet. Check back soon.",
+    emptyDescription: "No competitions to show yet. Check back soon.",
   },
   // KN-30: both of these routes were fully built — list page, detail page,
   // loading skeleton — and reachable from nowhere. Grepping every href in src/
@@ -206,7 +206,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/managers",
     icon: ClipboardList,
     status: "live",
-    emptyDescription: "No managers synced yet. Check back soon.",
+    emptyDescription: "No managers to show yet. Check back soon.",
   },
   {
     id: "venues",
@@ -214,7 +214,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/venues",
     icon: MapPin,
     status: "live",
-    emptyDescription: "No venues synced yet. Check back soon.",
+    emptyDescription: "No venues to show yet. Check back soon.",
   },
   {
     id: "ai",

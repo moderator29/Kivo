@@ -110,7 +110,7 @@ export function LiveCentreSections({
       <FadeIn className="flex items-start justify-between gap-3">
         <p className="text-sm text-foreground-muted">
           {live.length > 0
-            ? `Matches in progress right now${providerLabel ? `, synced from ${providerLabel}` : ""}.`
+            ? "Matches in progress right now."
             : "Nothing in play right now. Here's what's on today."}
         </p>
         <CompetitionFilter

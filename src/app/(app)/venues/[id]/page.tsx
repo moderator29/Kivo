@@ -83,7 +83,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
 
         <FadeIn delay={0.1} className="mt-4 flex items-center gap-2 text-sm text-foreground-muted">
           <Users2 className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-          {venue.capacity ? `Capacity ${formatNumber(venue.capacity)}` : "Capacity not yet synced"}
+          {venue.capacity ? `Capacity ${formatNumber(venue.capacity)}` : "Capacity not listed"}
         </FadeIn>
       </div>
 
@@ -102,8 +102,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No fixtures synced at this venue yet. They appear here as KIVO syncs the competitions played at this
-            ground.
+            No matches at this ground yet.
           </div>
         )}
       </FadeIn>

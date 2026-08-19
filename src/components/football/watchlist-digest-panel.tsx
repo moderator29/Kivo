@@ -50,8 +50,7 @@ export async function WatchlistDigestPanel({ profileId }: { profileId: string })
 
       {digest.events.length === 0 ? (
         <p className="text-xs text-foreground-muted">
-          Nothing has happened to them in that window that KIVO has synced. This is a real answer, not a loading
-          state — if a match was played but its details haven&apos;t been synced yet, it won&apos;t appear here.
+          Nothing has happened to them in that window. A quiet week is a real answer, not a blank screen.
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-hairline-soft">

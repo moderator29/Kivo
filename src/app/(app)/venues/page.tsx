@@ -39,13 +39,13 @@ export default async function VenuesPage() {
       <NoDataYet
         icon={<MapPin className="h-6 w-6" strokeWidth={1.75} />}
         title="Venues"
-        description="No venues synced yet. Venues come in alongside fixture syncs."
+        description="No venues to show yet. Check back soon."
       />
     );
   }
 
   return (
-    <EntityListPage title="Venues" description="Stadiums synced alongside KIVO's fixtures.">
+    <EntityListPage title="Venues" description="The grounds the football is played at.">
       <VenuesList venues={venues} />
     </EntityListPage>
   );

@@ -54,14 +54,14 @@ export default async function TeamsPage({
 
   if (teams.length === 0) {
     return (
-      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing synced yet."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing to show here yet."} />
     );
   }
 
   return (
     <EntityListPage
       title="Teams"
-      description="Clubs KIVO has synced — a competition's full club list where one has been pulled, plus any club that has appeared in a synced fixture."
+      description="Every club on KIVO — browse by name, or jump straight to a squad, form guide and fixture list."
     >
       <TeamsGrid teams={teams} hasMore={hasMore} page={page} />
     </EntityListPage>

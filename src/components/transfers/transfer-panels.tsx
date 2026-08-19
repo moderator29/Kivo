@@ -37,8 +37,8 @@ export function TransferTimeline({ playerName, timeline }: { playerName: string;
         <h2 className="text-sm font-semibold text-foreground">{playerName}&apos;s recorded moves</h2>
         <p className="text-xs text-foreground-muted">
           {timeline.length === 1
-            ? "One move on record. KIVO shows what it has synced, not a full career history."
-            : `${timeline.length} moves on record, newest first. KIVO shows what it has synced, not a full career history.`}
+            ? "One move on record."
+            : `${timeline.length} moves on record, newest first.`}
         </p>
       </div>
       <ol className="flex flex-col gap-0">
@@ -59,14 +59,14 @@ export function TransferTimeline({ playerName, timeline }: { playerName: string;
               <span className="text-xs text-foreground-subtle">{formatDate(entry.transferDate)}</span>
               {entry.isCurrent ? (
                 <span className="truncate text-sm font-semibold text-foreground">
-                  {entry.fromTeamName ?? "Club not synced"} → {entry.toTeamName ?? "Club not synced"}
+                  {entry.fromTeamName ?? "Club not listed"} → {entry.toTeamName ?? "Club not listed"}
                 </span>
               ) : (
                 <Link
                   href={`/transfers/${entry.id}`}
                   className="kivo-focus truncate text-sm font-medium text-foreground hover:text-accent"
                 >
-                  {entry.fromTeamName ?? "Club not synced"} → {entry.toTeamName ?? "Club not synced"}
+                  {entry.fromTeamName ?? "Club not listed"} → {entry.toTeamName ?? "Club not listed"}
                 </Link>
               )}
               <span className="text-[11px] text-foreground-subtle">
@@ -106,7 +106,7 @@ export function TransferFacts({
           What the data says
         </h2>
         <p className="text-xs text-foreground-muted">
-          Counts from what KIVO has actually synced. Not a verdict on the move — KIVO has no data that could
+          Counted from real matches. Not a verdict on the move — KIVO has no data that could
           support one.
         </p>
       </div>
@@ -135,7 +135,7 @@ export function TransferFacts({
             ))}
           </div>
           <span className="text-[11px] text-foreground-subtle">
-            Across every match KIVO has synced for this player. Sync coverage is partial, not a full career record.
+            Across every match KIVO has on record for this player.
           </span>
         </div>
       )}
@@ -156,7 +156,7 @@ export function TransferFacts({
             ))}
           </div>
           <span className="text-[11px] text-foreground-subtle">
-            {squad.syncedPlayerCount} player{squad.syncedPlayerCount === 1 ? "" : "s"} synced for {squad.teamName}
+            {squad.syncedPlayerCount} player{squad.syncedPlayerCount === 1 ? "" : "s"} at {squad.teamName}
             {squad.countInPlayerPosition != null && playerPosition
               ? `, of whom ${squad.countInPlayerPosition} play ${playerPosition.toLowerCase()}.`
               : "."}

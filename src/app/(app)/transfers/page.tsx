@@ -107,7 +107,7 @@ export default async function TransfersPage({
   // filters themselves stay on screen to adjust.
   if (!hasActiveFilters && transfers.length === 0) {
     return (
-      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing synced yet."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing to show here yet."} />
     );
   }
 
@@ -130,8 +130,7 @@ export default async function TransfersPage({
       <FadeIn className="flex flex-col gap-2">
         <h1 className="text-xl font-semibold text-foreground">Transfer Centre</h1>
         <p className="text-sm text-foreground-muted">
-          Completed moves for KIVO&apos;s synced players, newest first, each with its source and the date KIVO
-          retrieved it.
+          Completed moves, newest first. Deals that are done, not rumours.
         </p>
         {/* The directive asked for Confirmed / Reported / Rumour / Unverified.
             Three of those describe a signal KIVO's data does not carry, so the

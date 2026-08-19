@@ -105,7 +105,7 @@ function ClubSide({
           <TeamCrest crestUrl={null} name={null} size={48} />
           {/* Not "Free agent" — KIVO does not know that. It knows only that
               this side of the move references a club it has not synced. */}
-          <span className="text-sm text-foreground-subtle">Club not synced</span>
+          <span className="text-sm text-foreground-subtle">Club not listed</span>
         </>
       )}
     </div>
@@ -183,7 +183,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
               {playerName}
             </Link>
             <span className="truncate text-xs text-foreground-muted">
-              {[player.position, player.nationality].filter(Boolean).join(" · ") || "Position not synced"}
+              {[player.position, player.nationality].filter(Boolean).join(" · ") || "Position not listed"}
             </span>
           </div>
         </div>
@@ -214,24 +214,20 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           {TRANSFER_STATUS_EXPLAINER}
         </p>
 
-        {/* Source and timestamp, from the provider_mappings row the sync
-            actually wrote — attribution for this move, not for whichever
-            provider happens to be configured today. */}
-        {context.source ? (
+        {/* When this move was recorded. FRONTEND SWEEP: this line used to print
+            the raw data-source slug ("api-football") next to it, and a fallback
+            explaining that no provider record was mapped. Neither means anything
+            to a fan — the slug is an internal id and the fallback is a note about
+            KIVO's join tables. The date is the part that is genuinely theirs: it
+            is what lets them tell a deal recorded this morning from one recorded
+            in June. With no record, the line simply does not appear. */}
+        {context.source && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-foreground-subtle">
             <Clock className="h-3 w-3" strokeWidth={2} />
             <span>
-              Source <span className="font-semibold text-foreground-muted">{context.source.provider}</span>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Retrieved by KIVO <RelativeTime iso={context.source.retrievedAt} />
+              Recorded <RelativeTime iso={context.source.retrievedAt} />
             </span>
           </div>
-        ) : (
-          <p className="text-[11px] text-foreground-subtle">
-            No provider record is mapped to this transfer, so KIVO can&apos;t attribute a source for it.
-          </p>
         )}
       </FadeIn>
 

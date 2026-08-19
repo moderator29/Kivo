@@ -89,11 +89,11 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
         <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
             <Flag className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-            {manager.nationality ?? "Nationality not yet synced"}
+            {manager.nationality ?? "Nationality not listed"}
           </div>
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
             <Cake className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-            {manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : "Date of birth not yet synced"}
+            {manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : "Date of birth not listed"}
           </div>
         </FadeIn>
       </div>
@@ -135,7 +135,7 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
             </div>
           ) : (
             <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-              No results synced yet for this club.
+              No results for this club yet.
             </div>
           )}
         </FadeIn>

@@ -240,7 +240,7 @@ export function ShareSheet({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-3 px-6 text-center">
             <p className="text-sm font-medium text-foreground">This card can&apos;t be made yet.</p>
             <p className="max-w-xs text-xs text-foreground-subtle">
-              KIVO only puts real numbers on a card. When the data behind this one is synced, it will render here.
+              KIVO only puts real numbers on a card. When there are some for this one, it will render here.
             </p>
           </div>
         )}

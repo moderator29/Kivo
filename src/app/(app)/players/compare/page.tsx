@@ -159,7 +159,7 @@ export default async function PlayerComparePage({
           Compare players
         </h1>
         <p className="text-sm text-foreground-muted">
-          Appearances, starts, goals and cards, from KIVO&apos;s synced match data. No AI, no guesswork.
+          Appearances, starts, goals and cards from real matches. No AI, no guesswork.
         </p>
       </FadeIn>
 
@@ -205,7 +205,7 @@ export default async function PlayerComparePage({
           </div>
 
           <p className="text-center text-[11px] text-foreground-subtle">
-            Based on {playerA.stats.appearances} match{playerA.stats.appearances === 1 ? "" : "es"} KIVO has synced
+            From {playerA.stats.appearances} match{playerA.stats.appearances === 1 ? "" : "es"} on KIVO
             for {playerA.name}, and {playerB.stats.appearances} for {playerB.name}. Sync coverage is
             admin-triggered and partial, not a full season record.
           </p>

@@ -120,7 +120,6 @@ export default async function AiCopilotPage({
       focusLabel={grounding.disclosureLabel}
       groundingSummary={grounding.summary}
       lastSyncedAt={freshness.lastSyncedAt}
-      quotaRemaining={freshness.quotaRemaining}
     />
       {latestAnswerId && (
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 pb-8 lg:px-8">

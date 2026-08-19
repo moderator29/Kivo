@@ -52,14 +52,14 @@ export function TeamsGrid({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter loaded teams…"
+          placeholder="Filter clubs…"
           aria-label="Filter teams"
           className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
         />
       </div>
 
       {filteredTeams.length === 0 ? (
-        <p className="py-10 text-center text-sm text-foreground-muted">No loaded teams match &quot;{query}&quot;.</p>
+        <p className="py-10 text-center text-sm text-foreground-muted">No clubs match &quot;{query}&quot;.</p>
       ) : (
         <StaggeredList
           items={filteredTeams}

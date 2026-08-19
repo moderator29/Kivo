@@ -197,7 +197,7 @@ export default async function MatchesPage({
       <FadeIn className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Matches</h1>
-          <p className="text-sm text-foreground-muted">Fixtures synced from API-Football.</p>
+          <p className="text-sm text-foreground-muted">Every fixture, day by day.</p>
         </div>
         <LastSyncedNote timestamp={fixturesLastSyncedAt} className="shrink-0 pt-1" />
       </FadeIn>
@@ -245,11 +245,9 @@ export default async function MatchesPage({
       ) : fixtures.length === 0 ? (
         <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-16 text-center">
           <p className="text-sm text-foreground-muted">
-            No fixtures synced for {isToday ? "today" : dateLabel}.
+            No matches {isToday ? "today" : `on ${dateLabel}`}.
           </p>
-          <p className="max-w-xs text-xs text-foreground-subtle">
-            Try another date above, or check back once KIVO&apos;s football data sync has run.
-          </p>
+          <p className="max-w-xs text-xs text-foreground-subtle">Pick another date above to see what&apos;s on.</p>
         </FadeIn>
       ) : visibleFixtures.length === 0 ? (
         /* A third, separate fact. There ARE fixtures on this date — the reader

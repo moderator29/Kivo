@@ -17,7 +17,7 @@ function TeamLink({ team }: { team: TeamRef | null }) {
     return (
       <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
         <TeamCrest crestUrl={null} name={null} size={24} />
-        Club not synced
+        Club not listed
       </span>
     );
   }

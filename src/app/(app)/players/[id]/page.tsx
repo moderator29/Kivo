@@ -269,13 +269,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
             <Flag className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-            {player.nationality ?? "Nationality not yet synced"}
+            {player.nationality ?? "Nationality not listed"}
           </div>
           <div className="flex items-center gap-2 text-sm text-foreground-muted">
             <Cake className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
             {player.date_of_birth
               ? `${formatDate(player.date_of_birth)} (age ${calculateAge(player.date_of_birth)})`
-              : "Date of birth not yet synced"}
+              : "Date of birth not listed"}
           </div>
         </FadeIn>
         <FadeIn delay={0.18}>
@@ -381,7 +381,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Across synced matches
+          Career on KIVO
         </h2>
         {hasMatchData ? (
           // Six cells with assists, five without, and the wide grid follows the
@@ -413,9 +413,9 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
             scope is the whole fix; the numbers were never wrong. */}
         {hasMatchData && (
           <p className="px-1 text-[11px] leading-relaxed text-foreground-subtle">
-            Counted from the {stats.appearances} finished{" "}
-            {stats.appearances === 1 ? "match" : "matches"} KIVO has synced for {displayName}, across all
-            competitions. The by-competition table above splits the provider&apos;s own figures instead.
+            From the {stats.appearances} completed{" "}
+            {stats.appearances === 1 ? "match" : "matches"} KIVO has for {displayName}, across all competitions. The
+            by-competition table above splits the same career up league by league.
           </p>
         )}
       </FadeIn>
@@ -438,8 +438,8 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             {playerResultsNewestFirst.length > 0
-              ? `Only ${playerResultsNewestFirst.length} finished match${playerResultsNewestFirst.length === 1 ? "" : "es"} synced for ${displayName} so far — not enough real matches yet for a reliable form trend.`
-              : `No finished matches synced yet for ${displayName}.`}
+              ? `Only ${playerResultsNewestFirst.length} completed match${playerResultsNewestFirst.length === 1 ? "" : "es"} so far — not enough to read a form trend from.`
+              : `No completed matches for ${displayName} yet.`}
           </div>
         )}
       </FadeIn>
@@ -471,7 +471,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                   ) : (
                     <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
                       <TeamCrest crestUrl={null} name="" />
-                      Club not synced
+                      Club not listed
                     </span>
                   )}
                   <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
@@ -486,7 +486,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                   ) : (
                     <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
                       <TeamCrest crestUrl={null} name="" />
-                      Club not synced
+                      Club not listed
                     </span>
                   )}
                 </div>
@@ -504,12 +504,12 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           </div>
         ) : (
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No transfer history synced for this player yet.
+            No transfer history recorded for this player yet.
             {canManageFootballData(profile?.role) && (
               <InlineSyncButton
                 label="Sync transfers"
                 action={triggerPlayerTransfersSync.bind(null, player.id)}
-                hint="Needs this player's team squad synced first, so this player has a provider mapping."
+                hint="Needs this player's club squad first, so this player has a mapping."
               />
             )}
           </div>

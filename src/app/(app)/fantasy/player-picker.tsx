@@ -157,7 +157,7 @@ export function PlayerPicker({
                 </div>
               ) : results.length === 0 ? (
                 <p className="py-8 text-center text-xs text-foreground-subtle">
-                  No players synced yet. The picker fills in once KIVO&apos;s football data sync has run.
+                  No players to pick from yet. Check back soon.
                 </p>
               ) : (
                 <div className="flex flex-col divide-y divide-hairline-soft">

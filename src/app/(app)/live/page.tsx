@@ -153,13 +153,9 @@ export default async function LivePage() {
         title={item.label}
         description={
           syncedSomething
-            ? "Nothing is in play, and no match KIVO has is scheduled for today. Try the Matches tab for another date."
-            : (item.emptyDescription ?? "Nothing synced yet.")
+            ? "No match is in play right now, and nothing else kicks off today."
+            : (item.emptyDescription ?? "Nothing to show here yet.")
         }
-        // The coverage explainer answers "why does KIVO have nothing here",
-        // which is the question a genuinely empty database raises and not the
-        // one a quiet Tuesday raises. Shown only when it is the question.
-        explainCoverage={!syncedSomething}
       />
     );
   }

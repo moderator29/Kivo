@@ -8,7 +8,7 @@ import type { FormResult } from "@/lib/football/results";
  */
 export function FormBadges({ form }: { form: FormResult[] }) {
   if (form.length === 0) {
-    return <p className="text-sm text-foreground-muted">No results synced yet.</p>;
+    return <p className="text-sm text-foreground-muted">No results yet.</p>;
   }
   const style: Record<FormResult, string> = {
     W: "border-live/30 bg-live/10 text-live",

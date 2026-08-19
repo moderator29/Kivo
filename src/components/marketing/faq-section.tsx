@@ -33,7 +33,7 @@ const FAQS: { question: string; answer: string }[] = [
   {
     question: "What is the AI Copilot, and how is it “grounded”?",
     answer:
-      "Ask it about a match, a player, or your team and it answers from KIVO's own synced data, not a guess. A disclosure panel shows exactly what it knew when it answered, and it says so plainly when the data isn't there yet instead of inventing a plausible-sounding answer.",
+      "Ask it about a match, a player, or your team and it answers from KIVO's own data, not a guess. A disclosure panel shows exactly what it knew when it answered, and it says so plainly when it doesn't have something instead of inventing a plausible-sounding answer.",
   },
   {
     question: "Is there any gambling or real-money betting on KIVO?",
@@ -43,7 +43,7 @@ const FAQS: { question: string; answer: string }[] = [
   {
     question: "Where does KIVO's football data come from?",
     answer:
-      "From real football data providers, synced into KIVO, never invented or estimated. If something hasn't synced yet, KIVO says so honestly instead of filling the gap with a plausible-looking number. The Transparency page shows exactly what's synced right now, down to the row count.",
+      "From verified football data sources, never invented or estimated. If KIVO doesn't have something, it says so honestly instead of filling the gap with a plausible-looking number. The Transparency page shows exactly what KIVO has right now, counted live.",
   },
   {
     question: "What devices does KIVO work on?",

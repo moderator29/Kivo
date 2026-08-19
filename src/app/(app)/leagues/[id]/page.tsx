@@ -200,12 +200,12 @@ export default async function LeagueDetailPage({
         </div>
         {!standings || standings.length === 0 ? (
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            Standings haven&apos;t been synced yet for this competition.
+            No table for this competition yet.
             {activeSeason && canManageFootballData(profile?.role) && (
               <InlineSyncButton
                 label="Sync standings"
                 action={triggerStandingsSync.bind(null, activeSeason.id)}
-                hint="Needs this competition's fixtures synced first, so it has a provider mapping."
+                hint="Needs this competition's fixtures first, so it has a mapping."
               />
             )}
           </div>
@@ -269,7 +269,7 @@ export default async function LeagueDetailPage({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Upcoming fixtures</h2>
         {!upcoming || upcoming.length === 0 ? (
           <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-            No upcoming fixtures synced for this competition yet.
+            Nothing scheduled in this competition right now.
           </div>
         ) : (
           <div className="flex flex-col gap-2">

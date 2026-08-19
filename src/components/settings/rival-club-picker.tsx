@@ -146,8 +146,8 @@ export function RivalClubPicker({
             ) : clubs.length === 0 ? (
               <p className="px-4 py-6 text-center text-xs text-foreground-subtle">
                 {query.trim().length >= 2
-                  ? `No club matching "${query.trim()}" has been synced yet.`
-                  : "No clubs have been synced yet."}
+                  ? `No club matching "${query.trim()}".`
+                  : "No clubs to choose from yet."}
               </p>
             ) : (
               clubs.map((option, index) => {
