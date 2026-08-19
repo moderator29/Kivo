@@ -88,6 +88,113 @@ export const FLAT_GOAL_POINTS = 5;
 /** Only these two groups can earn the clean sheet bonus. */
 const CLEAN_SHEET_ELIGIBLE: ReadonlySet<PositionGroup> = new Set(["Goalkeepers", "Defenders"]);
 
+/**
+ * The rule VALUES, as data.
+ *
+ * ## Why this exists, when the constants above already do
+ *
+ * `SCORING_MODEL_VERSION` was stamped onto every scored row, which told you
+ * WHICH ruleset produced a score and nothing about what that ruleset said. The
+ * numbers lived only in this file, so:
+ *
+ *   * a past gameweek could not be re-explained — an itemised breakdown would
+ *     be shown against today's rates and would not add up to the stored total;
+ *   * re-running the scorer on an old gameweek silently rescored it under the
+ *     new rules, which is exactly the "last week's scores must not move" the
+ *     founding directive names.
+ *
+ * `fantasy_scoring_rulesets` (migration 0095) stores these values per version.
+ * The FORMULA stays here — `scoreRosterSlotBreakdown` — and the numbers are
+ * passed in. That split is deliberate in both directions: a fully data-driven
+ * formula would be a small interpreter nobody can read or test, and fully
+ * hardcoded numbers are the problem being fixed.
+ */
+export type ScoringRules = {
+  appearance: number;
+  assist: number;
+  cleanSheet: number;
+  yellowCard: number;
+  redCard: number;
+  ownGoal: number;
+  flatGoal: number;
+  captainMultiplier: number;
+  goalByPosition: Record<PositionGroup, number>;
+  cleanSheetEligible: PositionGroup[];
+};
+
+/** The values this release scores NEW gameweeks with. Built from the constants
+ * above so there is one definition, and asserted against the stored `1.0`
+ * ruleset by `fantasy-scoring.test.ts` — if they ever disagree, that test fails
+ * rather than the disagreement being discovered in somebody's points. */
+export const CURRENT_SCORING_RULES: ScoringRules = {
+  appearance: APPEARANCE_POINTS,
+  assist: ASSIST_POINTS,
+  cleanSheet: CLEAN_SHEET_POINTS,
+  yellowCard: YELLOW_CARD_POINTS,
+  redCard: RED_CARD_POINTS,
+  ownGoal: OWN_GOAL_POINTS,
+  flatGoal: FLAT_GOAL_POINTS,
+  captainMultiplier: 2,
+  goalByPosition: GOAL_POINTS_BY_POSITION,
+  cleanSheetEligible: [...CLEAN_SHEET_ELIGIBLE],
+};
+
+/**
+ * Validates a ruleset read back out of the database.
+ *
+ * Returns null — never a partially-defaulted object — for anything it cannot
+ * fully verify. A ruleset with one missing field, silently filled from today's
+ * constants, would score a gameweek under a mixture of two rulesets and stamp
+ * it with the name of one of them, which is worse than refusing: the caller can
+ * handle "I could not read the ruleset" honestly, and cannot handle a number
+ * that is quietly a hybrid.
+ */
+export function parseScoringRules(value: unknown): ScoringRules | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+
+  const num = (key: string): number | null => (typeof raw[key] === "number" && Number.isFinite(raw[key]) ? (raw[key] as number) : null);
+
+  const appearance = num("appearance");
+  const assist = num("assist");
+  const cleanSheet = num("cleanSheet");
+  const yellowCard = num("yellowCard");
+  const redCard = num("redCard");
+  const ownGoal = num("ownGoal");
+  const flatGoal = num("flatGoal");
+  const captainMultiplier = num("captainMultiplier");
+  if (
+    appearance === null || assist === null || cleanSheet === null || yellowCard === null ||
+    redCard === null || ownGoal === null || flatGoal === null || captainMultiplier === null
+  ) {
+    return null;
+  }
+
+  const rawGoals = raw.goalByPosition;
+  if (typeof rawGoals !== "object" || rawGoals === null) return null;
+  const goalByPosition = {} as Record<PositionGroup, number>;
+  for (const group of ["Goalkeepers", "Defenders", "Midfielders", "Forwards"] as PositionGroup[]) {
+    const v = (rawGoals as Record<string, unknown>)[group];
+    if (typeof v !== "number" || !Number.isFinite(v)) return null;
+    goalByPosition[group] = v;
+  }
+
+  const rawEligible = raw.cleanSheetEligible;
+  if (!Array.isArray(rawEligible)) return null;
+  const cleanSheetEligible: PositionGroup[] = [];
+  for (const entry of rawEligible) {
+    if (entry !== "Goalkeepers" && entry !== "Defenders" && entry !== "Midfielders" && entry !== "Forwards") {
+      return null;
+    }
+    cleanSheetEligible.push(entry);
+  }
+
+  return {
+    appearance, assist, cleanSheet, yellowCard, redCard, ownGoal, flatGoal,
+    captainMultiplier, goalByPosition, cleanSheetEligible,
+  };
+}
+
 export type PlayerMatchFacts = {
   goals: number;
   assists: number;
@@ -180,30 +287,114 @@ export type RosterSlotFlags = {
   doubleAsVice: boolean;
 };
 
-/** Pure scoring formula for a single fantasy_rosters slot. */
-export function scoreRosterSlot(facts: PlayerMatchFacts, position: string | null, flags: RosterSlotFlags): number {
-  if (!flags.isStarting) return 0;
+/**
+ * One roster slot's score, itemised.
+ *
+ * Every component is returned alongside the counts that produced it, because a
+ * total on its own is not auditable and neither half alone is checkable: counts
+ * without points cannot be reconciled against the total, and points without
+ * counts cannot be reconciled against the match. With both, a disputed score
+ * resolves to either a wrong count (a sync problem) or a wrong rate (a rule
+ * problem) — different bugs, different fixes.
+ *
+ * Components are PRE-multiplier and `total` is post, so the captain's double is
+ * a visible step rather than baked into every line. A manager checking their
+ * armband should be able to see the base and the doubling separately.
+ */
+export type SlotBreakdown = {
+  isStarting: boolean;
+  multiplier: number;
+  appearancePoints: number;
+  goalPoints: number;
+  assistPoints: number;
+  ownGoalPoints: number;
+  cardPoints: number;
+  cleanSheetPoints: number;
+  /** Sum of the components, before the multiplier. */
+  subtotal: number;
+  /** `subtotal * multiplier` — what this slot contributed to the team. */
+  total: number;
+};
+
+export function scoreRosterSlotBreakdown(
+  facts: PlayerMatchFacts,
+  position: string | null,
+  flags: RosterSlotFlags,
+  rules: ScoringRules = CURRENT_SCORING_RULES,
+): SlotBreakdown {
+  const empty: SlotBreakdown = {
+    isStarting: flags.isStarting,
+    multiplier: 1,
+    appearancePoints: 0,
+    goalPoints: 0,
+    assistPoints: 0,
+    ownGoalPoints: 0,
+    cardPoints: 0,
+    cleanSheetPoints: 0,
+    subtotal: 0,
+    total: 0,
+  };
+  // A bench player scores nothing, and the itemised zero is written anyway —
+  // "this player was on your bench and scored 0" is a real answer a manager
+  // asks for, and it is not the same as "we have no record of this player".
+  if (!flags.isStarting) return empty;
 
   const group = positionGroup(position);
-  const goalPoints = group === "Other" ? FLAT_GOAL_POINTS : GOAL_POINTS_BY_POSITION[group];
+  const goalRate = group === "Other" ? rules.flatGoal : rules.goalByPosition[group];
+  const cleanSheetEligible = group !== "Other" && rules.cleanSheetEligible.includes(group);
 
-  let total = APPEARANCE_POINTS;
-  total += facts.goals * goalPoints;
-  total += facts.assists * ASSIST_POINTS;
-  total += facts.ownGoals * OWN_GOAL_POINTS;
-  total += facts.yellowCards * YELLOW_CARD_POINTS;
-  total += facts.redCards * RED_CARD_POINTS;
-  if (group !== "Other" && CLEAN_SHEET_ELIGIBLE.has(group)) {
-    total += facts.cleanSheets * CLEAN_SHEET_POINTS;
-  }
+  const appearancePoints = rules.appearance;
+  const goalPoints = facts.goals * goalRate;
+  const assistPoints = facts.assists * rules.assist;
+  const ownGoalPoints = facts.ownGoals * rules.ownGoal;
+  const cardPoints = facts.yellowCards * rules.yellowCard + facts.redCards * rules.redCard;
+  const cleanSheetPoints = cleanSheetEligible ? facts.cleanSheets * rules.cleanSheet : 0;
 
-  if (flags.isCaptain || flags.doubleAsVice) total *= 2;
-  return total;
+  const subtotal =
+    appearancePoints + goalPoints + assistPoints + ownGoalPoints + cardPoints + cleanSheetPoints;
+  const multiplier = flags.isCaptain || flags.doubleAsVice ? rules.captainMultiplier : 1;
+
+  return {
+    isStarting: true,
+    multiplier,
+    appearancePoints,
+    goalPoints,
+    assistPoints,
+    ownGoalPoints,
+    cardPoints,
+    cleanSheetPoints,
+    subtotal,
+    total: subtotal * multiplier,
+  };
+}
+
+/** The slot's total only. Kept as the narrow entry point for callers that
+ * genuinely want a number (and for the tests that predate itemisation) — it is
+ * the same computation, not a second one. */
+export function scoreRosterSlot(
+  facts: PlayerMatchFacts,
+  position: string | null,
+  flags: RosterSlotFlags,
+  rules: ScoringRules = CURRENT_SCORING_RULES,
+): number {
+  return scoreRosterSlotBreakdown(facts, position, flags, rules).total;
 }
 
 /** Ordered, human-readable summary of the rules above — the single source
  * the "How scoring works" UI renders from, so the published explanation can
  * never drift from what scoreFantasyGameweek actually computes. */
+export function buildScoringRulesSummary(rules: ScoringRules): string[] {
+  return [
+    `Starting XI: +${rules.appearance} pts. Bench players score 0.`,
+    `Goal: GK/DEF +${rules.goalByPosition.Goalkeepers}, MID +${rules.goalByPosition.Midfielders}, FWD +${rules.goalByPosition.Forwards}.`,
+    `Assist: +${rules.assist} pts.`,
+    `Clean sheet (GK/DEF, team concedes 0): +${rules.cleanSheet} pts.`,
+    `Yellow card: ${rules.yellowCard} pts. Red card or second yellow: ${rules.redCard} pts.`,
+    `Own goal: ${rules.ownGoal} pts.`,
+    "Captain: points doubled. Vice-captain doubles instead only if the captain wasn't in the starting XI.",
+  ];
+}
+
 export const SCORING_RULES_SUMMARY: string[] = [
   `Starting XI: +${APPEARANCE_POINTS} pts. Bench players score 0.`,
   `Goal: GK/DEF +${GOAL_POINTS_BY_POSITION.Goalkeepers}, MID +${GOAL_POINTS_BY_POSITION.Midfielders}, FWD +${GOAL_POINTS_BY_POSITION.Forwards}.`,

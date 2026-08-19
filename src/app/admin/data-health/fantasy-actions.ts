@@ -15,10 +15,12 @@ import {
 import {
   computePlayerMatchFacts,
   emptyPlayerMatchFacts,
-  scoreRosterSlot,
+  parseScoringRules,
+  scoreRosterSlotBreakdown,
   SCORING_MODEL_VERSION,
   type FinishedFixtureFacts,
   type FixtureEventType,
+  type ScoringRules,
 } from "@/lib/fantasy-scoring";
 import { computeGameweekPricingPoints, computePriceNudges, applyPriceNudge } from "@/lib/fantasy-pricing";
 import { DEFAULT_FANTASY_PRICE } from "@/app/(app)/fantasy/fantasy-rules";
@@ -130,6 +132,15 @@ export type ScoreFantasyGameweekResult = {
   recordsProcessed?: number;
   fixturesFinished?: number;
   fixturesTotal?: number;
+  /** How many of the FINISHED fixtures actually have synced match events. A
+   * finished fixture with none scores every player as if nothing happened, so
+   * this being short of `fixturesFinished` is the signal that a total may be
+   * under-counted — see the scorer's own comment on it. */
+  fixturesWithEvents?: number;
+  /** 'final' only when every fixture has finished AND every finished fixture
+   * has events. The admin button surfaces this so a partial run reads as
+   * partial rather than as done. */
+  status?: "provisional" | "final";
   /** RECOMMENDATIONS.md item 251: how many real players had their
    * fantasy_player_prices row nudged by this run — see
    * applyFantasyPriceNudges below. Always 0 when no player in the gameweek's
@@ -254,6 +265,54 @@ async function applyFantasyPriceNudges(
 }
 
 /**
+ * Loads the rule VALUES for the version this release scores under.
+ *
+ * ## Why this refuses rather than falling back
+ *
+ * The obvious fallback — "row missing, use the constants in
+ * `fantasy-scoring.ts`" — is wrong in a way that only shows up later. Today
+ * those constants ARE version 1.0, so the fallback would be harmless and
+ * invisible. The moment somebody bumps `SCORING_MODEL_VERSION` to 1.1 and the
+ * matching ruleset row has not been applied, the same fallback silently scores
+ * a gameweek with 1.1's formula, 1.0's numbers, and a 1.1 stamp on the row —
+ * a score no version can explain, discovered by a manager arguing about it.
+ *
+ * So a missing or unreadable ruleset stops the scoring run with a message that
+ * names the fix. `parseScoringRules` returns null rather than a
+ * partially-defaulted object for the same reason: a ruleset with one field
+ * filled in from somewhere else is a hybrid nobody declared.
+ */
+async function loadScoringRules(
+  supabase: ServiceClient,
+): Promise<{ rules: ScoringRules; error: null } | { rules: null; error: string }> {
+  const { data, error } = await supabase
+    .from("fantasy_scoring_rulesets")
+    .select("rules")
+    .eq("version", SCORING_MODEL_VERSION)
+    .maybeSingle();
+
+  if (error) {
+    logError("admin.data-health.fantasy-actions.loadScoringRuleset", error);
+    return { rules: null, error: "Couldn't read the scoring rules. Try again." };
+  }
+  if (!data) {
+    return {
+      rules: null,
+      error: `No stored ruleset for scoring version ${SCORING_MODEL_VERSION}. Apply the migration that seeds it before scoring — a gameweek must not be scored under rules KIVO cannot show a manager.`,
+    };
+  }
+
+  const rules = parseScoringRules(data.rules);
+  if (!rules) {
+    return {
+      rules: null,
+      error: `The stored ruleset for version ${SCORING_MODEL_VERSION} is incomplete or malformed, so scoring would use a mixture of rulesets. Fix the fantasy_scoring_rulesets row before scoring.`,
+    };
+  }
+  return { rules, error: null };
+}
+
+/**
  * On-demand admin pass, same shape as scorePredictions() in
  * predictions-actions.ts: an admin triggers it for one gameweek at a time
  * (fantasy scoring has no natural "score everything" target the way
@@ -333,6 +392,12 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
 
   const service = createServiceRoleSupabaseClient();
 
+  // Before any work: the rules this run will score under. Refused rather than
+  // defaulted — see loadScoringRules.
+  const ruleset = await loadScoringRules(service);
+  if (ruleset.rules === null) return { error: ruleset.error };
+  const rules = ruleset.rules;
+
   // A team whose owner hasn't opened /fantasy since this gameweek turned
   // current still has zero fantasy_rosters rows here — carryForwardFantasyRoster
   // (src/lib/fantasy.ts) only runs lazily per-viewer on page load. Carry every
@@ -350,6 +415,23 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     logError("admin.data-health.fantasy-actions.loadFixtureEventsGameweek", eventsError);
     return { error: "Couldn't load match events. Try again." };
   }
+
+  /**
+   * The count that closes the silent-wrong-score hole.
+   *
+   * A finished fixture with no rows in `fixture_events` produces EXACTLY the
+   * same points as a real goalless, cardless match: the scorer sees no events
+   * either way, so every player in it gets the appearance point and nothing
+   * else. A hat-trick in an unsynced fixture is indistinguishable from a 0-0.
+   *
+   * Counting how many finished fixtures actually carry events is the only thing
+   * that can tell those two apart — and it deliberately does NOT claim which
+   * one it is. A genuinely eventless match is rare but real, so this is a
+   * signal the UI explains ("2 of 10 finished matches have no events synced"),
+   * not a verdict. What it does guarantee is that a score built on it is never
+   * presented as settled.
+   */
+  const fixturesWithEvents = new Set((events ?? []).map((event) => event.fixture_id)).size;
 
   // RECOMMENDATIONS.md item 251: deliberately run before the fantasy-rosters
   // read below, and independent of it — real prices are about every real
@@ -416,6 +498,8 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   }
 
   const pointsByTeam = new Map<string, number>();
+  const breakdownRows: Database["public"]["Tables"]["fantasy_point_breakdowns"]["Insert"][] = [];
+
   for (const row of rosters) {
     if (!pointsByTeam.has(row.fantasy_team_id)) pointsByTeam.set(row.fantasy_team_id, 0);
 
@@ -423,14 +507,61 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     const playerFacts = facts.get(row.player_id) ?? emptyPlayerMatchFacts();
     const captainStarted = captainStartingByTeam.get(row.fantasy_team_id) ?? false;
 
-    const slotPoints = scoreRosterSlot(playerFacts, player?.position ?? null, {
-      isStarting: row.is_starting,
-      isCaptain: row.is_captain,
-      doubleAsVice: row.is_vice_captain && !captainStarted,
-    });
+    const slot = scoreRosterSlotBreakdown(
+      playerFacts,
+      player?.position ?? null,
+      {
+        isStarting: row.is_starting,
+        isCaptain: row.is_captain,
+        doubleAsVice: row.is_vice_captain && !captainStarted,
+      },
+      rules,
+    );
 
-    pointsByTeam.set(row.fantasy_team_id, pointsByTeam.get(row.fantasy_team_id)! + slotPoints);
+    pointsByTeam.set(row.fantasy_team_id, pointsByTeam.get(row.fantasy_team_id)! + slot.total);
+
+    // Both the counts and the points they produced. Storing one without the
+    // other makes the other unverifiable — see fantasy_point_breakdowns'
+    // table comment (migration 0095).
+    breakdownRows.push({
+      fantasy_team_id: row.fantasy_team_id,
+      gameweek_id: gameweekId,
+      player_id: row.player_id,
+      is_starting: row.is_starting,
+      multiplier: slot.multiplier,
+      goals: playerFacts.goals,
+      assists: playerFacts.assists,
+      own_goals: playerFacts.ownGoals,
+      yellow_cards: playerFacts.yellowCards,
+      red_cards: playerFacts.redCards,
+      clean_sheets: playerFacts.cleanSheets,
+      appearance_points: slot.appearancePoints,
+      goal_points: slot.goalPoints,
+      assist_points: slot.assistPoints,
+      own_goal_points: slot.ownGoalPoints,
+      card_points: slot.cardPoints,
+      clean_sheet_points: slot.cleanSheetPoints,
+      total_points: slot.total,
+      scoring_model_version: SCORING_MODEL_VERSION,
+    });
   }
+
+  /**
+   * `final` is a claim, so it is only made when both halves of it are true:
+   * every fixture in the gameweek has finished, AND every finished fixture has
+   * match events synced. Anything else stays `provisional`.
+   *
+   * The second condition is deliberately conservative. A genuinely eventless
+   * match — 0-0, no cards — would hold a gameweek at `provisional` forever,
+   * which is mildly unsatisfying and is the right way round: under-claiming
+   * costs a caveat on screen, over-claiming means telling a manager their score
+   * is settled while a hat-trick is missing from it. The counts are stored
+   * alongside so the UI can say precisely which fixtures are short rather than
+   * leaving "provisional" unexplained.
+   */
+  const computedAt = new Date().toISOString();
+  const isComplete =
+    finishedFixtures.length === fixturesInGroup.length && fixturesWithEvents === finishedFixtures.length;
 
   const upsertRows = [...pointsByTeam.entries()].map(([fantasy_team_id, points]) => ({
     fantasy_team_id,
@@ -440,6 +571,11 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     // produced this row (migration 0052) — see fantasy-scoring.ts's own
     // doc comment on SCORING_MODEL_VERSION.
     scoring_model_version: SCORING_MODEL_VERSION,
+    status: isComplete ? "final" : "provisional",
+    fixtures_total: fixturesInGroup.length,
+    fixtures_finished: finishedFixtures.length,
+    fixtures_with_events: fixturesWithEvents,
+    computed_at: computedAt,
   }));
 
   const { error: upsertError } = await service
@@ -448,6 +584,35 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   if (upsertError) {
     logError("admin.data-health.fantasy-actions.writeFantasyPoints", upsertError);
     return { error: "Couldn't save fantasy points. Try again." };
+  }
+
+  /**
+   * The itemisation, written after the totals so a failure here cannot leave a
+   * gameweek unscored — the total is the thing managers act on, the breakdown
+   * is how they check it.
+   *
+   * Stale rows are cleared first rather than left: a player transferred out
+   * between two runs of this scorer would otherwise keep a breakdown row that
+   * no longer corresponds to any roster slot, and the breakdown's whole value
+   * is that its totals sum to the team's score.
+   */
+  const { error: clearBreakdownError } = await service
+    .from("fantasy_point_breakdowns")
+    .delete()
+    .eq("gameweek_id", gameweekId);
+  if (clearBreakdownError) {
+    logError("admin.data-health.fantasy-actions.clearFantasyBreakdowns", clearBreakdownError);
+  } else if (breakdownRows.length > 0) {
+    const { error: breakdownError } = await service
+      .from("fantasy_point_breakdowns")
+      .upsert(breakdownRows, { onConflict: "fantasy_team_id,gameweek_id,player_id" });
+    if (breakdownError) {
+      // Not fatal, and deliberately so: the points are correct and already
+      // written. A missing breakdown makes the score unexplained, which the UI
+      // says honestly (computed_at is set but no rows exist), rather than
+      // making it wrong.
+      logError("admin.data-health.fantasy-actions.writeFantasyBreakdowns", breakdownError);
+    }
   }
 
   // KN-61: tell the managers. Until now a squad could be carried forward for
@@ -514,6 +679,8 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
     recordsProcessed: upsertRows.length,
     fixturesFinished: finishedFixtures.length,
     fixturesTotal: fixturesInGroup.length,
+    fixturesWithEvents,
+    status: isComplete ? "final" : "provisional",
     playersRepriced,
   };
 }

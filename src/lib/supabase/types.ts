@@ -556,32 +556,144 @@ export type Database = {
           },
         ]
       }
-      fantasy_points: {
+      fantasy_point_breakdowns: {
         Row: {
+          appearance_points: number
+          assist_points: number
+          assists: number
+          card_points: number
+          clean_sheet_points: number
+          clean_sheets: number
           created_at: string
           fantasy_team_id: string
+          gameweek_id: string
+          goal_points: number
+          goals: number
+          id: string
+          is_starting: boolean
+          multiplier: number
+          own_goal_points: number
+          own_goals: number
+          player_id: string
+          red_cards: number
+          scoring_model_version: string
+          total_points: number
+          updated_at: string
+          yellow_cards: number
+        }
+        Insert: {
+          appearance_points?: number
+          assist_points?: number
+          assists?: number
+          card_points?: number
+          clean_sheet_points?: number
+          clean_sheets?: number
+          created_at?: string
+          fantasy_team_id: string
+          gameweek_id: string
+          goal_points?: number
+          goals?: number
+          id?: string
+          is_starting: boolean
+          multiplier?: number
+          own_goal_points?: number
+          own_goals?: number
+          player_id: string
+          red_cards?: number
+          scoring_model_version: string
+          total_points: number
+          updated_at?: string
+          yellow_cards?: number
+        }
+        Update: {
+          appearance_points?: number
+          assist_points?: number
+          assists?: number
+          card_points?: number
+          clean_sheet_points?: number
+          clean_sheets?: number
+          created_at?: string
+          fantasy_team_id?: string
+          gameweek_id?: string
+          goal_points?: number
+          goals?: number
+          id?: string
+          is_starting?: boolean
+          multiplier?: number
+          own_goal_points?: number
+          own_goals?: number
+          player_id?: string
+          red_cards?: number
+          scoring_model_version?: string
+          total_points?: number
+          updated_at?: string
+          yellow_cards?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fantasy_point_breakdowns_fantasy_team_id_fkey"
+            columns: ["fantasy_team_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_point_breakdowns_gameweek_id_fkey"
+            columns: ["gameweek_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_gameweeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_point_breakdowns_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fantasy_points: {
+        Row: {
+          computed_at: string | null
+          created_at: string
+          fantasy_team_id: string
+          fixtures_finished: number | null
+          fixtures_total: number | null
+          fixtures_with_events: number | null
           gameweek_id: string
           id: string
           points: number
           scoring_model_version: string | null
+          status: string
           updated_at: string
         }
         Insert: {
+          computed_at?: string | null
           created_at?: string
           fantasy_team_id: string
+          fixtures_finished?: number | null
+          fixtures_total?: number | null
+          fixtures_with_events?: number | null
           gameweek_id: string
           id?: string
           points?: number
           scoring_model_version?: string | null
+          status?: string
           updated_at?: string
         }
         Update: {
+          computed_at?: string | null
           created_at?: string
           fantasy_team_id?: string
+          fixtures_finished?: number | null
+          fixtures_total?: number | null
+          fixtures_with_events?: number | null
           gameweek_id?: string
           id?: string
           points?: number
           scoring_model_version?: string | null
+          status?: string
           updated_at?: string
         }
         Relationships: [
@@ -658,6 +770,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fantasy_scoring_rulesets: {
+        Row: {
+          created_at: string
+          effective_from: string
+          retired_at: string | null
+          rules: Json
+          summary: string[]
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string
+          retired_at?: string | null
+          rules: Json
+          summary: string[]
+          version: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          retired_at?: string | null
+          rules?: Json
+          summary?: string[]
+          version?: string
+        }
+        Relationships: []
       }
       fantasy_teams: {
         Row: {

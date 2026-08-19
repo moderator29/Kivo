@@ -9,6 +9,7 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
+import { GameweekScorecard } from "./gameweek-scorecard";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -242,6 +243,19 @@ export default async function FantasyPage({
           carriedForwardFromGameweek={carriedForwardFromGameweek}
         />
       </WidgetErrorBoundary>
+
+      {/* The itemised score, below the builder because it answers a question
+          the builder raises rather than one it asks. Renders nothing at all
+          until the gameweek has actually been scored — see the component. */}
+      {gameweek && (
+        <WidgetErrorBoundary context="fantasyScorecard" label="Your gameweek scorecard">
+          <GameweekScorecard
+            fantasyTeamId={activeTeam.id}
+            gameweekId={gameweek.id}
+            gameweekNumber={gameweek.number}
+          />
+        </WidgetErrorBoundary>
+      )}
 
       {/* Only a gameweek that has actually been scored produces a card — an
           unscored week would render as 0 points, which reads as a bad week
