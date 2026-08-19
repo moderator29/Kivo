@@ -8,6 +8,7 @@ import { SQUAD_BATCH_MAX_REQUESTS } from "@/lib/football/sync-catalogue";
 import {
   AdoptCompetitionsButton,
   FillCountriesButton,
+  RefreshCoverageRegistryButton,
   SquadBackfillButton,
   SyncClubsButton,
 } from "@/components/admin/catalogue-action-buttons";
@@ -276,6 +277,10 @@ export async function ClubCataloguePanel() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
+            {/* First, deliberately: everything else in this panel is useless
+                without it, and it used to be reachable only from a league page
+                — which a competition KIVO has never synced does not have. */}
+            <RefreshCoverageRegistryButton />
             <AdoptCompetitionsButton />
             <FillCountriesButton />
             <SquadBackfillButton maxClubs={SQUAD_BATCH_MAX_REQUESTS} disabled={clubsAffordable === 0} />

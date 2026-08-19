@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
-import { AlertTriangle, Check, Download, Globe, ListPlus, RefreshCw, Users } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, Download, Globe, ListPlus, RefreshCw, Users } from "lucide-react";
 import {
   adoptCompetitions,
   fillCompetitionCountries,
   runSquadBackfill,
   syncCompetitionClubs,
 } from "@/app/admin/data-health/catalogue-actions";
+import { triggerCoverageSync } from "@/app/admin/data-health/provider-data-actions";
 
 /**
  * The four buttons that build the club catalogue.
@@ -87,6 +88,36 @@ function ActionButton({
       <p className="text-[11px] text-foreground-subtle">{cost}</p>
       <FeedbackLine feedback={feedback} />
     </div>
+  );
+}
+
+/**
+ * The registry refresh, surfaced HERE as well as on a league page.
+ *
+ * It already existed, and it was only reachable from an individual
+ * competition's page — which is a chicken-and-egg the founder cannot escape:
+ * the registry is what names a competition, and a competition KIVO has never
+ * synced has no page to press the button on. Every other action in this panel
+ * depends on the registry, so the button that fills it has to be the first
+ * thing in the panel rather than somewhere a competition that does not exist
+ * would have taken you.
+ */
+export function RefreshCoverageRegistryButton() {
+  return (
+    <ActionButton
+      icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
+      label="Refresh coverage registry"
+      busyLabel="Reading /leagues…"
+      cost="Costs 1 provider request, and it is the best-value request on the whole API — it returns the name, country and capabilities of every competition your plan can see, synced or not. Drawn from the headroom outside every allowance, not from the catalogue's."
+      onRun={async () => {
+        const result = await triggerCoverageSync();
+        if (result.error) return { tone: "bad", lines: [result.error] };
+        return {
+          tone: "ok",
+          lines: [`${result.recordsProcessed ?? 0} competition(s) recorded in the registry.`],
+        };
+      }}
+    />
   );
 }
 
