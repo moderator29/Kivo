@@ -125,6 +125,10 @@ export function mapEvent(item: TheSportsDbEvent): NormalizedFixture {
     providerId: item.idEvent,
     competitionProviderId: item.idLeague ?? "",
     competitionName: item.strLeague ?? "Unknown competition",
+    // TheSportsDB's `eventsday.php` payload carries no country for the league
+    // it names. Null here is "this provider does not report it on this
+    // endpoint", which is the honest answer — see NormalizedFixture.
+    competitionCountry: null,
     season: parseSeasonYear(item.strSeason, kickoffAt),
     kickoffAt,
     status: mapTheSportsDbStatus(item.strStatus),

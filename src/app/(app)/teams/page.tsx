@@ -59,7 +59,10 @@ export default async function TeamsPage({
   }
 
   return (
-    <EntityListPage title="Teams" description="Clubs synced from today's fixtures.">
+    <EntityListPage
+      title="Teams"
+      description="Clubs KIVO has synced — a competition's full club list where one has been pulled, plus any club that has appeared in a synced fixture."
+    >
       <TeamsGrid teams={teams} hasMore={hasMore} page={page} />
     </EntityListPage>
   );

@@ -12,6 +12,7 @@ import type {
   NormalizedPlayer,
   NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
+  NormalizedTeamProfile,
   NormalizedTopScorer,
   NormalizedTransfer,
 } from "../types";
@@ -43,6 +44,10 @@ const LIVE_FIXTURE_CACHE_SECONDS = 60;
 // (see api-football.com/pricing) — there is no other tier assumed anywhere in this file,
 // per the project's $0 budget. Every window below is chosen to make on-demand, per-team/
 // per-fixture syncing survive that quota rather than to serve "freshness" for its own sake.
+/** A league's club list changes once a season, at most. A full day is already
+ * far shorter than the thing it describes; longer would risk a newly promoted
+ * club staying invisible for a week after the founder pressed the button. */
+const TEAMS_CACHE_SECONDS = 86_400;
 /** Squads/managers change rarely — cache a full day. */
 const SQUAD_CACHE_SECONDS = 86_400;
 const MANAGER_CACHE_SECONDS = 86_400;
@@ -90,6 +95,41 @@ interface ApiFootballSquadResponse {
       photo: string | null;
     }>;
   }>;
+}
+
+/**
+ * `/teams?league={id}&season={year}`.
+ *
+ * One request, every club in the competition, each with the crest and the home
+ * ground. This is the endpoint the club directory is built on — see
+ * `getTeamsByLeague` below for why that matters.
+ *
+ * Every field is optional in this declaration even though the provider sends
+ * most of them on most clubs, for the same reason the coverage response is
+ * declared that way: a missing key must normalize to null, never to a crash or
+ * to a fabricated value.
+ */
+interface ApiFootballTeamsResponse {
+  response?: Array<{
+    team?: {
+      id?: number | null;
+      name?: string | null;
+      /** Three-letter club code ("MUN"). The provider's own abbreviation — used
+       * as shortName rather than one KIVO derives by truncating the name. */
+      code?: string | null;
+      country?: string | null;
+      founded?: number | null;
+      /** True for national teams. Kept in the shape so a caller can see it
+       * exists; KIVO does not currently model national sides separately. */
+      national?: boolean | null;
+      logo?: string | null;
+    } | null;
+    venue?: {
+      id?: number | null;
+      name?: string | null;
+      city?: string | null;
+    } | null;
+  }> | null;
 }
 
 interface ApiFootballCoachResponse {
@@ -186,7 +226,11 @@ interface ApiFootballFixtureResponse {
     // `round` is free text ("Regular Season - 12", "Quarter-finals"). KIVO
     // reads a matchday number out of it where there is one and stores null
     // where there is not — see parseMatchday in ../matchday.ts.
-    league: { id: number; name: string; season: number; round?: string | null };
+    // `country` is sent on every /fixtures item and was previously dropped on
+    // the floor here, which is the whole reason competitions.country is null
+    // for all 85 competitions in the live database. It is the provider's own
+    // string ("England", "World" for continental competitions), not a code.
+    league: { id: number; name: string; season: number; country?: string | null; round?: string | null };
     teams: {
       home: { id: number; name: string; logo: string | null };
       away: { id: number; name: string; logo: string | null };
@@ -291,7 +335,13 @@ interface ApiFootballFixturePlayersResponse {
  */
 interface ApiFootballLeaguesResponse {
   response?: Array<{
-    league?: { id?: number | null; name?: string | null } | null;
+    league?: { id?: number | null; name?: string | null; type?: string | null; logo?: string | null } | null;
+    // The provider's country block for the competition. `name` is the plain
+    // country string ("England"), and continental/international competitions
+    // are filed under "World". Read here because this is the only endpoint that
+    // reports it for competitions KIVO has never synced a fixture for — which
+    // is exactly the set the catalogue needs to name.
+    country?: { name?: string | null; code?: string | null; flag?: string | null } | null;
     seasons?: Array<{
       year?: number | null;
       coverage?: {
@@ -477,6 +527,7 @@ export class ApiFootballProvider implements FootballDataProvider {
       providerId: String(item.fixture.id),
       competitionProviderId: String(item.league.id),
       competitionName: item.league.name,
+      competitionCountry: item.league.country ?? null,
       season: item.league.season,
       kickoffAt: item.fixture.date,
       status: mapStatus(item.fixture.status.short),
@@ -533,42 +584,22 @@ export class ApiFootballProvider implements FootballDataProvider {
     return data.response.map((item) => this.mapFixture(item, retrievedAt));
   }
 
+  /**
+   * One fixture by the provider's own id.
+   *
+   * Goes through `mapFixture` like the other two `/fixtures` callers. It used
+   * to hold a hand-copied second version of the same twenty-field mapping,
+   * which is exactly the drift `mapFixture`'s own doc comment was written to
+   * prevent — and it had already drifted: the copy dropped `league.country`,
+   * so a fixture refreshed by id lost the competition's country that a dated
+   * sync had just written.
+   */
   async getFixtureById(providerId: string): Promise<NormalizedFixture | null> {
     const data = await this.request<ApiFootballFixtureResponse>(`/fixtures?id=${providerId}`, FIXTURE_CACHE_SECONDS);
     const retrievedAt = new Date().toISOString();
     const item = data.response[0];
     if (!item) return null;
-
-    return {
-      provider: this.name,
-      providerId: String(item.fixture.id),
-      competitionProviderId: String(item.league.id),
-      competitionName: item.league.name,
-      season: item.league.season,
-      kickoffAt: item.fixture.date,
-      status: mapStatus(item.fixture.status.short),
-      minute: item.fixture.status.elapsed,
-      homeTeam: {
-        providerId: String(item.teams.home.id),
-        name: item.teams.home.name,
-        shortName: null,
-        crestUrl: item.teams.home.logo,
-      },
-      awayTeam: {
-        providerId: String(item.teams.away.id),
-        name: item.teams.away.name,
-        shortName: null,
-        crestUrl: item.teams.away.logo,
-      },
-      homeScore: item.goals.home,
-      awayScore: item.goals.away,
-      homeScoreHt: item.score.halftime.home,
-      awayScoreHt: item.score.halftime.away,
-      matchday: parseMatchday(item.league.round),
-    venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
-      venueName: item.fixture.venue.name,
-      retrievedAt,
-    };
+    return this.mapFixture(item, retrievedAt);
   }
 
   async getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]> {
@@ -596,6 +627,63 @@ export class ApiFootballProvider implements FootballDataProvider {
       goalsAgainst: row.all.goals.against,
       points: row.points,
     }));
+  }
+
+  /**
+   * Every club in one competition and season — `/teams?league={id}&season={y}`.
+   *
+   * ## Why this method exists
+   *
+   * Until it did, a club entered KIVO exactly one way: by appearing in
+   * `/fixtures?date=` on a day somebody ran a sync. That is why the live
+   * database holds 705 clubs of which none is Real Madrid — Real Madrid did not
+   * play on the Tuesday in August when the sync ran, and reserve sides in the
+   * Polish third tier did. A directory built out of one day's fixtures is a
+   * directory of whoever happened to kick off.
+   *
+   * This returns the whole league for ONE request, which is the same price as
+   * one day of fixtures, and it does not care what day it is.
+   *
+   * ## What it returns and what it does not
+   *
+   * The provider sends the crest, the three-letter code, the country, the
+   * founding year and the home venue for each club. It does not send squads:
+   * players are a separate request PER CLUB (`getSquad`), which is why the
+   * catalogue sync treats clubs and squads as two different budgets — see
+   * `sync-catalogue.ts`.
+   *
+   * An empty response is a real answer (a season the provider has not set up
+   * for this league) and is returned as an empty array, never as a failure and
+   * never backfilled from another season.
+   */
+  async getTeamsByLeague(leagueProviderId: string, season: number): Promise<NormalizedTeamProfile[]> {
+    const data = await this.request<ApiFootballTeamsResponse>(
+      `/teams?league=${encodeURIComponent(leagueProviderId)}&season=${season}`,
+      TEAMS_CACHE_SECONDS,
+    );
+
+    const profiles: NormalizedTeamProfile[] = [];
+    for (const entry of data.response ?? []) {
+      const id = entry.team?.id;
+      const name = entry.team?.name;
+      // A club with no id cannot be mapped and a club with no name cannot be
+      // displayed. Skipped rather than inserted under a placeholder — a row
+      // named "Unknown" is worse than a row that is not there.
+      if (id === null || id === undefined || !name) continue;
+      profiles.push({
+        providerId: String(id),
+        name,
+        shortName: entry.team?.code ?? null,
+        crestUrl: entry.team?.logo ?? null,
+        country: entry.team?.country ?? null,
+        founded: typeof entry.team?.founded === "number" ? entry.team.founded : null,
+        venueProviderId:
+          entry.venue?.id === null || entry.venue?.id === undefined ? null : String(entry.venue.id),
+        venueName: entry.venue?.name ?? null,
+        venueCity: entry.venue?.city ?? null,
+      });
+    }
+    return profiles;
   }
 
   /**
@@ -918,6 +1006,9 @@ export class ApiFootballProvider implements FootballDataProvider {
         rows.push({
           competitionProviderId: String(leagueId),
           competitionName: entry.league?.name ?? "",
+          competitionCountry: entry.country?.name ?? null,
+          competitionLogoUrl: entry.league?.logo ?? null,
+          competitionType: entry.league?.type ?? null,
           season,
           fixtureEvents: parseCoverageFlag(c?.fixtures?.events),
           fixtureLineups: parseCoverageFlag(c?.fixtures?.lineups),

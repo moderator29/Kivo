@@ -36,6 +36,11 @@ const BUCKET_COPY: Record<BucketUsage["bucket"], { label: string; detail: string
     label: "Daily baseline",
     detail: "One fixtures call plus a few league tables, so the database is never empty.",
   },
+  catalogue: {
+    label: "Club catalogue",
+    detail:
+      "The club directory and squad backfill. The only allowance an admin spends by pressing a button, and the only one that goes quiet once its work is done.",
+  },
 };
 
 /** The plain-English reasons the worker records, mapped to what an admin should
@@ -172,8 +177,9 @@ export async function LiveWorkerPanel() {
         <div className="flex items-center gap-2">
           <Gauge className="h-3.5 w-3.5 text-foreground-subtle" strokeWidth={2} />
           <span className="text-[11px] text-foreground-subtle">
-            {totalSpent} of {TOTAL_AUTOMATED_REQUEST_BUDGET} automated requests used in the last 24 hours. Anything
-            beyond that is reserved for admin-triggered syncs and cannot be spent by automation.
+            {totalSpent} of {TOTAL_AUTOMATED_REQUEST_BUDGET} budgeted requests used in the last 24 hours. Three of
+            these allowances bound automation; the club catalogue&apos;s bounds a button. Anything beyond the total is
+            outside every allowance and reachable only by a one-off admin sync.
           </span>
         </div>
         {last?.provider_quota_remaining !== null && last?.provider_quota_remaining !== undefined && (

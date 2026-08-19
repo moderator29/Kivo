@@ -328,7 +328,7 @@ missing:
 | `THE_SPORTS_DB_API_KEY` | — | Only read when the provider is set to `thesportsdb`; if the provider is selected without the key, KIVO logs and falls back to API-Football rather than pretending | **Loud** in the server log |
 | `FOOTBALL_IMAGE_HOSTS` | API-Football's host is built in | Crests from any other provider's CDN are blocked by the Content-Security-Policy. **Build-time value** — needs a redeploy, not just a save | **Silent** — broken images |
 | `FOOTBALL_LIVE_POLLING_ENABLED` | off | The once-a-minute worker no-ops. Intended | Fine |
-| `FOOTBALL_SYNC_COMPETITION_IDS` | unset | No filter; every league the provider returns for the day is synced | Fine |
+| `FOOTBALL_SYNC_COMPETITION_IDS` | KIVO's shipped default list (7 major competitions, API-Football ids) | The daily sync only writes fixtures from those competitions. Set to `all` to restore the old no-filter behaviour; set to a comma-separated id list to choose your own | Fine — the run records "the allowlist scoped out all N fixtures" rather than reporting an empty day |
 
 ### Set by the platform
 

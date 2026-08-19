@@ -12,6 +12,7 @@ import type {
   NormalizedPlayer,
   NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
+  NormalizedTeamProfile,
   NormalizedTopScorer,
   NormalizedTransfer,
 } from "../types";
@@ -26,6 +27,7 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
     providerId: "mock-1",
     competitionProviderId: "mock-competition-1",
     competitionName: "Nigeria Premier Football League",
+    competitionCountry: "Nigeria",
     season: 2026,
     kickoffAt: new Date().toISOString(),
     status: "scheduled",
@@ -393,6 +395,9 @@ const MOCK_COVERAGE: NormalizedCompetitionCoverage[] = [
   {
     competitionProviderId: "mock-competition-1",
     competitionName: "Nigeria Premier Football League",
+    competitionCountry: "Nigeria",
+    competitionLogoUrl: null,
+    competitionType: "League",
     season: 2026,
     fixtureEvents: true,
     fixtureLineups: true,
@@ -519,6 +524,34 @@ const MOCK_PLAYER_SEASON_STATS: Record<string, NormalizedPlayerSeasonStatistics[
   ],
 };
 
+/** The clubs `getTeamsByLeague` reports, matching the two sides in
+ * MOCK_FIXTURES so a dev database stays internally consistent whichever entry
+ * point created the rows. */
+const MOCK_TEAM_PROFILES: NormalizedTeamProfile[] = [
+  {
+    providerId: "mock-team-1",
+    name: "Remo Stars",
+    shortName: "REM",
+    crestUrl: null,
+    country: "Nigeria",
+    founded: null,
+    venueProviderId: "mock-venue-1",
+    venueName: "Remo Stars Stadium",
+    venueCity: null,
+  },
+  {
+    providerId: "mock-team-2",
+    name: "Enyimba",
+    shortName: "ENY",
+    crestUrl: null,
+    country: "Nigeria",
+    founded: null,
+    venueProviderId: null,
+    venueName: null,
+    venueCity: null,
+  },
+];
+
 export class MockFootballProvider implements FootballDataProvider {
   readonly name = "mock";
 
@@ -558,6 +591,19 @@ export class MockFootballProvider implements FootballDataProvider {
 
   async getStandings(): Promise<NormalizedStandingRow[]> {
     return MOCK_STANDINGS;
+  }
+
+  /**
+   * The two mock clubs, for whichever league is asked about.
+   *
+   * Deliberately does not filter on `leagueProviderId`: the mock exists so the
+   * catalogue sync's write path can be exercised without a provider key, and a
+   * mock that returned an empty array for every league id but one would make
+   * every dev run of that path look like a provider with no data. The season is
+   * ignored for the same reason.
+   */
+  async getTeamsByLeague(): Promise<NormalizedTeamProfile[]> {
+    return MOCK_TEAM_PROFILES;
   }
 
   async getSquad(teamProviderId: string): Promise<NormalizedPlayer[]> {

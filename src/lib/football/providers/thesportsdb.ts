@@ -12,6 +12,7 @@ import type {
   NormalizedPlayer,
   NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
+  NormalizedTeamProfile,
   NormalizedTopScorer,
   NormalizedTransfer,
 } from "../types";
@@ -216,6 +217,29 @@ export class TheSportsDbProvider implements FootballDataProvider {
       goalsAgainst: toIntOrZero(row.intGoalsAgainst),
       points: toIntOrZero(row.intPoints),
     }));
+  }
+
+  /**
+   * NOT SUPPORTED by this adapter, deliberately.
+   *
+   * TheSportsDB's v1 catalog does list `lookup_all_teams.php?id={leagueId}`,
+   * and it is the obvious counterpart to API-Football's `/teams?league=`. What
+   * this adapter does not have is a verified response shape for it — the same
+   * position `getLineups` below is in, and this file's sourcing note explains
+   * why that matters: the fields this would write are a club's identity, its
+   * crest and its country, and a normalizer written against a guessed shape
+   * would fill KIVO's club directory with nulls or with the wrong strings and
+   * look like it worked.
+   *
+   * A throw is the honest outcome. The catalogue sync catches it and records
+   * the sentence on the sync run, so an operator who has switched
+   * FOOTBALL_DATA_PROVIDER to TheSportsDB is told exactly why the club
+   * directory did not fill, rather than being shown an empty league.
+   */
+  async getTeamsByLeague(): Promise<NormalizedTeamProfile[]> {
+    throw new Error(
+      "TheSportsDbProvider.getTeamsByLeague: not supported by this adapter — TheSportsDB publishes a league team-list endpoint but KIVO has no verified response shape for it, and guessing one would write a club directory nobody can trust. Use ApiFootballProvider (FOOTBALL_DATA_PROVIDER=api-football) for the club catalogue.",
+    );
   }
 
   /**

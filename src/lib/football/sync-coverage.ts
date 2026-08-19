@@ -69,6 +69,16 @@ async function upsertCoverageRow(
     season_year: row.season,
     competition_id: competitionId,
     competition_name: row.competitionName,
+    // The country/type/badge the same `/leagues` response already carried and
+    // KIVO used to discard (migration 0107). This makes the registry the only
+    // place KIVO can learn what a league id IS — its name and where it is
+    // played — without first spending a request on it, which is what lets the
+    // competition allowlist be verified against the provider rather than taken
+    // on faith, and what fills the country on every competition whose row was
+    // created by a fixture sync that never had one.
+    country: row.competitionCountry,
+    competition_type: row.competitionType,
+    logo_url: row.competitionLogoUrl,
     fixture_events: row.fixtureEvents,
     fixture_lineups: row.fixtureLineups,
     fixture_statistics: row.fixtureStatistics,

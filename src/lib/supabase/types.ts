@@ -249,6 +249,64 @@ export type Database = {
           },
         ]
       }
+      competition_teams: {
+        Row: {
+          competition_id: string
+          created_at: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          provider: string
+          season_id: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          competition_id: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          provider: string
+          season_id: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          provider?: string
+          season_id?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competition_teams_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_teams_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitions: {
         Row: {
           country: string | null
@@ -1614,6 +1672,38 @@ export type Database = {
           },
         ]
       }
+      notification_mutes: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          target_id?: string
+          target_type?: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_mutes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
           created_at: string
@@ -1668,38 +1758,6 @@ export type Database = {
             foreignKeyName: "notification_preferences_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      notification_mutes: {
-        Row: {
-          created_at: string
-          id: string
-          profile_id: string
-          target_id: string
-          target_type: Database["public"]["Enums"]["follow_target_type"]
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          profile_id: string
-          target_id: string
-          target_type: Database["public"]["Enums"]["follow_target_type"]
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          profile_id?: string
-          target_id?: string
-          target_type?: Database["public"]["Enums"]["follow_target_type"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "notification_mutes_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -2493,10 +2551,48 @@ export type Database = {
           },
         ]
       }
+      provider_backfill_state: {
+        Row: {
+          created_at: string
+          entity_id: string
+          last_attempted_at: string | null
+          last_error: string | null
+          last_succeeded_at: string | null
+          provider: string
+          records_processed: number | null
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          last_attempted_at?: string | null
+          last_error?: string | null
+          last_succeeded_at?: string | null
+          provider: string
+          records_processed?: number | null
+          scope: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          last_attempted_at?: string | null
+          last_error?: string | null
+          last_succeeded_at?: string | null
+          provider?: string
+          records_processed?: number | null
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       provider_coverage: {
         Row: {
           competition_id: string | null
           competition_name: string | null
+          competition_type: string | null
+          country: string | null
           created_at: string
           fixture_events: boolean | null
           fixture_lineups: boolean | null
@@ -2504,6 +2600,7 @@ export type Database = {
           fixture_statistics: boolean | null
           id: string
           injuries: boolean | null
+          logo_url: string | null
           odds: boolean | null
           players: boolean | null
           predictions: boolean | null
@@ -2521,6 +2618,8 @@ export type Database = {
         Insert: {
           competition_id?: string | null
           competition_name?: string | null
+          competition_type?: string | null
+          country?: string | null
           created_at?: string
           fixture_events?: boolean | null
           fixture_lineups?: boolean | null
@@ -2528,6 +2627,7 @@ export type Database = {
           fixture_statistics?: boolean | null
           id?: string
           injuries?: boolean | null
+          logo_url?: string | null
           odds?: boolean | null
           players?: boolean | null
           predictions?: boolean | null
@@ -2545,6 +2645,8 @@ export type Database = {
         Update: {
           competition_id?: string | null
           competition_name?: string | null
+          competition_type?: string | null
+          country?: string | null
           created_at?: string
           fixture_events?: boolean | null
           fixture_lineups?: boolean | null
@@ -2552,6 +2654,7 @@ export type Database = {
           fixture_statistics?: boolean | null
           id?: string
           injuries?: boolean | null
+          logo_url?: string | null
           odds?: boolean | null
           players?: boolean | null
           predictions?: boolean | null
@@ -3981,6 +4084,10 @@ export type Database = {
         }
         Returns: string
       }
+      upsert_notifications_superseding: {
+        Args: { p_rows: Json }
+        Returns: number
+      }
       upsert_team_with_mapping: {
         Args: {
           p_crest_url?: string
@@ -3998,10 +4105,6 @@ export type Database = {
           p_provider_entity_id: string
         }
         Returns: string
-      }
-      upsert_notifications_superseding: {
-        Args: { p_rows: Json }
-        Returns: number
       }
       vote_on_poll: {
         Args: { p_option_id: string; p_post_id: string }
