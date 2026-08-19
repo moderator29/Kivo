@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { logError } from "@/lib/log";
-import { getCompetitionScope } from "./competitions-config";
+import { resolveCompetitionScope } from "./competition-scope";
 import { NO_COMPETITION_RANKING_SIGNALS, type CompetitionRankingSignals } from "./competition-tier";
 
 type Client = SupabaseClient<Database>;
@@ -47,7 +47,11 @@ export async function getCompetitionRankingSignals(
   // on key presence would blank the ordering on any deployment where the key
   // lives only in the sync environment.
   const providerName = process.env.FOOTBALL_DATA_PROVIDER === "thesportsdb" ? "thesportsdb" : "api-football";
-  const scope = getCompetitionScope(providerName);
+  // Reads `competition_scope` (migration 0114) before the env var and the
+  // shipped default, so the matches list orders by the operator's own choice.
+  // Publicly selectable by design — a logged-out visitor's list is ordered by
+  // this too, and the covered set is inferable from the list anyway.
+  const scope = await resolveCompetitionScope(supabase, providerName);
 
   const [favouritesResult, providerIdsResult, followerCountsResult] = await Promise.all([
     viewerProfileId

@@ -158,6 +158,13 @@ export function mapEvent(item: TheSportsDbEvent): NormalizedFixture {
     awayScoreHt: null,
     venueProviderId: null, // TheSportsDB does not expose a stable venue id on events.
     venueName: item.strVenue ?? null,
+    // TheSportsDB's event payload carries no city, referee or round label on
+    // the fields this normalizer reads. Null rather than an empty string, and
+    // certainly not derived from the venue name — "not reported by this
+    // provider" and "this match had no referee" must not render the same.
+    venueCity: null,
+    referee: null,
+    roundLabel: null,
     retrievedAt: new Date().toISOString(),
   };
 }

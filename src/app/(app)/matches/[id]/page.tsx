@@ -86,7 +86,7 @@ export default async function MatchCentrePage({
     await supabase
       .from("fixtures")
       .select(
-        `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
+        `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday, referee, round_label,
          home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
          away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
          competition:competitions(id, name, short_name),
@@ -562,6 +562,14 @@ export default async function MatchCentrePage({
               competitionName: fixture.competition?.short_name ?? fixture.competition?.name ?? null,
               venueName: fixture.venue?.name ?? null,
               venueCity: fixture.venue?.city ?? null,
+              // Migration 0113. Both were already on the provider payload KIVO
+              // pays for and were dropped by the adapter; the Overview tab is
+              // where a fan looks for them.
+              referee: fixture.referee,
+              // The label, not the number. `matchday` is null for a cup tie,
+              // and this is the only thing that names its round.
+              roundLabel: fixture.round_label,
+              matchday: fixture.matchday,
             }}
             // RECOMMENDATIONS.md item 161, now as a Match Centre tab rather
             // than a card stranded below the whole tab strip. Null unless both

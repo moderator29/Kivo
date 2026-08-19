@@ -182,3 +182,92 @@ describe("getCompetitionCoverage", () => {
     expect(row.odds).toBeNull();
   });
 });
+
+/**
+ * The three Details-tab facts the adapter used to drop.
+ *
+ * All three arrive on the SAME `/fixtures` payload KIVO already pays for.
+ * `referee` and `venue.city` were not declared on the response interface at
+ * all; `league.round` was declared but only `parseMatchday` ran over it, which
+ * extracts a number and correctly returns null for "Quarter-finals" — so for
+ * every cup tie the one string naming the round was parsed, found to contain
+ * no number, and thrown away.
+ */
+describe("fixture details depth", () => {
+  function fixtureResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      response: [
+        {
+          fixture: {
+            id: 1001,
+            date: "2026-08-15T15:00:00+00:00",
+            status: { short: "NS", elapsed: null },
+            venue: { id: 556, name: "Old Trafford", city: "Manchester" },
+            referee: "Michael Oliver, England",
+            ...overrides,
+          },
+          league: { id: 39, name: "Premier League", season: 2026, country: "England", round: "Regular Season - 12" },
+          teams: { home: { id: 33, name: "Manchester United", logo: null }, away: { id: 40, name: "Liverpool", logo: null } },
+          goals: { home: null, away: null },
+          score: { halftime: { home: null, away: null } },
+        },
+      ],
+    };
+  }
+
+  it("keeps the referee, the venue city and the round label", async () => {
+    respondWith(fixtureResponse());
+    const [fixture] = await (await makeProvider()).getFixturesByDate("2026-08-15");
+
+    expect(fixture.referee).toBe("Michael Oliver, England");
+    expect(fixture.venueCity).toBe("Manchester");
+    expect(fixture.roundLabel).toBe("Regular Season - 12");
+  });
+
+  it("keeps the round label AND the parsed number — neither replaces the other", async () => {
+    respondWith(fixtureResponse());
+    const [fixture] = await (await makeProvider()).getFixturesByDate("2026-08-15");
+    expect(fixture.matchday).toBe(12);
+    expect(fixture.roundLabel).toBe("Regular Season - 12");
+  });
+
+  it("keeps a cup round's label even though it parses to no matchday", async () => {
+    // The regression that made the column necessary. `matchday` is null here
+    // and correctly so — 16 is a count of teams, not a matchday — and without
+    // the label a quarter-final could not say which round it was.
+    const body = fixtureResponse();
+    body.response[0].league.round = "Round of 16";
+    respondWith(body);
+
+    const [fixture] = await (await makeProvider()).getFixturesByDate("2026-08-15");
+    expect(fixture.matchday).toBeNull();
+    expect(fixture.roundLabel).toBe("Round of 16");
+  });
+
+  it("reports null, not an empty string, when the provider omits them", async () => {
+    // Null means "the provider did not say". An empty string would render as a
+    // blank Referee row, which is a claim about the match.
+    const body = fixtureResponse({ referee: null, venue: { id: 556, name: "Old Trafford", city: null } });
+    body.response[0].league.round = "   ";
+    respondWith(body);
+
+    const [fixture] = await (await makeProvider()).getFixturesByDate("2026-08-15");
+    expect(fixture.referee).toBeNull();
+    expect(fixture.venueCity).toBeNull();
+    expect(fixture.roundLabel).toBeNull();
+  });
+
+  it("survives a payload with the fields absent entirely", async () => {
+    // A provider response that predates these fields, or a plan that omits
+    // them, must map to null rather than throwing.
+    const body = fixtureResponse();
+    delete (body.response[0].fixture as Record<string, unknown>).referee;
+    delete (body.response[0].fixture.venue as Record<string, unknown>).city;
+    respondWith(body);
+
+    const [fixture] = await (await makeProvider()).getFixturesByDate("2026-08-15");
+    expect(fixture.referee).toBeNull();
+    expect(fixture.venueCity).toBeNull();
+    expect(fixture.venueName).toBe("Old Trafford");
+  });
+});

@@ -222,7 +222,12 @@ interface ApiFootballFixtureResponse {
       id: number;
       date: string;
       status: { short: string; elapsed: number | null };
-      venue: { id: number | null; name: string | null };
+      // `city` and `referee` are sent on every /fixtures item and were both
+      // undeclared here, so both were dropped — which is why venues.city has
+      // been null since migration 0001 and no match page could name the
+      // official. Same payload, read more completely; costs nothing.
+      venue: { id: number | null; name: string | null; city?: string | null };
+      referee?: string | null;
     };
     // `round` is free text ("Regular Season - 12", "Quarter-finals"). KIVO
     // reads a matchday number out of it where there is one and stores null
@@ -550,8 +555,14 @@ export class ApiFootballProvider implements FootballDataProvider {
       homeScoreHt: item.score.halftime.home,
       awayScoreHt: item.score.halftime.away,
       matchday: parseMatchday(item.league.round),
+      // The label itself, alongside the number parsed out of it. A cup tie has
+      // no numbered matchday, so `matchday` is null there and this is the only
+      // thing that names the round — see NormalizedFixture.roundLabel.
+      roundLabel: item.league.round?.trim() || null,
+      referee: item.fixture.referee?.trim() || null,
       venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
+      venueCity: item.fixture.venue.city?.trim() || null,
       retrievedAt,
     };
   }

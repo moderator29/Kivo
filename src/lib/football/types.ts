@@ -92,6 +92,30 @@ export interface NormalizedFixture {
    * pipeline leaves fixtures.venue_id null in that case rather than dedupe-by-name. */
   venueProviderId: string | null;
   venueName: string | null;
+  /** The venue's city. `venues.city` has existed since migration 0001 and no
+   * fixture sync ever wrote to it, because the adapter did not declare the
+   * field — API-Football sends it on every `/fixtures` item. Null is a real
+   * answer for a provider that omits it, never a guess from the venue name. */
+  venueCity: string | null;
+  /** The match official, exactly as the provider names them. Was not declared
+   * on the response interface at all, so a Match Centre could not show the
+   * referee even though the field arrived on the same payload KIVO already
+   * pays for. Null means the provider supplied none — never an assertion that
+   * a fixture has no referee. */
+  referee: string | null;
+  /**
+   * The provider's own round label, verbatim: "Regular Season - 12",
+   * "Quarter-finals", "Group Stage - 2".
+   *
+   * Deliberately NOT `matchday`, and neither replaces the other. `matchday` is
+   * the number `parseMatchday` extracts and is correctly null for any round
+   * that has none — which meant that for every cup tie, the one string naming
+   * the round was parsed, found to contain no number, and thrown away. A
+   * knockout fixture could not say which round it was. This is that string,
+   * stored as text and not parsed further, because parsing it would invent
+   * structure the provider did not supply.
+   */
+  roundLabel: string | null;
   /** When this record was fetched from the provider — required for freshness display, never omit. */
   retrievedAt: string;
 }

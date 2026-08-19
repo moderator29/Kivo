@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getFootballDataProvider } from "./index";
-import { getCompetitionScope } from "./competitions-config";
+import { resolveCompetitionScope } from "./competition-scope";
 import { syncStandings } from "./sync-match-details";
 import { reserveProviderRequests } from "./request-budget";
 import { logError } from "@/lib/log";
@@ -102,7 +102,7 @@ export type ScopedStandingsResult = {
 export async function syncScopedStandings(): Promise<ScopedStandingsResult> {
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
-  const scope = getCompetitionScope(provider.name);
+  const scope = await resolveCompetitionScope(supabase, provider.name);
 
   const seasons = await selectSeasons(supabase, provider.name, scope.orderedIds);
   if (seasons.error) return { error: seasons.error, outcomes: [], requestsSpent: 0 };

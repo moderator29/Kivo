@@ -249,6 +249,33 @@ export type Database = {
           },
         ]
       }
+      competition_scope: {
+        Row: {
+          added_at: string
+          country: string | null
+          label: string | null
+          position: number
+          provider: string
+          provider_entity_id: string
+        }
+        Insert: {
+          added_at?: string
+          country?: string | null
+          label?: string | null
+          position: number
+          provider: string
+          provider_entity_id: string
+        }
+        Update: {
+          added_at?: string
+          country?: string | null
+          label?: string | null
+          position?: number
+          provider?: string
+          provider_entity_id?: string
+        }
+        Relationships: []
+      }
       competition_teams: {
         Row: {
           competition_id: string
@@ -1280,6 +1307,8 @@ export type Database = {
           matchday: number | null
           minute_elapsed: number | null
           provider_last_seen_at: string | null
+          referee: string | null
+          round_label: string | null
           season_id: string
           status: Database["public"]["Enums"]["fixture_status"]
           updated_at: string
@@ -1301,6 +1330,8 @@ export type Database = {
           matchday?: number | null
           minute_elapsed?: number | null
           provider_last_seen_at?: string | null
+          referee?: string | null
+          round_label?: string | null
           season_id: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -1322,6 +1353,8 @@ export type Database = {
           matchday?: number | null
           minute_elapsed?: number | null
           provider_last_seen_at?: string | null
+          referee?: string | null
+          round_label?: string | null
           season_id?: string
           status?: Database["public"]["Enums"]["fixture_status"]
           updated_at?: string
@@ -4114,6 +4147,8 @@ export type Database = {
           p_home_team_id: string
           p_kickoff_at: string
           p_matchday?: number
+          p_referee?: string
+          p_round_label?: string
           p_minute_elapsed?: number
           p_provider: string
           p_provider_entity_id: string
@@ -4139,6 +4174,7 @@ export type Database = {
       }
       upsert_venue_with_mapping: {
         Args: {
+          p_city?: string
           p_name?: string
           p_provider: string
           p_provider_entity_id: string
