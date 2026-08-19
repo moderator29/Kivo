@@ -40,7 +40,7 @@ export function ProfileUnavailable({ retryHref = "/home" }: { retryHref?: string
           <div className="flex flex-col gap-3">
             <Link
               href={retryHref}
-              className="kivo-gradient-prime flex w-full items-center justify-center rounded-full px-6 py-3.5 text-base font-semibold text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] transition-opacity hover:opacity-90"
+              className="kivo-gradient-prime flex w-full items-center justify-center rounded-xl px-6 py-3.5 text-base font-semibold text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] transition-opacity hover:opacity-90"
             >
               Try again
             </Link>
