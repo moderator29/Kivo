@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Flame, Star, Users, ArrowRight } from "lucide-react";
 import { DISPLAY_LOCALE } from "@/lib/format";
 import { FadeIn } from "@/components/ui/fade-in";
-import { FixtureRow } from "@/components/home/fixture-row";
+import { MatchList, MatchListRow } from "@/components/matches/match-list";
 import { HomeLeadCard } from "@/components/home/home-lead";
 import { Greeting } from "@/components/home/greeting";
 import { HomeSectionCard } from "@/components/home/section-card";
@@ -120,32 +120,27 @@ function toLeadFixture(row: FixtureRowShape, teamNames: Map<string, string>): Le
   };
 }
 
-function FixtureList({ fixtures, dateLabels }: { fixtures: FixtureRowShape[]; dateLabels?: boolean }) {
+/**
+ * Home's fixture lists.
+ *
+ * FRONTEND SWEEP: these were a third distinct match row — home and away side by
+ * side with the score squeezed between them, no time rail, its own hover and
+ * entrance animation. Home is the first screen anyone opens, so the app's first
+ * impression was a match row that appears nowhere else in it.
+ *
+ * They are now the same rows /matches and /live render, `inset` because the
+ * section card around them already provides the surface. `dateLabels` used to
+ * substitute a date into the score slot for the "Your teams" list, which is what
+ * a fixture list on Home is really showing; `MatchListRow`'s rail carries that
+ * job properly, since a fixture with no score already shows its kickoff there.
+ */
+function FixtureList({ fixtures }: { fixtures: FixtureRowShape[] }) {
   return (
-    <div className="flex flex-col gap-2">
-      {fixtures.map((fixture, index) => {
-        const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-        return (
-          <FixtureRow
-            key={fixture.id}
-            href={`/matches/${fixture.id}`}
-            homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
-            homeName={fixture.home_team?.name ?? "Home"}
-            awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
-            awayName={fixture.away_team?.name ?? "Away"}
-            scoreLabel={
-              dateLabels
-                ? new Date(fixture.kickoff_at).toLocaleDateString(DISPLAY_LOCALE, { month: "short", day: "numeric" })
-                : hasScore
-                  ? `${fixture.home_score} – ${fixture.away_score}`
-                  : "vs"
-            }
-            live={!dateLabels && isLiveStatus(fixture.status)}
-            index={index}
-          />
-        );
-      })}
-    </div>
+    <MatchList inset>
+      {fixtures.map((fixture) => (
+        <MatchListRow key={fixture.id} fixture={fixture} />
+      ))}
+    </MatchList>
   );
 }
 
@@ -616,7 +611,7 @@ export default async function HomePage() {
             reason={reason}
             action={{ href: "/profile/following", label: "Manage" }}
           >
-            <FixtureList fixtures={upcomingRest} dateLabels />
+            <FixtureList fixtures={upcomingRest} />
           </HomeSectionCard>
         );
 

@@ -1,5 +1,6 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MatchListSkeleton } from "@/components/matches/match-list";
 
 export default function MatchesLoading() {
   return (
@@ -19,27 +20,23 @@ export default function MatchesLoading() {
         <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
       </div>
 
-      <div className="flex flex-col gap-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-4 w-14 rounded-full" />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-1 items-center gap-2">
-                <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
-                <Skeleton className="h-4 w-24" />
+      {/* The same component the page's own competition blocks use, so the
+          transition from skeleton to matches is a fill rather than a reflow. */}
+      <div className="flex flex-col gap-6">
+        {[0, 1].map((group) => (
+          <div key={group} className="flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-[26px] w-[26px] shrink-0 rounded-full" />
+                <Skeleton className="h-4 w-32" />
               </div>
-              <Skeleton className="h-4 w-8 shrink-0" />
-              <div className="flex flex-1 items-center justify-end gap-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
-              </div>
+              <Skeleton className="h-3 w-16" />
             </div>
+            <MatchListSkeleton rows={group === 0 ? 4 : 3} />
           </div>
         ))}
       </div>
+
     </PageSkeleton>
   );
 }

@@ -92,7 +92,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
   }
 
   return (
-    <div className="kivo-glass flex items-center justify-between gap-3 rounded-2xl p-4">
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="w-4 shrink-0 text-[11px] font-semibold uppercase text-foreground-subtle">
           {isHome ? "H" : "A"}
@@ -130,7 +130,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
           </span>
         )}
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -672,10 +672,16 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           Upcoming fixtures
         </h2>
         {upcoming && upcoming.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {upcoming.map((fixture) => (
-              <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
-            ))}
+          // FRONTEND SWEEP: one surface, hairline-divided rows — not one card
+          // per fixture. Same rule MatchList applies to /matches; the row here
+          // stays team-relative because that IS the information this list
+          // carries, and only the container changes.
+          <div className="kivo-glass overflow-hidden rounded-2xl">
+            <ul className="flex flex-col divide-y divide-hairline-soft">
+              {upcoming.map((fixture) => (
+                <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
+              ))}
+            </ul>
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
@@ -695,10 +701,16 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           {recentForm.length > 0 && <FormBadges form={recentForm} />}
         </div>
         {recent && recent.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {recent.map((fixture) => (
-              <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
-            ))}
+          // FRONTEND SWEEP: one surface, hairline-divided rows — not one card
+          // per fixture. Same rule MatchList applies to /matches; the row here
+          // stays team-relative because that IS the information this list
+          // carries, and only the container changes.
+          <div className="kivo-glass overflow-hidden rounded-2xl">
+            <ul className="flex flex-col divide-y divide-hairline-soft">
+              {recent.map((fixture) => (
+                <FixtureListItem key={fixture.id} fixture={fixture} teamId={team.id} />
+              ))}
+            </ul>
           </div>
         ) : (
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">

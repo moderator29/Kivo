@@ -64,9 +64,23 @@ export type MatchListFixture = {
  * The grouped surface. One per competition — the competition's own header sits
  * ABOVE this, outside the box, so the box holds only matches.
  */
-export function MatchList({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function MatchList({
+  children,
+  /**
+   * `inset` drops the glass surface and corners, for a list that already sits
+   * inside a panel — Home's section cards, for instance. Without it those rows
+   * would be a card inside a card, which is the exact nesting `DENSITY_RULES`
+   * ("one divider weight per boundary") tells us not to build.
+   */
+  inset = false,
+  className = "",
+}: {
+  children: ReactNode;
+  inset?: boolean;
+  className?: string;
+}) {
   return (
-    <div className={`kivo-glass overflow-hidden rounded-2xl ${className}`}>
+    <div className={`${inset ? "-mx-2" : "kivo-glass overflow-hidden rounded-2xl"} ${className}`}>
       <ul className="flex flex-col divide-y divide-hairline-soft">{children}</ul>
     </div>
   );
@@ -216,5 +230,43 @@ export function MatchListRow(props: { fixture: MatchListFixture; meta?: ReactNod
     <li className={`relative ${className}`}>
       <MatchListRowContent {...rest} />
     </li>
+  );
+}
+
+/**
+ * The skeleton for a match list — the same geometry as `MatchListRow`, because a
+ * skeleton whose shape differs from what replaces it produces a reflow at the
+ * exact moment the reader starts reading. That jolt is most of what makes
+ * loading feel unpolished, and it is entirely avoidable: the rail is the same
+ * 44px, the two team lines are the same height, the score column is the same
+ * width, and the rows are divided by the same hairline.
+ *
+ * Sized to the surface it fills rather than a fixed count, so a list that will
+ * hold three matches does not flash six grey rows and then collapse.
+ */
+export function MatchListSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="kivo-glass overflow-hidden rounded-2xl" aria-hidden="true">
+      <div className="flex flex-col divide-y divide-hairline-soft">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex items-stretch gap-3 px-3 py-2">
+            <div className="flex w-11 shrink-0 items-center justify-center">
+              <div className="kivo-skeleton h-3 w-8 rounded" />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              {[0, 1].map((line) => (
+                <div key={line} className="flex items-center gap-2">
+                  <div className="kivo-skeleton h-[18px] w-[18px] shrink-0 rounded-full" />
+                  {/* Two different name widths, alternating, so the block reads
+                      as a list of different clubs rather than as a grid. */}
+                  <div className={`kivo-skeleton h-3.5 rounded ${line === 0 ? "w-32" : "w-24"}`} />
+                  <div className="ml-auto kivo-skeleton h-3.5 w-4 shrink-0 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
