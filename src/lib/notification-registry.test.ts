@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   NOTIFICATION_GROUPS,
   NOTIFICATION_REGISTRY,
@@ -17,6 +17,12 @@ import {
  * string is a bug a user sees. Both are the kind of thing that only shows up
  * in production, which is exactly what makes them worth a test.
  */
+
+// describeNotification logs when it meets a type it does not know. Stubbed so
+// the unregistered-type tests below assert behaviour rather than filling the
+// run with console noise — the logging itself is the point of that path, not
+// an accident, so it is silenced rather than removed.
+vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 
 const ALL_TYPES = Object.keys(NOTIFICATION_REGISTRY) as NotificationType[];
 
@@ -86,5 +92,47 @@ describe("the three types the brief named and KIVO never sent", () => {
   it("sit in the Matches group", () => {
     const matches = NOTIFICATION_GROUPS.find((group) => group.id === "matches");
     for (const type of added) expect(matches?.types).toContain(type);
+  });
+});
+
+/**
+ * The fallback path — the one part of this module a user should never see
+ * working.
+ *
+ * The registry used to answer an unrecognised type with
+ * `type.replace(/_/g, " ")`, which reads as graceful degradation and is really
+ * a leak: the reader gets an internal identifier, not a sentence. The tests
+ * above prove no *registered* type renders one. These prove an unregistered
+ * one cannot either.
+ */
+describe("an unrecognised type", () => {
+  it("never renders as a raw type string", () => {
+    const line = describeNotification({ type: "goal", payload: {} });
+    expect(line).not.toBe("goal");
+    expect(line).not.toMatch(/_/);
+    expect(line.trim().length).toBeGreaterThan(0);
+  });
+
+  it("still goes somewhere real rather than nowhere", () => {
+    expect(notificationHref({ type: "goal", payload: {} })).toBe("/notifications");
+  });
+});
+
+describe("a registered type with a damaged payload", () => {
+  it("never returns a blank line when the summary field is empty text", () => {
+    // Distinct from the missing-summary case the tests above cover: a field
+    // that exists and is whitespace passes a `?? fallback` untouched, and an
+    // empty row in a notification list reads as a rendering bug.
+    const line = describeNotification({ type: "match_goal", payload: { summary: "   " } });
+    expect(line.trim().length).toBeGreaterThan(0);
+  });
+
+  it("uses the producer's summary when there genuinely is one", () => {
+    expect(
+      describeNotification({
+        type: "match_goal",
+        payload: { fixture_id: "f1", summary: "Saka scores for Arsenal (12')" },
+      }),
+    ).toBe("Saka scores for Arsenal (12')");
   });
 });

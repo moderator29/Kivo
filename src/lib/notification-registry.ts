@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationRow } from "@/lib/notifications";
+import { logError } from "@/lib/log";
 
 /**
  * `notifications.type` is free text in the schema (see the comment on the
@@ -231,16 +232,61 @@ function isKnownType(type: string): type is NotificationType {
   return Object.prototype.hasOwnProperty.call(NOTIFICATION_REGISTRY, type);
 }
 
+/**
+ * What a notification says when KIVO does not recognise its own type.
+ *
+ * This used to be `type.replace(/_/g, " ")`, which is a reasonable-looking
+ * fallback and is wrong for one specific reason: it is not a fallback at all,
+ * it is a leak. `notifications.type` is free text in the schema, so an
+ * unregistered value reaches this function as a raw internal identifier — and
+ * a fan then reads the literal word "goal", or "match_goal", in their bell.
+ * That is not a shorter version of a sentence; it is a column name wearing a
+ * sentence's clothes, and it tells the reader nothing about what happened.
+ *
+ * Every type with a producer today sets a real title, so nothing renders this
+ * right now. It is exactly one bad producer away from being user-visible,
+ * which is the wrong moment to discover that the safety net was made of
+ * database identifiers.
+ *
+ * So the fallback says the one thing KIVO actually knows — that something
+ * arrived — and the raw type goes to the log, where the person who can fix it
+ * will look, instead of to the person who cannot.
+ */
+const UNKNOWN_NOTIFICATION_TITLE = "You have a new KIVO notification";
+
+/**
+ * Logged once per render of an unrecognised type. `logError` is
+ * console-backed and isomorphic (see src/lib/log.ts), so this works from the
+ * client components that render the bell as well as from the server.
+ */
+function reportUnknownType(type: string): void {
+  logError(
+    "notification-registry.unknownNotificationType",
+    new Error(`No registry entry for notifications.type "${type}"`),
+    { notificationType: type },
+  );
+}
+
 function payloadOf(notification: Pick<NotificationRow, "payload">): Payload {
   return (notification.payload ?? {}) as Payload;
 }
 
-/** Human-readable line for a notification. Falls back to a humanized version
- * of the raw type string for anything not yet in the registry above, instead
- * of ever throwing on an unrecognized value from the free-text `type` column. */
+/**
+ * Human-readable line for a notification.
+ *
+ * Never throws on an unrecognised value from the free-text `type` column, and
+ * never renders that value either — see UNKNOWN_NOTIFICATION_TITLE. A known
+ * type whose title function returns an empty string (a payload field that
+ * exists but is blank) gets the same treatment, because an empty row in a
+ * notification list is indistinguishable from a rendering bug.
+ */
 export function describeNotification(notification: Pick<NotificationRow, "type" | "payload">): string {
-  if (isKnownType(notification.type)) return NOTIFICATION_REGISTRY[notification.type].title(payloadOf(notification));
-  return notification.type.replace(/_/g, " ");
+  if (!isKnownType(notification.type)) {
+    reportUnknownType(notification.type);
+    return UNKNOWN_NOTIFICATION_TITLE;
+  }
+  const title = NOTIFICATION_REGISTRY[notification.type].title(payloadOf(notification));
+  return title.trim().length > 0 ? title : UNKNOWN_NOTIFICATION_TITLE;
 }
 
 /** Icon for a notification's type; a generic bell for anything unregistered. */

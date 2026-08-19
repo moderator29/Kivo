@@ -120,6 +120,28 @@ there are no clubs to pick yet. That is correct behaviour, not a broken screen.
 
 ## Step 5 — Make yourself an admin
 
+> **Already done on the current KIVO project — do not re-run this.**
+> Verified against the live database on 2026-08-19: exactly two profiles exist,
+> and the founder's own account already holds `super_admin`. Running the
+> `update` below again against a *different* address would promote the wrong
+> account, which is why this notice sits above the SQL rather than after it.
+>
+> To confirm for yourself without needing to know which address it was:
+>
+> ```sql
+> select p.username, p.role, u.email is not null as has_login
+> from public.profiles p
+> left join auth.users u on u.id = p.auth_user_id
+> order by p.created_at;
+> ```
+>
+> One row should read `super_admin` with `has_login = true`. The other is
+> `kivo_system` — see the note at the end of this step.
+>
+> **The rest of this step still applies verbatim to a fresh deployment**, which
+> is why it is kept rather than deleted: a new Supabase project starts with no
+> admin at all, and nothing in the product can create one.
+
 **This is the step with no in-product path, and the one most likely to be
 missed.**
 
