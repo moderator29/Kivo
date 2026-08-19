@@ -8,9 +8,10 @@ import { FeedFilterTabs } from "@/components/social/feed-filter-tabs";
 import { SocialFeed } from "@/components/social/social-feed";
 import { PageHeader } from "@/components/layout/page-header";
 import { FadeIn } from "@/components/ui/fade-in";
+import { EmptyState } from "@/components/ui/empty-state";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { TabPanel } from "@/components/ui/section-tabs";
-import { parseSocialFilter, resolveFeedScope, SOCIAL_FILTER_LABELS } from "@/lib/social-filters";
+import { parseSocialFilter, resolveFeedScope } from "@/lib/social-filters";
 import { fetchPostsPage } from "./posts";
 import { fetchTrendingRooms } from "./trending";
 import { TrendingPanel } from "@/components/social/trending-panel";
@@ -88,27 +89,24 @@ export default async function SocialPage({
           worse than no wiring at all. */}
       <FeedRegion signedIn={Boolean(profile)} filter={filter}>
         {scope.kind === "unavailable" ? (
-          <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
-            {scope.missing === "rival" ? (
-              <ShieldHalf className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
-            ) : (
-              <Users className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
-            )}
-            <p className="text-sm font-semibold text-foreground">
-              {scope.missing === "rival" ? "You haven't named a rival yet." : "You haven't picked a club yet."}
-            </p>
-            <p className="max-w-sm text-xs text-foreground-subtle">
-              {scope.missing === "rival"
-                ? "KIVO holds no list of which clubs are rivals — this feed shows posts from fans of the one club you name, and nothing until you name it."
-                : "Club mates shows posts from other fans of the club you support. Tell KIVO which one that is and this feed fills up on its own."}
-            </p>
-            <Link
-              href={scope.missing === "rival" ? "/settings/clubs" : "/profile/club"}
-              className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
-            >
-              {scope.missing === "rival" ? "Name your rival" : "Pick your club"}
-            </Link>
-          </FadeIn>
+          <EmptyState
+            icon={scope.missing === "rival" ? ShieldHalf : Users}
+            tone="section"
+            title={scope.missing === "rival" ? "You haven't named a rival yet" : "You haven't picked a club yet"}
+            description={
+              scope.missing === "rival"
+                ? "KIVO holds no list of which clubs are rivals. Name the one club you want to hear from and this feed fills up on its own."
+                : "Club mates shows posts from other fans of the club you support. Tell KIVO which one that is."
+            }
+            action={
+              <Link
+                href={scope.missing === "rival" ? "/settings/clubs" : "/profile/club"}
+                className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
+              >
+                {scope.missing === "rival" ? "Name your rival" : "Pick your club"}
+              </Link>
+            }
+          />
         ) : (
           // key remounts SocialFeed when the filter changes: its `posts` state is
           // seeded once via useState(initialPosts), so without a key tied to the
@@ -122,7 +120,6 @@ export default async function SocialPage({
               initialHasMore={hasMore}
               signedIn={Boolean(profile)}
               filter={filter}
-              emptyLabel={SOCIAL_FILTER_LABELS[filter]}
               scrollToPostId={targetPostId ?? null}
               initialOffset={pageOne.length}
             />

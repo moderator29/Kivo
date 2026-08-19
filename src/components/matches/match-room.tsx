@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Eye, Lock, PencilLine } from "lucide-react";
+import { Clock, Eye, Lock, MessagesSquare, PencilLine } from "lucide-react";
 import { RoomComposer } from "@/components/matches/room-composer";
 import { RoomMessage } from "@/components/social/room-message";
 import { useRealtimeRoomPosts } from "@/hooks/use-realtime-room-posts";
 import { useRoomPresence } from "@/hooks/use-room-presence";
 import { useMatchRoomWindow } from "@/hooks/use-match-room-window";
 import { LocalDateTime } from "@/components/ui/relative-time";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { MatchRoomWindow } from "@/lib/match-room-window";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import type { PollSummary } from "@/app/(app)/social/posts";
@@ -151,12 +152,12 @@ export function MatchRoomTab({
           measurement, and for why KIVO's own goal and red-card posts are drawn
           as match events rather than as messages. */}
       {posts.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-2xl border border-hairline px-6 py-10 text-center">
-          <p className="text-sm text-foreground-muted">Nobody&apos;s said anything yet.</p>
-          <p className="max-w-xs text-xs text-foreground-subtle">
-            Rooms open the moment a fixture lands and stay open a day after full time. First word is yours.
-          </p>
-        </div>
+        <EmptyState
+          icon={MessagesSquare}
+          tone="section"
+          title="Nobody's said anything yet"
+          description="Rooms open the moment a fixture lands and stay open a day after full time. First word is yours."
+        />
       ) : (
         <div className="flex flex-col divide-y divide-hairline-soft">
           {posts.map((post, index) => (

@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { MessagesSquare } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PostCard } from "@/components/social/post-card";
 import { PostThread } from "@/components/social/post-thread";
 import { groupPostsIntoThreads } from "@/lib/social-threads";
@@ -65,21 +67,26 @@ export function ProfilePosts({
 
   if (posts.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-hairline px-6 py-10 text-center">
-        <p className="text-sm text-foreground-muted">
-          {isOwnProfile
-            ? "You haven't posted yet. Your takes show up here, and in the room of whatever match they're about."
-            : `${authorName} hasn't posted yet.`}
-        </p>
-        {isOwnProfile && (
-          <Link
-            href="/social/compose"
-            className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
-          >
-            Write your first take
-          </Link>
-        )}
-      </div>
+      <EmptyState
+        icon={MessagesSquare}
+        tone="section"
+        title={isOwnProfile ? "You haven't posted yet" : `${authorName} hasn't posted yet`}
+        description={
+          isOwnProfile
+            ? "Your takes show up here, and in the room of whatever match they're about."
+            : "When they do, their takes show up here."
+        }
+        action={
+          isOwnProfile ? (
+            <Link
+              href="/social/compose"
+              className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
+            >
+              Write your first take
+            </Link>
+          ) : undefined
+        }
+      />
     );
   }
 

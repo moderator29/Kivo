@@ -1,28 +1,28 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { PageHeaderSkeleton, PostSkeleton, SectionTabsSkeleton } from "@/components/ui/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * The feed's wait, shaped like the feed.
+ *
+ * Built from the skeleton family (docs/UI_PRIMITIVES.md) rather than from
+ * hand-measured boxes, because a skeleton is a promise about where things will
+ * be and the visible way to break it is to get the geometry wrong: content
+ * lands, the page jumps. `PostSkeleton` is measured against the real card, so
+ * it cannot drift from it.
+ */
 export default function SocialLoading() {
   return (
     <PageSkeleton label="Loading the community feed">
-      <Skeleton className="h-7 w-32" />
-      <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="ml-auto h-8 w-20" />
+      <PageHeaderSkeleton />
+      {/* The composer row: an avatar, a placeholder line and the Post button. */}
+      <div className="kivo-glass flex items-center gap-3 rounded-2xl p-3">
+        <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+        <Skeleton className="h-3.5 flex-1" />
+        <Skeleton className="h-8 w-16 shrink-0 rounded-xl" />
       </div>
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <div className="flex flex-col gap-1.5">
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="h-3 w-12" />
-            </div>
-          </div>
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-5 w-14" />
-        </div>
-      ))}
+      <SectionTabsSkeleton />
+      <PostSkeleton />
     </PageSkeleton>
   );
 }

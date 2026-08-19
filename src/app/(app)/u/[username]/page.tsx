@@ -10,6 +10,7 @@ import { logError } from "@/lib/log";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FollowButton } from "@/components/ui/follow-button";
 import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
@@ -291,14 +292,19 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               // RECOMMENDATIONS.md item 286: an honest privacy state, not a
               // bare zero — "0 XP earned" would misread as "hasn't earned
               // anything" when this profile's owner has simply opted out.
-              <div className="flex flex-col items-center gap-2 rounded-2xl border border-hairline px-6 py-10 text-center">
-                <Lock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
-                <p className="text-sm text-foreground-muted">This user keeps their activity private.</p>
-              </div>
+              <EmptyState
+                icon={Lock}
+                tone="section"
+                title="This profile is kept private"
+                description="Its owner has chosen not to show what they've earned on KIVO."
+              />
             ) : badges.length === 0 ? (
-              <div className="rounded-2xl border border-hairline px-6 py-10 text-center text-sm text-foreground-muted">
-                No badges yet. They arrive for predicting, posting and turning up on matchday.
-              </div>
+              <EmptyState
+                icon={Award}
+                tone="section"
+                title="No badges yet"
+                description="They arrive for predicting, posting and turning up on matchday."
+              />
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {badges.map((badge, index) => (

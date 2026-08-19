@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { ListSurface } from "@/components/ui/list-surface";
+import { FieldLabel } from "@/components/ui/section";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { LocalDateTime } from "@/components/ui/relative-time";
@@ -50,9 +52,7 @@ export function MatchAttachPicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
-        The match
-      </span>
+      <FieldLabel>The match</FieldLabel>
 
       {selected ? (
         <div className="flex items-center gap-2">
@@ -137,13 +137,12 @@ export function MatchAttachPicker({
             groups.map((group) =>
               group.matches.length === 0 ? null : (
                 <section key={group.id} className="flex flex-col gap-2">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
-                    {group.title}
-                  </h3>
-                  {/* One container, hairline dividers — not one box per match.
-                      DENSITY_RULES: stacked boxes are what makes a list look
-                      cluttered, and this list is long by nature. */}
-                  <ul className="overflow-hidden rounded-xl border border-hairline">
+                  <h3><FieldLabel>{group.title}</FieldLabel></h3>
+                  {/* One surface, hairline-divided rows — never a card per
+                      match. `inset` because the sheet is already the surface,
+                      and a card inside a card is the nesting DENSITY_RULES
+                      exists to prevent. */}
+                  <ListSurface inset>
                     {group.matches.map((match, index) => (
                       <li key={match.id} className={index === 0 ? "" : "border-t border-hairline-soft"}>
                         <button
@@ -191,7 +190,7 @@ export function MatchAttachPicker({
                         </button>
                       </li>
                     ))}
-                  </ul>
+                  </ListSurface>
                 </section>
               ),
             )
