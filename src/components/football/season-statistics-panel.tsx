@@ -49,6 +49,12 @@ function statCell(value: number | null): string {
   return value === null ? "–" : value.toLocaleString("en-GB");
 }
 
+/** "goals", "goals and assists", "goals, assists and minutes played". */
+function formatList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: string }) {
   const supabase = createServerSupabaseClient();
   const { label: providerLabel } = getActiveProviderStatus();
@@ -121,9 +127,29 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
       {Array.from(bySeason.entries()).map(([seasonYear, seasonRows]) => {
         // Summed from exactly the rows above it, so a competition the provider
         // did not report is visibly absent from both the list and the total.
+        //
+        // Each column used to drop its own nulls and sum whatever was left,
+        // independently of every other column. So a player with three
+        // competitions, one of which never reported assists, got an
+        // appearances total spanning three and an assists total spanning two —
+        // sitting side by side in one row labelled "All competitions", with
+        // nothing saying they covered different things. Two true numbers
+        // forming one false pair, which is the same error as inventing a
+        // number and harder to catch, because both halves are real.
+        //
+        // A total is now only shown when the provider reported that column for
+        // EVERY competition in the season. Anything narrower renders the same
+        // dash a missing value gets, and the note below the table names which
+        // columns were withheld and why — so the reader learns the coverage is
+        // partial rather than silently reading a total as complete.
+        const partialColumns: string[] = [];
         const totals = COLUMNS.map((column) => {
-          const values = seasonRows.map((row) => row[column.key]).filter((value): value is number => value !== null);
-          return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) : null;
+          const values = seasonRows.map((row) => row[column.key]);
+          if (values.some((value) => value === null)) {
+            if (values.some((value) => value !== null)) partialColumns.push(column.label.toLowerCase());
+            return null;
+          }
+          return values.reduce((sum: number, value) => sum + (value ?? 0), 0);
         });
 
         return (
@@ -193,6 +219,19 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
                 </tbody>
               </table>
             </div>
+
+            {/* Only when a column was actually withheld, and only naming the
+                ones that were. A reader who sees a dash in a total row can
+                otherwise only conclude the provider reported nothing at all,
+                when in fact it reported some competitions and not others —
+                which is a different and more useful fact. */}
+            {seasonRows.length > 1 && partialColumns.length > 0 && (
+              <p className="px-1 text-[11px] leading-relaxed text-foreground-subtle">
+                No total shown for {formatList(partialColumns)}: {providerLabel} reported{" "}
+                {partialColumns.length === 1 ? "it" : "them"} for some of these competitions and not others, so a
+                sum would cover fewer competitions than the figures beside it.
+              </p>
+            )}
           </div>
         );
       })}
