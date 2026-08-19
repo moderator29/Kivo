@@ -15,8 +15,12 @@ import { RouteBackLink } from "@/components/ui/back-link";
  * one, name it, and keep it stuck to the top of the screen.
  */
 export function FocusHeader() {
+  // Same height as `TopBar`, from the same variable. They were 61px and 65px:
+  // small enough to look like nothing, large enough that moving between a tab
+  // route and a focus route nudged the whole page — and it meant no sticky
+  // offset could have been correct on both.
   return (
-    <div className="sticky top-0 z-20 flex items-center gap-1 border-b border-hairline-soft bg-background/80 px-2 py-2 backdrop-blur-xl lg:px-6">
+    <div className="sticky top-0 z-20 flex h-[var(--kivo-header-h)] items-center gap-1 border-b border-hairline-soft bg-background/80 px-2 backdrop-blur-xl lg:px-6">
       <RouteBackLink />
     </div>
   );

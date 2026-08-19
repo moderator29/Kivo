@@ -60,13 +60,17 @@
   --kivo-dur-base: 180ms;
   --kivo-dur-slow: 320ms;
 
-  /* The app header's height, named so anything that has to sit directly under
-     it can say so instead of guessing. `<SectionTabs sticky>` is the first
-     caller: a tab rail that sticks 8px too high slides under the header and
-     disappears, and 8px too low leaves a stripe of scrolling content showing
-     through the gap. `TopBar` (src/components/layout/top-bar.tsx) sets its own
-     `min-height` from this value, so the two cannot drift apart. */
-  --kivo-header-h: 3.25rem;
+  /* The app header's height — the real one, and the only place it is decided.
+     `TopBar` and `FocusHeader` both set their `height` from this, rather than
+     letting it fall out of whatever their tallest child happens to be, so
+     anything sticking directly under a header can offset by it and be exactly
+     right. `<SectionTabs sticky>` is the first such caller: a rail that sticks
+     a few pixels too high slides under the header and disappears, and a few
+     too low shows a stripe of scrolling content through the gap. Measured in
+     Chromium at both breakpoints before it was written down — the two headers
+     were 65px and 61px, so this also stops a focus route's header being 4px
+     shorter than a tab route's. */
+  --kivo-header-h: 4rem;
 }
 
 /* ---------------------------------------------------------------------------
