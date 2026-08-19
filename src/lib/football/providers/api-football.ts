@@ -1,16 +1,29 @@
 import "server-only";
 import type {
   FootballDataProvider,
+  NormalizedCompetitionCoverage,
   NormalizedFixture,
+  NormalizedFixturePlayerStatistics,
   NormalizedFixtureStatistics,
+  NormalizedInjury,
   NormalizedLineups,
   NormalizedManager,
   NormalizedMatchEvent,
   NormalizedPlayer,
+  NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
+  NormalizedTopScorer,
   NormalizedTransfer,
 } from "../types";
-import { mapEventType, mapFixtureStatistics, mapStatus, mapTransferType } from "./normalizers";
+import {
+  mapEventType,
+  mapFixtureStatistics,
+  mapInjuryStatus,
+  mapStatus,
+  mapTransferType,
+  parseCoverageFlag,
+  parseProviderNumber,
+} from "./normalizers";
 import { ApiFootballError, requestWithRetry } from "./api-football-request";
 import { buildRawResponseSample, type RawResponseSample } from "../raw-response-sample";
 import { parseMatchday } from "../matchday";
@@ -35,6 +48,25 @@ const EVENTS_CACHE_SECONDS = 120;
 const STATISTICS_CACHE_SECONDS = 120;
 /** Standings settle slowly outside of matchdays — an hour is plenty fresh. */
 const STANDINGS_CACHE_SECONDS = 3_600;
+/** Per-player match statistics move on exactly the same clock as the team
+ * statistics beside them — same window, deliberately, so a Match Centre that
+ * refreshes one and not the other cannot show a player line that disagrees with
+ * the team line above it. */
+const FIXTURE_PLAYERS_CACHE_SECONDS = 120;
+/** What a provider *supports* changes when a season rolls over, not during one.
+ * A week is still a fraction of that, and this response is large (every league
+ * the plan can see), so re-fetching it often is the most wasteful call available
+ * on this API. */
+const COVERAGE_CACHE_SECONDS = 604_800;
+/** Injury reports are the one thing here that genuinely changes within a day —
+ * a squad announcement can flip a player from doubt to available hours before
+ * kickoff — but they are also never so urgent that a six-hour-old report misleads
+ * anyone, and this is a per-competition call on a 100-request budget. */
+const INJURIES_CACHE_SECONDS = 21_600;
+/** A scoring chart only moves when matches are played. */
+const TOP_SCORERS_CACHE_SECONDS = 21_600;
+/** A player's season aggregate changes at most once per matchday. */
+const PLAYER_SEASON_CACHE_SECONDS = 21_600;
 /** Transfer history is append-only and barely changes day to day — cache well beyond
  * a single day so re-visiting a player's profile never burns fresh quota for data
  * that's already historical fact. */
@@ -69,8 +101,13 @@ interface ApiFootballLineupsResponse {
   response: Array<{
     team: { id: number; name: string; logo: string | null };
     formation: string | null;
-    startXI: Array<{ player: { id: number; name: string; number: number | null; pos: string | null } }>;
-    substitutes: Array<{ player: { id: number; name: string; number: number | null; pos: string | null } }>;
+    // `grid` is present on startXI entries only — see NormalizedLineupEntry.grid.
+    startXI: Array<{
+      player: { id: number; name: string; number: number | null; pos: string | null; grid?: string | null };
+    }>;
+    substitutes: Array<{
+      player: { id: number; name: string; number: number | null; pos: string | null; grid?: string | null };
+    }>;
   }>;
 }
 
@@ -162,6 +199,179 @@ interface ApiFootballFixtureResponse {
  * (see DECISIONS.md). Every call is cache-first; nothing here polls on its own, and
  * live polling stays behind the FOOTBALL_LIVE_POLLING_ENABLED flag until real quota exists.
  */
+/**
+ * `/fixtures/players?fixture={id}`.
+ *
+ * ## What this shape is, and what it is not
+ *
+ * Every field below is a COUNT of something a player did. There is not a single
+ * coordinate anywhere in this payload, and there is no "touches" field either.
+ * API-Football does not publish, on any plan, where on the pitch any of these
+ * actions happened. That is the finding the whole heatmap design rests on — see
+ * `docs/HEATMAP_ENGINE.md`.
+ *
+ * ## Confidence in this shape
+ *
+ * This build environment cannot reach api-football.com (the outbound proxy
+ * refuses the CONNECT), so this interface could not be checked against a live
+ * response. It is modelled on the documented v3 shape, and every field is
+ * declared optional and read through `parseProviderNumber`, so a response that
+ * nests differently produces nulls — "the provider did not report this" — rather
+ * than a crash or a fabricated zero. If a field turns out to live elsewhere, the
+ * failure mode is a missing number, never a wrong one.
+ */
+interface ApiFootballFixturePlayersResponse {
+  response?: Array<{
+    team?: { id?: number | null } | null;
+    players?: Array<{
+      player?: { id?: number | null; name?: string | null } | null;
+      statistics?: Array<{
+        games?: {
+          minutes?: number | string | null;
+          position?: string | null;
+          rating?: string | number | null;
+          substitute?: boolean | null;
+        } | null;
+        offsides?: number | string | null;
+        shots?: { total?: number | string | null; on?: number | string | null } | null;
+        goals?: {
+          total?: number | string | null;
+          conceded?: number | string | null;
+          assists?: number | string | null;
+          saves?: number | string | null;
+        } | null;
+        passes?: {
+          total?: number | string | null;
+          key?: number | string | null;
+          accuracy?: number | string | null;
+        } | null;
+        tackles?: {
+          total?: number | string | null;
+          blocks?: number | string | null;
+          interceptions?: number | string | null;
+        } | null;
+        duels?: { total?: number | string | null; won?: number | string | null } | null;
+        dribbles?: {
+          attempts?: number | string | null;
+          success?: number | string | null;
+          past?: number | string | null;
+        } | null;
+        fouls?: { drawn?: number | string | null; committed?: number | string | null } | null;
+        cards?: { yellow?: number | string | null; red?: number | string | null } | null;
+        penalty?: {
+          won?: number | string | null;
+          commited?: number | string | null;
+          scored?: number | string | null;
+          missed?: number | string | null;
+          saved?: number | string | null;
+        } | null;
+      }> | null;
+    }> | null;
+  }> | null;
+}
+
+/**
+ * `/leagues?season={year}`.
+ *
+ * The `coverage` object on each season entry is the reason this endpoint is
+ * worth a request at all: it is the provider stating, per competition, which
+ * of its own endpoints will actually return something. Everything KIVO can say
+ * about "this tab can never fill" as opposed to "this tab has not been synced"
+ * comes from here and from nowhere else.
+ *
+ * Same confidence caveat as the interface above — modelled, not observed, and
+ * every flag read through `parseCoverageFlag`, which returns null (unknown)
+ * for anything that is not literally a boolean.
+ */
+interface ApiFootballLeaguesResponse {
+  response?: Array<{
+    league?: { id?: number | null; name?: string | null } | null;
+    seasons?: Array<{
+      year?: number | null;
+      coverage?: {
+        fixtures?: {
+          events?: unknown;
+          lineups?: unknown;
+          statistics_fixtures?: unknown;
+          statistics_players?: unknown;
+        } | null;
+        standings?: unknown;
+        players?: unknown;
+        top_scorers?: unknown;
+        top_assists?: unknown;
+        top_cards?: unknown;
+        injuries?: unknown;
+        predictions?: unknown;
+        odds?: unknown;
+      } | null;
+    }> | null;
+  }> | null;
+}
+
+/** `/injuries?league={id}&season={year}`. */
+interface ApiFootballInjuriesResponse {
+  response?: Array<{
+    player?: {
+      id?: number | null;
+      name?: string | null;
+      type?: string | null;
+      reason?: string | null;
+    } | null;
+    team?: { id?: number | null } | null;
+    fixture?: { id?: number | null; date?: string | null } | null;
+  }> | null;
+}
+
+/** `/players/topscorers?league={id}&season={year}`. Ranked by the provider. */
+interface ApiFootballTopScorersResponse {
+  response?: Array<{
+    player?: { id?: number | null; name?: string | null; photo?: string | null } | null;
+    statistics?: Array<{
+      team?: { id?: number | null; name?: string | null } | null;
+      games?: { appearences?: number | string | null; minutes?: number | string | null } | null;
+      goals?: { total?: number | string | null; assists?: number | string | null } | null;
+      penalty?: { scored?: number | string | null } | null;
+    }> | null;
+  }> | null;
+}
+
+/**
+ * `/players?id={id}&season={year}` — one entry per player, with a `statistics`
+ * array holding one aggregate per competition they appeared in that season.
+ * That per-competition split is what makes a real career breakdown possible,
+ * and it is why this is stored one row per competition rather than summed.
+ */
+interface ApiFootballPlayerSeasonResponse {
+  response?: Array<{
+    player?: { id?: number | null; name?: string | null } | null;
+    statistics?: Array<{
+      team?: { id?: number | null; name?: string | null } | null;
+      league?: { id?: number | null; name?: string | null; season?: number | null } | null;
+      games?: {
+        appearences?: number | string | null;
+        lineups?: number | string | null;
+        minutes?: number | string | null;
+        position?: string | null;
+        rating?: string | number | null;
+      } | null;
+      shots?: { total?: number | string | null; on?: number | string | null } | null;
+      goals?: {
+        total?: number | string | null;
+        conceded?: number | string | null;
+        assists?: number | string | null;
+        saves?: number | string | null;
+      } | null;
+      passes?: { total?: number | string | null; key?: number | string | null; accuracy?: number | string | null } | null;
+      tackles?: { total?: number | string | null; blocks?: number | string | null; interceptions?: number | string | null } | null;
+      duels?: { total?: number | string | null; won?: number | string | null } | null;
+      dribbles?: { attempts?: number | string | null; success?: number | string | null } | null;
+      fouls?: { drawn?: number | string | null; committed?: number | string | null } | null;
+      cards?: { yellow?: number | string | null; red?: number | string | null } | null;
+      penalty?: { scored?: number | string | null; missed?: number | string | null } | null;
+    }> | null;
+  }> | null;
+}
+
 export class ApiFootballProvider implements FootballDataProvider {
   readonly name = "api-football";
 
@@ -403,6 +613,10 @@ export class ApiFootballProvider implements FootballDataProvider {
             isStarting: true,
             shirtNumber: player.number,
             position: player.pos,
+            // Real provider data already paid for by this same request — the
+            // same reasoning that maps `photo` through on getSquad. Passed
+            // through raw; `parsePitchGrid` owns the row/col semantics.
+            grid: player.grid ?? null,
           })),
           ...side.substitutes.map(({ player }) => ({
             playerProviderId: String(player.id),
@@ -410,6 +624,8 @@ export class ApiFootballProvider implements FootballDataProvider {
             isStarting: false,
             shirtNumber: player.number,
             position: player.pos,
+            // A substitute has no formation slot to report. Null, not "0:0".
+            grid: player.grid ?? null,
           })),
         ],
       })),
@@ -517,5 +733,298 @@ export class ApiFootballProvider implements FootballDataProvider {
         transferType: mapTransferType(feeText),
       };
     });
+  }
+
+  /**
+   * Per-player statistics for one fixture — minutes, shots, passes, tackles,
+   * interceptions, duels, dribbles, fouls and the provider's own rating, for
+   * every player who appeared.
+   *
+   * **No coordinates.** This endpoint reports what each player did, never where.
+   * Nothing downstream may present anything built on it as a positional
+   * heatmap; see `src/lib/football/heatmap/` for the labelling that requirement
+   * turns into.
+   *
+   * Returns null when the response carries no players — which covers both "not
+   * published yet" (a fixture that has not kicked off) and "this plan or this
+   * competition never publishes it". Those two are genuinely different, and
+   * this method cannot tell them apart; the coverage registry can, which is why
+   * `syncFixturePlayerStatistics` asks it before spending a request here.
+   */
+  async getFixturePlayerStatistics(fixtureProviderId: string): Promise<NormalizedFixturePlayerStatistics | null> {
+    const data = await this.request<ApiFootballFixturePlayersResponse>(
+      `/fixtures/players?fixture=${fixtureProviderId}`,
+      FIXTURE_PLAYERS_CACHE_SECONDS,
+    );
+    const sides = data.response ?? [];
+    if (sides.length === 0) return null;
+
+    const players: NormalizedFixturePlayerStatistics["players"] = [];
+    for (const side of sides) {
+      const teamId = side.team?.id;
+      if (teamId === null || teamId === undefined) continue;
+      for (const entry of side.players ?? []) {
+        const playerId = entry.player?.id;
+        if (playerId === null || playerId === undefined) continue;
+        // The provider nests a one-element array here (a shape it shares with
+        // the season endpoint, where the array genuinely has many entries).
+        // Reading [0] rather than assuming a length keeps a differently-shaped
+        // response producing nulls instead of throwing.
+        const st = entry.statistics?.[0];
+        players.push({
+          playerProviderId: String(playerId),
+          playerName: entry.player?.name ?? "",
+          teamProviderId: String(teamId),
+          minutesPlayed: parseProviderNumber(st?.games?.minutes),
+          position: st?.games?.position ?? null,
+          // Deliberately not `?? false`: "the provider did not say" is not the
+          // same claim as "this player started".
+          isSubstitute: typeof st?.games?.substitute === "boolean" ? st.games.substitute : null,
+          providerRating: parseProviderNumber(st?.games?.rating),
+          shotsTotal: parseProviderNumber(st?.shots?.total),
+          shotsOnTarget: parseProviderNumber(st?.shots?.on),
+          goals: parseProviderNumber(st?.goals?.total),
+          assists: parseProviderNumber(st?.goals?.assists),
+          goalsConceded: parseProviderNumber(st?.goals?.conceded),
+          saves: parseProviderNumber(st?.goals?.saves),
+          passesTotal: parseProviderNumber(st?.passes?.total),
+          passesKey: parseProviderNumber(st?.passes?.key),
+          passAccuracy: parseProviderNumber(st?.passes?.accuracy),
+          tacklesTotal: parseProviderNumber(st?.tackles?.total),
+          blocks: parseProviderNumber(st?.tackles?.blocks),
+          interceptions: parseProviderNumber(st?.tackles?.interceptions),
+          duelsTotal: parseProviderNumber(st?.duels?.total),
+          duelsWon: parseProviderNumber(st?.duels?.won),
+          dribblesAttempted: parseProviderNumber(st?.dribbles?.attempts),
+          dribblesSucceeded: parseProviderNumber(st?.dribbles?.success),
+          dribbledPast: parseProviderNumber(st?.dribbles?.past),
+          foulsDrawn: parseProviderNumber(st?.fouls?.drawn),
+          foulsCommitted: parseProviderNumber(st?.fouls?.committed),
+          yellowCards: parseProviderNumber(st?.cards?.yellow),
+          redCards: parseProviderNumber(st?.cards?.red),
+          offsides: parseProviderNumber(st?.offsides),
+          penaltiesWon: parseProviderNumber(st?.penalty?.won),
+          // API-Football's own field is spelled "commited". Mirrored exactly,
+          // with this note, so a future reader does not "fix" it into a field
+          // that does not exist and silently turn a real number into null.
+          penaltiesCommitted: parseProviderNumber(st?.penalty?.commited),
+          penaltiesScored: parseProviderNumber(st?.penalty?.scored),
+          penaltiesMissed: parseProviderNumber(st?.penalty?.missed),
+          penaltiesSaved: parseProviderNumber(st?.penalty?.saved),
+        });
+      }
+    }
+
+    if (players.length === 0) return null;
+    return { fixtureProviderId, players };
+  }
+
+  /**
+   * The provider's own declaration of what it supports, per competition, for
+   * one season — one request that answers "can this tab ever fill?" for every
+   * competition at once.
+   *
+   * This is the single highest-value request on the whole API for a product
+   * whose problem is empty tabs, because it is the only one that returns a
+   * *capability* rather than data. One request a week (see
+   * COVERAGE_CACHE_SECONDS) buys the difference between an honest
+   * "this competition doesn't publish lineups" and a misleading
+   * "nothing synced yet" on every surface in KIVO.
+   *
+   * Flags are read through `parseCoverageFlag`, so a key the provider omits
+   * stays null rather than becoming false. That distinction is the registry's
+   * entire reason to exist: null is "KIVO does not know", false is "the
+   * provider says never", and rendering the first as the second would make
+   * KIVO assert a limitation nobody claimed.
+   */
+  async getCompetitionCoverage(season: number): Promise<NormalizedCompetitionCoverage[]> {
+    const data = await this.request<ApiFootballLeaguesResponse>(
+      `/leagues?season=${season}`,
+      COVERAGE_CACHE_SECONDS,
+    );
+
+    const rows: NormalizedCompetitionCoverage[] = [];
+    for (const entry of data.response ?? []) {
+      const leagueId = entry.league?.id;
+      if (leagueId === null || leagueId === undefined) continue;
+      for (const seasonEntry of entry.seasons ?? []) {
+        // The response carries every season the plan can see, not only the one
+        // asked for. Filtering here rather than trusting the query parameter
+        // means a row can never be filed under the wrong season.
+        if (seasonEntry.year !== season) continue;
+        const c = seasonEntry.coverage;
+        rows.push({
+          competitionProviderId: String(leagueId),
+          competitionName: entry.league?.name ?? "",
+          season,
+          fixtureEvents: parseCoverageFlag(c?.fixtures?.events),
+          fixtureLineups: parseCoverageFlag(c?.fixtures?.lineups),
+          fixtureStatistics: parseCoverageFlag(c?.fixtures?.statistics_fixtures),
+          fixturePlayerStatistics: parseCoverageFlag(c?.fixtures?.statistics_players),
+          standings: parseCoverageFlag(c?.standings),
+          players: parseCoverageFlag(c?.players),
+          topScorers: parseCoverageFlag(c?.top_scorers),
+          topAssists: parseCoverageFlag(c?.top_assists),
+          topCards: parseCoverageFlag(c?.top_cards),
+          injuries: parseCoverageFlag(c?.injuries),
+          predictions: parseCoverageFlag(c?.predictions),
+          odds: parseCoverageFlag(c?.odds),
+          raw: c ?? null,
+        });
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Current injury and unavailability reports for one competition and season.
+   *
+   * `docs/API_FOOTBALL.md` records injuries as unavailable on the free tier.
+   * That claim is not contradicted here and it is not assumed either: this
+   * method exists so the capability is reachable the moment the plan or the
+   * competition allows it, and `syncInjuries` checks the coverage registry
+   * first so a plan that genuinely cannot serve this never spends a request
+   * finding out twice.
+   *
+   * The synthetic key mirrors the transfer/event convention — the endpoint
+   * publishes no per-row id, so one is derived from the fields that identify a
+   * report, and it stays stable across re-fetches of the same report.
+   */
+  async getInjuries(competitionProviderId: string, season: number): Promise<NormalizedInjury[]> {
+    const data = await this.request<ApiFootballInjuriesResponse>(
+      `/injuries?league=${competitionProviderId}&season=${season}`,
+      INJURIES_CACHE_SECONDS,
+    );
+
+    const rows: NormalizedInjury[] = [];
+    for (const entry of data.response ?? []) {
+      const playerId = entry.player?.id;
+      if (playerId === null || playerId === undefined) continue;
+      const fixtureId = entry.fixture?.id ?? null;
+      // The date is taken from the fixture the report is attached to, and only
+      // its date part — the provider gives no separate "reported on" field, and
+      // inventing one from `now` would date every report to whenever KIVO
+      // happened to sync.
+      const reportedOn = typeof entry.fixture?.date === "string" ? entry.fixture.date.slice(0, 10) : null;
+      rows.push({
+        providerId: [competitionProviderId, season, playerId, fixtureId ?? "x", entry.player?.type ?? "x"].join(":"),
+        playerProviderId: String(playerId),
+        playerName: entry.player?.name ?? "",
+        teamProviderId: entry.team?.id != null ? String(entry.team.id) : null,
+        fixtureProviderId: fixtureId != null ? String(fixtureId) : null,
+        status: mapInjuryStatus(entry.player?.type),
+        reason: entry.player?.reason ?? null,
+        reportedOn,
+      });
+    }
+    return rows;
+  }
+
+  /**
+   * The competition's scoring chart, in the provider's own ranked order.
+   *
+   * Rank is the array index, not a recomputation from goals: the provider
+   * applies the competition's real tie-breaks (goals, then assists, then
+   * minutes, in most leagues) and re-sorting here would quietly substitute
+   * JavaScript's idea of a tie for the competition's.
+   */
+  async getTopScorers(competitionProviderId: string, season: number): Promise<NormalizedTopScorer[]> {
+    const data = await this.request<ApiFootballTopScorersResponse>(
+      `/players/topscorers?league=${competitionProviderId}&season=${season}`,
+      TOP_SCORERS_CACHE_SECONDS,
+    );
+
+    const rows: NormalizedTopScorer[] = [];
+    let rank = 0;
+    for (const entry of data.response ?? []) {
+      const playerId = entry.player?.id;
+      if (playerId === null || playerId === undefined) continue;
+      rank += 1;
+      const st = entry.statistics?.[0];
+      rows.push({
+        rank,
+        playerProviderId: String(playerId),
+        playerName: entry.player?.name ?? "",
+        playerPhotoUrl: entry.player?.photo ?? null,
+        teamProviderId: st?.team?.id != null ? String(st.team.id) : null,
+        teamName: st?.team?.name ?? null,
+        goals: parseProviderNumber(st?.goals?.total),
+        assists: parseProviderNumber(st?.goals?.assists),
+        penaltiesScored: parseProviderNumber(st?.penalty?.scored),
+        // API-Football spells this "appearences". Mirrored deliberately.
+        appearances: parseProviderNumber(st?.games?.appearences),
+        minutesPlayed: parseProviderNumber(st?.games?.minutes),
+      });
+    }
+    return rows;
+  }
+
+  /**
+   * One player's season aggregates, one row per competition they appeared in.
+   *
+   * The per-competition split is kept rather than summed, because summing is
+   * lossy and irreversible: "14 goals" cannot be turned back into "11 in the
+   * league, 3 in the cup", and the competition split is the whole point of a
+   * career breakdown. Anything that wants a total can add these up; nothing can
+   * take a total apart.
+   */
+  async getPlayerSeasonStatistics(
+    playerProviderId: string,
+    season: number,
+  ): Promise<NormalizedPlayerSeasonStatistics[]> {
+    const data = await this.request<ApiFootballPlayerSeasonResponse>(
+      `/players?id=${playerProviderId}&season=${season}`,
+      PLAYER_SEASON_CACHE_SECONDS,
+    );
+
+    const entry = data.response?.[0];
+    if (!entry) return [];
+    const playerName = entry.player?.name ?? "";
+
+    const rows: NormalizedPlayerSeasonStatistics[] = [];
+    for (const st of entry.statistics ?? []) {
+      const leagueId = st.league?.id;
+      // A competition KIVO cannot identify cannot be filed against one. Dropped
+      // rather than bucketed into an "other competitions" row, which would be a
+      // number nobody could trace back to a real competition.
+      if (leagueId === null || leagueId === undefined) continue;
+      rows.push({
+        playerProviderId,
+        playerName,
+        competitionProviderId: String(leagueId),
+        competitionName: st.league?.name ?? null,
+        season: typeof st.league?.season === "number" ? st.league.season : season,
+        teamProviderId: st.team?.id != null ? String(st.team.id) : null,
+        teamName: st.team?.name ?? null,
+        position: st.games?.position ?? null,
+        appearances: parseProviderNumber(st.games?.appearences),
+        lineups: parseProviderNumber(st.games?.lineups),
+        minutesPlayed: parseProviderNumber(st.games?.minutes),
+        providerRating: parseProviderNumber(st.games?.rating),
+        goals: parseProviderNumber(st.goals?.total),
+        assists: parseProviderNumber(st.goals?.assists),
+        goalsConceded: parseProviderNumber(st.goals?.conceded),
+        saves: parseProviderNumber(st.goals?.saves),
+        shotsTotal: parseProviderNumber(st.shots?.total),
+        shotsOnTarget: parseProviderNumber(st.shots?.on),
+        passesTotal: parseProviderNumber(st.passes?.total),
+        passesKey: parseProviderNumber(st.passes?.key),
+        passAccuracy: parseProviderNumber(st.passes?.accuracy),
+        tacklesTotal: parseProviderNumber(st.tackles?.total),
+        blocks: parseProviderNumber(st.tackles?.blocks),
+        interceptions: parseProviderNumber(st.tackles?.interceptions),
+        duelsTotal: parseProviderNumber(st.duels?.total),
+        duelsWon: parseProviderNumber(st.duels?.won),
+        dribblesAttempted: parseProviderNumber(st.dribbles?.attempts),
+        dribblesSucceeded: parseProviderNumber(st.dribbles?.success),
+        foulsDrawn: parseProviderNumber(st.fouls?.drawn),
+        foulsCommitted: parseProviderNumber(st.fouls?.committed),
+        yellowCards: parseProviderNumber(st.cards?.yellow),
+        redCards: parseProviderNumber(st.cards?.red),
+        penaltiesScored: parseProviderNumber(st.penalty?.scored),
+        penaltiesMissed: parseProviderNumber(st.penalty?.missed),
+      });
+    }
+    return rows;
   }
 }

@@ -1,13 +1,18 @@
 import "server-only";
 import type {
   FootballDataProvider,
+  NormalizedCompetitionCoverage,
   NormalizedFixture,
+  NormalizedFixturePlayerStatistics,
   NormalizedFixtureStatistics,
+  NormalizedInjury,
   NormalizedLineups,
   NormalizedManager,
   NormalizedMatchEvent,
   NormalizedPlayer,
+  NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
+  NormalizedTopScorer,
   NormalizedTransfer,
 } from "../types";
 
@@ -72,20 +77,20 @@ const MOCK_LINEUPS: NormalizedLineups = {
       // real provider's; the UI still falls back to the plain list for this fixture.
       formation: "4-3-3",
       entries: [
-        { playerProviderId: "mock-player-1", playerName: "Chidi Okafor", isStarting: true, shirtNumber: 1, position: "G" },
-        { playerProviderId: "mock-player-2", playerName: "Tunde Bakare", isStarting: true, shirtNumber: 4, position: "D" },
-        { playerProviderId: "mock-player-3", playerName: "Femi Adisa", isStarting: true, shirtNumber: 8, position: "M" },
-        { playerProviderId: "mock-player-4", playerName: "Kelechi Uzo", isStarting: false, shirtNumber: 11, position: "F" },
+        { playerProviderId: "mock-player-1", playerName: "Chidi Okafor", isStarting: true, shirtNumber: 1, position: "G", grid: "1:1" },
+        { playerProviderId: "mock-player-2", playerName: "Tunde Bakare", isStarting: true, shirtNumber: 4, position: "D", grid: "2:2" },
+        { playerProviderId: "mock-player-3", playerName: "Femi Adisa", isStarting: true, shirtNumber: 8, position: "M", grid: "3:2" },
+        { playerProviderId: "mock-player-4", playerName: "Kelechi Uzo", isStarting: false, shirtNumber: 11, position: "F", grid: null },
       ],
     },
     {
       team: { providerId: "mock-team-2", name: "Enyimba", shortName: "ENY", crestUrl: null },
       formation: "4-4-2",
       entries: [
-        { playerProviderId: "mock-player-5", playerName: "Emeka Nwosu", isStarting: true, shirtNumber: 1, position: "G" },
-        { playerProviderId: "mock-player-6", playerName: "Yusuf Danladi", isStarting: true, shirtNumber: 5, position: "D" },
-        { playerProviderId: "mock-player-7", playerName: "Obinna Chukwu", isStarting: true, shirtNumber: 6, position: "M" },
-        { playerProviderId: "mock-player-8", playerName: "Ahmed Musa Jr", isStarting: false, shirtNumber: 9, position: "F" },
+        { playerProviderId: "mock-player-5", playerName: "Emeka Nwosu", isStarting: true, shirtNumber: 1, position: "G", grid: "1:1" },
+        { playerProviderId: "mock-player-6", playerName: "Yusuf Danladi", isStarting: true, shirtNumber: 5, position: "D", grid: "2:3" },
+        { playerProviderId: "mock-player-7", playerName: "Obinna Chukwu", isStarting: true, shirtNumber: 6, position: "M", grid: "3:3" },
+        { playerProviderId: "mock-player-8", playerName: "Ahmed Musa Jr", isStarting: false, shirtNumber: 9, position: "F", grid: null },
       ],
     },
   ],
@@ -257,6 +262,263 @@ const MOCK_TRANSFERS: Record<string, NormalizedTransfer[]> = {
   ],
 };
 
+/**
+ * Per-player match statistics for the mock fixture. Numbers are small and
+ * obviously synthetic; the point is the SHAPE — including that a keeper's
+ * `saves` is a number and an outfielder's is null, so a consumer that treats
+ * null as zero shows up in development rather than in production.
+ */
+const MOCK_FIXTURE_PLAYER_STATS: NormalizedFixturePlayerStatistics = {
+  fixtureProviderId: "mock-1",
+  players: [
+    {
+      playerProviderId: "mock-player-1",
+      playerName: "Chidi Okafor",
+      teamProviderId: "mock-team-1",
+      minutesPlayed: 90,
+      position: "G",
+      isSubstitute: false,
+      providerRating: 6.8,
+      shotsTotal: null,
+      shotsOnTarget: null,
+      goals: 0,
+      assists: 0,
+      goalsConceded: 1,
+      saves: 4,
+      passesTotal: 24,
+      passesKey: 0,
+      passAccuracy: 71,
+      tacklesTotal: null,
+      blocks: null,
+      interceptions: null,
+      duelsTotal: 1,
+      duelsWon: 1,
+      dribblesAttempted: null,
+      dribblesSucceeded: null,
+      dribbledPast: null,
+      foulsDrawn: null,
+      foulsCommitted: null,
+      yellowCards: 0,
+      redCards: 0,
+      offsides: null,
+      penaltiesWon: null,
+      penaltiesCommitted: null,
+      penaltiesScored: null,
+      penaltiesMissed: null,
+      penaltiesSaved: 0,
+    },
+    {
+      playerProviderId: "mock-player-2",
+      playerName: "Tunde Bakare",
+      teamProviderId: "mock-team-1",
+      minutesPlayed: 90,
+      position: "D",
+      isSubstitute: false,
+      providerRating: 7.1,
+      shotsTotal: 1,
+      shotsOnTarget: 0,
+      goals: 0,
+      assists: 0,
+      goalsConceded: null,
+      saves: null,
+      passesTotal: 51,
+      passesKey: 1,
+      passAccuracy: 84,
+      tacklesTotal: 4,
+      blocks: 2,
+      interceptions: 3,
+      duelsTotal: 11,
+      duelsWon: 7,
+      dribblesAttempted: 1,
+      dribblesSucceeded: 0,
+      dribbledPast: 2,
+      foulsDrawn: 1,
+      foulsCommitted: 2,
+      yellowCards: 1,
+      redCards: 0,
+      offsides: 0,
+      penaltiesWon: null,
+      penaltiesCommitted: null,
+      penaltiesScored: null,
+      penaltiesMissed: null,
+      penaltiesSaved: null,
+    },
+    {
+      playerProviderId: "mock-player-3",
+      playerName: "Femi Adisa",
+      teamProviderId: "mock-team-1",
+      minutesPlayed: 78,
+      position: "M",
+      isSubstitute: false,
+      providerRating: 7.6,
+      shotsTotal: 2,
+      shotsOnTarget: 1,
+      goals: 0,
+      assists: 1,
+      goalsConceded: null,
+      saves: null,
+      passesTotal: 63,
+      passesKey: 3,
+      passAccuracy: 88,
+      tacklesTotal: 2,
+      blocks: 0,
+      interceptions: 1,
+      duelsTotal: 9,
+      duelsWon: 5,
+      dribblesAttempted: 4,
+      dribblesSucceeded: 3,
+      dribbledPast: 1,
+      foulsDrawn: 3,
+      foulsCommitted: 1,
+      yellowCards: 0,
+      redCards: 0,
+      offsides: 0,
+      penaltiesWon: null,
+      penaltiesCommitted: null,
+      penaltiesScored: null,
+      penaltiesMissed: null,
+      penaltiesSaved: null,
+    },
+  ],
+};
+
+/**
+ * A coverage declaration for the mock competition. `injuries: false` and
+ * `fixturePlayerStatistics: true` are chosen so both sides of the registry's
+ * three-way distinction are reachable in development: a tab that says
+ * "this competition never publishes this" and one that says "not synced yet".
+ * `odds: null` exercises the third — unknown.
+ */
+const MOCK_COVERAGE: NormalizedCompetitionCoverage[] = [
+  {
+    competitionProviderId: "mock-competition-1",
+    competitionName: "Nigeria Premier Football League",
+    season: 2026,
+    fixtureEvents: true,
+    fixtureLineups: true,
+    fixtureStatistics: true,
+    fixturePlayerStatistics: true,
+    standings: true,
+    players: true,
+    topScorers: true,
+    topAssists: false,
+    topCards: false,
+    injuries: false,
+    predictions: false,
+    odds: null,
+    raw: null,
+  },
+];
+
+const MOCK_TOP_SCORERS: NormalizedTopScorer[] = [
+  {
+    rank: 1,
+    playerProviderId: "mock-player-4",
+    playerName: "Kelechi Uzo",
+    playerPhotoUrl: null,
+    teamProviderId: "mock-team-1",
+    teamName: "Remo Stars",
+    goals: 9,
+    assists: 2,
+    penaltiesScored: 1,
+    appearances: 14,
+    minutesPlayed: 1150,
+  },
+  {
+    rank: 2,
+    playerProviderId: "mock-player-8",
+    playerName: "Ahmed Musa Jr",
+    playerPhotoUrl: null,
+    teamProviderId: "mock-team-2",
+    teamName: "Enyimba",
+    goals: 7,
+    assists: 4,
+    penaltiesScored: 0,
+    appearances: 15,
+    minutesPlayed: 1280,
+  },
+];
+
+/** One player, two competitions — the split that makes a competition breakdown
+ * testable at all, and the reason season statistics are stored per competition
+ * rather than summed. */
+const MOCK_PLAYER_SEASON_STATS: Record<string, NormalizedPlayerSeasonStatistics[]> = {
+  "mock-player-4": [
+    {
+      playerProviderId: "mock-player-4",
+      playerName: "Kelechi Uzo",
+      competitionProviderId: "mock-competition-1",
+      competitionName: "Nigeria Premier Football League",
+      season: 2026,
+      teamProviderId: "mock-team-1",
+      teamName: "Remo Stars",
+      position: "Attacker",
+      appearances: 14,
+      lineups: 12,
+      minutesPlayed: 1150,
+      providerRating: 7.4,
+      goals: 9,
+      assists: 2,
+      goalsConceded: null,
+      saves: null,
+      shotsTotal: 38,
+      shotsOnTarget: 19,
+      passesTotal: 310,
+      passesKey: 21,
+      passAccuracy: 79,
+      tacklesTotal: 9,
+      blocks: 1,
+      interceptions: 4,
+      duelsTotal: 121,
+      duelsWon: 58,
+      dribblesAttempted: 47,
+      dribblesSucceeded: 26,
+      foulsDrawn: 24,
+      foulsCommitted: 11,
+      yellowCards: 2,
+      redCards: 0,
+      penaltiesScored: 1,
+      penaltiesMissed: 0,
+    },
+    {
+      playerProviderId: "mock-player-4",
+      playerName: "Kelechi Uzo",
+      competitionProviderId: "mock-competition-2",
+      competitionName: "Mock Federation Cup",
+      season: 2026,
+      teamProviderId: "mock-team-1",
+      teamName: "Remo Stars",
+      position: "Attacker",
+      appearances: 3,
+      lineups: 2,
+      minutesPlayed: 190,
+      providerRating: 7.0,
+      goals: 2,
+      assists: 0,
+      goalsConceded: null,
+      saves: null,
+      shotsTotal: 6,
+      shotsOnTarget: 3,
+      passesTotal: 41,
+      passesKey: 2,
+      passAccuracy: 74,
+      tacklesTotal: 1,
+      blocks: 0,
+      interceptions: 0,
+      duelsTotal: 18,
+      duelsWon: 8,
+      dribblesAttempted: 7,
+      dribblesSucceeded: 4,
+      foulsDrawn: 3,
+      foulsCommitted: 2,
+      yellowCards: 0,
+      redCards: 0,
+      penaltiesScored: 0,
+      penaltiesMissed: 0,
+    },
+  ],
+};
+
 export class MockFootballProvider implements FootballDataProvider {
   readonly name = "mock";
 
@@ -307,5 +569,40 @@ export class MockFootballProvider implements FootballDataProvider {
 
   async getFixtureStatistics(fixtureProviderId: string): Promise<NormalizedFixtureStatistics | null> {
     return fixtureProviderId === MOCK_STATISTICS.fixtureProviderId ? MOCK_STATISTICS : null;
+  }
+
+  /**
+   * Per-player match statistics for the one mock fixture. Deliberately carries
+   * NO coordinates, exactly like the real provider — the mock's job is to let
+   * UI be built without spending quota, and a mock that quietly had a
+   * capability the real provider lacks would let a surface be built that can
+   * never work in production. That is the mistake this file's existing comments
+   * (no market value, no date of birth, no photo) already guard against.
+   */
+  async getFixturePlayerStatistics(fixtureProviderId: string): Promise<NormalizedFixturePlayerStatistics | null> {
+    return fixtureProviderId === MOCK_FIXTURE_PLAYER_STATS.fixtureProviderId ? MOCK_FIXTURE_PLAYER_STATS : null;
+  }
+
+  async getCompetitionCoverage(season: number): Promise<NormalizedCompetitionCoverage[]> {
+    return MOCK_COVERAGE.map((row) => ({ ...row, season }));
+  }
+
+  /** Empty, always. There is no mock injury list: an invented injury is a
+   * claim about a named player's body, and the mock's fake names sit in the
+   * same UI components real ones would. */
+  async getInjuries(): Promise<NormalizedInjury[]> {
+    return [];
+  }
+
+  async getTopScorers(): Promise<NormalizedTopScorer[]> {
+    return MOCK_TOP_SCORERS;
+  }
+
+  async getPlayerSeasonStatistics(
+    playerProviderId: string,
+    season: number,
+  ): Promise<NormalizedPlayerSeasonStatistics[]> {
+    const rows = MOCK_PLAYER_SEASON_STATS[playerProviderId];
+    return rows ? rows.map((row) => ({ ...row, season })) : [];
   }
 }

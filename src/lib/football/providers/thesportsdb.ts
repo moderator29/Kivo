@@ -1,13 +1,18 @@
 import "server-only";
 import type {
   FootballDataProvider,
+  NormalizedCompetitionCoverage,
   NormalizedFixture,
+  NormalizedFixturePlayerStatistics,
   NormalizedFixtureStatistics,
+  NormalizedInjury,
   NormalizedLineups,
   NormalizedManager,
   NormalizedMatchEvent,
   NormalizedPlayer,
+  NormalizedPlayerSeasonStatistics,
   NormalizedStandingRow,
+  NormalizedTopScorer,
   NormalizedTransfer,
 } from "../types";
 import { TheSportsDbError, requestWithRetry } from "./thesportsdb-request";
@@ -306,6 +311,72 @@ export class TheSportsDbProvider implements FootballDataProvider {
   async getPlayerTransfers(): Promise<NormalizedTransfer[]> {
     throw new Error(
       "TheSportsDbProvider.getPlayerTransfers: not supported by this provider — TheSportsDB's public API has no transfer-history endpoint. Use ApiFootballProvider for transfer history.",
+    );
+  }
+
+  /**
+   * NOT SUPPORTED by this provider. Per-player, per-fixture statistics have no
+   * confirmed endpoint in TheSportsDB's catalog (see this file's top sourcing
+   * note) — and this adapter already throws for the per-TEAM fixture statistics
+   * it sits alongside, so returning an empty array here would be the only place
+   * in this file where a missing data category looked like an empty result.
+   * Throws, for the same reason every other unsupported method here does.
+   */
+  async getFixturePlayerStatistics(): Promise<NormalizedFixturePlayerStatistics | null> {
+    throw new Error(
+      "TheSportsDbProvider.getFixturePlayerStatistics: not supported by this provider — TheSportsDB has no confirmed per-player match-statistics endpoint. Use ApiFootballProvider for per-player match statistics.",
+    );
+  }
+
+  /**
+   * NOT SUPPORTED, and deliberately an EMPTY ARRAY rather than a throw — the
+   * one place in this file where that is the right answer.
+   *
+   * Everywhere else, throwing is what keeps "this provider has no such data
+   * category" distinguishable from "this query genuinely found nothing". The
+   * coverage registry inverts that: its own contract (see
+   * `NormalizedCompetitionCoverage`) is that an absent flag means "KIVO does
+   * not know", and an empty result is exactly how a provider says it publishes
+   * no capability declaration. TheSportsDB publishes none. Returning nothing is
+   * therefore the accurate answer, and it lands consumers on "unknown", which
+   * is true — rather than on "unsupported", which would be KIVO asserting a
+   * limitation on TheSportsDB's behalf for every competition at once.
+   */
+  async getCompetitionCoverage(): Promise<NormalizedCompetitionCoverage[]> {
+    return [];
+  }
+
+  /**
+   * NOT SUPPORTED by this provider. No confirmed injuries endpoint exists in
+   * TheSportsDB's catalog. Throws rather than return an empty array, which a
+   * caller could reasonably read as "nobody in this competition is injured" —
+   * a claim about players' fitness that KIVO would be making up.
+   */
+  async getInjuries(): Promise<NormalizedInjury[]> {
+    throw new Error(
+      "TheSportsDbProvider.getInjuries: not supported by this provider — TheSportsDB's public API has no confirmed injuries endpoint. Use ApiFootballProvider for injury reports.",
+    );
+  }
+
+  /**
+   * NOT SUPPORTED by this provider. No confirmed top-scorers endpoint. Throws
+   * rather than return an empty chart, which would read as "nobody has scored".
+   */
+  async getTopScorers(): Promise<NormalizedTopScorer[]> {
+    throw new Error(
+      "TheSportsDbProvider.getTopScorers: not supported by this provider — TheSportsDB's public API has no confirmed top-scorers endpoint. Use ApiFootballProvider for scoring charts.",
+    );
+  }
+
+  /**
+   * NOT SUPPORTED by this provider. TheSportsDB's player lookup returns
+   * biography fields (which is a genuine strength of this provider — it has the
+   * date of birth and nationality API-Football's free squads endpoint lacks)
+   * but no per-season, per-competition statistical aggregate. Throws.
+   */
+  async getPlayerSeasonStatistics(): Promise<NormalizedPlayerSeasonStatistics[]> {
+    throw new Error(
+      "TheSportsDbProvider.getPlayerSeasonStatistics: not supported by this provider — TheSportsDB's public API has no per-season player statistics endpoint. Use ApiFootballProvider for season statistics.",
     );
   }
 }
