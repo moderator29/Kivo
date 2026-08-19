@@ -29,6 +29,7 @@ any of them:
 | [`DATA_ARCHITECTURE.md`](./DATA_ARCHITECTURE.md) | Where football data comes from, how it is normalized, how it reaches Supabase, and which parts of the target architecture do not exist yet. **The one to read first** if you are touching anything football-shaped. |
 | [`STRUCTURAL_SURVEY.md`](./STRUCTURAL_SURVEY.md) | A whole-platform survey: what is genuinely built, what is scaffolding, and where the biggest gaps between "impressive demo" and "product" actually are. |
 | [`BACKUP_RESTORE_AND_SEED.md`](./BACKUP_RESTORE_AND_SEED.md) | What protects the live database, how to restore it, and how to fill an empty one with the development seed (`supabase/seed.sql`). **Read before running anything against a database with real data in it.** |
+| [`CONSTRAINTS.md`](./CONSTRAINTS.md) | The things that are **not bugs and not backlog** — no pitch coordinates on any tier, Hobby crons run once a day, `pg_net` cannot leave `public`, the XP allowance cannot be per-person. Each with the artefact that establishes it, and two entries that were recorded as constraints and were wrong. **Read before proposing anything that sounds too obviously missing to have been missed.** |
 
 ## The football data pipeline
 

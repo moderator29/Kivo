@@ -906,7 +906,187 @@ Three queued builds, one rule between them: build everything the real data suppo
 
 ---
 
-## If you only do 10 things
+## The five to act on now (2026-08-19)
+
+The founding directive asks that the strongest recommendations be surfaced at
+every milestone rather than left in a numbered list nobody reads to the end. This
+is that list, rewritten for the milestone actually in front of us — the founder
+is about to deploy — and weighted toward **what changes the next decision**, not
+toward what was hardest to build.
+
+Everything here was verified by reading the code, a migration, or a live
+`get_advisors` response today. Where an item contradicts something written
+earlier in this document, the contradiction is named rather than quietly
+resolved.
+
+---
+
+### 1. Arm the data pipeline. One variable, then two secrets and a flag.
+
+**Impact: total. Effort: minutes. Risk: none.** Every football feature in KIVO is
+built, deployed and correct, and none of it has data because the schedulers that
+would fetch it are inert.
+
+`vercel.json` already carries the daily `crons` block (committed and verified) —
+**there is nothing left to paste.** What it needs is `CRON_SECRET` set in Vercel.
+Without it KIVO rejects its own scheduled call with
+`500 {"error":"CRON_SECRET is not configured"}`, writes no `sync_runs` row, and
+Admin → Data Health reports "Never run".
+
+The thing worth knowing, because it has cost this project time twice: **a
+half-armed pipeline is indistinguishable from an unarmed one from the inside.**
+"Never run" is the honest report for a missing secret, a missing key, and a cron
+that was never deployed — three different problems with one symptom.
+`docs/DEPLOYING.md` step 7 has the single `curl` that tells them apart. Run it
+rather than inferring from the panel.
+
+Live scores are a second, separate action: two Supabase Vault secrets plus
+`FOOTBALL_LIVE_POLLING_ENABLED=true`, exact SQL at the top of `ENVIRONMENT.md`.
+The Vercel cron cannot do this — the Hobby plan permits once a day, which is why
+minute-resolution polling lives in Postgres (`docs/CONSTRAINTS.md` §4).
+
+### 2. Predictions cannot settle themselves, and there are six of them now.
+
+**Impact: high. Effort: small. Risk: low.** As of today a fan can call six things
+about a match — winner, correct score, first scorer, total goals, cards and
+corners, man of the match. `scorePredictions()` reads real finished fixtures,
+real match events, real team statistics and the Room's own MOTM vote, awards XP,
+badges and streaks, and **is reachable from exactly one place: an admin opening
+`/admin/data-health` and clicking a button.**
+
+Until someone clicks, every prediction on the platform sits unresolved, the
+leaderboard stays empty, and the feature reads as broken rather than as pending.
+That is the single largest gap between "built" and "works" left in the product.
+
+The fix does **not** need a new cron and must not touch `vercel.json`: fold the
+scoring pass into the existing `/api/cron/sync-daily` route, after the sync that
+produces the very results it scores. One function call, in the one place that
+already runs daily with the right authority.
+
+### 3. Configure custom SMTP before you tell anyone the product exists.
+
+**Impact: high. Effort: small. Risk: none.** KIVO signs people in by emailing a
+one-time code. There is no password fallback — **if the mail does not arrive,
+there is no way in at all.** Supabase's built-in sender delivers, and is rate
+limited to a handful of messages per hour per project.
+
+That is fine for the two accounts on the project today and becomes the launch's
+first outage the moment more than a few people try at once. It is a dashboard
+task with no code change, and it is the only item on this list that gets
+strictly worse the later it is done, because the failure lands on first
+impressions.
+
+### 4. The coverage registry is built, and nothing at the tab layer reads it.
+
+**Impact: medium. Effort: small. Risk: low.** This document's own item 299 states
+that a coverage registry "does not exist anywhere in the codebase". **That is no
+longer true** — `src/lib/football/coverage-registry.ts` exists, migration `0082`
+stores API-Football's own per-competition `coverage` object, and
+`shouldAttemptCapability()` already gates real sync spending on it.
+
+What has not happened is the half the founding brief actually named: *don't show
+a tab a provider doesn't support for that competition.*
+`match-centre-tabs.tsx` still renders a static six-tab array unconditionally for
+every fixture. Today each tab renders an honest empty state, which is defensible
+— but "the provider will never have this for this league" and "nobody has synced
+it yet" are different sentences, and KIVO now holds the data to say which.
+
+The expensive half is done. Wiring it is a filter over one array.
+
+### 5. Both backlog files were wrong about their own status, and one called a shipped feature impossible.
+
+**Impact: high, indirectly. Effort: this pass. Risk: none.** An item list that
+lies about its own status is worse than no list, because it sends the next person
+down a road already walked.
+
+Two findings worth the founder's attention rather than just an engineer's:
+
+- **`KIVO_NEXT_GEN.md` KN-142 recorded trending as NOT BUILDABLE.** Trending
+  shipped on 2026-08-19. The recorded facts were true (no view tracking, no
+  analytics log) and the conclusion did not follow: what shipped counts
+  **participation** — real posts and comments in a real, named time window —
+  rather than attention. An absent measurement did not make the question
+  unanswerable; it made a slightly different and more honest question the right
+  one to ask.
+- **`docs/API_FOOTBALL.md` recorded per-match player statistics as
+  free-tier-unavailable, and that was never verified against a live response.**
+  No build environment on this project can reach api-football.com. It is now
+  neither asserted nor denied: both those endpoints are implemented and ask the
+  coverage registry — the provider's own statement about exactly this — before
+  spending a request. It resolves itself on the first sync against a live key.
+
+Everything established as genuinely immovable is now in one place,
+**`docs/CONSTRAINTS.md`**, with the artefact that establishes each one and,
+deliberately, the two corrections above kept in the file rather than dropped.
+Trust that file and this section over item text elsewhere in this document.
+
+---
+
+## Reconciliation pass, 2026-08-19 — status verified against code, not commit messages
+
+The previous "If you only do 10 things" list is preserved below for the record
+and is **complete**. Every one of its ten entries was checked against the current
+code today, individually, by opening the file or running the grep rather than
+trusting an item's own description:
+
+| Old #1–10 | Verified today |
+|---|---|
+| 1. `seasons.is_current` in sync + generate `fantasy_gameweeks` | Shipped — `sync.ts` sets it (see its own comment at line 111); `admin/data-health/fantasy-actions.ts` generates gameweeks |
+| 2. Guest author-name bug + public profiles view | Shipped — `get_public_profiles` (migration `get_public_profiles`) |
+| 3. Prediction scoring + leaderboard RPC | Shipped — `rpc("get_predictions_leaderboard")` at `predictions/page.tsx:124`; scoring now covers six types |
+| 4. Report flow | Shipped — `social/report-actions.ts`, wired into `post-card.tsx:397` |
+| 5. Match Rooms on `posts.fixture_id` | Shipped — `components/matches/match-room.tsx`, plus templated MOTM/referee polls |
+| 6. Redirect through sign-up gates | Shipped — 28 files carry `redirect_url` |
+| 7. `error.tsx`, per-route `loading.tsx`, `generateMetadata` | Shipped — 3 error boundaries, 57 loading files, 8 `generateMetadata` |
+| 8. Cache `getOrCreateProfile` per request | Shipped — `resolveViewerProfile` is `cache()`-wrapped, `lib/profile.ts:58` |
+| 9. Three bugs (AI history order, fantasy filter, like revert) | Shipped |
+| 10. Extract duplicated primitives | Shipped — exactly one `TeamCrest`, at `components/ui/team-crest.tsx` |
+
+Items elsewhere in this document corrected in the same pass, each verified the
+same way:
+
+- **285** (`notification_preferences` gates nothing) — **RESOLVED.** Every
+  producer funnels through `filterNotifiable`/`shouldNotify`.
+- **286** (no privacy control) — **RESOLVED.** `settings/privacy` exists.
+- **287** (no per-team notification tuning) — **RESOLVED.** `follows.muted`
+  (`0049`) plus per-entity mutes (`0104`).
+- **291** (nowhere lists followers/following) — **RESOLVED.**
+  `/profile/following`, backed by `get_my_followers`.
+- **292** (no per-competition prediction breakdown) — **RESOLVED.**
+  `predictions/mine/page.tsx` computes it, suppressed below a real sample.
+- **293** (own prediction absent from Match Centre) — **RESOLVED**, and now
+  lists all six types rather than one.
+- **294** (Lineups never cross-references fantasy squad) — **RESOLVED.**
+  `lib/football/fantasy-lineup-crossref.ts`.
+- **299** (no coverage registry) — **PARTLY WRONG.** The registry exists; the
+  tab filter does not. See item 4 above.
+- **302** (quiet hours, timezone, dedupe) — **RESOLVED** by migrations `0088`,
+  `0104`, `0105`, within the limit that KIVO has no push channel to defer
+  (`docs/CONSTRAINTS.md` §7).
+- **303** (no conflict detection) — **RESOLVED.** `data_conflicts` has a real
+  producer in the sync path.
+- **306** (polls not where the brief named them) — **RESOLVED.** MOTM and
+  referee-decision are first-class templated kinds inside Match Rooms, and an
+  MOTM poll's options carry real `players.id` values.
+- **307** (no user block/mute) — **RESOLVED.** `blocks` (`0086`),
+  `block-actions.ts`, `lib/blocks.ts`.
+- **308** (fantasy scoring not config-driven) — **STILL OPEN, correctly.**
+  `SCORING_MODEL_VERSION = "1.0"` is a versioned TypeScript constant. Honest and
+  documented, and still not what the brief asked for.
+- **326** (`TRANSFER_WINDOWS` empty) — **STILL OPEN, correctly.** The array is
+  genuinely `[]`, so the countdown has nothing to count to.
+
+Sections 5–8 (items 89 onward) still carry whatever accuracy they had before
+2026-08-18 and were **not** re-audited here.
+
+---
+
+## If you only do 10 things — ARCHIVED 2026-08-19, all ten shipped
+
+**Kept for the record, not for action.** Every entry below was verified complete
+against the current code on 2026-08-19 — see the reconciliation table above for
+the file or grep that establishes each one. The live list is
+"The five to act on now".
 
 Ordered by leverage, weighing "unblocks a whole feature" over "polishes a working one".
 

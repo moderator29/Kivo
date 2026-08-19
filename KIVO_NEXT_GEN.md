@@ -502,13 +502,32 @@ Grounded in `supabase/migrations/0053_supabase_auth_identity.sql` and the in-fli
 
 Named so they stop being re-proposed, each with the specific verified reason. This section extends `RECOMMENDATIONS.md`'s own "Explicitly not buildable" list (items 178–181) and section 18's out-of-scope note rather than repeating them.
 
+> **Read `docs/CONSTRAINTS.md` alongside this section (added 2026-08-19).** It
+> holds the constraints that are genuinely immovable — no pitch coordinates on
+> any provider tier, Hobby crons at once a day, `pg_net` unable to leave
+> `public`, the XP allowance unable to be per-person — each with the artefact
+> that establishes it rather than a recollection.
+>
+> It also carries the corrections, which matter more than the list. **KN-142
+> below was wrong**, and one entry in `docs/API_FOOTBALL.md` asserted a free-tier
+> limit that was never checked against a live response. A "not buildable" note is
+> the most expensive kind of thing to get wrong, because its whole purpose is to
+> stop anyone looking again — so before adding one, confirm you are reasoning
+> from an artefact and not from an absence you have assumed the meaning of.
+
 **KN-139. Per-90-minute statistics, minutes-played leaderboards, or any rate stat with a time denominator. NOT BUILDABLE.** `lineups` (migration `0001`) has `is_starting`, `shirt_number`, `position` and `formation` — no minutes column anywhere, confirmed against every migration. `docs/RATING_ENGINE.md` and the rating engine's own doc comment say the same. Any per-90 figure would divide by an invented denominator.
 
 **KN-140. A live "which of your fantasy players just scored" ticker, or any per-player fantasy points display. NOT BUILDABLE.** `fantasy-scoring.ts` computes `scoreRosterSlot` per player in memory, and only the team-level sum is persisted to `fantasy_points` (keyed `(fantasy_team_id, gameweek_id)`). There is no per-player-per-gameweek row to read back. `RECOMMENDATIONS.md` items 296 and section 18 reach this same conclusion independently.
 
 **KN-141. Percentile ranks, "top 10% of KIVO managers", or any cohort-relative stat. NOT BUILDABLE today.** There is no cohort. The live project has a handful of profiles and, per item 225, zero finished fixtures. Every existing aggregate in this codebase that could mislead is already suppressed below a minimum sample (`MIN_MEANINGFUL_SAMPLE = 3` in `PredictionCard`, `FanRatingCard`, `/predictions/mine`) — a percentile is that problem with no honest floor.
 
-**KN-142. "Trending", "hot right now", view counts, or anything time-windowed over attention. NOT BUILDABLE.** There is no view-tracking table and no analytics event log (`RECOMMENDATIONS.md` item 212). `src/components/ui/track-view.tsx` and `src/lib/recently-viewed.ts` are client-local only. `get_most_followed_teams` is deliberately labelled "Popular", not "Trending", for exactly this reason — and that precedent should hold.
+**KN-142. "Trending", "hot right now", view counts, or anything time-windowed over attention. ~~NOT BUILDABLE~~ — WRONG, AND CORRECTED 2026-08-19.** The facts this item stated are all true and the conclusion did not follow from them. There is still no view-tracking table and no analytics event log; `src/components/ui/track-view.tsx` and `src/lib/recently-viewed.ts` are still client-local only.
+
+**Trending shipped anyway, on 2026-08-19**, because it measures a different thing: **participation, not attention.** Real `posts` and `comments` rows inside a real time window are a first-class fact KIVO already owns — `src/app/(app)/social/trending.ts`, `src/components/social/trending-panel.tsx`, migration `0089_trending_and_fan_sentiment.sql`. The implementation states the window it measured rather than asserting "trending" with no period attached, refuses to rank a window with too little in it, and keeps "nothing happened" distinct from "KIVO could not read". Fan sentiment alongside it comes from real `fan_ratings` and real poll votes, never an invented engagement signal.
+
+The `get_most_followed_teams` precedent still holds for *that* metric: a follow count is popularity and calling it trending would be a lie about a time window. That was always a naming rule, not a proof that no honest time-windowed count exists.
+
+**The transferable lesson, recorded because this cost a later session real time:** an absent measurement does not make a question unanswerable. Check whether a different real signal answers a slightly different, more honest question, before writing NOT BUILDABLE. This correction is also carried in `docs/CONSTRAINTS.md` §C1, where the constraints that *are* real now live.
 
 **KN-143. Any match outcome forecast, win probability, expected points, or "form suggests". NOT BUILDABLE BY POLICY.** Not a data limitation — a deliberate product position (`RECOMMENDATIONS.md` items 178 and 246, `DECISIONS.md`'s no-gambling entry). KIVO explains what happened and what is verifiably true; it does not predict results. Fan **polls** about outcomes are fine (they are labelled opinion); a KIVO-computed number is not.
 
