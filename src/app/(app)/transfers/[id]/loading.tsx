@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  * shape rather than replacing it. */
 export default function TransferDetailLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading this transfer">
+    <PageSkeleton className="kivo-page" label="Loading this transfer">
       <div className="flex items-center justify-between gap-3">
         <Skeleton className="h-3 w-32" />
         <Skeleton className="h-6 w-24 rounded-full" />

@@ -1,13 +1,15 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeaderSkeleton } from "@/components/ui/skeletons";
 
 export default function TransfersLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading Transfers">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-72" />
-      </div>
+    <PageSkeleton className="kivo-page" label="Loading Transfers">
+      <PageHeaderSkeleton titleWidth="w-44" />
+
+      {/* The status explainer, which is a real paragraph on the page and not a
+          decoration — leaving it out here is 60px of reflow. */}
+      <Skeleton className="h-14 w-full rounded-2xl" />
 
       <div className="kivo-glass-sharp grid grid-cols-2 gap-3 rounded-2xl p-4 sm:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ListOrdered } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 /**
  * What the table says when there is no table.
@@ -29,6 +30,11 @@ import { ListOrdered } from "lucide-react";
  *
  * The third is the honest floor. KIVO does not know why the table is missing,
  * and a guessed reason would be a worse lie than the absence.
+ *
+ * The frame is `<EmptyState>` (docs/UI_PRIMITIVES.md) at `section` tone, since
+ * this fills one tab panel on a page whose header, season rail and tab rail all
+ * loaded fine. Only the sentence is this file's own work — which is the point
+ * of the primitive.
  */
 export function StandingsEmpty({
   seasonLabel,
@@ -43,7 +49,7 @@ export function StandingsEmpty({
   fixtureCount: number;
   /** Of those, how many have finished with a score. */
   playedCount: number;
-  /** Optional next step — the fixtures tab, or an admin control. */
+  /** Optional next step — the fixtures tab. */
   action?: ReactNode;
 }) {
   const season = seasonLabel ? `The ${seasonLabel} season` : "This season";
@@ -56,15 +62,13 @@ export function StandingsEmpty({
         : `KIVO doesn't have the ${seasonLabel ?? "current"} table yet. The results so far are a tab away, and the table shows here as soon as it's in.`;
 
   return (
-    <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl px-6 py-10 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-hairline-soft bg-surface-1 text-foreground-subtle">
-        <ListOrdered className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <h3 className="text-base font-semibold tracking-tight text-foreground">No table yet</h3>
-        <p className="max-w-[36ch] text-sm leading-relaxed text-foreground-muted">{description}</p>
-      </div>
-      {action}
-    </div>
+    <EmptyState
+      icon={ListOrdered}
+      tone="section"
+      title="No table yet"
+      description={description}
+      action={action}
+      className="kivo-glass rounded-2xl"
+    />
   );
 }
