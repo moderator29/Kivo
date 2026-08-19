@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/layout/page-header";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { readList } from "@/lib/query-result";
@@ -112,7 +113,7 @@ export default async function TransfersPage({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       {/* Transfers-only keyframe: a very subtle idle left-right nudge on the
           from/to arrow, just enough to read as "in motion" without calling
           attention to itself. Scoped here rather than globals.css since it's
@@ -127,19 +128,20 @@ export default async function TransfersPage({
         }
       `}</style>
 
-      <FadeIn className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold text-foreground">Transfer Centre</h1>
-        <p className="text-sm text-foreground-muted">
-          Completed moves, newest first. Deals that are done, not rumours.
-        </p>
-        {/* The directive asked for Confirmed / Reported / Rumour / Unverified.
-            Three of those describe a signal KIVO's data does not carry, so the
-            product says so here instead of inventing them — the full reasoning
-            lives in src/lib/football/transfer-status.ts and
-            RECOMMENDATIONS.md item 178. */}
-        <p className="rounded-2xl border border-hairline-soft bg-surface-1 p-3 text-xs leading-relaxed text-foreground-subtle">
-          {TRANSFER_STATUS_EXPLAINER}
-        </p>
+      {/* The one page header, so arriving here from any other screen does not
+          shift the content column or change the size of the title. */}
+      <PageHeader
+        title="Transfer Centre"
+        description="Completed moves, newest first. Deals that are done, not rumours."
+      />
+
+      {/* The directive asked for Confirmed / Reported / Rumour / Unverified.
+          Three of those describe a signal KIVO's data does not carry, so the
+          product says so here instead of inventing them — the full reasoning
+          lives in src/lib/football/transfer-status.ts and
+          RECOMMENDATIONS.md item 178. */}
+      <FadeIn delay={0.02} className="rounded-2xl border border-hairline-soft bg-surface-1 p-3 text-xs leading-relaxed text-foreground-subtle">
+        {TRANSFER_STATUS_EXPLAINER}
       </FadeIn>
 
       <FadeIn delay={0.02}>

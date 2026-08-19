@@ -156,10 +156,14 @@ export async function triggerFixtureDetailsSync(
   const result = await syncFixtureDetails(fixtureId, { autoSyncMissingSquads });
 
   revalidatePath("/admin/data-health");
-  // RECOMMENDATIONS.md item 99: same gap as triggerTeamSquadSync above — this
-  // is the public Match Centre page FixtureDetailsSyncControl actually
-  // renders on, and without revalidating it too, the admin's own
-  // router.refresh() re-fetched a payload the framework never marked stale.
+  // Still required, and now for a stronger reason than the one it arrived with.
+  // This line was added because FixtureDetailsSyncControl rendered ON that
+  // public page, so an admin pressing it there needed the page under their feet
+  // to go stale. That control has since moved into Admin — and the revalidation
+  // matters MORE rather than less, because the operator is no longer standing on
+  // the match page, so nothing else will ever invalidate it. Without this, a fan
+  // opening that fixture is served a cached payload that predates the line-ups
+  // and events this sync just wrote.
   revalidatePath(`/matches/${fixtureId}`);
 
   if (result.status === "failed") {

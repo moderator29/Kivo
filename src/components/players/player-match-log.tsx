@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { RatingChip } from "@/components/matches/lineup-pitch";
-import { ListSurface } from "@/components/football/entity-shell";
+import { ListSurface } from "@/components/ui/list-surface";
 import { CappedListFooter } from "@/components/ui/capped-list-footer";
 import { formatDate } from "@/lib/format";
 import type { FormResult } from "@/lib/football/results";
@@ -108,7 +108,7 @@ export function PlayerMatchLog({ rows }: { rows: MatchLogRow[] }) {
           <li key={row.fixtureId}>
             <Link
               href={`/matches/${row.fixtureId}`}
-              className="kivo-focus flex flex-col gap-1.5 px-3 py-3 transition-colors hover:bg-surface-2"
+              className="kivo-focus flex min-h-11 flex-col gap-1.5 px-4 py-3 transition-colors duration-150 hover:bg-surface-2 motion-reduce:transition-none"
             >
               <span className="flex items-center gap-3">
                 <TeamCrest crestUrl={row.opponentCrestUrl} name={row.opponentName} size={22} />
@@ -129,8 +129,8 @@ export function PlayerMatchLog({ rows }: { rows: MatchLogRow[] }) {
                 )}
                 {row.rating && <RatingChip rating={row.rating.kivoRating} size="md" />}
               </span>
-              <span className="flex flex-wrap items-center gap-1.5 pl-[2.125rem]">
-                <span className="text-[11px] text-foreground-subtle">{secondLine}</span>
+              <span className="flex flex-wrap items-center gap-1.5 pl-[2.375rem]">
+                <span className="text-xs text-foreground-subtle">{secondLine}</span>
                 {contributions.map((chip) => (
                   <Contribution key={chip.key} label={chip.label} value={chip.value} tone={chip.tone} />
                 ))}

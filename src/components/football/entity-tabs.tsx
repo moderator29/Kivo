@@ -19,8 +19,20 @@ import { SectionTabs, TabPanel, useTabParam, type SectionTab } from "@/component
  *
  * Twelve lines of glue rather than a fork. If a behaviour is missing from the
  * rail, it gets fixed in `section-tabs.tsx` for every surface at once.
+ *
+ * `src/components/leagues/competition-tabs.tsx` is the same twelve lines with
+ * its `ariaLabel` and `idPrefix` hardcoded, written independently for the
+ * competition page. Two copies of one bridge is one too many: this one is the
+ * general shape and both pages could share it, but `leagues/**` belongs to
+ * another surface, so consolidating is flagged rather than done here.
  */
-export type EntityTab = SectionTab & { content: ReactNode };
+/**
+ * `icon` is deliberately dropped from `SectionTab` here. A `LucideIcon` is a
+ * function, and a function cannot cross the server/client boundary — a server
+ * page passing one would fail at the boundary rather than at the type. A
+ * club's sections read perfectly well as words.
+ */
+export type EntityTab = Omit<SectionTab, "icon"> & { content: ReactNode };
 
 function EntityTabsInner({
   tabs,

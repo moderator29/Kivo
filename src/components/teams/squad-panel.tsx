@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
-import { ListSurface, StatTile } from "@/components/football/entity-shell";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
+import { FieldLabel } from "@/components/ui/section";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
 import { calculateAge } from "@/lib/format";
 
 /**
@@ -45,43 +46,19 @@ export function SquadSummary({ players }: { players: SquadPlayer[] }) {
   const nations = new Set(players.map((p) => p.nationality).filter((n): n is string => Boolean(n)));
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <StatTile label="Players" value={String(players.length)} />
-      <StatTile
-        label="Average age"
-        value={averageAge === null ? "–" : averageAge.toFixed(1)}
-        hint={
-          averageAge !== null && withAge.length < players.length ? `of ${withAge.length} with a birth date` : undefined
-        }
-      />
-      <StatTile label="Nations" value={nations.size > 0 ? String(nations.size) : "–"} />
-    </div>
-  );
-}
-
-function SquadRow({ player }: { player: SquadPlayer }) {
-  const meta = [player.position, player.nationality].filter(Boolean).join(" · ");
-  const age = player.dateOfBirth ? calculateAge(player.dateOfBirth) : null;
-
-  return (
-    <li>
-      <Link
-        href={`/players/${player.id}`}
-        className="kivo-focus flex min-h-[3.25rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
-      >
-        <PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={32} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-foreground">{player.name}</p>
-          {meta && <p className="truncate text-[11px] text-foreground-subtle">{meta}</p>}
-        </div>
-        {age !== null && (
-          <span className="shrink-0 text-xs tabular-nums text-foreground-subtle">
-            {age}
-            <span className="sr-only"> years old</span>
-          </span>
-        )}
-      </Link>
-    </li>
+    <StatGrid columns={3}>
+      <StatBlock label="Players" value={players.length} />
+      {/* Rendered only when it is a real average. A "—" here would be a dash
+          dressed as a squad statistic. */}
+      {averageAge !== null && (
+        <StatBlock
+          label="Average age"
+          value={averageAge.toFixed(1)}
+          meta={withAge.length < players.length ? `${withAge.length} with a birth date` : undefined}
+        />
+      )}
+      {nations.size > 0 && <StatBlock label="Nations" value={nations.size} />}
+    </StatGrid>
   );
 }
 
@@ -91,14 +68,26 @@ export function SquadPanel({ groups }: { groups: SquadGroup[] }) {
       {groups.map((group) => (
         <div key={group.title} className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-3 px-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground-subtle">
-              {group.title}
-            </span>
+            <FieldLabel>{group.title}</FieldLabel>
             <span className="text-[11px] tabular-nums text-foreground-subtle">{group.players.length}</span>
           </div>
           <ListSurface>
             {group.players.map((player) => (
-              <SquadRow key={player.id} player={player} />
+              <ListRow
+                key={player.id}
+                href={`/players/${player.id}`}
+                leading={<PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={32} />}
+                title={player.name}
+                subtitle={[player.position, player.nationality].filter(Boolean).join(" · ") || undefined}
+                trailing={
+                  player.dateOfBirth ? (
+                    <>
+                      {calculateAge(player.dateOfBirth)}
+                      <span className="sr-only"> years old</span>
+                    </>
+                  ) : undefined
+                }
+              />
             ))}
           </ListSurface>
         </div>

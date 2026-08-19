@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { escapeLikePattern } from "@/lib/text";
+import { queryTerms, rankByRelevance } from "@/lib/search-ranking";
 import type { SearchCoverage } from "@/lib/search-coverage";
 
 export type SearchResultType = "team" | "player" | "competition" | "manager" | "venue";
@@ -17,6 +18,16 @@ export type SearchResult = {
 };
 
 const RESULTS_PER_CATEGORY = 5;
+
+/**
+ * How many rows each category fetches before ranking, as a multiple of what it
+ * shows. Ranking can only reorder what it was given, so fetching exactly five
+ * and then sorting them is sorting an arbitrary five — "arsenal" would still
+ * be able to return three under-21 sides and no Arsenal. Fetching a wider slice
+ * and keeping the best five is what makes the ordering mean anything, and it
+ * costs the same number of queries.
+ */
+const FETCH_MULTIPLIER = 4;
 const MAX_QUERY_LENGTH = 80;
 
 export type PopularTeam = {
@@ -73,10 +84,23 @@ export async function getPopularTeams(): Promise<PopularTeam[]> {
  *
  * KIVO_NEXT_GEN KN-58: managers and venues were added because /managers and
  * /venues are otherwise unreachable from anywhere in the app shell (KN-30) —
- * two more ilike queries against tables that already carry the pg_trgm indexes
- * migration 0021 created. `venues.name` is nullable (see migration 0020), so a
- * nameless venue row simply never matches a name search rather than rendering
- * as an untitled result.
+ * against tables that already carry the pg_trgm indexes migration 0021 created,
+ * which is what keeps a `%…%` filter index-served rather than a scan.
+ * `venues.name` is nullable (see migration 0020), so a nameless venue row
+ * simply never matches a name search rather than rendering as an untitled
+ * result.
+ *
+ * ## Forgiving, and then ordered
+ *
+ * The query is split into words and each one must appear in the name, in any
+ * order — so "man united" finds Manchester United, which the single-substring
+ * version this replaced could not, because "man united" is not a substring of
+ * anything. What comes back is then ranked by `rankByRelevance`
+ * (src/lib/search-ranking.ts) and cut to five per category, so the five a
+ * reader sees are the five best matches rather than the five the database
+ * happened to return first. Both halves are needed: without the wider fetch
+ * the ranking sorts an arbitrary handful, and without the ranking the wider
+ * fetch just returns more arbitrary rows.
  *
  * Guest-callable (no auth required), so it's rate-limited by profile when
  * signed in and by IP otherwise — same reasoning as getClientIp's own
@@ -96,7 +120,25 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
   if (!rateLimit.ok) return { error: rateLimit.error, results: [] };
 
   const supabase = createServerSupabaseClient();
-  const pattern = `%${escapeLikePattern(trimmed)}%`;
+
+  /**
+   * One `ilike` per word, chained — PostgREST ANDs them, so every word has to
+   * appear somewhere in the name but they may appear in any order and with
+   * anything between. That is what makes "man united" find Manchester United
+   * and "inter milan" find Inter, neither of which is a substring of the name
+   * a fan is looking for.
+   *
+   * Still one `.ilike()` per term rather than a built `.or()` string: the
+   * value rides as a parameter, so nothing here can be read as filter syntax.
+   * `escapeLikePattern` handles LIKE's own metacharacters on top of that.
+   */
+  const terms = queryTerms(trimmed);
+  const patterns = terms.map((term) => `%${escapeLikePattern(term)}%`);
+  const fetchLimit = RESULTS_PER_CATEGORY * FETCH_MULTIPLIER;
+
+  function matchAllTerms<T extends { ilike(column: string, pattern: string): T }>(request: T, column: string): T {
+    return patterns.reduce((accumulated, pattern) => accumulated.ilike(column, pattern), request);
+  }
 
   const playerColumns = "id, full_name, known_as, position, current_team:teams(name)";
   const [
@@ -107,40 +149,39 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
     { data: managers },
     { data: venues },
   ] = await Promise.all([
-      supabase.from("teams").select("id, name, country, crest_url").ilike("name", pattern).limit(RESULTS_PER_CATEGORY),
-      // Two plain single-column ilike() calls instead of one .or("full_name.ilike.X,known_as.ilike.X") —
-      // .or() takes a raw PostgREST filter string built by string interpolation, and escapeLikePattern
-      // above only escapes LIKE's own metacharacters (%, _, \), not PostgREST filter-syntax ones (`,`,
-      // `(`, `)`). A search term containing those could inject an unintended extra filter clause. Plain
-      // .ilike() calls pass the value as a parameter, not raw filter syntax, so there's nothing to inject.
-      supabase.from("players").select(playerColumns).ilike("full_name", pattern).limit(RESULTS_PER_CATEGORY),
-      supabase.from("players").select(playerColumns).ilike("known_as", pattern).limit(RESULTS_PER_CATEGORY),
-      supabase
-        .from("competitions")
-        .select("id, name, country, logo_url")
-        .ilike("name", pattern)
-        .limit(RESULTS_PER_CATEGORY),
-      supabase
-        .from("managers")
-        .select("id, full_name, nationality, current_team:teams(name)")
-        .ilike("full_name", pattern)
-        .limit(RESULTS_PER_CATEGORY),
-      supabase
-        .from("venues")
-        .select("id, name, city, country")
-        .ilike("name", pattern)
-        .limit(RESULTS_PER_CATEGORY),
+      matchAllTerms(supabase.from("teams").select("id, name, country, crest_url"), "name").limit(fetchLimit),
+      // Two plain single-column filters instead of one `.or(...)`: `.or()` takes
+      // a raw PostgREST filter string built by interpolation, and
+      // escapeLikePattern escapes LIKE's metacharacters (%, _, \) but not
+      // PostgREST's own (`,`, `(`, `)`). A term containing those could add a
+      // filter clause nobody wrote.
+      matchAllTerms(supabase.from("players").select(playerColumns), "full_name").limit(fetchLimit),
+      matchAllTerms(supabase.from("players").select(playerColumns), "known_as").limit(fetchLimit),
+      matchAllTerms(supabase.from("competitions").select("id, name, country, logo_url"), "name").limit(fetchLimit),
+      matchAllTerms(
+        supabase.from("managers").select("id, full_name, nationality, current_team:teams(name)"),
+        "full_name",
+      ).limit(fetchLimit),
+      matchAllTerms(supabase.from("venues").select("id, name, city, country"), "name").limit(fetchLimit),
     ]);
 
   const playerById = new Map((playersByFullName ?? []).concat(playersByKnownAs ?? []).map((p) => [p.id, p]));
-  const players = [...playerById.values()].slice(0, RESULTS_PER_CATEGORY);
+  // Ranked against the name a reader will actually see, which for a player is
+  // the one they are known by — ranking "Cristiano Ronaldo dos Santos Aveiro"
+  // against a search for "ronaldo" and then rendering "Cristiano Ronaldo"
+  // would sort by a string that is not on screen.
+  const players = rankByRelevance(
+    [...playerById.values()],
+    trimmed,
+    (player) => player.known_as ?? player.full_name,
+  ).slice(0, RESULTS_PER_CATEGORY);
 
   const results: SearchResult[] = [];
 
-  for (const team of teams ?? []) {
+  for (const team of rankByRelevance(teams ?? [], trimmed, (team) => team.name).slice(0, RESULTS_PER_CATEGORY)) {
     results.push({ type: "team", id: team.id, label: team.name, sublabel: team.country, imageUrl: team.crest_url });
   }
-  for (const player of players ?? []) {
+  for (const player of players) {
     results.push({
       type: "player",
       id: player.id,
@@ -149,7 +190,7 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
       imageUrl: null,
     });
   }
-  for (const competition of competitions ?? []) {
+  for (const competition of rankByRelevance(competitions ?? [], trimmed, (row) => row.name).slice(0, RESULTS_PER_CATEGORY)) {
     results.push({
       type: "competition",
       id: competition.id,
@@ -158,7 +199,7 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
       imageUrl: competition.logo_url,
     });
   }
-  for (const manager of managers ?? []) {
+  for (const manager of rankByRelevance(managers ?? [], trimmed, (row) => row.full_name).slice(0, RESULTS_PER_CATEGORY)) {
     results.push({
       type: "manager",
       id: manager.id,
@@ -167,7 +208,7 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
       imageUrl: null,
     });
   }
-  for (const venue of venues ?? []) {
+  for (const venue of rankByRelevance((venues ?? []).filter((row) => row.name !== null), trimmed, (row) => row.name ?? "").slice(0, RESULTS_PER_CATEGORY)) {
     // venues.name is nullable in the schema; a row without one has nothing to
     // show and could not have matched the name filter anyway.
     if (!venue.name) continue;

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Compass, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/layout/page-header";
 import { DiscoverCard } from "@/components/discover/discover-card";
 import { SearchSurface } from "@/components/search/search-surface";
 import { getPopularTeams } from "@/app/(app)/search-actions";
@@ -109,18 +110,15 @@ export default async function DiscoverPage() {
   ].filter((surface) => surface.count > 0);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-6">
-        <div className="kivo-gradient-prime flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-          <Compass className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-foreground">Discover</h1>
-          <p className="text-sm text-foreground-muted">
-            Leagues, clubs, players and transfers — all in one place.
-          </p>
-        </div>
-      </FadeIn>
+    <div className="kivo-page kivo-page--wide">
+      {/* Not a hero card. Discover opened with a brand-ringed box containing a
+          gradient tile, a title and a sentence — a container whose entire
+          content was the page's own name, in the one glass tier the design
+          system reserves for elevated moments. On a phone that box was the
+          first screenful, so the page's actual job (find something) started
+          below the fold. The header is now the same one every other screen
+          uses and the field is the first thing under it. */}
+      <PageHeader title="Discover" description="Leagues, clubs, players and transfers — all in one place." />
 
       {/* A real field, not a link to one.
           

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { TeamCrest } from "@/components/ui/team-crest";
-import { ListSurface } from "@/components/football/entity-shell";
+import { ListSurface } from "@/components/ui/list-surface";
+import { FieldLabel } from "@/components/ui/section";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { formatDate } from "@/lib/format";
 import type { Database } from "@/lib/supabase/types";
@@ -43,7 +44,7 @@ function TransferRow({ entry }: { entry: TransferLedgerEntry }) {
     <>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-foreground">{entry.playerName ?? "Player not listed"}</p>
-        <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-foreground-subtle">
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-foreground-subtle">
           {entry.direction === "in" ? "from" : "to"}
           <TeamCrest crestUrl={entry.counterpartTeam?.crest_url ?? null} name={counterpartLabel} size={14} />
           <span className="truncate">{counterpartLabel}</span>
@@ -51,7 +52,7 @@ function TransferRow({ entry }: { entry: TransferLedgerEntry }) {
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5">
         <span className="text-xs font-semibold tabular-nums text-foreground">{entry.feeText ?? "–"}</span>
-        <span className="text-[10px] uppercase tracking-[0.06em] text-foreground-subtle">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
           {TRANSFER_TYPE_LABEL[entry.transferType]} · {formatDate(entry.transferDate, { month: "short" })}
         </span>
       </div>
@@ -63,12 +64,12 @@ function TransferRow({ entry }: { entry: TransferLedgerEntry }) {
       {entry.playerId ? (
         <Link
           href={`/players/${entry.playerId}`}
-          className="kivo-focus flex min-h-[3.25rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
+          className="kivo-focus flex min-h-11 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-2 motion-reduce:transition-none"
         >
           {body}
         </Link>
       ) : (
-        <div className="flex min-h-[3.25rem] items-center gap-3 px-3 py-2.5">{body}</div>
+        <div className="flex min-h-11 items-center gap-3 px-4 py-3">{body}</div>
       )}
     </li>
   );
@@ -88,10 +89,10 @@ export function TransferLedger({ entries }: { entries: TransferLedgerEntry[] }) 
         .map((group) => (
           <div key={group.title} className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-3 px-1">
-              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground-subtle">
+              <FieldLabel className="flex items-center gap-1.5">
                 {group.icon}
                 {group.title}
-              </span>
+              </FieldLabel>
               <span className="text-[11px] tabular-nums text-foreground-subtle">{group.rows.length}</span>
             </div>
             <ListSurface>

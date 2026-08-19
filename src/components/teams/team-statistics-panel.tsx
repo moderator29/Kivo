@@ -1,4 +1,4 @@
-import { MetricBar, StatTile } from "@/components/football/entity-shell";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
 import type { TeamStatisticsSummary } from "@/components/teams/team-statistics";
 
 /**
@@ -15,6 +15,42 @@ import type { TeamStatisticsSummary } from "@/components/teams/team-statistics";
  * many matches the figures came from — which is the difference between a
  * season average and a single match dressed as one.
  */
+
+/**
+ * A labelled proportion. Local to this file on purpose: it is the only bar in
+ * the product, `docs/UI_PRIMITIVES.md` sanctions no shared one, and a
+ * one-caller "primitive" in a shared folder is how a component library starts
+ * accumulating things nobody uses.
+ *
+ * It takes `value` and `max` rather than a percentage so it cannot be handed a
+ * figure whose denominator has been lost — a caller with no real denominator
+ * has no bar to draw.
+ */
+function MetricBar({
+  label,
+  value,
+  max,
+  display,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  display: string;
+}) {
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="truncate text-sm text-foreground-muted">{label}</span>
+        <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{display}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-surface-track">
+        <div className="kivo-gradient-prime h-full rounded-full" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function TeamStatisticsPanel({ summary }: { summary: TeamStatisticsSummary }) {
   const tiles = [
     summary.shotsPerMatch && { label: "Shots", value: summary.shotsPerMatch.value.toFixed(1) },
@@ -49,7 +85,7 @@ export function TeamStatisticsPanel({ summary }: { summary: TeamStatisticsSummar
   ].filter((bar): bar is { key: string; label: string; value: number; max: number; display: string } => Boolean(bar));
 
   return (
-    <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
+    <div className="kivo-glass flex flex-col gap-5 rounded-2xl p-5">
       {bars.length > 0 && (
         <div className="flex flex-col gap-3">
           {bars.map((bar) => (
@@ -59,14 +95,16 @@ export function TeamStatisticsPanel({ summary }: { summary: TeamStatisticsSummar
       )}
 
       {tiles.length > 0 && (
-        <div className={`grid gap-2 ${bars.length > 0 ? "border-t border-hairline-soft pt-4" : ""} grid-cols-3 sm:grid-cols-5`}>
+        // `inset`: this card is already the surface, and a StatGrid with its
+        // own would be the card-inside-a-card DENSITY_RULES forbids.
+        <StatGrid inset columns={3} className={bars.length > 0 ? "border-t border-hairline-soft pt-5" : undefined}>
           {tiles.map((tile) => (
-            <StatTile key={tile.label} label={tile.label} value={tile.value} />
+            <StatBlock key={tile.label} label={tile.label} value={tile.value} />
           ))}
-        </div>
+        </StatGrid>
       )}
 
-      <p className="text-[11px] leading-relaxed text-foreground-subtle">
+      <p className="text-xs leading-relaxed text-foreground-subtle">
         Per match, from the {summary.matchesWithStatistics}{" "}
         {summary.matchesWithStatistics === 1 ? "match" : "matches"} with statistics on record. A metric only appears
         once at least one match has reported it.

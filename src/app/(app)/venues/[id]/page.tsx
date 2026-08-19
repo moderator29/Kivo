@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { MapPin, Users2, CalendarClock } from "lucide-react";
+import { MapPin, CalendarClock } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
+import { Section } from "@/components/ui/section";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
+import { EmptyState } from "@/components/ui/empty-state";
 import { MatchRowList } from "@/components/matches/match-row";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { parseUuidParam } from "@/lib/params";
@@ -69,39 +72,51 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   const metaParts = [venue.city, venue.country].filter(Boolean);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <div className="kivo-glass-brand rounded-2xl p-6">
-        <div className="flex items-center gap-4">
-          <FadeIn delay={0} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-2">
-            <MapPin className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
-          </FadeIn>
-          <FadeIn delay={0.05} className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold text-foreground">{venue.name ?? "Unnamed venue"}</h1>
-            {metaParts.length > 0 && <p className="text-xs text-foreground-subtle">{metaParts.join(", ")}</p>}
-          </FadeIn>
+    <div className="kivo-page">
+      {/* Not a hero card. A ground's page opened with a brand-ringed box whose
+          whole content was the ground's name and one line of metadata — the
+          most elevated glass tier in the system spent on a heading. The
+          identity now sits on the page the way the competition header does,
+          and the one number a ground has is a stat rather than a sentence. */}
+      <FadeIn className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-hairline-soft bg-surface-1">
+          <MapPin className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+            {venue.name ?? "Unnamed venue"}
+          </h1>
+          {metaParts.length > 0 && <p className="truncate text-xs text-foreground-subtle">{metaParts.join(", ")}</p>}
         </div>
+      </FadeIn>
 
-        <FadeIn delay={0.1} className="mt-4 flex items-center gap-2 text-sm text-foreground-muted">
-          <Users2 className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-          {venue.capacity ? `Capacity ${formatNumber(venue.capacity)}` : "Capacity not listed"}
+      {/* Rendered only when there is a real capacity on record. "Capacity not
+          listed" is a sentence about KIVO's records in the place a fact about
+          the ground should be, and a StatBlock exists to carry a number KIVO
+          has — not a dash where one is missing. */}
+      {venue.capacity !== null && (
+        <FadeIn delay={0.05}>
+          <StatGrid>
+            <StatBlock label="Capacity" value={formatNumber(venue.capacity)} />
+          </StatGrid>
         </FadeIn>
-      </div>
+      )}
 
-      <FadeIn delay={0.15} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <CalendarClock className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Fixtures at this venue
-        </h2>
+      <Section title="Matches here">
         {fixturesOutcome.failed ? (
-          <LoadFailed title="Fixtures at this venue" tone="section" icon={<CalendarClock className="h-6 w-6" strokeWidth={1.75} />} />
+          <LoadFailed title="Matches here" tone="section" icon={<CalendarClock className="h-6 w-6" strokeWidth={1.75} />} />
         ) : fixturesOutcome.rows.length > 0 ? (
           <MatchRowList fixtures={fixturesOutcome.rows} />
         ) : (
-          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No matches at this ground yet.
-          </div>
+          <EmptyState
+            icon={CalendarClock}
+            tone="section"
+            title="No matches here yet"
+            description="Nothing has been played at this ground on KIVO so far."
+            className="kivo-glass rounded-2xl"
+          />
         )}
-      </FadeIn>
+      </Section>
     </div>
   );
 }

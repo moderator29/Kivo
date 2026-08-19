@@ -48,7 +48,7 @@ export function NextMatchCard({
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
           {live ? (
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-live">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-live">
               <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-live opacity-75 motion-safe:animate-ping" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
@@ -58,11 +58,11 @@ export function NextMatchCard({
           ) : (
             <CalendarClock className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} />
           )}
-          <span className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground-subtle">
+          <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
             {competition ?? "Next match"}
           </span>
         </span>
-        <span className="shrink-0 rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground-muted">
+        <span className="shrink-0 rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-foreground-muted">
           {isHome ? "Home" : "Away"}
         </span>
       </div>
@@ -87,7 +87,7 @@ export function NextMatchCard({
               <span className="text-lg font-semibold tabular-nums text-foreground">
                 {formatDateTime(fixture.kickoff_at, "time")}
               </span>
-              <span className="text-[11px] text-foreground-subtle">
+              <span className="text-xs text-foreground-subtle">
                 {formatDateTime(fixture.kickoff_at, "dayMonth")}
               </span>
             </>
@@ -103,7 +103,7 @@ export function NextMatchCard({
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-hairline-soft pt-3">
-        <span className="min-w-0 truncate text-[11px] text-foreground-subtle">
+        <span className="min-w-0 truncate text-xs text-foreground-subtle">
           {live ? (
             "Match Centre is live"
           ) : isHome && venueName ? (
@@ -115,7 +115,7 @@ export function NextMatchCard({
             </>
           )}
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-accent">
+        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-accent">
           Match Centre
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" strokeWidth={2} />
         </span>

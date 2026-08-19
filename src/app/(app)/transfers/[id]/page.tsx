@@ -158,7 +158,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const record = context.playerRecord;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex items-center justify-between gap-3">
         <Link
           href="/transfers"
@@ -182,9 +182,15 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             <Link href={`/players/${player.id}`} className="kivo-focus truncate text-lg font-semibold text-foreground">
               {playerName}
             </Link>
-            <span className="truncate text-xs text-foreground-muted">
-              {[player.position, player.nationality].filter(Boolean).join(" · ") || "Position not listed"}
-            </span>
+            {/* Rendered only when there is something to render. "Position not
+                listed" puts a sentence about KIVO's records where a fact about
+                the player goes, and an absent line is the honest form of an
+                absent fact. */}
+            {[player.position, player.nationality].filter(Boolean).length > 0 && (
+              <span className="truncate text-xs text-foreground-muted">
+                {[player.position, player.nationality].filter(Boolean).join(" · ")}
+              </span>
+            )}
           </div>
         </div>
 

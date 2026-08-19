@@ -135,14 +135,14 @@ export function LeagueTable({
   return (
     <div className="kivo-glass overflow-hidden rounded-2xl">
       {caption && (
-        <p className="border-b border-hairline-soft px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground-subtle">
+        <p className="border-b border-hairline-soft px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
           {caption}
         </p>
       )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[20rem] border-collapse text-sm">
           <thead>
-            <tr className="border-b border-hairline-soft text-[10px] uppercase tracking-[0.06em] text-foreground-subtle">
+            <tr className="border-b border-hairline-soft text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
               <th scope="col" className="w-9 px-2 py-2 text-center font-medium">
                 #
               </th>
@@ -235,7 +235,7 @@ export function LeagueTable({
       {showZoneLegend && legend.length > 0 && (
         <ul className="flex flex-col gap-1.5 border-t border-hairline-soft px-4 py-3">
           {legend.map(([zone, tone]) => (
-            <li key={zone} className="flex items-center gap-2 text-[11px] text-foreground-muted">
+            <li key={zone} className="flex items-center gap-2 text-xs text-foreground-muted">
               <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${tone.swatch}`} />
               {/* Verbatim. KIVO does not paraphrase a qualification rule it did
                   not write. */}

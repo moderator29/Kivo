@@ -1,15 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  Activity,
-  ArrowLeftRight,
-  ChartColumn,
-  GitCompareArrows,
-  LineChart,
-  ListOrdered,
-  Trophy,
-} from "lucide-react";
+import { Activity, ArrowLeftRight, GitCompareArrows, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -25,7 +17,10 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { TrackView } from "@/components/ui/track-view";
 import { FormBadges } from "@/components/teams/form-badges";
 import { EntityTabs, type EntityTab } from "@/components/football/entity-tabs";
-import { ListSurface, Section, SectionEmpty, StatTile } from "@/components/football/entity-shell";
+import { Section } from "@/components/ui/section";
+import { ListSurface } from "@/components/ui/list-surface";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PlayerHeader } from "@/components/players/player-header";
 import { PlayerMatchLog, type MatchLogRow } from "@/components/players/player-match-log";
 import { CareerChart } from "@/components/players/career-chart";
@@ -341,7 +336,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       {hasMatchData ? (
         <>
           {ratingSummary && (
-            <Section title="KIVO rating" icon={<Activity className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="KIVO rating">
               <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
                 <div className="flex items-baseline gap-3">
                   <span className="text-4xl font-semibold tabular-nums leading-none text-accent">
@@ -352,7 +347,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                     {ratingSummary.sampleSize === 1 ? "match" : "matches"}
                   </span>
                 </div>
-                <p className="border-t border-hairline-soft pt-3 text-[11px] leading-relaxed text-foreground-subtle">
+                <p className="border-t border-hairline-soft pt-3 text-xs leading-relaxed text-foreground-subtle">
                   KIVO&apos;s own model (v{RATING_MODEL_VERSION}), computed from real goals, assists, cards and the
                   match result — not a rating published by anyone else.
                   {!ratingSummary.isSufficientSample &&
@@ -363,10 +358,10 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           )}
 
           {recentForm.isSufficientSample && (
-            <Section title="Recent form" icon={<LineChart className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="Recent form">
               <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
                 <FormBadges form={recentForm.sequence} />
-                <p className="text-[11px] leading-relaxed text-foreground-subtle">
+                <p className="text-xs leading-relaxed text-foreground-subtle">
                   {displayName}&apos;s team in the {recentForm.sampleSize} most recent finished{" "}
                   {recentForm.sampleSize === 1 ? "match" : "matches"} they were named for: {recentForm.wins}W{" "}
                   {recentForm.draws}D {recentForm.losses}L · {recentForm.goalsScored} scored, {recentForm.goalsConceded}{" "}
@@ -377,7 +372,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           )}
 
           {matchLogRows.length > 0 && (
-            <Section title="Last matches" icon={<ListOrdered className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="Last matches">
               <ListSurface>
                 <MatchLogPreview rows={matchLogRows.slice(0, 3)} />
               </ListSurface>
@@ -385,30 +380,31 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           )}
         </>
       ) : (
-        <SectionEmpty
-          icon={<Activity className="h-6 w-6" strokeWidth={1.75} />}
-          message={
+        <EmptyState
+          tone="page"
+          icon={Activity}
+          title="No matches yet"
+          description={
             player.current_team
-              ? `${displayName} hasn't appeared in a match KIVO covers yet. Their matches for ${player.current_team.name} will show up here.`
-              : `${displayName} hasn't appeared in a match KIVO covers yet.`
+              ? `${displayName} hasn't played in a match KIVO covers. Appearances for ${player.current_team.name} will show up here.`
+              : `${displayName} hasn't played in a match KIVO covers.`
           }
           action={
             player.current_team ? (
               <Link
                 href={`/teams/${player.current_team.id}`}
-                className="kivo-focus flex min-h-11 items-center gap-2 rounded-xl border border-hairline px-3.5 text-xs font-semibold text-foreground-muted transition hover:border-hairline-strong hover:text-foreground"
+                className="kivo-focus flex min-h-11 items-center gap-2 rounded-xl border border-hairline px-3.5 text-sm font-semibold text-foreground-muted transition-colors duration-150 hover:border-hairline-strong hover:text-foreground motion-reduce:transition-none"
               >
                 <TeamCrest crestUrl={player.current_team.crest_url} name={player.current_team.name} size={16} />
                 {player.current_team.name}
               </Link>
             ) : undefined
           }
-          className="py-12"
         />
       )}
 
       {fantasySeasonId && fantasyPrice !== null && (
-        <Section title="Fantasy" icon={<Trophy className="h-3.5 w-3.5 text-kivo-cyan" strokeWidth={2} />}>
+        <Section title="Fantasy">
           <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -424,7 +420,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
                 </p>
               </div>
             </div>
-            <p className="border-t border-hairline-soft pt-3 text-[11px] leading-relaxed text-foreground-subtle">
+            <p className="border-t border-hairline-soft pt-3 text-xs leading-relaxed text-foreground-subtle">
               KIVO&apos;s own internal fantasy-game currency — not a real transfer-market value — moves in small, capped
               steps based on this player&apos;s real recent match performance relative to their position group.
             </p>
@@ -461,7 +457,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       label: "Matches",
       count: matchLogRows.length,
       content: (
-        <Section title="Match by match" icon={<ListOrdered className="h-3.5 w-3.5" strokeWidth={2} />}>
+        <Section title="Match by match">
           <PlayerMatchLog rows={matchLogRows} />
         </Section>
       ),
@@ -484,26 +480,26 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       content: (
         <>
           {showCareerChart && (
-            <Section title="Season by season" icon={<ChartColumn className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="Season by season">
               <CareerChart seasons={careerSeasons} />
             </Section>
           )}
 
           {hasMatchData && (
-            <Section title="Career on KIVO" icon={<Activity className="h-3.5 w-3.5" strokeWidth={2} />}>
-              <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                  <StatTile label="Apps" value={formatNumber(stats.appearances)} />
-                  <StatTile label="Starts" value={formatNumber(stats.starts)} />
-                  <StatTile label="Goals" value={formatNumber(stats.goals)} />
-                  {stats.assists !== null && <StatTile label="Assists" value={formatNumber(stats.assists)} />}
-                  <StatTile label="Yellow" value={formatNumber(stats.yellowCards)} />
-                  <StatTile label="Red" value={formatNumber(stats.redCards)} />
-                </div>
+            <Section title="Career on KIVO">
+              <div className="flex flex-col gap-3">
+                <StatGrid columns={3}>
+                  <StatBlock label="Apps" value={formatNumber(stats.appearances)} />
+                  <StatBlock label="Starts" value={formatNumber(stats.starts)} />
+                  <StatBlock label="Goals" value={formatNumber(stats.goals)} />
+                  {stats.assists !== null && <StatBlock label="Assists" value={formatNumber(stats.assists)} />}
+                  <StatBlock label="Yellow" value={formatNumber(stats.yellowCards)} />
+                  <StatBlock label="Red" value={formatNumber(stats.redCards)} />
+                </StatGrid>
                 {/* These were once headed "Season stats", which was false twice
                     over: not one season, and not one competition. Naming the
                     scope is the whole fix — the numbers were never wrong. */}
-                <p className="px-1 text-[11px] leading-relaxed text-foreground-subtle">
+                <p className="px-1 text-xs leading-relaxed text-foreground-subtle">
                   From the {stats.appearances} completed {stats.appearances === 1 ? "match" : "matches"} KIVO holds for{" "}
                   {displayName}, across all competitions. The by-competition table below splits the same career up
                   league by league, and will differ wherever KIVO holds only part of a season.
@@ -530,14 +526,10 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       label: "Transfers",
       count: transfers!.length,
       content: (
-        <Section
-          title="Transfer history"
-          icon={<ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={2} />}
-          action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}
-        >
+        <Section title="Transfer history" action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}>
           <ListSurface>
             {(transfers ?? []).map((transfer) => (
-                <li key={transfer.id} className="flex flex-col gap-2 px-3 py-3">
+                <li key={transfer.id} className="flex flex-col gap-2 px-4 py-3">
                   <span className="flex items-center gap-2">
                     <ClubSide team={transfer.from_team} />
                     <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
@@ -565,7 +557,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 lg:px-8">
+    <div className="kivo-page">
       <TrackView type="player" id={player.id} name={displayName} imageUrl={player.photo_url} />
 
       <PlayerHeader
@@ -661,7 +653,7 @@ function MatchLogPreview({ rows }: { rows: MatchLogRow[] }) {
         <li key={row.fixtureId}>
           <Link
             href={`/matches/${row.fixtureId}`}
-            className="kivo-focus flex min-h-[3.25rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
+            className="kivo-focus flex min-h-11 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-2 motion-reduce:transition-none"
           >
             <TeamCrest crestUrl={row.opponentCrestUrl} name={row.opponentName} size={22} />
             <span className="min-w-0 flex-1">

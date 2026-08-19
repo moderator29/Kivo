@@ -4,6 +4,7 @@ import { MapPin } from "lucide-react";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FormBadges } from "@/components/teams/form-badges";
 import { FadeIn } from "@/components/ui/fade-in";
+import { FieldLabel } from "@/components/ui/section";
 import { formatNumber } from "@/lib/format";
 import type { FormResult } from "@/lib/football/results";
 
@@ -98,7 +99,7 @@ export function TeamHeader({
                   </span>
                 )}
               </span>
-              <span className="min-w-0 text-[11px] leading-tight text-foreground-subtle">
+              <span className="min-w-0 text-xs leading-tight text-foreground-subtle">
                 {standing.competitionLabel ?? "League"}
                 <br />
                 {standing.points} pts · {standing.played} played
@@ -107,7 +108,7 @@ export function TeamHeader({
           )}
           {form.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground-subtle">Form</span>
+              <FieldLabel>Form</FieldLabel>
               <FormBadges form={form} />
             </div>
           )}
