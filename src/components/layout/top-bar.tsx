@@ -64,8 +64,14 @@ export function TopBar({
   isAdmin?: boolean;
   aiConfigured?: boolean;
 }) {
+  // `min-h` from --kivo-header-h rather than a height that falls out of
+  // whatever happens to be inside: anything sticking directly under this
+  // header (`<SectionTabs sticky>`) offsets itself by that variable, and the
+  // two drifting apart shows up as a tab rail that either hides beneath the
+  // header or floats a stripe of scrolling content under it. min-, not fixed,
+  // so a taller child still fits rather than being clipped.
   return (
-    <header className="sticky top-0 z-20 flex items-center border-b border-hairline-soft bg-background/80 px-4 py-2.5 backdrop-blur-xl lg:px-8">
+    <header className="sticky top-0 z-20 flex min-h-[var(--kivo-header-h)] items-center border-b border-hairline-soft bg-background/80 px-4 py-2.5 backdrop-blur-xl lg:px-8">
       {/* Founder's placement: top-left, where the logo used to sit. Hidden on
           desktop, where the sidebar is permanently open and a menu button
           would open a menu that is already on screen. */}
