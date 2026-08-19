@@ -132,6 +132,12 @@ export async function updateNotificationPreference(column: NotificationPreferenc
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
 
+  // Generous: the notifications screen is a wall of toggles and somebody
+  // setting it up flips most of them in a burst. This exists so an endpoint
+  // that writes to the database on every tap is not completely unbounded.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_preferences", 60, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
   const supabase = createServerSupabaseClient();
   // upsert with only { profile_id, [column]: value } in the payload leaves
   // every other column untouched on conflict (ON CONFLICT DO UPDATE SET only
@@ -163,6 +169,9 @@ export async function updateNotificationPreference(column: NotificationPreferenc
 export async function updateQuietHours(input: { enabled: boolean; start: string; end: string }) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_preferences", 60, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const start = parseClockTime(input.start);
   const end = parseClockTime(input.end);
@@ -208,6 +217,11 @@ export async function updateProfileDetails(formData: FormData) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
 
+  // A bio is user-authored text on a public profile, which makes this the one
+  // profile field worth bounding for its own sake and not only for write cost.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_profile", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
     .from("profiles")
@@ -234,6 +248,9 @@ export async function updateProfileDetails(formData: FormData) {
 export async function updateActivityVisibility(showActivityPublicly: boolean) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_profile", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
@@ -276,6 +293,9 @@ export async function updateTimezone(timezone: string | null) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_profile", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase

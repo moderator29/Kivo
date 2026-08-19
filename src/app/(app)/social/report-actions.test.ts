@@ -19,9 +19,11 @@ import { createSupabaseDouble } from "@/lib/supabase/query-double";
  */
 
 const profileMock = vi.fn();
+const rateLimitMock = vi.fn();
 let double: ReturnType<typeof createSupabaseDouble>;
 
 vi.mock("@/lib/profile", () => ({ getOrCreateProfile: () => profileMock() }));
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: () => rateLimitMock() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,6 +31,12 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const VIEWER = { id: "profile-1" };
+
+/** The insert, not the duplicate-check select that now precedes it — both
+ * touch `reports`, and only one of them carries the row. */
+function reportInsert() {
+  return double.calls.find((call) => call.table === "reports" && call.chain.includes("insert"));
+}
 
 async function report(reason = "Spam", targetType: "post" | "comment" | "profile" = "post", targetId = "post-1") {
   const { reportContent } = await import("./report-actions");
@@ -38,6 +46,7 @@ async function report(reason = "Spam", targetType: "post" | "comment" | "profile
 beforeEach(() => {
   vi.resetModules();
   profileMock.mockReset().mockResolvedValue(VIEWER);
+  rateLimitMock.mockReset().mockResolvedValue({ ok: true });
 });
 
 describe("reportContent input handling", () => {
@@ -90,7 +99,7 @@ describe("reportContent snapshot capture", () => {
 
     await report("  harassment  ", "post", "post-7");
 
-    const write = double.calls.find((call) => call.table === "reports");
+    const write = reportInsert();
     expect(write?.payload).toMatchObject({
       reporter_profile_id: VIEWER.id,
       target_type: "post",
@@ -114,7 +123,7 @@ describe("reportContent snapshot capture", () => {
     const result = await report();
 
     expect(result.error).toBeNull();
-    const write = double.calls.find((call) => call.table === "reports");
+    const write = reportInsert();
     expect((write?.payload as { content_snapshot: unknown }).content_snapshot).toBeNull();
   });
 
@@ -139,5 +148,56 @@ describe("reportContent snapshot capture", () => {
     const result = await report();
 
     expect(result.error).toMatch(/couldn't submit/i);
+  });
+});
+
+describe("reportContent: the queue is a shared, finite resource", () => {
+  /**
+   * Moderator attention is the scarcest thing in this system, and the queue is
+   * ordered oldest-first — so a hundred junk rows do not merely sit there,
+   * they push real reports down the list. Both guards below protect the same
+   * thing: what a moderator sees first.
+   */
+  it("stops at the rate limit without writing a report", async () => {
+    rateLimitMock.mockResolvedValue({ ok: false, error: "You're doing that too quickly.", retryAfterSeconds: 60 });
+    double = createSupabaseDouble({});
+
+    const result = await report();
+
+    expect(result.error).toMatch(/too quickly/i);
+    expect(double.wrote("reports")).toBe(false);
+  });
+
+  it("refuses a second open report on the same target from the same reporter", async () => {
+    double = createSupabaseDouble({
+      reports: { data: { id: "existing-report" }, error: null },
+    });
+
+    const result = await report("spam", "post", "post-1");
+
+    expect(result.error).toMatch(/already reported this/i);
+    // Nothing written, and the snapshot read is skipped too — a duplicate
+    // should cost nothing beyond the lookup that identified it.
+    expect(double.wrote("reports")).toBe(false);
+    expect(double.calls.some((call) => call.table === "posts")).toBe(false);
+  });
+
+  it("allows a fresh report when the earlier one was already resolved", async () => {
+    // Content that was dismissed and then got worse is a genuinely new
+    // report, so only pending/reviewing rows block — asserted through the
+    // filter the action actually sends.
+    double = createSupabaseDouble({
+      reports: [
+        { data: null, error: null },
+        { data: null, error: null },
+      ],
+      posts: { data: { body: "b", created_at: "t", fixture_id: null, author: null }, error: null },
+    });
+
+    const result = await report("spam again", "post", "post-1");
+
+    expect(result.error).toBeNull();
+    const lookup = double.calls.find((call) => call.table === "reports");
+    expect(lookup?.chain).toContain("in");
   });
 });

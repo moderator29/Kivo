@@ -1,10 +1,11 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 type ModerationTargetType = Database["public"]["Enums"]["moderation_target_type"];
 
@@ -95,7 +96,37 @@ export async function reportContent(targetType: ModerationTargetType, targetId: 
     return { error: "You must be signed in to report content." };
   }
 
+  // Reporting is the one write in the product where both failure directions
+  // are real. Too loose and one account can bury the moderation queue under
+  // hundreds of rows, which costs moderator attention — the scarcest thing in
+  // the system — and pushes genuine reports down an oldest-first list. Too
+  // tight and somebody watching a brigade cannot report it. Ten in five
+  // minutes is more than anyone reports in good faith and far less than a
+  // script needs to be a problem.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "report_content", 10, 300);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
   const supabase = createServerSupabaseClient();
+
+  // Reporting the same thing twice is almost always a double-tap or a second
+  // pass over a feed, not a second complaint. Two rows for one grievance make
+  // the queue look busier than it is and make the same content arrive twice
+  // for one moderator to judge twice. An already-resolved report is
+  // deliberately NOT a blocker: content that was dismissed and then got worse
+  // is a genuinely new report.
+  const { data: existing } = await supabase
+    .from("reports")
+    .select("id")
+    .eq("reporter_profile_id", profile.id)
+    .eq("target_type", targetType)
+    .eq("target_id", targetId)
+    .in("status", ["pending", "reviewing"])
+    .maybeSingle();
+
+  if (existing) {
+    return { error: "You've already reported this. A moderator is looking at it." };
+  }
+
   const contentSnapshot = await captureContentSnapshot(supabase, targetType, targetId);
 
   const { error } = await supabase.from("reports").insert({

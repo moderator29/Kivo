@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { isKivoBackgroundId } from "@/lib/kivo-assets";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { pruneSupersededUploads } from "@/lib/storage-uploads";
 import { logError } from "@/lib/log";
 
 // Matches the `backgrounds` Storage bucket's own file_size_limit /
@@ -30,6 +32,9 @@ export async function selectBackground(backgroundId: string) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_appearance", 30, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   // background_uploaded_url has to be cleared in the same write: migration
@@ -62,9 +67,10 @@ export async function selectBackground(backgroundId: string) {
  * holding the old URL is never broken out from under it), and no cleanup of
  * the superseded object.
  *
- * That leaves orphaned objects behind, which is a real cost and a deliberate
- * one — the same trade `uploadAvatar` already made and documented. What it is
- * NOT allowed to leave behind is an undeletable account: Supabase refuses to
+ * Objects older than the immediately-previous one are swept afterwards by
+ * `pruneSupersededUploads`, exactly as `uploadAvatar` now does: keeping every
+ * superseded cover forever was a cost with no ceiling. What this is also NOT
+ * allowed to leave behind is an undeletable account: Supabase refuses to
  * delete an auth user who still owns Storage objects, so `deleteAccount`
  * (src/app/(app)/settings/actions.ts) sweeps this bucket alongside `avatars`.
  */
@@ -84,6 +90,10 @@ export async function uploadBackground(formData: FormData) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  // Same bound as uploadAvatar, and for the same reason — see its comment.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "upload_background", 5, 600);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
 
@@ -119,6 +129,8 @@ export async function uploadBackground(formData: FormData) {
     return { error: "Something went wrong. Try again." };
   }
 
+  await pruneSupersededUploads(supabase, "backgrounds", profile.auth_user_id, path);
+
   revalidatePath("/profile");
   revalidatePath(`/u/${profile.username}`);
   return { error: null, url: publicUrl };
@@ -130,6 +142,9 @@ export async function uploadBackground(formData: FormData) {
 export async function clearBackground() {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_appearance", 30, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
