@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LocalDateTime } from "@/components/ui/relative-time";
-import { Shield, ArrowLeft } from "lucide-react";
+import { Shield } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -17,6 +17,7 @@ import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
+import { TopScorersPanel } from "@/components/football/top-scorers-panel";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -202,6 +203,16 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
         )}
       </FadeIn>
 
+      {/* Before the coverage panel, because it is content rather than an
+          explanation of missing content — and its own empty state already names
+          which of "not synced", "this source can't", and "not established" it
+          is, using the same registry the panel below reads. */}
+      <TopScorersPanel
+        competitionId={competition.id}
+        seasonId={currentSeason?.id ?? null}
+        seasonLabel={currentSeason?.name ?? null}
+      />
+
       {/* KIVO_NEXT_GEN KN-103. Placed after the table and fixtures rather than
           before them: it answers "why is that section empty", which is only a
           question once you have seen the empty section. */}
@@ -222,16 +233,6 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           />
         </FadeIn>
       )}
-
-      <FadeIn delay={0.25} className="self-center">
-        <Link
-          href="/leagues"
-          className="flex items-center gap-1 text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3 w-3" strokeWidth={2} />
-          Back to leagues
-        </Link>
-      </FadeIn>
     </div>
   );
 }

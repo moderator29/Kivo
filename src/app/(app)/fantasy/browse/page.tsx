@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -51,13 +50,6 @@ export default async function BrowsePublicFantasyLeaguesPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-2">
-        <Link
-          href="/fantasy"
-          className="flex w-fit items-center gap-1.5 text-xs font-medium text-foreground-subtle transition hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} />
-          Back to fantasy
-        </Link>
         <h1 className="text-xl font-semibold text-foreground">Browse public leagues</h1>
         <p className="text-sm text-foreground-muted">
           Join any public league below with one tap. Private leagues still need an invite code from the owner.

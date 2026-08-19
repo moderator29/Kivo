@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { redirect } from "next/navigation";
 import { FadeIn } from "@/components/ui/fade-in";
 import { EmailCodeForm } from "@/components/auth/email-code-form";
@@ -63,6 +64,15 @@ export default async function SignInPage({
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
+      {/* Sign-in and sign-up are reached from the landing page, from the
+          marketing footer, and from every gated action in the product. Without
+          this the only way back out is the browser's own control, which a
+          phone in standalone/PWA mode does not show. Falls back to the landing
+          page for anybody who arrived here from outside KIVO. */}
+      <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+12px)] z-20">
+        <BackLink href="/" label="KIVO" />
+      </div>
+
       <div className="kivo-aurora" aria-hidden="true">
         <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
         <span className="kivo-aurora-blob kivo-aurora-blob--violet" />

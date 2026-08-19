@@ -566,13 +566,6 @@ export default async function MatchCentrePage({
           />
         </WidgetErrorBoundary>
       </FadeIn>
-
-      <Link
-        href="/matches"
-        className="self-center text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
-      >
-        Back to today&apos;s matches
-      </Link>
     </FadeIn>
   );
 }

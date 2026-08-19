@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Star, Shield, UserRound, ArrowLeft, BellOff, Users } from "lucide-react";
+import { Star, Shield, UserRound, BellOff, Users } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -138,13 +138,6 @@ export default async function FollowingPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-1">
-        <Link
-          href="/profile"
-          className="flex items-center gap-1 text-xs text-foreground-subtle hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3 w-3" strokeWidth={2} />
-          Back to profile
-        </Link>
         <h1 className="text-xl font-semibold text-foreground">Following</h1>
         <p className="text-sm text-foreground-subtle">
           Teams, players and competitions you follow — and the people you follow and who follow you.

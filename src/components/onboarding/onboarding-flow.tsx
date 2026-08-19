@@ -207,8 +207,14 @@ export function OnboardingFlow({
           <button
             type="button"
             onClick={handleBack}
-            aria-label="Back"
-            className="kivo-glass kivo-glass-interactive flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+            // Not a <BackLink>: this moves between steps of one flow, not
+            // between routes, and there is deliberately no way to *leave*
+            // onboarding backwards — the account is not usable until it
+            // finishes, and "Skip for now" is the honest exit. Sized and named
+            // to the same standard as the platform's route back control: a
+            // 44px target, and an accessible name that says where it goes.
+            aria-label="Back to the previous step"
+            className="kivo-focus kivo-glass kivo-glass-interactive flex h-11 w-11 items-center justify-center rounded-xl transition-colors motion-reduce:transition-none"
           >
             <ArrowLeft className="h-4 w-4 text-foreground" strokeWidth={1.75} />
           </button>

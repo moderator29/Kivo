@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Target } from "lucide-react";
+import { Target } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -122,13 +122,6 @@ export default async function MyPredictionsPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-1">
-        <Link
-          href="/predictions"
-          className="flex items-center gap-1 text-xs text-foreground-subtle hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3 w-3" strokeWidth={2} />
-          Back to predictions
-        </Link>
         <h1 className="text-xl font-semibold text-foreground">My Predictions</h1>
         <p className="text-sm text-foreground-subtle">Your prediction history and record.</p>
       </FadeIn>
