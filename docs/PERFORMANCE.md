@@ -177,37 +177,57 @@ The logic is pure and under test (`src/lib/capped-list.ts`,
 all when nothing is being withheld — "showing 12 of 12" makes a complete list
 look truncated.
 
----
 
-## Measured, not landed — these need an owner
+### 3. A monospace font nobody public can see, preloaded on every route — fixed
 
-Both are in `src/app/layout.tsx`, which has had another agent's uncommitted
-`siteUrl()` refactor sitting in it throughout this pass. The measurements are
-real; the changes are not committed.
+Geist Mono is used on exactly four surfaces: the error-reference code, the
+sign-in code input, and two invite-code fields in the prediction leagues panel.
+None is public. `next/font` preloaded it on **every** route anyway — a second
+render-blocking request ahead of the typeface the page is actually set in.
 
-### Fonts: CLS 0.209 → 0, and −250 ms FCP, for one line
+The change is `preload: false`, `display: "optional"` and a real `fallback`
+list on the `Geist_Mono(...)` call in `src/app/layout.tsx`. Plus Jakarta Sans is
+untouched.
 
-Geist Mono is used in exactly four places — `error-reference.tsx`, the code
-input in `email-code-form.tsx`, and two invite-code fields in
-`prediction-leagues-panel.tsx`. None of them are on the landing page, the
-marketing pages or the legal pages. `next/font` preloads it on **every** route
-anyway: 23.4 KB of a 51 KB font budget.
+**The mechanism, measured directly.** Font requests per public route:
 
-Proof it is the fonts: `/support` measured CLS **0.2090**; with every `.woff2`
-request aborted, CLS **0.0000**.
+| Route | Before | After |
+| --- | --- | --- |
+| `/terms` | 2 requests, 49.2 KB | **1 request, 26.6 KB** |
+| `/support` | 2 requests, 49.2 KB | **1 request, 26.6 KB** |
+| `/sign-up` | 2 requests, 49.2 KB | **1 request, 26.6 KB** |
+| `/` | 2 requests, 49.2 KB | 2 requests, 49.2 KB — but the second is no longer preloaded, so it lands after first paint and `display: optional` declines the swap |
 
-Adding `preload: false, display: "optional"` to the `Geist_Mono(...)` call — and
-changing nothing about Plus Jakarta Sans — gave **CLS 0.0000 on all seven public
-routes** (`/support` 0.2090, `/sign-up` 0.1009, `/terms` 0.0332, `/` 0.0149, all
-to zero) and FCP 3.32–3.76 s → 3.04–3.32 s.
+**Core Web Vitals, same conditions as the table above, median of 3, confirmed
+across two independent passes:**
 
-The mechanism is worth keeping: dropping 23 KB off a 50 KB/s pipe lets Plus
-Jakarta Sans arrive *before* first paint, so the swap — and its reflow — never
-happens. Which is also why `/support`'s CLS is bimodal in the table above
-(0.0184 on one run, 0.2090 on another): it is a race between the font and first
-paint, and today it is a coin toss.
+| Route | FCP before → after | LCP before → after | CLS before → after |
+| --- | --- | --- | --- |
+| `/` | 3212 → **3196 ms** | *no candidate* → **3916 ms** | 0.0199 → **0.0006** |
+| `/about` | 3124 → **3076 ms** | 3132 → **3076 ms** | 0.0033 → **0.0005** |
+| `/terms` | 3140 → **3012 ms** | 3140 → **3012 ms** | 0.0166 → **0.0126** |
+| `/privacy` | 3116 → **2996 ms** | 3116 → **3032 ms** | 0.0167 → **0.0110** |
+| `/support` | 3120 → **2952 ms** | 3120 → **2952 ms** | 0.0231 → **0.0155** |
+| `/sign-in` | 3248 → **3216 ms** | 6884 → **6612 ms** | 0.0014 → **0.0000** |
+| `/sign-up` | 3276 → **3200 ms** | 7060 → **6772 ms** | 0.0941 → **0.0148** |
 
-Underneath sits something that will bite this product again. Next's
+**Two corrections to the measurement that proposed this**, both in the
+direction of claiming less.
+
+The earlier note recorded "CLS 0.0000 on all seven public routes" and "FCP
+250–400 ms faster". Neither reproduces. CLS falls a long way but lands at
+0.0005–0.0155, not zero, and FCP improves by **16–128 ms**, not 250–400. The
+larger figure appears to have come from comparing runs that landed on opposite
+sides of the race described next.
+
+The real win is not the median, it is the **variance**. `/support` measured CLS
+0.2089 on one baseline pass and 0.0231 on another — the same build, the same
+conditions. That bimodality is the point: it is a race between the font arriving
+and first paint happening, and before this change it was a coin toss. After, it
+is 0.0155 on every pass. What was removed is the worst case, and the worst case
+was a fifth of a viewport moving under the reader's thumb.
+
+**Underneath sits something that will bite this product again.** Next's
 `adjustFontFallback` emits:
 
 ```css
@@ -218,36 +238,12 @@ Underneath sits something that will bite this product again. Next's
 **Android has no Arial.** The `local()` never matches, the size-adjusted face is
 dropped, and the metric matching Next advertises silently does nothing on
 exactly the devices this product is being launched for. That is why the reflow
-was 0.2 rather than 0.02.
+was 0.2 rather than 0.02, and it is why the explicit `fallback` list naming
+families Android actually ships is load-bearing rather than decorative.
 
-Patch:
+---
 
-```ts
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  preload: false,
-  display: "optional",
-  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
-});
-```
-
-### `MotionConfig` in the root layout puts framer-motion on every route
-
-`src/app/layout.tsx` wraps the whole tree in `<MotionConfig reducedMotion="user">`.
-That is a client component importing `motion/react`, so **43 KB gzipped of
-framer-motion is in the universal path**, including on pages with no animation
-whatsoever.
-
-Measured by removing it: JavaScript per public route **229–243 KB → 179–187 KB**,
-about **−47 KB on every route in the product**.
-
-It must not simply be deleted — it is what makes every `motion` component honour
-`prefers-reduced-motion`. It needs to move down to the surfaces that actually
-contain motion components (`AppShell`, the admin layout, onboarding, the auth
-screens), which is the same call this codebase already made once when the
-landing page stopped being `"use client"` in full so that two elements could
-float.
+## Measured, not landed — these need an owner
 
 ### The landing hero is 454 KB of one image
 
@@ -299,6 +295,43 @@ Worth recording so nobody spends the day re-deriving it.
   **over** at 662.8 KB against 640 KB. Its own header already predicted the
   cause — "`motion` is in the shell only because components in the app shell
   itself import it… Tracked, not done here."
+- **Moving `MotionConfig` out of the root layout buys ~0.2 KB, not 47 KB — do
+  not spend the accessibility risk on it.** An earlier note measured
+  "JavaScript per public route 229–243 KB → 179–187 KB, about −47 KB on every
+  route" and proposed relocating `<MotionConfig reducedMotion="user">` down to
+  the surfaces that animate. Built and measured both ways, in two isolated
+  worktrees off the same commit:
+
+  | | Before | After |
+  | --- | --- | --- |
+  | Shell (`rootMainFiles` + polyfills, gzipped) | 166.8 KB | **166.8 KB** |
+  | All client chunks, gzipped | 647.3 KB | **647.1 KB** |
+  | `/terms` total route JS | 253.7 KB | **253.5 KB** |
+  | `/terms` motion-containing bytes | 53.1 KB | **50.6 KB** |
+  | `/` total route JS | 251.1 KB | **250.8 KB** |
+
+  The shell does not move **at all**, because `motion` was never in it — the
+  43 KB chunk is not among `rootMainFiles`. And every public route still ships
+  50–67 KB of motion after the removal, because 62 files across `src/components`
+  import `motion/react` directly and the route pulls them for its own sake.
+  `MotionConfig` was one import among many, not the reason the runtime shipped.
+
+  The measurement that produced −47 KB most likely read the shrinking of one
+  named chunk without noticing that Turbopack re-split the same modules into
+  differently-named ones: by filename, the 43 KB chunk disappears from all 70
+  routes; by content, the bytes are still there.
+
+  So the trade is 0.2 KB per route against remounting `MotionConfig` on nine
+  separate surfaces — `(app)`, admin, `/`, `/about`, `/sign-in`, `/sign-up`,
+  `/support`, `/onboarding`, `not-found` — where forgetting one silently
+  removes `prefers-reduced-motion` for everything under it. `reducedMotion`
+  defaults to `"never"`, so a missed mount is not a degraded animation, it is an
+  accessibility regression that nothing fails on. Not worth it.
+
+  The route that would genuinely benefit is `/terms` and `/privacy`, and the way
+  to get it is the one `check-bundle.mjs`'s own header already names: move the
+  app shell's own animations to CSS, the way `FadeIn` was. That removes the
+  bytes rather than moving the provider that references them.
 
 ---
 

@@ -13,9 +13,32 @@ const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
 });
 
+// Geist Mono is used on exactly four surfaces — the error reference code, the
+// sign-in code input, and two invite-code fields in the prediction leagues
+// panel. None of them is public, and `next/font` preloaded the face on every
+// route regardless: a second render-blocking request, 22.6 KB, ahead of the
+// typeface the page is actually set in, on a pipe that moves ~50 KB/s.
+//
+// `preload: false` stops the request on routes that never use it. `display:
+// "optional"` means that where it IS used the browser either has it almost
+// immediately or keeps the fallback and never swaps — the swap is the reflow,
+// and the reflow was the CLS.
+//
+// The explicit `fallback` list is the part that is easy to leave out and
+// shouldn't be. Next's `adjustFontFallback` emits a size-adjusted face anchored
+// to `src: local("Arial")`, and Android has no Arial: the `local()` never
+// matches, the metric-matched face is dropped, and the adjustment silently does
+// nothing on exactly the devices this product is being launched for. Naming
+// monospace families Android actually ships makes the fallback real.
+//
+// Measured, /support: two font requests (49.2 KB) -> one (26.6 KB), and CLS
+// 0.209 worst-case -> 0.0155 stable. See docs/PERFORMANCE.md.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
+  display: "optional",
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
 });
 
 // `||`, not `??`: an env var Vercel knows about but that hasn't been given a

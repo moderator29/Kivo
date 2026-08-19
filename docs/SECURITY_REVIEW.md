@@ -522,6 +522,51 @@ Two places where a missing key degrades behaviour rather than announcing itself.
 
 ---
 
+## How to verify an RLS policy without getting a false PASS
+
+This is the most portable thing in this document, and it belongs here rather
+than only in the header of the migration that discovered it, because the next
+person to test a policy will reach for exactly the same tool.
+
+**A probe run as `postgres` bypasses RLS and reports PASS for a policy that does
+nothing.** While checking the RESTRICTIVE insert ceiling in `0103`, the first
+attempt ran as the default superuser and let all four inserts through — the
+boundary was set at 3. Nothing was wrong with the policy; the probe simply was
+not subject to it. A test that cannot fail is worse than no test, because it
+retires the question.
+
+The rule, for any RLS check anyone runs against this database:
+
+```sql
+begin;
+  -- Become a role that RLS actually applies to. `postgres` is not one.
+  set local role authenticated;
+  -- And give the policy an identity to key off, or every
+  -- private.current_profile_id() predicate silently evaluates to NULL.
+  set local request.jwt.claims = '{"sub":"<a real auth user id>"}';
+
+  -- ... the probe ...
+rollback;
+```
+
+Three things make that shape the right one:
+
+- `set local role authenticated` is what puts the session under RLS at all.
+  Without it the probe measures the absence of a restriction on a superuser.
+- `set local request.jwt.claims` matters just as much and fails more quietly:
+  with no claim, helper functions that resolve the caller return NULL, and a
+  policy comparing against NULL denies everything. That produces a *false FAIL*,
+  which at least announces itself — unlike the superuser case.
+- `begin` / `rollback` means the probe can write against real tables without
+  leaving anything behind. Every confirmed result in this document was produced
+  inside an aborted transaction.
+
+**And confirm the probe can fail.** Lower the ceiling, or aim the check at a row
+the policy should refuse, and watch it be refused — `42501` is the code to look
+for. A boundary that was never crossed during the test was never tested.
+
+---
+
 ## What the sweep found to be sound
 
 Stating these explicitly, because a review that only lists problems gives a false
