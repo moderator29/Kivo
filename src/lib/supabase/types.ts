@@ -1014,6 +1014,7 @@ export type Database = {
           home_team_id: string
           id: string
           kickoff_at: string
+          live_reconciled_at: string | null
           matchday: number | null
           minute_elapsed: number | null
           provider_last_seen_at: string | null
@@ -1034,6 +1035,7 @@ export type Database = {
           home_team_id: string
           id?: string
           kickoff_at: string
+          live_reconciled_at?: string | null
           matchday?: number | null
           minute_elapsed?: number | null
           provider_last_seen_at?: string | null
@@ -1054,6 +1056,7 @@ export type Database = {
           home_team_id?: string
           id?: string
           kickoff_at?: string
+          live_reconciled_at?: string | null
           matchday?: number | null
           minute_elapsed?: number | null
           provider_last_seen_at?: string | null
@@ -1500,6 +1503,44 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_aliases: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          note: string | null
+          player_id: string
+          provider: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          player_id: string
+          provider?: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          player_id?: string
+          provider?: string | null
+          source?: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_aliases_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
@@ -2329,6 +2370,30 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_request_spend: {
+        Row: {
+          bucket: string
+          id: number
+          provider: string
+          requests: number
+          spent_at: string
+        }
+        Insert: {
+          bucket: string
+          id?: number
+          provider: string
+          requests?: number
+          spent_at?: string
+        }
+        Update: {
+          bucket?: string
+          id?: number
+          provider?: string
+          requests?: number
+          spent_at?: string
+        }
+        Relationships: []
+      }
       rate_limit_events: {
         Row: {
           action: string
@@ -2831,6 +2896,44 @@ export type Database = {
         }
         Relationships: []
       }
+      team_aliases: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          note: string | null
+          provider: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+          team_id: string
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          provider?: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+          team_id: string
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          provider?: string | null
+          source?: Database["public"]["Enums"]["entity_alias_source"]
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_aliases_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           country: string | null
@@ -3135,6 +3238,20 @@ export type Database = {
         }
         Returns: string
       }
+      consume_provider_requests: {
+        Args: {
+          p_bucket: string
+          p_count?: number
+          p_provider: string
+          p_window_seconds: number
+        }
+        Returns: {
+          allowed: boolean
+          oldest_spend_at: string
+          request_limit: number
+          spent_in_window: number
+        }[]
+      }
       consume_rate_limit: {
         Args: {
           p_action: string
@@ -3200,24 +3317,6 @@ export type Database = {
           poll_count: number
           poll_vote_count: number
           rating_count: number
-        }[]
-      }
-      get_trending_match_rooms: {
-        Args: { p_limit?: number; p_since: string }
-        Returns: {
-          comment_count: number
-          fixture_id: string
-          participant_count: number
-          post_count: number
-        }[]
-      }
-      get_trending_posts: {
-        Args: { p_limit?: number; p_since: string }
-        Returns: {
-          comment_count: number
-          participant_count: number
-          post_id: string
-          reaction_count: number
         }[]
       }
       get_fantasy_league_leaderboard: {
@@ -3423,6 +3522,24 @@ export type Database = {
           position: number
         }[]
       }
+      get_trending_match_rooms: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          comment_count: number
+          fixture_id: string
+          participant_count: number
+          post_count: number
+        }[]
+      }
+      get_trending_posts: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          comment_count: number
+          participant_count: number
+          post_id: string
+          reaction_count: number
+        }[]
+      }
       get_user_head_to_head: {
         Args: { p_other_profile_id: string }
         Returns: {
@@ -3482,6 +3599,11 @@ export type Database = {
         Args: { p_payload: Json; p_type: string }
         Returns: boolean
       }
+      provider_request_limit: { Args: { p_bucket: string }; Returns: number }
+      prune_provider_request_spend: {
+        Args: { p_max_rows?: number }
+        Returns: number
+      }
       prune_rate_limit_events: {
         Args: { p_max_rows?: number; p_older_than_seconds?: number }
         Returns: number
@@ -3500,6 +3622,17 @@ export type Database = {
           p_sync_run_id?: string
         }
         Returns: string
+      }
+      record_entity_alias: {
+        Args: {
+          p_alias: string
+          p_entity_id: string
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_note?: string
+          p_provider?: string
+          p_source: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Returns: boolean
       }
       record_standings_snapshot: {
         Args: {
@@ -3645,6 +3778,7 @@ export type Database = {
         | "provider_disagreement"
       delivery_channel: "push" | "email" | "sms" | "in_app"
       delivery_status: "pending" | "sent" | "delivered" | "failed"
+      entity_alias_source: "provider" | "merge" | "admin" | "rename"
       fixture_event_type:
         | "goal"
         | "own_goal"
@@ -3857,6 +3991,7 @@ export const Constants = {
       ],
       delivery_channel: ["push", "email", "sms", "in_app"],
       delivery_status: ["pending", "sent", "delivered", "failed"],
+      entity_alias_source: ["provider", "merge", "admin", "rename"],
       fixture_event_type: [
         "goal",
         "own_goal",

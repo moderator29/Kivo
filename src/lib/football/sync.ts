@@ -316,6 +316,10 @@ async function upsertFixture(
   refs: ResolvedFixtureRefs,
   previousStatus: DbFixtureStatus | null,
   previousScores: { homeScore: number | null; awayScore: number | null } | null,
+  /** The name of a DIFFERENT provider that also maps this fixture, or null
+   * when this fixture has only ever been written by the provider syncing now.
+   * What separates "a source revised itself" from "two sources disagree". */
+  previousWrittenBy: string | null,
   syncRunId: string,
 ): Promise<FixtureStatusChangeInput | null> {
   // RECOMMENDATIONS.md item 303 ("conflict detection"): a same-provider
@@ -374,6 +378,60 @@ async function upsertFixture(
       previous: { status: previousStatus },
       next: { status: toDbFixtureStatus(fixture.status) },
     });
+  }
+
+  // Two sources disagreeing about the same fact. Only reachable when another
+  // provider has really written this fixture before — otherwise a changed
+  // value is one provider revising itself, which the regression checks above
+  // already cover and which is not a disagreement.
+  //
+  // Every field compared here is one both providers claim to know. A value
+  // KIVO holds but the incoming provider did not send (null) is silence, not
+  // a contradiction, so it is skipped rather than reported as a conflict.
+  if (previousWrittenBy && previousScores) {
+    const incomingStatus = toDbFixtureStatus(fixture.status);
+    const disagreements: { field: string; previous: Json; next: Json }[] = [];
+
+    if (
+      fixture.homeScore !== null &&
+      previousScores.homeScore !== null &&
+      fixture.homeScore !== previousScores.homeScore
+    ) {
+      disagreements.push({
+        field: "home_score",
+        previous: { home_score: previousScores.homeScore },
+        next: { home_score: fixture.homeScore },
+      });
+    }
+    if (
+      fixture.awayScore !== null &&
+      previousScores.awayScore !== null &&
+      fixture.awayScore !== previousScores.awayScore
+    ) {
+      disagreements.push({
+        field: "away_score",
+        previous: { away_score: previousScores.awayScore },
+        next: { away_score: fixture.awayScore },
+      });
+    }
+    if (previousStatus !== null && previousStatus !== incomingStatus) {
+      disagreements.push({
+        field: "status",
+        previous: { status: previousStatus },
+        next: { status: incomingStatus },
+      });
+    }
+
+    for (const disagreement of disagreements) {
+      anomalies.push({
+        type: "provider_disagreement",
+        detail:
+          `${provider} and ${previousWrittenBy} disagree on ${disagreement.field} ` +
+          `for ${fixtureLabel}: ${JSON.stringify(disagreement.previous)} vs ${JSON.stringify(disagreement.next)}`,
+        previous: disagreement.previous,
+        next: disagreement.next,
+      });
+    }
   }
   for (const anomaly of anomalies) {
     console.warn(`Football sync anomaly: ${provider}:${fixture.providerId} ${anomaly.detail}`);
@@ -771,6 +829,41 @@ export async function syncTodayFixtures(
       }
     }
 
+    // KIVO_NEXT_GEN: the producer `provider_disagreement` never had.
+    // `data_anomaly_type` has carried that value since migration 0056 and the
+    // admin panel has a label for it, and nothing in the codebase ever wrote
+    // one — so the one anomaly the founding brief names most explicitly was
+    // the one KIVO could not report.
+    //
+    // The distinction that makes it meaningful: a value changing under the
+    // SAME provider is that provider revising itself (already covered by the
+    // score/status regression checks). A value differing from what a
+    // DIFFERENT provider wrote is two sources disagreeing about a fact, which
+    // is a different problem with a different fix.
+    //
+    // One batched query for the whole run, same shape as the prior-state
+    // lookup above. Today this map is almost always empty, because KIVO runs
+    // one provider at a time (see DECISIONS.md's provider-failover entry) —
+    // and it stops being empty the moment a second provider is switched on,
+    // which is exactly when somebody needs it and is too late to build it.
+    const otherProviderByKivoFixtureId = new Map<string, string>();
+    if (knownKivoFixtureIds.length > 0) {
+      const { data: otherMappings, error: otherMappingError } = await supabase
+        .from("provider_mappings")
+        .select("kivo_entity_id, provider")
+        .eq("entity_type", "fixture")
+        .neq("provider", provider.name)
+        .in("kivo_entity_id", knownKivoFixtureIds);
+      // Best-effort, exactly like recordAnomaly itself: failing to detect a
+      // disagreement must never fail the sync that would have reported it.
+      if (otherMappingError) {
+        logError("football.sync.loadOtherProviderMappings", otherMappingError);
+      }
+      for (const row of otherMappings ?? []) {
+        otherProviderByKivoFixtureId.set(row.kivo_entity_id, row.provider);
+      }
+    }
+
     const errors: string[] = [];
     /**
      * KIVO_NEXT_GEN KN-81. `errors` above still builds the truncated,
@@ -816,6 +909,7 @@ export async function syncTodayFixtures(
         const knownKivoId = fixtureMappings.get(fixture.providerId) ?? null;
         const previousStatus = knownKivoId ? (priorStatusByKivoId.get(knownKivoId) ?? null) : null;
         const previousScores = knownKivoId ? (priorScoresByKivoId.get(knownKivoId) ?? null) : null;
+        const previousWrittenBy = knownKivoId ? (otherProviderByKivoFixtureId.get(knownKivoId) ?? null) : null;
 
         const notification = await upsertFixture(
           supabase,
@@ -830,6 +924,7 @@ export async function syncTodayFixtures(
           },
           previousStatus,
           previousScores,
+          previousWrittenBy,
           syncRun.id,
         );
         if (notification) {
