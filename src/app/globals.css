@@ -238,6 +238,45 @@
   --kivo-achievement: #a1720c;
 }
 
+/* ---------------------------------------------------------------------------
+   LEAGUE TABLE ZONES
+
+   The bar down the left edge of a standings row, and its dot in the table's
+   key. Their own tokens rather than the status hues above, for two reasons.
+
+   Meaning: `--kivo-live` means "a match is in play right now" and
+   `--kivo-critical` means "a real failure" (see design-system.ts, Status:
+   "meaning, not mood"). A promotion place is neither of those things, and
+   borrowing those tokens would make the one green in the app mean two
+   unrelated things on the same screen.
+
+   Distinguishability: a table needs five marks that survive being 3px wide and
+   a row apart, in both themes — so the ramp runs blue -> violet -> green ->
+   amber -> red, which separates by lightness as well as by hue rather than
+   resting on a red/green pair. Light-mode values are deepened for the same
+   reason the status hues above are: the pale versions fall under 3:1 on a
+   white card.
+
+   KIVO never picks one of these from a position number. Which row gets which
+   bar comes from the competition's own description of that place, stored on
+   `standings.zone_description` — see src/lib/football/standings-zones.ts.
+--------------------------------------------------------------------------- */
+:root {
+  --kivo-zone-champions: #3b82f6;
+  --kivo-zone-europe: #a78bfa;
+  --kivo-zone-promotion: #22c55e;
+  --kivo-zone-playoff: #f59e0b;
+  --kivo-zone-relegation: #ef4444;
+}
+
+[data-theme="light"] {
+  --kivo-zone-champions: #2563eb;
+  --kivo-zone-europe: #7c3aed;
+  --kivo-zone-promotion: #0f9d52;
+  --kivo-zone-playoff: #b45309;
+  --kivo-zone-relegation: #dc2626;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-background-secondary: var(--background-secondary);
@@ -283,6 +322,12 @@
   --color-warning: var(--kivo-warning);
   --color-info: var(--kivo-info);
   --color-achievement: var(--kivo-achievement);
+
+  --color-zone-champions: var(--kivo-zone-champions);
+  --color-zone-europe: var(--kivo-zone-europe);
+  --color-zone-promotion: var(--kivo-zone-promotion);
+  --color-zone-playoff: var(--kivo-zone-playoff);
+  --color-zone-relegation: var(--kivo-zone-relegation);
 
   /* Namespaced so they sit alongside Tailwind's own shadow-sm/md/lg rather
      than silently redefining them for code that still uses those. */
