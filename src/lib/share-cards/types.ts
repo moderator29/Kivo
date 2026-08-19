@@ -18,6 +18,18 @@
  *     the downloaded PNG is the standard failure mode of a share feature, and
  *     the only way to be sure it can't happen is to not have two renderers.
  *
+ * ## What is deliberately NOT in this union
+ *
+ * **A social post.** Posts are shareable — `SharePostButton` copies a real
+ * permalink — but they never become a picture. A card puts KIVO's frame
+ * around data KIVO synced and verified; a post is somebody else's writing,
+ * and framing a stranger's words as a KIVO graphic asserts something about
+ * them KIVO has no standing to assert and detaches the words from the author,
+ * reactions and replies that give them meaning. This is a decision, not a
+ * gap — see DECISIONS.md, "A post gets a link, not a share card". If you are
+ * here to add a tenth kind for posts and make the product consistent, read
+ * that entry first.
+ *
  * ## The one rule these types encode
  *
  * Every number on a share card is a real number or the card omits that

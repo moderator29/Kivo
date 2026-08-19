@@ -4,6 +4,17 @@ Log of decisions with real consequences (irreversible, costly, or scope-defining
 
 ---
 
+### 2026-08-19 — A post gets a link, not a share card
+
+**Decision**: KIVO's share cards render verified football data — a scoreline, a table, a transfer, a player's real totals — into a picture. A social post gets a **permalink and nothing else** (`SharePostButton`, `/social?post=<id>`), and this is deliberate rather than an unfinished half of the share system.
+
+**Rationale**: A share card and a shared post are different acts. A card takes rows KIVO synced and verified and puts KIVO's frame around them, which is exactly what KIVO's frame is for. A post is somebody's own writing. Rendering a stranger's words into a KIVO-branded graphic puts KIVO's authority behind a sentence KIVO did not write and its author did not agree to see reframed, and it detaches those words from the author, reactions and replies that give them their context. The link carries all of that; the picture strips it.
+
+**Consequences**:
+- The nine card kinds in `src/lib/share-cards/types.ts` are a closed set of *data* surfaces. "Post" is not a missing tenth.
+- The asymmetry is intentional and is written at three places a person would notice it from: this entry, the module doc in `src/lib/share-cards/types.ts`, and `SharePostButton` itself. Anyone about to "fix the inconsistency" should read one of them first.
+- If posts ever do get an image, the consent question has to be answered first — by the founder, not by the engineer adding the button.
+
 ### 2026-08-18 — Automated sync trigger: Supabase `pg_cron` + `pg_net`, not Vercel Cron, GitHub Actions or an external pinger
 
 **Decision**: Schedule `/api/cron/sync-live` from inside Supabase, with `pg_cron` firing `private.trigger_live_sync()` every minute and `pg_net` making the HTTP call. Both credentials it needs — the app's base URL and the value of `CRON_SECRET` — live in Supabase Vault, so the job is **inert until the founder adds them** and requires no code change or deployment to switch on. Migration `0067_scheduled_live_sync_trigger.sql`.
