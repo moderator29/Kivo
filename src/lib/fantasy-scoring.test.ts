@@ -208,7 +208,8 @@ describe("versioned scoring rules", () => {
     // The dangerous case: everything present except one rate. Defaulting it
     // would score a gameweek under a mixture of two rulesets and stamp it with
     // the name of one of them.
-    const { assist: _dropped, ...missingOneRate } = SEEDED_V1;
+    const missingOneRate = { ...SEEDED_V1 } as Partial<typeof SEEDED_V1>;
+    delete missingOneRate.assist;
     expect(parseScoringRules(missingOneRate)).toBeNull();
 
     const missingOnePosition = {
