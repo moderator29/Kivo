@@ -309,7 +309,24 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   // real to report.
   const viewerConnection = profile ? await getViewerTeamConnection(supabase, profile.id, team.id) : null;
 
-  const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
+  // A club is usually in more than one competition at once, and each one has
+  // its own standings row. The page used to `.find()` a single current row and
+  // discard the rest — so a team in a league and a cup group showed one table
+  // position and dropped the other, with nothing saying a second existed, and
+  // *which* one survived was whatever order the join happened to return.
+  //
+  // Sorted by matches played, descending: the competition a club has played
+  // most in this season is its league, which is the position a fan means when
+  // they ask where a team is. The rest follow, each under its own name.
+  // Nothing is combined — a league record and a cup record are answers to
+  // different questions, and a "total" spanning both would describe no
+  // competition that exists.
+  const currentStandings = (standingsRows ?? [])
+    .filter((s) => s.season?.is_current)
+    .sort((left, right) => right.played - left.played);
+
+  const currentStanding = currentStandings[0] ?? null;
+  const otherStandings = currentStandings.slice(1);
 
   // The league-position chart. `standings_snapshots` (migration 0072) has been
   // filling up since the sync started recording it and nothing had ever read
@@ -487,7 +504,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Trophy className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          League position
+          {otherStandings.length > 0 ? "Table positions" : "League position"}
         </h2>
         {currentStanding ? (
           <div className="flex flex-col gap-3">
@@ -528,6 +545,34 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                 </div>
               ))}
             </div>
+
+            {/* The competitions the headline position is not about. Each keeps
+                its own name and its own figures; nothing is added to anything
+                above it. Compact because these are secondary — a cup group
+                table is context for the league position, not a rival to it. */}
+            {otherStandings.length > 0 && (
+              <div className="flex flex-col gap-1.5 border-t border-hairline-soft pt-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                  Also this season
+                </span>
+                {otherStandings.map((standing) => (
+                  <div
+                    key={standing.season?.id ?? standing.season?.name}
+                    className="flex items-center justify-between gap-3 text-xs"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-foreground-muted">
+                      {standing.season?.competition?.short_name ?? standing.season?.competition?.name ?? "Competition"}
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                      {standing.position !== null ? `#${standing.position}` : "-"}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-foreground-subtle">
+                      {standing.played} played · {standing.points} pts
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-foreground-muted">Standings not yet synced for this team.</p>
