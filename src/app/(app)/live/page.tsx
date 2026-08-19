@@ -124,8 +124,43 @@ export default async function LivePage() {
   const displayedFixtures = [...byId.values()].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at));
 
   if (displayedFixtures.length === 0) {
+    // Two different facts hid behind one sentence here, and the old copy —
+    // "Nothing is live and nothing is synced for today yet" — asserted both at
+    // once so a reader could not tell which was true:
+    //
+    //   * KIVO has football, and none of it is on today. A quiet Tuesday. The
+    //     product is working exactly as it should.
+    //   * KIVO has no fixtures at all, for any date. Coverage has not started
+    //     here yet, and there is a real reason for that which /transparency
+    //     spells out.
+    //
+    // The first reads as a broken app if it is described as the second, and
+    // the second reads as a promise if it is described as the first. KIVO can
+    // tell them apart for the price of one `head: true` count that reads no
+    // rows, so it does.
+    const anyFixtures = await supabase
+      .from("fixtures")
+      .select("id", { count: "exact", head: true })
+      .limit(1);
+    // A failed count is a third state again: KIVO does not know which of the
+    // two it is. It says the smaller, certain thing — nothing is on today —
+    // rather than guessing at coverage it could not read.
+    const syncedSomething = anyFixtures.error === null && (anyFixtures.count ?? 0) > 0;
+
     return (
-      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
+      <NoDataYet
+        icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />}
+        title={item.label}
+        description={
+          syncedSomething
+            ? "Nothing is in play, and no match KIVO has is scheduled for today. Try the Matches tab for another date."
+            : (item.emptyDescription ?? "Nothing synced yet.")
+        }
+        // The coverage explainer answers "why does KIVO have nothing here",
+        // which is the question a genuinely empty database raises and not the
+        // one a quiet Tuesday raises. Shown only when it is the question.
+        explainCoverage={!syncedSomething}
+      />
     );
   }
 

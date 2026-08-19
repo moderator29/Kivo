@@ -10,6 +10,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
 import { staggerDelay } from "@/lib/stagger";
+import { competitionName as competitionNameOf } from "@/lib/football/competition-label";
 import {
   PREDICTION_PICK_COLUMNS,
   PREDICTION_TYPE_LABEL,
@@ -122,12 +123,15 @@ export default async function MyPredictionsPage() {
   const competitionAccuracy: CompetitionAccuracy[] = Array.from(
     scoredRows
       .reduce((byCompetition, row) => {
-        const competitionName =
-          row.fixture!.competition?.short_name ?? row.fixture!.competition?.name ?? "Unknown competition";
-        const existing = byCompetition.get(competitionName) ?? { total: 0, correct: 0 };
+        // A row whose competition KIVO cannot name is left out of this cut
+        // rather than pooled under a made-up heading: "Unknown competition:
+        // 3 of 4 correct" is a statistic about nothing.
+        const name = competitionNameOf(row.fixture!.competition, "short");
+        if (name === null) return byCompetition;
+        const existing = byCompetition.get(name) ?? { total: 0, correct: 0 };
         existing.total += 1;
         if ((row.points_awarded ?? 0) > 0) existing.correct += 1;
-        byCompetition.set(competitionName, existing);
+        byCompetition.set(name, existing);
         return byCompetition;
       }, new Map<string, { total: number; correct: number }>())
       .entries(),
@@ -233,7 +237,7 @@ export default async function MyPredictionsPage() {
           <div className="flex flex-col gap-3">
             {rows.map((row, index) => {
               const fixture = row.fixture!;
-              const competitionName = fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition";
+              const competitionName = competitionNameOf(fixture.competition, "short");
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
               const result = predictionResultInfo(
                 fixture.status,

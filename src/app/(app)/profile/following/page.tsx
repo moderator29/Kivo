@@ -380,9 +380,9 @@ export default async function FollowingPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm text-foreground">{competition.name}</p>
-                        <p className="truncate text-[11px] text-foreground-subtle">
-                          {competition.country ?? "International"}
-                        </p>
+                        {competition.country && (
+                          <p className="truncate text-[11px] text-foreground-subtle">{competition.country}</p>
+                        )}
                       </div>
                     </Link>
                     <FollowButton

@@ -20,6 +20,7 @@ import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
 import { TopScorersPanel } from "@/components/football/top-scorers-panel";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
+import { competitionMetaLine } from "@/lib/football/competition-label";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -143,10 +144,14 @@ export default async function LeagueDetailPage({
         </FadeIn>
         <FadeIn delay={0.05} className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold text-foreground">{competition.name}</h1>
-          <p className="text-xs text-foreground-subtle">
-            {competition.country ?? "International"}
-            {activeSeason ? ` · ${activeSeason.name}` : ""}
-          </p>
+          {/* A null country is missing metadata, not evidence that this is an
+              international competition, so it prints nothing. With neither a
+              country nor a season, the whole line is omitted. */}
+          {competitionMetaLine([competition.country, activeSeason?.name]) && (
+            <p className="text-xs text-foreground-subtle">
+              {competitionMetaLine([competition.country, activeSeason?.name])}
+            </p>
+          )}
         </FadeIn>
         <FadeIn delay={0.1}>
           <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={viewerIsSignedIn(profile)} />

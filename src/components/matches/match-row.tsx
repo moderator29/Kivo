@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { competitionName } from "@/lib/football/competition-label";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import type { Database } from "@/lib/supabase/types";
 
@@ -34,40 +35,43 @@ export function MatchRow({ fixture }: { fixture: MatchRowFixture }) {
         aria-label={`${fixture.home_team?.name ?? "Home team"} vs ${fixture.away_team?.name ?? "Away team"}, match centre`}
       />
       <div className="relative z-0 mb-2 flex items-center justify-between">
-        <span className="text-xs text-foreground-subtle">
-          {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+        {/* Nothing at all when KIVO has no name for the competition. The
+            previous "Unknown competition" sat in the exact slot a league's
+            name sits in, so it read as the name. */}
+        <span className="min-w-0 truncate text-xs text-foreground-subtle">
+          {competitionName(fixture.competition, "short")}
         </span>
         <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} includeWeekday />
       </div>
       <div className="relative z-0 flex items-center justify-between gap-3">
-        <div className="flex flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="shrink-0 rounded-full p-0.5 ring-1 ring-hairline">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
           </span>
           {fixture.home_team?.id ? (
             <Link
               href={`/teams/${fixture.home_team.id}`}
-              className="relative z-10 truncate text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="relative z-10 line-clamp-2 break-words text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {fixture.home_team.name}
             </Link>
           ) : (
-            <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+            <span className="line-clamp-2 break-words text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
           )}
         </div>
         <span className={hasScore ? "shrink-0 text-base font-bold tabular-nums text-foreground" : "shrink-0 text-sm font-semibold text-foreground-subtle"}>
           {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
         </span>
-        <div className="flex flex-1 items-center justify-end gap-2">
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           {fixture.away_team?.id ? (
             <Link
               href={`/teams/${fixture.away_team.id}`}
-              className="relative z-10 truncate text-right text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="relative z-10 line-clamp-2 break-words text-right text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {fixture.away_team.name}
             </Link>
           ) : (
-            <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+            <span className="line-clamp-2 break-words text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
           )}
           <span className="shrink-0 rounded-full p-0.5 ring-1 ring-hairline">
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />

@@ -26,6 +26,7 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { competitionName } from "@/lib/football/competition-label";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
@@ -109,7 +110,7 @@ function FixtureListItem({ fixture, teamId }: { fixture: FixtureRow; teamId: str
             <span className="block truncate text-sm text-foreground">{opponent?.name ?? "Unknown opponent"}</span>
           )}
           <span className="text-[11px] text-foreground-subtle">
-            {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+            {competitionName(fixture.competition, "short")}
           </span>
         </div>
       </div>

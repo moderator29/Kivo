@@ -42,6 +42,24 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   status: NavStatus;
+  /**
+   * What a *built* surface says when its table is genuinely empty.
+   *
+   * Separate from `comingSoonDescription` on purpose, and the separation is
+   * the point rather than tidiness. Every built page — /live, /matches,
+   * /teams, /players, /leagues, /discover, /predictions, /transfers — used to
+   * read its empty-state copy out of a field called `comingSoonDescription`.
+   * The rendered sentence was fine; the model behind it said that "we have not
+   * synced this yet" and "we have not built this yet" are the same fact, and a
+   * model that cannot tell them apart is one edit away from a page that tells
+   * a user a working feature is unreleased.
+   *
+   * Only `status: "coming-soon"` items carry the coming-soon fields now, and
+   * only built ones carry this. See src/components/ui/no-data-yet.tsx and
+   * src/components/ui/coming-soon.tsx, which are already two different screens
+   * for exactly this reason.
+   */
+  emptyDescription?: string;
   comingSoonDescription?: string;
   /** The concrete capabilities the feature will ship with — rendered as the
    * body of its Coming Soon page. Kept here rather than in the page module so
@@ -67,8 +85,10 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/live",
     icon: Radio,
     status: "live",
-    comingSoonDescription: "Nothing is live and nothing is synced for today yet. Check back once a match kicks off.",
-    comingSoonImage: "/assets/icons/navigation/live-scores.webp",
+    // Reached only when KIVO holds no fixtures at all, for any date — /live
+    // checks which of the two empty states it is in and writes the "quiet day"
+    // sentence itself.
+    emptyDescription: "KIVO hasn't synced any fixtures yet, so there's nothing to show live.",
   },
   {
     id: "matches",
@@ -76,8 +96,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/matches",
     icon: CalendarDays,
     status: "live",
-    comingSoonDescription: "No fixtures synced yet. Check back soon.",
-    comingSoonImage: "/assets/icons/navigation/matches.webp",
+    emptyDescription: "No fixtures synced yet. Check back soon.",
   },
   {
     id: "discover",
@@ -85,7 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/discover",
     icon: Compass,
     status: "live",
-    comingSoonDescription: "Nothing synced yet across leagues, teams, players or transfers. Check back soon.",
+    emptyDescription: "Nothing synced yet across leagues, teams, players or transfers. Check back soon.",
   },
   { id: "social", label: "Social", href: "/social", icon: Users, status: "live" },
   // Search stopped being a field wedged into the top bar and became a real
@@ -100,8 +119,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/predictions",
     icon: Target,
     status: "live",
-    comingSoonDescription: "No upcoming fixtures synced yet to predict on.",
-    comingSoonImage: "/assets/icons/navigation/predictions.webp",
+    emptyDescription: "No upcoming fixtures synced yet to predict on.",
   },
   {
     id: "transfers",
@@ -109,8 +127,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/transfers",
     icon: ArrowLeftRight,
     status: "live",
-    comingSoonDescription: "No transfers synced yet.",
-    comingSoonImage: "/assets/icons/navigation/transfers.webp",
+    emptyDescription: "No transfers synced yet.",
   },
   {
     id: "news",
@@ -157,8 +174,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/teams",
     icon: Shield,
     status: "live",
-    comingSoonDescription: "No teams synced yet. Check back soon.",
-    comingSoonImage: "/assets/icons/navigation/teams.webp",
+    emptyDescription: "No teams synced yet. Check back soon.",
   },
   {
     id: "players",
@@ -166,8 +182,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/players",
     icon: UserRound,
     status: "live",
-    comingSoonDescription: "No players synced yet. Check back soon.",
-    comingSoonImage: "/assets/icons/navigation/players.webp",
+    emptyDescription: "No players synced yet. Check back soon.",
   },
   {
     id: "leagues",
@@ -175,8 +190,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/leagues",
     icon: ListOrdered,
     status: "live",
-    comingSoonDescription: "No competitions synced yet. Check back soon.",
-    comingSoonImage: "/assets/icons/navigation/leagues.webp",
+    emptyDescription: "No competitions synced yet. Check back soon.",
   },
   // KN-30: both of these routes were fully built — list page, detail page,
   // loading skeleton — and reachable from nowhere. Grepping every href in src/
@@ -192,7 +206,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/managers",
     icon: ClipboardList,
     status: "live",
-    comingSoonDescription: "No managers synced yet. Check back soon.",
+    emptyDescription: "No managers synced yet. Check back soon.",
   },
   {
     id: "venues",
@@ -200,7 +214,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/venues",
     icon: MapPin,
     status: "live",
-    comingSoonDescription: "No venues synced yet. Check back soon.",
+    emptyDescription: "No venues synced yet. Check back soon.",
   },
   {
     id: "ai",
