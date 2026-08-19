@@ -10,6 +10,43 @@
 
 export type ApiFootballErrorKind = "rate_limited" | "auth" | "server_error" | "client_error" | "network_error";
 
+/**
+ * API-Football reports account-level and parameter-level problems with HTTP
+ * **200** and a populated `errors` field, not with a 4xx. A suspended account,
+ * an unverified signup, a plan that does not cover an endpoint and a malformed
+ * parameter all arrive looking like a perfectly successful request that simply
+ * found nothing:
+ *
+ *     {"get":"fixtures","errors":{"access":"Your account is suspended, …"},
+ *      "results":0,"response":[]}
+ *
+ * Reading only `response` therefore turns "the provider refused us" into "there
+ * is no football today" — which is the single most expensive confusion this
+ * product can make, because both render as an empty database and only one of
+ * them is something the founder can act on. It cost a real afternoon before
+ * this function existed.
+ *
+ * `errors` is `[]` on a genuinely successful call and an object with at least
+ * one key when something is wrong, so emptiness is the test. Read defensively:
+ * this is a parsed network payload and nothing about its shape is guaranteed.
+ */
+export function extractProviderError(json: unknown): { key: string; message: string } | null {
+  if (!json || typeof json !== "object") return null;
+  const errors = (json as { errors?: unknown }).errors;
+  if (!errors || typeof errors !== "object") return null;
+
+  const entries = Array.isArray(errors)
+    ? errors.map((value, index) => [String(index), value] as const)
+    : Object.entries(errors as Record<string, unknown>);
+
+  for (const [key, value] of entries) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return { key, message: value.trim() };
+    }
+  }
+  return null;
+}
+
 export class ApiFootballError extends Error {
   readonly status: number | null;
   readonly kind: ApiFootballErrorKind;

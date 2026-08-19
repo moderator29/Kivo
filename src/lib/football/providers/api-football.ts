@@ -24,7 +24,7 @@ import {
   parseCoverageFlag,
   parseProviderNumber,
 } from "./normalizers";
-import { ApiFootballError, requestWithRetry } from "./api-football-request";
+import { extractProviderError, ApiFootballError, requestWithRetry } from "./api-football-request";
 import { buildRawResponseSample, type RawResponseSample } from "../raw-response-sample";
 import { parseMatchday } from "../matchday";
 
@@ -417,6 +417,28 @@ export class ApiFootballProvider implements FootballDataProvider {
       if (quotaRemaining !== null) this.quotaRemaining = quotaRemaining;
       const json = (await response.json()) as T;
       this.lastRawResponseSample = buildRawResponseSample(path, response.status, json);
+
+      // A 200 is not success. API-Football answers a suspended account, an
+      // unverified signup, an out-of-plan endpoint and a bad parameter with
+      // HTTP 200 and a populated `errors` field — so reading only `response`
+      // turns "the provider refused us" into "there is no football today".
+      // Those look identical in the database and only one of them is
+      // actionable. Raised as the error it is, carrying the provider's own
+      // wording so the admin panel can show the founder the actual sentence
+      // rather than a green tick over an empty sync.
+      const providerError = extractProviderError(json);
+      if (providerError) {
+        throw new ApiFootballError(
+          `API-Football refused the request (${providerError.key}): ${providerError.message}`,
+          // `access` is the account itself — suspended, unverified, or out of
+          // plan. That is an auth problem however it is spelled, and it is the
+          // one an operator can actually fix.
+          providerError.key === "access" || providerError.key === "token" ? "auth" : "client_error",
+          response.status,
+          quotaRemaining,
+        );
+      }
+
       return json;
     } catch (err) {
       if (err instanceof ApiFootballError && err.quotaRemaining !== null) {
