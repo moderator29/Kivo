@@ -1,12 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Trophy, Target, Flame, Users, Star, ArrowRight } from "lucide-react";
+import { Flame, Star, Users, ArrowRight } from "lucide-react";
 import { DISPLAY_LOCALE } from "@/lib/format";
 import { FadeIn } from "@/components/ui/fade-in";
-import { StatTile } from "@/components/home/stat-tile";
 import { FixtureRow } from "@/components/home/fixture-row";
 import { HomeLeadCard } from "@/components/home/home-lead";
 import { Greeting } from "@/components/home/greeting";
+import { HomeSectionCard } from "@/components/home/section-card";
+import {
+  BriefingCard,
+  FantasyCard,
+  FollowedPlayersCard,
+  NotificationsCard,
+  PredictionsCard,
+  QuickActionsRow,
+  TransferPulseCard,
+  TrendingRoomsCard,
+} from "@/components/home/sections";
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { AiTeaser } from "@/components/home/ai-teaser";
 import { RecentlyViewedStrip } from "@/components/home/recently-viewed-strip";
@@ -15,13 +25,41 @@ import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAiConfigured } from "@/lib/ai/client";
+import { getRecentNotifications } from "@/lib/notifications";
 import { selectHomeLead, type LeadFixture } from "@/lib/home-lead";
+import { selectHomeSections, selectQuickActions, type HomeSectionFacts } from "@/lib/home-sections";
+import { buildHomeBriefing } from "@/lib/home-briefing";
+import {
+  loadFantasySummary,
+  loadFollowedPlayers,
+  loadPredictionSummary,
+  loadTransferPulse,
+  loadTrendingRooms,
+} from "@/lib/home/data";
 import { PREDICTION_OUTCOME_LABEL, type PredictionOutcome } from "@/lib/predictions";
 import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
 import { fetchFixturesForTeams } from "@/lib/football/fixtures-by-team";
 import { scheduleAutoSyncIfStale } from "@/lib/football/auto-sync";
 
 export const metadata: Metadata = { title: "Home" };
+
+/**
+ * /home — the personal football command centre.
+ *
+ * The founding directive names thirteen things this page should carry. What
+ * makes it a command centre rather than a dashboard is not the count, it is
+ * that **the order is computed per reader**: `home-lead.ts` picks the single
+ * lead, and `home-sections.ts` ranks everything below it from the same facts,
+ * with each section carrying the reason it is where it is. Two people with
+ * different clubs, different fantasy states and different unread counts get
+ * genuinely different pages, and both can read why.
+ *
+ * This file's job is therefore narrow and should stay that way: fetch real
+ * rows, hand them to the two pure ranking modules, and render whatever comes
+ * back in the order it comes back in. No section decides its own position and
+ * no section renders an empty state — a section with nothing in it is simply
+ * not in the list.
+ */
 
 /**
  * KIVO_NEXT_GEN KN-16: neither followed-team fixture query had a `LIMIT`. The
@@ -31,6 +69,15 @@ export const metadata: Metadata = { title: "Home" };
  */
 const MATCHDAY_FIXTURES_LIMIT = 20;
 const UPCOMING_FIXTURES_LIMIT = 6;
+/** Today's fixtures across KIVO. Wider than the three that get listed,
+ * because the Room-activity pass needs a real field to find the busiest
+ * conversation in — asking three fixtures which is busiest is not a ranking. */
+const TODAY_FIXTURES_SCAN_LIMIT = 24;
+const TODAY_FIXTURES_SHOWN = 3;
+const TRENDING_ROOMS_SHOWN = 3;
+const FOLLOWED_PLAYERS_SHOWN = 4;
+const TRANSFER_PULSE_SHOWN = 3;
+const NOTIFICATIONS_SHOWN = 3;
 
 /** The shape every fixture query on this page selects, so the row → LeadFixture
  * conversion below can be written once. */
@@ -69,6 +116,35 @@ function toLeadFixture(row: FixtureRowShape, teamNames: Map<string, string>): Le
     awayScore: row.away_score,
     followedTeamName: followedName,
   };
+}
+
+function FixtureList({ fixtures, dateLabels }: { fixtures: FixtureRowShape[]; dateLabels?: boolean }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {fixtures.map((fixture, index) => {
+        const hasScore = fixture.home_score !== null && fixture.away_score !== null;
+        return (
+          <FixtureRow
+            key={fixture.id}
+            href={`/matches/${fixture.id}`}
+            homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
+            homeName={fixture.home_team?.name ?? "Home"}
+            awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
+            awayName={fixture.away_team?.name ?? "Away"}
+            scoreLabel={
+              dateLabels
+                ? new Date(fixture.kickoff_at).toLocaleDateString(DISPLAY_LOCALE, { month: "short", day: "numeric" })
+                : hasScore
+                  ? `${fixture.home_score} – ${fixture.away_score}`
+                  : "vs"
+            }
+            live={!dateLabels && isLiveStatus(fixture.status)}
+            index={index}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 export default async function HomePage() {
@@ -116,9 +192,9 @@ export default async function HomePage() {
 
   const supabase = createServerSupabaseClient();
 
-  // One clock for the whole render: the lead ladder, the "today" window and
-  // the "upcoming" cutoff all have to agree, or a fixture can be simultaneously
-  // "on today" and "in the past".
+  // One clock for the whole render: the lead ladder, the section ladder, the
+  // "today" window and the "upcoming" cutoff all have to agree, or a fixture
+  // can be simultaneously "on today" and "in the past".
   const nowDate = new Date();
   const now = nowDate.getTime();
   // KN-32: the viewer's day, not the server's. `setUTCHours(0,0,0,0)` meant a
@@ -131,16 +207,18 @@ export default async function HomePage() {
   const startOfDay = startOfDayInTimeZone(viewerTimeZone, nowDate);
   const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
 
-  // "Your teams" — the one place `follows` actually changes what's on screen
-  // (RECOMMENDATIONS item 13). Two-step because `followed_id` has no DB-level
-  // FK (it's polymorphic across team/player/competition), so the team ids
-  // have to be resolved before fixtures can be filtered on them.
-  const { data: followedTeamRows } = await supabase
+  // "Your teams" and "your players" — the follow graph is what makes this page
+  // personal at all (RECOMMENDATIONS item 13). Two-step because `followed_id`
+  // has no DB-level FK (it's polymorphic across team/player/competition), so
+  // the ids have to be resolved before anything can be filtered on them.
+  const { data: followRows } = await supabase
     .from("follows")
-    .select("followed_id")
+    .select("followed_id, followed_type")
     .eq("follower_profile_id", profile.id)
-    .eq("followed_type", "team");
-  const followedTeamIds = (followedTeamRows ?? []).map((f) => f.followed_id);
+    .in("followed_type", ["team", "player"]);
+
+  const followedTeamIds = (followRows ?? []).filter((f) => f.followed_type === "team").map((f) => f.followed_id);
+  const followedPlayerIds = (followRows ?? []).filter((f) => f.followed_type === "player").map((f) => f.followed_id);
 
   // A favourite club picked at onboarding counts as "yours" for the purposes
   // of this page even if the user never pressed Follow on it — it is the one
@@ -149,37 +227,43 @@ export default async function HomePage() {
     ...new Set([...followedTeamIds, ...(profile.favourite_team_id ? [profile.favourite_team_id] : [])]),
   ];
 
-  const [{ data: todayFixtures }, { data: xpTotal }, { count: openPredictionCount }, { data: fantasyTeams }, { data: myTeamRows }] =
-    await Promise.all([
-      supabase
-        .from("fixtures")
-        .select(FIXTURE_SELECT)
-        .gte("kickoff_at", startOfDay.toISOString())
-        .lt("kickoff_at", endOfDay.toISOString())
-        .order("kickoff_at", { ascending: true })
-        .limit(3),
-      // Single aggregate round trip instead of fetching every xp_ledger row
-      // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
-      // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
-      supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
-      supabase
-        .from("predictions")
-        .select("id", { count: "exact", head: true })
-        .eq("profile_id", profile.id)
-        .is("locked_at", null),
-      // Fetched as rows rather than a count because the lead ladder needs the
-      // league's season to find this viewer's next gameweek deadline.
-      supabase
-        .from("fantasy_teams")
-        .select("id, league:fantasy_leagues!inner(season_id)")
-        .eq("owner_profile_id", profile.id),
-      matchdayTeamIds.length
-        ? supabase.from("teams").select("id, name, short_name").in("id", matchdayTeamIds)
-        : Promise.resolve({ data: null }),
-    ]);
+  const [
+    { data: todayFixtures },
+    { data: xpTotal },
+    { data: fantasyTeams },
+    { data: myTeamRows },
+    followedPlayers,
+    transferPulse,
+    predictionSummary,
+    { notifications, unreadCount },
+  ] = await Promise.all([
+    supabase
+      .from("fixtures")
+      .select(FIXTURE_SELECT)
+      .gte("kickoff_at", startOfDay.toISOString())
+      .lt("kickoff_at", endOfDay.toISOString())
+      .order("kickoff_at", { ascending: true })
+      .limit(TODAY_FIXTURES_SCAN_LIMIT),
+    // Single aggregate round trip instead of fetching every xp_ledger row
+    // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
+    // supabase/migrations/0023_xp_total_and_sync_run_pruning.sql.
+    supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
+    // Fetched as rows rather than a count because the lead ladder needs the
+    // league's season to find this viewer's next gameweek deadline.
+    supabase
+      .from("fantasy_teams")
+      .select("id, league:fantasy_leagues!inner(season_id)")
+      .eq("owner_profile_id", profile.id),
+    matchdayTeamIds.length
+      ? supabase.from("teams").select("id, name, short_name").in("id", matchdayTeamIds)
+      : Promise.resolve({ data: null }),
+    loadFollowedPlayers(supabase, profile.id, FOLLOWED_PLAYERS_SHOWN),
+    loadTransferPulse(supabase, matchdayTeamIds, followedPlayerIds, TRANSFER_PULSE_SHOWN),
+    loadPredictionSummary(supabase, profile.id),
+    getRecentNotifications(),
+  ]);
 
   const totalXp = xpTotal ?? 0;
-  const fantasyTeamCount = fantasyTeams?.length ?? 0;
   const teamNames = new Map<string, string>(
     (myTeamRows ?? []).map((t) => [t.id, t.short_name || t.name] as const),
   );
@@ -257,6 +341,8 @@ export default async function HomePage() {
         )
     : { count: null };
 
+  const rosterConfirmed = (confirmedRosterCount ?? 0) > 0;
+
   const lead = selectHomeLead({
     now,
     followedTeamCount: matchdayTeamIds.length,
@@ -265,13 +351,9 @@ export default async function HomePage() {
     nextFixturePrediction: leadPrediction
       ? PREDICTION_OUTCOME_LABEL[leadPrediction.predicted_outcome as PredictionOutcome]
       : null,
-    openPredictionCount: openPredictionCount ?? 0,
+    openPredictionCount: predictionSummary?.openCount ?? 0,
     fantasy: nextGameweek
-      ? {
-          gameweekNumber: nextGameweek.number,
-          deadlineAt: nextGameweek.deadline_at,
-          rosterConfirmed: (confirmedRosterCount ?? 0) > 0,
-        }
+      ? { gameweekNumber: nextGameweek.number, deadlineAt: nextGameweek.deadline_at, rosterConfirmed }
       : null,
   });
 
@@ -282,85 +364,185 @@ export default async function HomePage() {
   const matchdayRest = (matchdayFixtures ?? []).filter((f) => f.id !== leadFixtureId);
   const upcomingRest = (upcomingFixtures ?? []).filter((f) => f.id !== leadFixtureId).slice(0, 5);
 
-  return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="flex flex-col gap-1">
-        <Greeting statedHour={statedGreetingHour} />
-        <h1 className="text-2xl font-semibold text-foreground">{firstName}, here&apos;s your football.</h1>
-      </FadeIn>
+  // Today's card across KIVO, minus the fixtures the viewer's own sections are
+  // already showing — "the rest of today's football" has to actually be the
+  // rest of it.
+  const ownFixtureIds = new Set<string>([
+    ...(leadFixtureId ? [leadFixtureId] : []),
+    ...matchdayRest.map((f) => f.id),
+  ]);
+  const allTodayFixtures = (todayFixtures ?? []) as unknown as FixtureRowShape[];
+  const topMatches = allTodayFixtures.filter((f) => !ownFixtureIds.has(f.id)).slice(0, TODAY_FIXTURES_SHOWN);
 
-      <FadeIn delay={0.06}>
-        <HomeLeadCard lead={lead} />
-      </FadeIn>
+  const followedTeamIdSet = new Set(matchdayTeamIds);
+  const [trendingRooms, fantasySummary] = await Promise.all([
+    loadTrendingRooms(supabase, allTodayFixtures, followedTeamIdSet, TRENDING_ROOMS_SHOWN),
+    loadFantasySummary(
+      supabase,
+      (fantasyTeams ?? []).map((t) => t.id),
+    ),
+  ]);
 
-      <RecentlyViewedStrip />
+  // ── The section ladder ───────────────────────────────────────────────────
+  const facts: HomeSectionFacts = {
+    now,
+    lead,
+    briefingLineCount: 0, // replaced below, once the briefing is composed
+    unreadNotificationCount: unreadCount,
+    clubsTodayCount: matchdayRest.length,
+    hasLiveFollowedFixture: Boolean(liveRow) || matchdayRest.some((f) => isLiveStatus(f.status)),
+    fantasy: fantasySummary
+      ? {
+          deadlineAt: nextGameweek?.deadline_at ?? null,
+          rosterConfirmed,
+          latestPoints: fantasySummary.latestPoints,
+          rank: fantasySummary.rank,
+        }
+      : null,
+    predictions: predictionSummary
+      ? {
+          openCount: predictionSummary.openCount,
+          nextLockAt: predictionSummary.nextLockAt,
+          currentStreak: predictionSummary.currentStreak,
+        }
+      : null,
+    trendingRoom: trendingRooms[0]
+      ? {
+          participantCount: trendingRooms[0].participantCount,
+          involvesFollowedClub: trendingRooms.some((room) => room.involvesFollowedClub),
+        }
+      : null,
+    transferPulse: {
+      count: transferPulse.length,
+      latestAt: transferPulse[0]?.transferDate ?? null,
+    },
+    followedPlayerCount: followedPlayers.length,
+    topMatchCount: topMatches.length,
+    upcomingCount: upcomingRest.length,
+    aiConfigured,
+  };
 
-      {matchdayRest.length > 0 && (
-        <FadeIn delay={0.1} className="kivo-glass rounded-2xl p-5">
-          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
-            <Flame className="h-4 w-4 text-accent" strokeWidth={1.75} />
-            Also on today for your clubs
-          </h2>
-          <div className="mt-3 flex flex-col gap-2">
-            {matchdayRest.map((fixture, index) => {
-              const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-              return (
-                <FixtureRow
-                  key={fixture.id}
-                  href={`/matches/${fixture.id}`}
-                  homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
-                  homeName={fixture.home_team?.name ?? "Home"}
-                  awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
-                  awayName={fixture.away_team?.name ?? "Away"}
-                  scoreLabel={hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-                  live={isLiveStatus(fixture.status)}
-                  index={index}
-                />
-              );
-            })}
-          </div>
-        </FadeIn>
-      )}
+  const briefingLines = buildHomeBriefing({
+    now,
+    clubsToday: {
+      count: matchdayFixtures?.length ?? 0,
+      liveCount: (matchdayFixtures ?? []).filter((f) => isLiveStatus(f.status)).length,
+      nextKickoffAt: (matchdayFixtures ?? []).find((f) => new Date(f.kickoff_at).getTime() > now)?.kickoff_at ?? null,
+      firstFixtureId: (matchdayFixtures ?? [])[0]?.id ?? null,
+    },
+    fantasy:
+      fantasySummary && nextGameweek
+        ? {
+            gameweekNumber: nextGameweek.number,
+            deadlineAt: nextGameweek.deadline_at,
+            rosterConfirmed,
+            latestPoints: fantasySummary.latestPoints,
+          }
+        : fantasySummary
+          ? {
+              // No upcoming gameweek: the only line this can produce is the
+              // "you scored N last week" one, which never reads a number.
+              gameweekNumber: null,
+              deadlineAt: null,
+              rosterConfirmed,
+              latestPoints: fantasySummary.latestPoints,
+            }
+          : null,
+    predictions: predictionSummary
+      ? { openCount: predictionSummary.openCount, currentStreak: predictionSummary.currentStreak }
+      : null,
+    latestTransfer: transferPulse[0]
+      ? {
+          playerName: transferPulse[0].playerName,
+          toTeamName: transferPulse[0].toTeamName,
+          dateLabel: transferPulse[0].dateLabel,
+        }
+      : null,
+    trendingRoom: trendingRooms[0]
+      ? {
+          label: `${trendingRooms[0].participantCount} people are talking about ${trendingRooms[0].homeName} v ${trendingRooms[0].awayName}.`,
+          fixtureId: trendingRooms[0].fixtureId,
+        }
+      : null,
+    unreadNotificationCount: unreadCount,
+  });
 
-      <FadeIn delay={0.14} className="kivo-glass rounded-2xl p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">Today across KIVO</h2>
-          <Link href="/matches" className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80">
-            All matches
-            <ArrowRight className="h-3 w-3" strokeWidth={2} />
-          </Link>
-        </div>
+  facts.briefingLineCount = briefingLines.length;
 
-        {todayFixtures && todayFixtures.length > 0 ? (
-          <div className="mt-3 flex flex-col gap-2">
-            {todayFixtures.map((fixture, index) => {
-              const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-              return (
-                <FixtureRow
-                  key={fixture.id}
-                  href={`/matches/${fixture.id}`}
-                  homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
-                  homeName={fixture.home_team?.name ?? "Home"}
-                  awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
-                  awayName={fixture.away_team?.name ?? "Away"}
-                  scoreLabel={hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-                  live={isLiveStatus(fixture.status)}
-                  index={index}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          // KN-36: this is the single highest-traffic empty state in the
-          // product — with the app gated, it is the first thing a brand-new
-          // account reads. It used to explain KIVO's admin tooling to them
-          // ("the football data pipeline is admin-triggered, not automatic").
-          // Same fact, told the way a football app would tell it, with
-          // somewhere real to go.
-          <div className="mt-3">
+  const sections = selectHomeSections(facts);
+  const quickActions = selectQuickActions(facts);
+
+  // One switch, rendered in the order the ladder returned. Adding a section
+  // means adding a case here and a rule there — never reordering this file.
+  function renderSection(id: (typeof sections)[number]["id"], reason: string) {
+    switch (id) {
+      case "briefing":
+        return <BriefingCard lines={briefingLines} aiConfigured={aiConfigured} />;
+
+      case "notifications":
+        return <NotificationsCard notifications={notifications.slice(0, NOTIFICATIONS_SHOWN)} reason={reason} />;
+
+      case "clubs_today":
+        return (
+          <HomeSectionCard
+            icon={<Flame className="h-4 w-4" strokeWidth={1.75} />}
+            title="Also on today for your clubs"
+            reason={reason}
+            action={{ href: "/matches", label: "Matches" }}
+          >
+            <FixtureList fixtures={matchdayRest} />
+          </HomeSectionCard>
+        );
+
+      case "fantasy":
+        return fantasySummary ? (
+          <FantasyCard
+            summary={fantasySummary}
+            deadlineAt={nextGameweek?.deadline_at ?? null}
+            rosterConfirmed={rosterConfirmed}
+            gameweekNumber={nextGameweek?.number ?? null}
+            now={now}
+            reason={reason}
+          />
+        ) : null;
+
+      case "predictions":
+        return predictionSummary ? <PredictionsCard summary={predictionSummary} now={now} reason={reason} /> : null;
+
+      case "trending_rooms":
+        return <TrendingRoomsCard rooms={trendingRooms} reason={reason} />;
+
+      case "transfer_pulse":
+        return <TransferPulseCard transfers={transferPulse} reason={reason} />;
+
+      case "your_players":
+        return <FollowedPlayersCard players={followedPlayers} reason={reason} />;
+
+      case "top_matches":
+        return (
+          <HomeSectionCard
+            icon={<Flame className="h-4 w-4" strokeWidth={1.75} />}
+            title="Today across KIVO"
+            reason={reason}
+            action={{ href: "/matches", label: "All matches" }}
+          >
+            <FixtureList fixtures={topMatches} />
+          </HomeSectionCard>
+        );
+
+      case "no_football_yet":
+        // KN-36: with the app gated, this is the first thing a brand-new
+        // account reads. It used to explain KIVO's admin tooling to them.
+        // Same fact, told the way a football app would tell it, with
+        // somewhere real to go.
+        return (
+          <HomeSectionCard
+            icon={<Flame className="h-4 w-4" strokeWidth={1.75} />}
+            title="Today across KIVO"
+            reason={reason}
+          >
             <p className="text-sm text-foreground-muted">
-              No fixtures on today&apos;s card yet. KIVO only lists matches it has actually verified — the moment today&apos;s
-              are in, they land here first.
+              No fixtures on today&apos;s card yet. The moment today&apos;s are in, they land here first.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
@@ -377,107 +559,76 @@ export default async function HomePage() {
                 Open the feed
               </Link>
             </div>
-          </div>
+          </HomeSectionCard>
+        );
+
+      case "upcoming":
+        return (
+          <HomeSectionCard
+            icon={<Star className="h-4 w-4" strokeWidth={1.75} />}
+            title="Your teams"
+            reason={reason}
+            action={{ href: "/profile/following", label: "Manage" }}
+          >
+            <FixtureList fixtures={upcomingRest} dateLabels />
+          </HomeSectionCard>
+        );
+
+      case "recently_viewed":
+        // Renders nothing at all when localStorage is empty — the one section
+        // whose contents the server genuinely cannot see.
+        return <RecentlyViewedStrip />;
+
+      case "community":
+        return (
+          <HomeSectionCard
+            icon={<Users className="h-4 w-4" strokeWidth={1.75} />}
+            title="Community"
+            reason={reason}
+            action={{ href: "/social", label: "Open" }}
+          >
+            <p className="text-sm text-foreground-muted">
+              The KIVO feed is live. Share your take, react to posts, and follow the conversation.
+            </p>
+          </HomeSectionCard>
+        );
+    }
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
+      <FadeIn className="flex flex-col gap-1">
+        <Greeting statedHour={statedGreetingHour} />
+        <h1 className="text-2xl font-semibold text-foreground">{firstName}, here&apos;s your football.</h1>
+      </FadeIn>
+
+      <FadeIn delay={0.06}>
+        <HomeLeadCard lead={lead} />
+      </FadeIn>
+
+      <FadeIn delay={0.09} className="flex flex-col gap-2">
+        <QuickActionsRow actions={quickActions} />
+        {/* XP is only shown once there is some. A "0 XP" tile on a first
+            session is exactly the kind of true-but-useless zero this page is
+            not allowed to render. */}
+        {totalXp > 0 && (
+          <Link
+            href="/rewards"
+            className="kivo-focus self-start text-[11px] font-medium text-foreground-subtle hover:text-foreground-muted"
+          >
+            {totalXp.toLocaleString(DISPLAY_LOCALE)} XP earned · see your badges
+          </Link>
         )}
       </FadeIn>
 
-      <FadeIn delay={0.18} className="kivo-glass rounded-2xl p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
-            <Star className="h-4 w-4 text-accent" strokeWidth={1.75} />
-            Your teams
-          </h2>
-          {matchdayTeamIds.length > 0 && (
-            <Link
-              href="/profile/following"
-              className="flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80"
-            >
-              Manage
-              <ArrowRight className="h-3 w-3" strokeWidth={2} />
-            </Link>
-          )}
-        </div>
+      {sections.map((section, index) => (
+        <FadeIn key={section.id} delay={0.12 + index * 0.03}>
+          {renderSection(section.id, section.reason)}
+        </FadeIn>
+      ))}
 
-        {matchdayTeamIds.length === 0 ? (
-          <p className="mt-3 text-sm text-foreground-muted">
-            You&apos;re not following any clubs yet. Star one on its page and its fixtures show up here.
-          </p>
-        ) : upcomingRest.length > 0 ? (
-          <div className="mt-3 flex flex-col gap-2">
-            {upcomingRest.map((fixture, index) => (
-              <FixtureRow
-                key={fixture.id}
-                href={`/matches/${fixture.id}`}
-                homeCrest={<TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={24} />}
-                homeName={fixture.home_team?.name ?? "Home"}
-                awayCrest={<TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={24} />}
-                awayName={fixture.away_team?.name ?? "Away"}
-                scoreLabel={new Date(fixture.kickoff_at).toLocaleDateString(DISPLAY_LOCALE, { month: "short", day: "numeric" })}
-                live={false}
-                index={index}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-foreground-muted">No upcoming fixtures synced yet for the clubs you follow.</p>
-        )}
-      </FadeIn>
-
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          {
-            icon: <Trophy className="h-4 w-4" strokeWidth={1.75} />,
-            label: "Fantasy",
-            value: fantasyTeamCount ? "In league" : "-",
-            href: "/fantasy",
-            brand: false,
-          },
-          {
-            icon: <Target className="h-4 w-4" strokeWidth={1.75} />,
-            label: "Predictions",
-            value: openPredictionCount !== null ? String(openPredictionCount) : "-",
-            href: "/predictions",
-            brand: false,
-          },
-          {
-            icon: <Flame className="h-4 w-4" strokeWidth={1.75} />,
-            label: "XP",
-            value: `${totalXp}`,
-            href: "/rewards",
-            brand: false,
-          },
-        ].map((stat, index) => (
-          <StatTile
-            key={stat.label}
-            href={stat.href}
-            icon={stat.icon}
-            value={stat.value}
-            label={stat.label}
-            brand={stat.brand}
-            delay={0.2 + index * 0.06}
-          />
-        ))}
-      </div>
-
-      <FadeIn delay={0.4}>
+      <FadeIn delay={0.5}>
         <AiTeaser aiConfigured={aiConfigured} />
-      </FadeIn>
-
-      <FadeIn delay={0.48} className="kivo-glass rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
-          <Users className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Community
-        </h2>
-        <p className="mt-3 text-sm text-foreground-muted">
-          The KIVO feed is live. Share your take, react to posts, and follow the conversation.
-        </p>
-        <Link
-          href="/social"
-          className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
-        >
-          Open Social
-          <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
-        </Link>
       </FadeIn>
     </div>
   );
