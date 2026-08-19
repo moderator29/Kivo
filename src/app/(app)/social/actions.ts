@@ -13,6 +13,7 @@ import { fetchPostsPage, type PostListItem } from "./posts";
 import { resolveFeedScope, type SocialFilter } from "@/lib/social-filters";
 import { buildNotification } from "@/lib/notification-payloads";
 import { logError } from "@/lib/log";
+import { matchRoomAcceptsPosts } from "@/lib/match-room-guard";
 
 const MAX_POST_LENGTH = 2000;
 
@@ -83,6 +84,15 @@ export async function createPost(formData: FormData) {
   // when it's rendered inside Match Centre's Room tab (see MatchRoomTab). Left
   // unset, the insert lands as a normal, unscoped community post.
   const fixtureId = String(formData.get("fixture_id") ?? "").trim() || null;
+
+  // A Match Room takes posts from the moment its fixture exists until a day
+  // after full time — the same window the composer renders from, checked here
+  // so a late post gets a sentence that explains itself rather than the generic
+  // failure a raw policy rejection produces. Migration 0110 is the enforcement.
+  if (fixtureId) {
+    const window = await matchRoomAcceptsPosts(fixtureId);
+    if (!window.ok) return { error: window.error };
+  }
 
   const supabase = createServerSupabaseClient();
   // The id comes back because KN-91's XP award is keyed on it below — the post
@@ -164,6 +174,14 @@ export async function createPoll(formData: FormData) {
   // the one poll type the brief actually specifies was unbuildable through the
   // UI. One line, and it is the same line createPost uses.
   const fixtureId = String(formData.get("fixture_id") ?? "").trim() || null;
+
+  // Same window as createPost. A poll is a post, and a closed room that still
+  // accepted polls would be a hole shaped exactly like the one feature the
+  // brief names by example.
+  if (fixtureId) {
+    const window = await matchRoomAcceptsPosts(fixtureId);
+    if (!window.ok) return { error: window.error };
+  }
 
   const supabase = createServerSupabaseClient();
   const { data: post, error: postError } = await supabase
