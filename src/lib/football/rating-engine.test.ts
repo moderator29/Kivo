@@ -48,6 +48,23 @@ describe("computePlayerMatchRating", () => {
     expect(rating).not.toBeNull();
   });
 
+  it("rates a substitute KIVO holds a real substitution event for, even with nothing else recorded", () => {
+    // A substitution event is a record that the player took the pitch — the
+    // same class of evidence `isStarting` is. Without this the engine refused
+    // to rate a player it could see had played half an hour.
+    const rating = computePlayerMatchRating(
+      baseInput({ isStarting: false, cameOnFromBench: true, goals: 0, assists: 0, ownGoals: 0, yellowCards: 0, redCards: 0 }),
+    );
+    expect(rating).not.toBeNull();
+  });
+
+  it("still refuses a named substitute with no substitution event and nothing recorded", () => {
+    const rating = computePlayerMatchRating(
+      baseInput({ isStarting: false, cameOnFromBench: false, goals: 0, assists: 0, ownGoals: 0, yellowCards: 0, redCards: 0 }),
+    );
+    expect(rating).toBeNull();
+  });
+
   it("returns a base rating around the neutral anchor for a clean appearance with nothing else recorded", () => {
     const rating = computePlayerMatchRating(baseInput());
     expect(rating).not.toBeNull();

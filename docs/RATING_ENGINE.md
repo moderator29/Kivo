@@ -45,7 +45,8 @@ Checked directly against the schema (`lineups`, `fixture_events`,
 
 | Input | Source | Used? |
 |---|---|---|
-| `is_starting` | `lineups` | Yes — only real evidence of involvement without a minutes column |
+| `is_starting` | `lineups` | Yes — real evidence of involvement without a minutes column |
+| Came on as a substitute | `fixture_events` (`substitution`, this player as `related_player_id`) | Yes — a real record that they were on the pitch |
 | Goals / assists | `fixture_events` (`goal`, `penalty_goal`, `related_player_id`) | Yes |
 | Own goals | `fixture_events` (`own_goal`) | Yes |
 | Yellow / red cards | `fixture_events` | Yes (second yellow counts as a red, same as `fantasy-scoring.ts`) |
@@ -70,11 +71,21 @@ means a bench player who never played a minute is otherwise
 indistinguishable from one who played 30.
 
 The engine's rule: a player is only rated for a match if `isStarting` is
-true, **or** they have at least one real `fixture_events` row for that
-match (a goal, assist, card, etc. — real evidence they were on the pitch).
-Anyone else — an unused substitute with zero recorded events — gets `null`,
-not a fabricated baseline rating. This is the direct, literal application
-of the task's own example: "player has 0 minutes that match → return null."
+true, **or** KIVO holds a substitution event bringing them on
+(`cameOnFromBench`), **or** they have at least one real `fixture_events`
+row for that match (a goal, assist, card, etc. — real evidence they were on
+the pitch). Anyone else — an unused substitute with zero recorded events —
+gets `null`, not a fabricated baseline rating. This is the direct, literal
+application of the task's own example: "player has 0 minutes that match →
+return null."
+
+`cameOnFromBench` was added when the Match Centre's Ratings tab was built
+(`src/lib/football/fixture-ratings.ts`, fed by `buildTeamSheet`). Before it,
+a substitute who came on at 60 minutes and did nothing countable was refused
+a rating for the wrong reason: not because KIVO could not tell whether they
+played, but because the input type had no field in which to say that it
+could. The substitution event is the same class of evidence `isStarting` is
+— a record that the player took the pitch — and it is treated identically.
 
 ## Position-aware, not just GK-vs-outfield
 

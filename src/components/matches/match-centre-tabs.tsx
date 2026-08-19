@@ -19,14 +19,23 @@ import { staggerDelay } from "@/lib/stagger";
 import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-sync-control";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
-import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
+import { MatchOverview, type MatchOverviewFacts } from "@/components/matches/match-overview";
+import { TeamSheetView, type ManagerRef } from "@/components/matches/team-sheet-view";
+import { PlayerRatingsView } from "@/components/matches/player-ratings-view";
+import { buildTeamSheet } from "@/lib/football/team-sheet";
+import {
+  pickStandoutPlayer,
+  rankRatedPlayers,
+  rateTeamSheet,
+  ratingsByPlayerId,
+} from "@/lib/football/fixture-ratings";
+import type { FormSummary } from "@/lib/football/form-engine";
 import { HeatmapView } from "@/components/matches/heatmap-view";
 import { buildFixtureHeatmaps, hasFixtureHeatmapContent } from "@/lib/football/heatmap/fixture-heatmap";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
-import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
+import { isLiveStatus } from "@/lib/football/fixture-status";
 import type { MatchRoomWindow } from "@/lib/match-room-window";
-import { LocalDateTime } from "@/components/ui/relative-time";
 import { useRealtimeFixtureEvents } from "@/hooks/use-realtime-fixture-events";
 import { resolveEventSide, resolveTabFromSlug, type EventSide } from "@/lib/football/match-timeline";
 
@@ -147,29 +156,31 @@ type MatchCentreTabsProps = {
    * lineups/events/stats (entity_type 'lineup') — see getLastSyncedAt() in
    * src/lib/football/last-synced.ts. RECOMMENDATIONS.md item 60. */
   detailsLastSyncedAt: string | null;
-  /** KN-53: everything the Overview tab needs to be worth opening on a fixture
-   * that has no synced detail yet. All of it is already fetched by
-   * matches/[id]/page.tsx for the header it renders above these tabs. */
   /** When this fixture's Match Room accepts new posts, as the server decided
    * at render time. Computed by matches/[id]/page.tsx from the same kickoff
    * and status in `preMatch`; see src/lib/match-room-window.ts. */
   roomWindow: MatchRoomWindow;
-  preMatch: {
-    kickoffAt: string;
-    status: FixtureStatus;
-    competitionName: string | null;
-    venueName: string | null;
-    venueCity: string | null;
-    /** The match official. Null means the provider reported none — the row is
-     * then absent rather than rendered as "Unknown", for the same reason a
-     * competition with no country prints nothing. */
-    referee: string | null;
-    /** The provider's own round label, verbatim ("Quarter-finals"). Distinct
-     * from `matchday`: a cup tie has no number and this is the only thing that
-     * names its round. */
-    roundLabel: string | null;
-    matchday: number | null;
-  };
+  /** Everything the Overview tab needs — kick-off, competition, round, venue,
+   * referee. All of it is already fetched by matches/[id]/page.tsx for the
+   * header it renders above these tabs, and the Overview tab is now always
+   * present rather than a fallback, so this is always read. */
+  preMatch: MatchOverviewFacts;
+  /** The fixture's real final (or running) score, for the rating engine's
+   * clean-sheet and goals-conceded terms. Null before either has been
+   * reported, which is exactly when the engine declines to rate anybody. */
+  homeScore: number | null;
+  awayScore: number | null;
+  /** Each club's own real recent form, computed by form-engine.ts from
+   * finished fixtures KIVO already holds (see matches/[id]/page.tsx). Null
+   * for a club with no finished match on record — the Overview then says so
+   * rather than drawing an empty strip. */
+  homeForm: FormSummary | null;
+  awayForm: FormSummary | null;
+  /** The manager who picked each of these team sheets. Already joined on the
+   * page for its header; passed down so the Lineups tab can name them, which
+   * is where a fan looks for them. */
+  homeManager: ManagerRef;
+  awayManager: ManagerRef;
   /** Real head-to-head record between these two clubs, computed by
    * getHeadToHead() from finished fixtures only. Null when either side of
    * the fixture has no resolved team row — the tab is then not offered at
@@ -203,27 +214,65 @@ type MatchCentreTabsProps = {
 };
 
 /**
- * KN-53. Timeline, Stats, Lineups and Heatmap each rendered a near-identical
- * "hasn't been synced yet" panel, so on a scheduled fixture — which is *every*
- * fixture before kickoff — the user paid four taps to learn one fact, and the
- * tab strip promised four things that were all the same nothing.
+ * The Match Centre's shape.
  *
- * The four data tabs are now only offered when they actually hold data. When
- * none of them do, they collapse into a single "Overview" tab that says it
- * once, and spends the space on what KIVO genuinely knows before a match
- * instead: when it kicks off, where, and which competition it belongs to.
+ * ## What KN-53 got right, and what it got wrong
  *
- * This is deliberately the zero-schema interim RECOMMENDATIONS.md item 299's
- * coverage registry will eventually supersede. The distinction it cannot make
- * is "the provider does not support this for this competition" versus "nobody
- * has synced it yet" — so the Overview panel says only the second, which is
- * the one thing that is always true.
+ * KN-53 made the four provider-backed tabs conditional on actually holding
+ * data, which was right: a tab strip that promises Timeline, Stats, Lineups
+ * and Heatmap and delivers the same apology behind all four charges a fan
+ * four taps for one fact. That rule stays.
+ *
+ * What it got wrong was making **Overview** the consolation prize. Overview
+ * only existed while every data tab was empty, and vanished the moment one
+ * filled — so the Match Centre had a summary exactly when there was nothing
+ * to summarise, and none at all once there was. On a finished match a fan
+ * landed straight in a raw event list with no scoreline context, no form, no
+ * table, no head-to-head. That is the "no standing, no head to head" the
+ * founder was looking at.
+ *
+ * Overview is now **always the first tab**, and it is a real front page: match
+ * flow, both clubs' form, the head-to-head record, where the two sit in the
+ * table, and the fixture's own facts — see match-overview.tsx. The deep tabs
+ * sit behind it, each appearing when it holds something, which is the
+ * progressive hierarchy this product is supposed to have: the important thing
+ * immediately, the advanced thing one tap away, and nothing promised that
+ * isn't there.
+ *
+ * ## The two tabs that used to be unreachable
+ *
+ * **H2H** was offered only when the two clubs had already met in a finished
+ * fixture KIVO holds — with almost no history in the database that condition
+ * was never true, so a tab the founder explicitly asked for had never once
+ * appeared. It is now offered whenever both clubs resolve, and the card
+ * already had an honest "first meeting on record" state written for it.
+ *
+ * **Standings** always rendered and was always empty. It now says what a table
+ * is waiting on instead of blaming a sync.
  */
-const ALL_TABS = ["Overview", "Timeline", "Stats", "Lineups", "Heatmap", "H2H", "Standings", "Room"] as const;
+const ALL_TABS = ["Overview", "Timeline", "Lineups", "Ratings", "Stats", "Heatmap", "H2H", "Standings", "Room"] as const;
 type Tab = (typeof ALL_TABS)[number];
 
-/** The tabs that hold provider-synced match detail — the ones that collapse. */
-const DATA_TABS = ["Timeline", "Stats", "Lineups", "Heatmap"] as const;
+/** The three tabs offered on every fixture whatever it holds: the front page,
+ * the table and the Room. Derived from ALL_TABS so the strip's order is stated
+ * in exactly one place. */
+const ALWAYS_TABS: Tab[] = ALL_TABS.filter((tab) => tab === "Overview" || tab === "Standings" || tab === "Room");
+
+/** The tabs backed by this fixture's own provider-fetched detail — the ones
+ * that appear only once they hold something. Ordered as a fan reads a match:
+ * what happened, who played, how they rated, the numbers, the shape. */
+const DATA_TABS = ["Timeline", "Lineups", "Ratings", "Stats", "Heatmap"] as const;
+
+/** How each deep tab is named in the Overview panel's one honest sentence
+ * about what KIVO does not hold yet. Lower case and in KIVO's own words,
+ * because it is read inside a sentence rather than as a label. */
+const MISSING_AREA_LABEL: Record<(typeof DATA_TABS)[number], string> = {
+  Timeline: "the timeline",
+  Lineups: "line-ups",
+  Ratings: "player ratings",
+  Stats: "stats",
+  Heatmap: "touch maps",
+};
 
 function tabSlug(tab: Tab): string {
   return tab.toLowerCase();
@@ -249,129 +298,26 @@ function PlayerNameLink({ playerId, playerName, className }: { playerId: string;
   );
 }
 
-/** "stats", "stats and lineups", "the timeline, stats and lineups". */
-function formatAreaList(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
-function EmptyState({ message }: { message: string }) {
+/**
+ * The one shape every "KIVO does not hold this" panel takes.
+ *
+ * The word "synced" is gone from all of them, deliberately. It is KIVO's
+ * internal word for its own pipeline, and a fan reading "lineups have not been
+ * synced" learns nothing they can act on — it sounds like a fault. What they
+ * can act on is *when the thing normally exists*: team sheets land about an
+ * hour before kick-off, statistics arrive with the match, a goalless first
+ * half genuinely has nothing in it. Each caller says its own version of that.
+ */
+function EmptyState({ title, message, action }: { title: string; message: string; action?: ReactNode }) {
   return (
-    <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
-      {message}
+    <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-6 text-center">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="max-w-sm text-xs leading-relaxed text-foreground-muted">{message}</p>
+      {action}
     </div>
   );
 }
 
-/**
- * KN-53. The one panel that replaces four identical "not synced yet" empty
- * states.
- *
- * Two jobs, in this order. First, be useful: kickoff in the reader's own zone,
- * the venue, the competition — all real columns already fetched for the header
- * above these tabs, and all things a fan actually wants before a match. Second,
- * be honest about the rest in a single sentence, once, instead of four times
- * behind four taps.
- *
- * What it deliberately does not say is *why* the data is missing. KIVO cannot
- * yet distinguish "this provider doesn't cover lineups for this competition"
- * from "nobody has synced this fixture" — that is the coverage registry in
- * RECOMMENDATIONS.md item 299 — so this claims only the part that is always
- * true.
- */
-/**
- * How a fixture's round reads on screen.
- *
- * Two columns hold two different facts and neither replaces the other:
- * `round_label` is the provider's own string ("Regular Season - 12",
- * "Quarter-finals") and `matchday` is the number parsed out of it, which is
- * null for any round that has none.
- *
- * The label wins when there is one, because it is what the competition calls
- * the round. But API-Football's league labels are machine-shaped — "Regular
- * Season - 12" is not how anyone says it — so that one exact shape is rewritten
- * to "Matchday 12" and every other label is passed through untouched. Narrow on
- * purpose: a rewrite that tried to prettify arbitrary labels would eventually
- * mangle a real round name, and "Quarter-finals" needs no help.
- */
-export function roundText(preMatch: MatchCentreTabsProps["preMatch"]): string | null {
-  const label = preMatch.roundLabel?.trim();
-  if (label) {
-    const regularSeason = /^regular season\s*-\s*(\d+)$/i.exec(label);
-    if (regularSeason) return `Matchday ${regularSeason[1]}`;
-    return label;
-  }
-  return preMatch.matchday !== null ? `Matchday ${preMatch.matchday}` : null;
-}
-
-function OverviewTab({
-  preMatch,
-  competitionCoverage,
-}: {
-  preMatch: MatchCentreTabsProps["preMatch"];
-  competitionCoverage: MatchCentreTabsProps["competitionCoverage"];
-}) {
-  const started = preMatch.status !== "scheduled";
-
-  // Only the areas the provider has explicitly said it does NOT publish for
-  // this competition. `null` is not a denial — it means the registry has never
-  // been synced, or has no opinion, and KIVO says nothing rather than inventing
-  // a capability gap it has not established.
-  const unsupported = [
-    competitionCoverage?.events === false ? "the timeline" : null,
-    competitionCoverage?.statistics === false ? "stats" : null,
-    competitionCoverage?.lineups === false ? "lineups" : null,
-  ].filter((label): label is string => label !== null);
-  const venue = [preMatch.venueName, preMatch.venueCity].filter(Boolean).join(", ");
-
-  // Every row is conditional on KIVO actually holding the fact. An absent row
-  // is the only honest rendering of an absent value — the alternative is a
-  // label with "Unknown" or a dash beside it, which reads as a statement about
-  // the match rather than about the data, and is exactly the pattern removed
-  // from competition names and countries elsewhere in this codebase.
-  const facts: { label: string; value: ReactNode }[] = [
-    { label: "Kick-off", value: <LocalDateTime iso={preMatch.kickoffAt} format="deadline" /> },
-    ...(preMatch.competitionName ? [{ label: "Competition", value: preMatch.competitionName }] : []),
-    ...(roundText(preMatch) ? [{ label: "Round", value: roundText(preMatch) }] : []),
-    ...(venue ? [{ label: "Venue", value: venue }] : []),
-    ...(preMatch.referee ? [{ label: "Referee", value: preMatch.referee }] : []),
-  ];
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl px-4">
-        {facts.map((fact) => (
-          <div key={fact.label} className="flex items-baseline justify-between gap-3 py-3">
-            <span className="text-xs text-foreground-subtle">{fact.label}</span>
-            <span className="text-right text-sm font-medium text-foreground">{fact.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Two different sentences, because they are two different facts and a
-          fan acts on them differently: "not there yet" means wait, and "this
-          competition doesn't carry it" means stop waiting. The second is only
-          ever said on the data source's own authority — see
-          `competitionCoverage`. */}
-      {unsupported.length > 0 ? (
-        <p className="px-1 text-xs leading-relaxed text-foreground-muted">
-          {`KIVO doesn't have ${formatAreaList(unsupported)} for this competition, so ${
-            unsupported.length === 1 ? "that tab" : "those tabs"
-          } won't fill however long you wait.`}{" "}
-          {unsupported.length < 3 ? "Whatever KIVO does have appears here as its own tab. " : ""}
-          The Room is open now.
-        </p>
-      ) : (
-        <p className="px-1 text-xs leading-relaxed text-foreground-muted">
-          {started
-            ? "Timeline, stats and lineups aren't available for this match yet. They'll appear here as their own tabs the moment they do."
-            : "Timeline, stats and lineups appear here as their own tabs, usually around kick-off."}{" "}
-          The Room is open now.
-        </p>
-      )}
-    </div>
-  );
-}
 
 /**
  * The Master Directive's "live event timeline" for a fixture. This is the tab
@@ -542,7 +488,10 @@ function TimelineTab({
     // asserted the second, so a real goalless game was reported as missing
     // data. Say both, and say which one KIVO cannot rule out.
     return (
-      <EmptyState message="No goals, cards or substitutions on record for this match." />
+      <EmptyState
+        title="Nothing on the timeline yet"
+        message="No goals, cards or substitutions on record for this match. That is either a match where none have happened, or one whose events KIVO does not hold — from here those look the same, so it claims neither."
+      />
     );
   }
 
@@ -695,165 +644,6 @@ function InYourXIBadge({ isCaptain }: { isCaptain: boolean }) {
   );
 }
 
-/**
- * KIVO_NEXT_GEN KN-113: a real side-by-side lineup comparison.
- *
- * Three things were wrong with what this rendered before, all of them the kind
- * that only show up once you look at the two halves as one comparison rather
- * than as two independent lineups:
- *
- *  1. **Neither side was labelled.** Two glass cards, two Starting XIs, no team
- *     name anywhere — on the tab whose entire job is telling you who is playing
- *     for whom. The names were already props on this component (the Heatmap tab
- *     uses them); they were simply never passed down here.
- *  2. **The shapes were never actually compared.** `lineups.formation` is real
- *     synced data (migration 0035) and each side rendered its own badge in
- *     isolation. "4-3-3 vs 4-2-3-1" as one line is the thing a reader is
- *     actually trying to work out, and it costs nothing — the data was already
- *     on screen, just never put next to itself.
- *  3. **The two sides could render in different formats.** `buildPitchRows`
- *     honestly returns null when a side's data won't draw a real pitch, so one
- *     team could appear as a positioned pitch and the other as a flat list. A
- *     side-by-side where the halves aren't like-for-like invites exactly the
- *     wrong read — that one team's shape is known and the other's is unusual,
- *     rather than that KIVO's data for one side is incomplete. So the pitch is
- *     drawn only when **both** sides can draw one, and the honest fallback is
- *     symmetric.
- */
-function LineupsTab({
-  homeTeamId,
-  awayTeamId,
-  homeTeamName,
-  awayTeamName,
-  lineups,
-  viewerFantasyRoster,
-}: {
-  homeTeamId: string;
-  awayTeamId: string;
-  homeTeamName: string;
-  awayTeamName: string;
-  lineups: LineupEntry[];
-  viewerFantasyRoster: ViewerFantasyRosterEntry[];
-}) {
-  if (lineups.length === 0) {
-    return <EmptyState message="Lineups aren't available for this match yet." />;
-  }
-
-  const rosterByPlayerId = new Map(viewerFantasyRoster.map((r) => [r.playerId, r.isCaptain]));
-
-  const sideData = (teamId: string) => {
-    const teamLineup = lineups.filter((l) => l.teamId === teamId);
-    const starters = teamLineup.filter((l) => l.isStarting);
-    return {
-      starters,
-      bench: teamLineup.filter((l) => !l.isStarting),
-      // Real formation, positioned pitch view when the data is clean enough to
-      // draw one honestly (see buildPitchRows' doc comment) — otherwise the
-      // plain list, never a guessed layout.
-      pitchRows: buildPitchRows(starters),
-      formation: starters[0]?.formation ?? null,
-    };
-  };
-
-  const home = sideData(homeTeamId);
-  const away = sideData(awayTeamId);
-  // Like-for-like or not at all — see point 3 in this component's doc comment.
-  const drawPitches = home.pitchRows !== null && away.pitchRows !== null;
-
-  const renderTeam = (teamName: string, side: ReturnType<typeof sideData>) => {
-    const { starters, bench, pitchRows, formation } = side;
-
-    return (
-      <div className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-sm font-semibold text-foreground">{teamName}</span>
-          {formation && (
-            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              {formation}
-            </span>
-          )}
-        </div>
-        {drawPitches && pitchRows ? (
-          <LineupPitch formation={formation} rows={pitchRows} viewerFantasyRoster={rosterByPlayerId} />
-        ) : (
-          starters.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Starting XI</span>
-              {starters.map((p, index) => (
-                <motion.div
-                  key={p.playerId || p.playerName}
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-                  className="flex items-center gap-2 text-sm text-foreground"
-                >
-                  <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
-                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
-                    {rosterByPlayerId.has(p.playerId) && <InYourXIBadge isCaptain={rosterByPlayerId.get(p.playerId)!} />}
-                  </div>
-                  {p.position && <span className="shrink-0 text-xs text-foreground-subtle">{p.position}</span>}
-                </motion.div>
-              ))}
-            </div>
-          )
-        )}
-        {bench.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">Substitutes</span>
-            {bench.map((p, index) => (
-              <motion.div
-                key={p.playerId || p.playerName}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: 0.1 + staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-                className="flex items-center gap-2 text-sm text-foreground-muted"
-              >
-                <span className="w-6 shrink-0 text-xs text-foreground-subtle">{p.shirtNumber ?? "-"}</span>
-                <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                  <PlayerNameLink playerId={p.playerId} playerName={p.playerName} className="truncate" />
-                  {rosterByPlayerId.has(p.playerId) && <InYourXIBadge isCaptain={rosterByPlayerId.get(p.playerId)!} />}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const bothFormations = home.formation && away.formation;
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* The shape comparison itself. Only rendered when both sides have a real
-          synced formation — one formation next to a blank is not a comparison,
-          and a dash in place of the missing one would read as a claim about
-          the team rather than about KIVO's data. When only one side has it,
-          that side's own badge (inside its card below) still shows it. */}
-      {bothFormations && (
-        <div className="kivo-glass-sharp flex items-center justify-center gap-3 rounded-xl px-4 py-2.5 text-sm">
-          <span className="font-semibold text-foreground">{home.formation}</span>
-          <span className="text-[11px] uppercase tracking-wide text-foreground-subtle">shape</span>
-          <span className="font-semibold text-foreground">{away.formation}</span>
-        </div>
-      )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="kivo-glass rounded-2xl p-4">{renderTeam(homeTeamName, home)}</div>
-        <div className="kivo-glass rounded-2xl p-4">{renderTeam(awayTeamName, away)}</div>
-      </div>
-      {/* Said once, for the whole tab, rather than left for the reader to infer
-          from two lists where they expected two pitches. */}
-      {!drawPitches && (home.starters.length > 0 || away.starters.length > 0) && (
-        <p className="text-[11px] leading-relaxed text-foreground-subtle">
-          Both sides are shown as lists: a positioned pitch is only drawn when every starter on{" "}
-          <em>both</em> teams has a real recorded position, and one of these lineups doesn&apos;t yet. Showing one pitch
-          and one list would suggest KIVO knows more about one team&apos;s shape than the other.
-        </p>
-      )}
-    </div>
-  );
-}
 
 type StatRow = { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string };
 
@@ -981,7 +771,12 @@ function StatsTab({
   const away = stats.find((s) => s.teamId === awayTeamId);
 
   if (!home && !away) {
-    return <EmptyState message="Statistics aren't available for this match yet." />;
+    return (
+      <EmptyState
+        title="No match statistics yet"
+        message="Team statistics are published once a match is under way, and KIVO holds none for this fixture."
+      />
+    );
   }
 
   const hasValue = (row: StatRow) => home?.[row.key] != null || away?.[row.key] != null;
@@ -1029,7 +824,12 @@ function StatsTab({
 
 function StandingsTab({ standings, homeTeamId, awayTeamId }: { standings: StandingsRow[]; homeTeamId: string; awayTeamId: string }) {
   if (standings.length === 0) {
-    return <EmptyState message="No table for this competition yet." />;
+    return (
+      <EmptyState
+        title="No table for this competition yet"
+        message="A league table needs a full season's results behind it. KIVO doesn't hold one for this competition, so it shows nothing rather than a table it would have to invent."
+      />
+    );
   }
   // Real `<table>` with `scope="col"` headers (RECOMMENDATIONS.md item 150):
   // this used to be a grid of `<span>`s, which carries no row/column
@@ -1104,7 +904,10 @@ function MatchCentreTabsFallback() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-1 overflow-x-auto border-b border-hairline">
-        {ALL_TABS.filter((tab) => tab !== "Overview").map((tab) => (
+        {/* The three tabs that are always offered, whatever this fixture
+            holds — so the strip the reader sees for a frame is the strip they
+            get, rather than five labels that then disappear. */}
+        {ALWAYS_TABS.map((tab) => (
           <div
             key={tab}
             className="relative min-w-fit flex-1 whitespace-nowrap px-1 py-2.5 text-center text-xs font-semibold text-foreground-muted"
@@ -1136,6 +939,12 @@ function MatchCentreTabsInner({
   syncDetailsAction,
   detailsLastSyncedAt,
   preMatch,
+  homeScore,
+  awayScore,
+  homeForm,
+  awayForm,
+  homeManager,
+  awayManager,
   roomWindow,
   headToHead,
   competitionCoverage,
@@ -1165,24 +974,69 @@ function MatchCentreTabsInner({
   // something the panel then fails to show.
   const heatmaps = buildFixtureHeatmaps({ fixtureId, homeTeamId, awayTeamId, lineups, events });
 
-  // KN-53: a data tab earns its place by holding data.
+  // The two team sheets, built once here from the lineup rows and the *live*
+  // event list — so a substitution or a goal arriving over Realtime moves the
+  // Lineups tab's markers at the same moment it moves the Timeline, rather
+  // than leaving the two panels of the same page disagreeing about the match
+  // they are both describing.
+  const fantasyRosterByPlayerId = new Map(viewerFantasyRoster.map((entry) => [entry.playerId, entry.isCaptain]));
+
+  const homeSheet = buildTeamSheet(homeTeamId, lineups, liveEvents);
+  const awaySheet = buildTeamSheet(awayTeamId, lineups, liveEvents);
+
+  // KIVO's own ratings. The engine refuses everything that is not a finished
+  // match with a real final score, so on a live or scheduled fixture both of
+  // these come back empty and the Ratings tab is simply not offered — no
+  // provisional number is ever shown and then revised.
+  const homeRated = rateTeamSheet(homeSheet, {
+    fixtureId,
+    fixtureStatus: preMatch.status,
+    goalsFor: homeScore,
+    goalsAgainst: awayScore,
+  });
+  const awayRated = rateTeamSheet(awaySheet, {
+    fixtureId,
+    fixtureStatus: preMatch.status,
+    goalsFor: awayScore,
+    goalsAgainst: homeScore,
+  });
+  const ratings = new Map([...ratingsByPlayerId(homeRated), ...ratingsByPlayerId(awayRated)]);
+  const homeRanked = rankRatedPlayers(homeRated);
+  const awayRanked = rankRatedPlayers(awayRated);
+  const standout = pickStandoutPlayer([
+    { teamId: homeTeamId, rated: homeRated },
+    { teamId: awayTeamId, rated: awayRated },
+  ]);
+  const unratedCount = [...homeRated, ...awayRated].filter((entry) => entry.rating === null).length;
+
+  // KN-53's rule, kept: a deep tab earns its place by holding data.
   const dataTabAvailability: Record<(typeof DATA_TABS)[number], boolean> = {
     Timeline: liveEvents.length > 0,
-    Stats: stats.length > 0,
     Lineups: lineups.length > 0,
+    Ratings: homeRanked.length > 0 || awayRanked.length > 0,
+    Stats: stats.length > 0,
     Heatmap: hasFixtureHeatmapContent(heatmaps),
   };
   const availableDataTabs = DATA_TABS.filter((tab) => dataTabAvailability[tab]);
-  const collapsed = availableDataTabs.length === 0;
+  // What the Overview panel names in its one sentence about what is missing.
+  // Ratings is excluded on purpose: it is KIVO's own computation rather than
+  // something waiting to arrive, and before full time its absence is a
+  // deliberate refusal, not a gap.
+  const missingAreas = DATA_TABS.filter(
+    (tab) => tab !== "Ratings" && tab !== "Heatmap" && !dataTabAvailability[tab],
+  ).map((tab) => MISSING_AREA_LABEL[tab]);
 
-  // H2H is not a "data tab" in the collapsing sense — it is computed from
-  // finished fixtures KIVO already has, not from this fixture's own sync — so
-  // it can be present on a scheduled match where every other data tab is
-  // empty, and it is offered only when these two clubs have actually met.
-  const hasHeadToHead = (headToHead?.record.meetings.length ?? 0) > 0;
+  // H2H is not a deep tab in that sense — it is computed from finished
+  // fixtures KIVO already holds, not from this fixture's own detail — so it
+  // is offered whenever both clubs resolved, including on a scheduled match
+  // where every other deep tab is empty. It used to require a prior meeting
+  // on record, which with almost no history meant it never appeared at all;
+  // HeadToHeadCard has always had an honest zero state and now gets to use it.
+  const hasHeadToHead = headToHead !== null;
 
   const visibleTabs: Tab[] = [
-    ...(collapsed ? (["Overview"] as const) : availableDataTabs),
+    "Overview",
+    ...availableDataTabs,
     ...(hasHeadToHead ? (["H2H"] as const) : []),
     "Standings",
     "Room",
@@ -1264,8 +1118,11 @@ function MatchCentreTabsInner({
           pull fresher stats), not just an entirely-unsynced one. Standings and
           Room aren't backed by this action, so the bar only shows for the
           other three. */}
-      {(active === "Overview" || active === "Timeline" || active === "Stats" || active === "Lineups") && (
+      {(active === "Overview" || active === "Timeline" || active === "Stats" || active === "Lineups" || active === "Ratings") && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1">
+          {/* LastSyncedNote renders nothing at all without a timestamp now, so
+              this no longer needs its own guard — the freshness line is simply
+              absent on a fixture nothing has been fetched for. */}
           <LastSyncedNote timestamp={detailsLastSyncedAt} />
           {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
         </div>
@@ -1296,7 +1153,31 @@ function MatchCentreTabsInner({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       >
-        {active === "Overview" && <OverviewTab preMatch={preMatch} competitionCoverage={competitionCoverage} />}
+        {active === "Overview" && (
+          <MatchOverview
+            facts={preMatch}
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+            events={liveEvents}
+            homeForm={homeForm}
+            awayForm={awayForm}
+            headToHead={headToHead?.record ?? null}
+            standings={standings}
+            competitionCoverage={competitionCoverage}
+            missingAreas={missingAreas}
+            // The Overview's own deep links move the tab strip rather than
+            // navigating, so a fan who taps "Full table" lands on the tab they
+            // asked for with the same shallow URL update every other tab uses.
+            onOpenTab={(tab) => {
+              if (visibleTabs.includes(tab)) {
+                setActive(tab);
+                tabRefs.current[tab]?.focus();
+              }
+            }}
+          />
+        )}
         {active === "Timeline" && (
           <TimelineTab
             events={liveEvents}
@@ -1317,13 +1198,31 @@ function MatchCentreTabsInner({
           />
         )}
         {active === "Lineups" && (
-          <LineupsTab
-            homeTeamId={homeTeamId}
-            awayTeamId={awayTeamId}
+          <TeamSheetView
             homeTeamName={homeTeamName}
             awayTeamName={awayTeamName}
-            lineups={lineups}
-            viewerFantasyRoster={viewerFantasyRoster}
+            homeSheet={homeSheet}
+            awaySheet={awaySheet}
+            homeManager={homeManager}
+            awayManager={awayManager}
+            ratings={ratings}
+            viewerFantasyRoster={fantasyRosterByPlayerId}
+            renderBadge={(playerId) =>
+              fantasyRosterByPlayerId.has(playerId) ? (
+                <InYourXIBadge isCaptain={Boolean(fantasyRosterByPlayerId.get(playerId))} />
+              ) : null
+            }
+          />
+        )}
+        {active === "Ratings" && (
+          <PlayerRatingsView
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+            homeRated={homeRanked}
+            awayRated={awayRanked}
+            standout={standout}
+            homeTeamId={homeTeamId}
+            unratedCount={unratedCount}
           />
         )}
         {active === "Heatmap" && (

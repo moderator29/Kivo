@@ -27,6 +27,7 @@ import { PREDICTION_PICK_COLUMNS, pickFromRow } from "@/lib/predictions";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { competitionName } from "@/lib/football/competition-label";
 import { getHeadToHead } from "@/lib/football/head-to-head";
+import { computeTeamForm, resolveFixtureResult, type FixtureResultRow, type ResolvedResult } from "@/lib/football/form-engine";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
 import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
@@ -129,6 +130,7 @@ export default async function MatchCentrePage({
     fixturesLastSyncedAt,
     detailsLastSyncedAt,
     headToHead,
+    { data: recentFinished },
     ownFanRating,
     fanRatingSummary,
     { data: managers },
@@ -184,6 +186,24 @@ export default async function MatchCentrePage({
     fixture.home_team?.id && fixture.away_team?.id
       ? getHeadToHead(supabase, fixture.home_team.id, fixture.away_team.id, { excludeFixtureId: fixture.id })
       : Promise.resolve(null),
+    // Real recent form for both clubs, for the Overview tab's Form section.
+    // One query for the pair (a single `.or()` over four columns) rather than
+    // two, and it reads only finished fixtures KIVO already holds — no
+    // provider call, nothing computed that isn't a result already in the
+    // database. Twenty rows covers both clubs' last five comfortably even
+    // when one of them has played every one of the recent fixtures.
+    fixture.home_team?.id && fixture.away_team?.id
+      ? supabase
+          .from("fixtures")
+          .select("id, kickoff_at, status, home_score, away_score, home_team_id, away_team_id")
+          .eq("status", "finished")
+          .neq("id", fixture.id)
+          .or(
+            `home_team_id.in.(${fixture.home_team.id},${fixture.away_team.id}),away_team_id.in.(${fixture.home_team.id},${fixture.away_team.id})`,
+          )
+          .order("kickoff_at", { ascending: false })
+          .limit(40)
+      : Promise.resolve({ data: null }),
     // fan_ratings_select_own already scopes this to the caller's own row.
     isFinished && profile
       ? supabase.from("fan_ratings").select("rating").eq("fixture_id", id).eq("profile_id", profile.id).maybeSingle()
@@ -313,6 +333,23 @@ export default async function MatchCentrePage({
   // exactly one.
   const homeManager = (managers ?? []).find((m) => m.current_team_id === fixture.home_team?.id) ?? null;
   const awayManager = (managers ?? []).find((m) => m.current_team_id === fixture.away_team?.id) ?? null;
+
+  // Each club's own last-five form, from the finished fixtures fetched above.
+  // `computeTeamForm` is the same engine /teams/[id] and /teams/compare use,
+  // so the strip on this page and the strip on the club's own page cannot
+  // disagree about the same five results. Null for a club with nothing
+  // finished on record — the Overview says that in words rather than drawing
+  // an empty badge strip.
+  function formFor(teamId: string | undefined) {
+    if (!teamId) return null;
+    const resolved: ResolvedResult[] = ((recentFinished ?? []) as FixtureResultRow[])
+      .filter((f) => f.home_team_id === teamId || f.away_team_id === teamId)
+      .map((f) => resolveFixtureResult(f, teamId))
+      .filter((r): r is ResolvedResult => r !== null);
+    return resolved.length > 0 ? computeTeamForm(resolved, "last5") : null;
+  }
+  const homeForm = formFor(fixture.home_team?.id);
+  const awayForm = formFor(fixture.away_team?.id);
 
   // MatchShareCard: reuses the exact fixture + fixture_events rows already
   // fetched above (buildMatchShareCardData internally filters to just the
@@ -594,6 +631,17 @@ export default async function MatchCentrePage({
             canSyncDetails={canManageFootballData(profile?.role)}
             syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
             detailsLastSyncedAt={detailsLastSyncedAt}
+            // The real score, for the rating engine's clean-sheet and
+            // goals-conceded terms. Null before either is reported, which is
+            // exactly when the engine refuses to rate anybody.
+            homeScore={fixture.home_score}
+            awayScore={fixture.away_score}
+            homeForm={homeForm}
+            awayForm={awayForm}
+            // Already joined above for this page's own header — the Lineups
+            // tab is where a fan looks for the name that picked the eleven.
+            homeManager={homeManager ? { id: homeManager.id, name: homeManager.full_name } : null}
+            awayManager={awayManager ? { id: awayManager.id, name: awayManager.full_name } : null}
             // KN-53: all already fetched above for this page's own header —
             // passed down so the collapsed-tab Overview can be worth opening
             // rather than four copies of "nothing synced yet".
