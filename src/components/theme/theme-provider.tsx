@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
+  DEFAULT_PREFERENCE,
   DEFAULT_THEME,
   THEME_COLOR,
   THEME_STORAGE_KEY,
@@ -37,11 +38,16 @@ let cachedPreference: ThemePreference | null = null;
 function readStoredPreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemePreference(stored) ? stored : "system";
+    // No stored choice means this person has never opened Appearance, and they
+    // get KIVO's dark rather than whatever their phone is set to. See
+    // DEFAULT_PREFERENCE. A stored value of any kind, "system" included, still
+    // wins outright.
+    return isThemePreference(stored) ? stored : DEFAULT_PREFERENCE;
   } catch {
-    // Private mode / storage disabled. "system" is still fully functional —
-    // the choice just will not survive a reload.
-    return "system";
+    // Private mode / storage disabled. The default still applies for this
+    // session — it just will not survive a reload, which is the same outcome
+    // as never having chosen.
+    return DEFAULT_PREFERENCE;
   }
 }
 
@@ -70,7 +76,11 @@ function getPreferenceSnapshot(): ThemePreference {
 }
 
 function getPreferenceServerSnapshot(): ThemePreference {
-  return "system";
+  // Must agree with what the server stamped on <html> (DEFAULT_THEME) or the
+  // hydration pass paints one theme and the next render paints another. It now
+  // does agree for everyone: "dark" resolves to dark whatever the system
+  // reports, where "system" resolved to light on a light-set phone and flashed.
+  return DEFAULT_PREFERENCE;
 }
 
 function writePreference(next: ThemePreference) {
