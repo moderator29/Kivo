@@ -239,6 +239,78 @@ const HOW_IT_WORKS = [
 //   WhatsApp-shaped share alongside the others.
 // - Reduced motion: globals.css clamps animation-duration under
 //   prefers-reduced-motion, and every Motion animation respects it too.
+// One match, start to finish, using only behaviour that exists. Checked
+// against the code rather than written as a pitch:
+// - Home ordering and the "why this card is here" reason: src/lib/home-lead.ts.
+// - Prediction lock at kickoff: (app)/predictions/actions.ts enforces it
+//   server-side, not just in the UI.
+// - Fantasy deadline countdown: (app)/fantasy/deadline-countdown.tsx.
+// - Lineups and the positioned pitch: match-centre-tabs.tsx + lineup-pitch.tsx,
+//   which draws a pitch only when both teams' positions are real.
+// - Score without a refresh, and the timeline event landing on the scoring
+//   club's side: use-realtime-fixtures.ts, use-realtime-fixture-events.ts.
+// - The Room's own goal announcement: match-room-system-posts.ts.
+// - Notifications: match-notifications.ts (goal, red card, kickoff, fulltime).
+// - Fan rating only after the whistle: fan-rating-card.tsx, and
+//   fan_ratings_insert_own would reject an earlier one anyway.
+// - Scoring from the real result and real events: predictions/actions.ts,
+//   fantasy-scoring.ts.
+const MATCHDAY = [
+  {
+    step: "Before kick-off",
+    description:
+      "KIVO opens on your club's next match, and every card tells you why it is there. Call the result before the whistle — the lock is enforced on the server, so nobody is backdating anything — and the fantasy deadline is counting down next to it.",
+  },
+  {
+    step: "Team news",
+    description:
+      "Lineups land and the shape is drawn: a real positioned pitch when both teams' positions are genuinely known, two honest lists when they are not. KIVO never draws one side's formation and lists the other's, because that would suggest it knows more about one team than it does.",
+  },
+  {
+    step: "The goal",
+    description:
+      "The score moves without you touching anything, the event appears on the scoring club's side of the timeline, the Room announces it, and your phone buzzes if you asked it to. If VAR takes it back, all of that reverses — a timeline still crediting a goal the scoreline dropped is the loudest way an app can lie.",
+  },
+  {
+    step: "Half-time and full-time",
+    description:
+      "Possession, shots, cards, and a whole advanced breakdown a tap deeper. When the whistle goes you can rate the performance, and the verdict card reads the Room back to you: the busiest minute, what the crowd actually made of it.",
+  },
+  {
+    step: "Afterwards",
+    description:
+      "Your prediction is scored from the real result, your fantasy points from the real match events, both traceable to the rows they came from. Then the card goes to the group chat, and it links straight back to the match it came from.",
+  },
+];
+
+// Every one of these is a real, reachable surface, not a policy sentence:
+// /settings/data (DataExportSection), /settings/delete-account (deleteAccount
+// in (app)/settings/actions.ts, which clears storage objects as well as rows),
+// /settings/privacy (blocked accounts, other devices), and the auth flow
+// itself, which has no password field anywhere in the product.
+const YOUR_DATA = [
+  {
+    title: "Nothing to steal",
+    description:
+      "There is no password field anywhere in KIVO, so there is no password of yours to lose in a breach. Signing in is a code sent to the inbox you already control.",
+  },
+  {
+    title: "Take a copy whenever",
+    description:
+      "Settings has an export that hands you your own data as a file. Not a request form, not a support ticket — a button that produces the file.",
+  },
+  {
+    title: "Leaving actually deletes",
+    description:
+      "Delete your account and it removes your rows and the files behind them, including the avatar and background you uploaded. Not a flag on a record that keeps everything.",
+  },
+  {
+    title: "You control the room",
+    description:
+      "Block an account and they are gone from your feed. Sign out a device you no longer have. Both live in settings, not behind an email to support.",
+  },
+];
+
 const BUILT_FOR = [
   {
     title: "It does not poll your data away",
@@ -547,6 +619,42 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* The only section on the page that describes the product as time
+            passing rather than as a list of parts. Every beat is real
+            behaviour — see MATCHDAY's comment for where each one lives. */}
+        <section className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-16 lg:px-12">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">A matchday</span>
+            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Ninety minutes, the way KIVO runs them
+            </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              Nothing described here is planned. This is the product as it stands today, in the order you would
+              meet it.
+            </p>
+          </ScrollReveal>
+          <ol className="flex flex-col gap-3">
+            {MATCHDAY.map((beat, index) => (
+              <ScrollReveal
+                key={beat.step}
+                delay={index * 0.05}
+                className="kivo-glass flex flex-col gap-2 rounded-2xl p-6 sm:flex-row sm:gap-6"
+              >
+                <div className="flex shrink-0 items-center gap-3 sm:w-40 sm:flex-col sm:items-start sm:gap-2">
+                  <span
+                    aria-hidden
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-1 text-xs font-semibold tabular-nums text-foreground-subtle"
+                  >
+                    {index + 1}
+                  </span>
+                  <h3 className="text-base font-semibold text-foreground">{beat.step}</h3>
+                </div>
+                <p className="text-sm leading-relaxed text-foreground-muted">{beat.description}</p>
+              </ScrollReveal>
+            ))}
+          </ol>
+        </section>
+
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Getting in</span>
@@ -639,6 +747,34 @@ export default function LandingPage() {
           </section>
         )}
 
+        {/* Written as reachable surfaces rather than as a policy paragraph —
+            every claim here is a button that exists in settings today. See
+            YOUR_DATA's comment for where each one lives. */}
+        <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Your account</span>
+            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Easy to join, and just as easy to leave
+            </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              A product that makes it hard to walk away is telling you something. Every one of these is a button in
+              settings, not a policy sentence.
+            </p>
+          </ScrollReveal>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {YOUR_DATA.map((item, index) => (
+              <ScrollReveal
+                key={item.title}
+                delay={index * 0.06}
+                className="kivo-glass flex flex-col gap-2 rounded-2xl p-6"
+              >
+                <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-foreground-muted">{item.description}</p>
+              </ScrollReveal>
+            ))}
+          </div>
+        </section>
+
         <section className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">FAQ</span>
@@ -651,6 +787,36 @@ export default function LandingPage() {
           </ScrollReveal>
           <ScrollReveal delay={0.08}>
             <FaqSection />
+          </ScrollReveal>
+        </section>
+
+        {/* A page this long has to end somewhere other than the footer. The
+            two buttons are the same pair as the hero's, since by here the
+            visitor has decided and should not have to scroll back up. */}
+        <section className="mx-auto w-full max-w-5xl px-6 pb-20 pt-8 lg:px-12">
+          <ScrollReveal className="kivo-glass-brand flex flex-col items-center gap-5 rounded-3xl px-6 py-12 text-center lg:px-12">
+            <h2 className="max-w-xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Pick your club. The rest arranges itself around it.
+            </h2>
+            <p className="max-w-lg text-sm leading-relaxed text-foreground-muted lg:text-base">
+              One email and a six-digit code, and KIVO opens on your team&apos;s next match instead of somebody
+              else&apos;s.
+            </p>
+            <div className="flex flex-col items-center gap-3 sm:flex-row">
+              <Link
+                href="/sign-up"
+                className="kivo-gradient-prime kivo-glow kivo-raise flex min-h-12 items-center gap-2 rounded-xl px-6 text-sm font-semibold text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              >
+                Create your free account
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+              </Link>
+              <Link
+                href="/sign-in"
+                className="flex min-h-12 items-center rounded-xl border border-hairline px-6 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              >
+                I already have one
+              </Link>
+            </div>
           </ScrollReveal>
         </section>
       </main>
