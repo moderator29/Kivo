@@ -29,11 +29,35 @@ export type OrderableEvent = { id: string; minute: number; addedTime: number | n
  * stamped the same minute and added time never swap places between renders.
  */
 export function compareTimelineEvents(a: OrderableEvent, b: OrderableEvent): number {
-  if (a.minute !== b.minute) return a.minute - b.minute;
-  const aAdded = a.addedTime ?? 0;
-  const bAdded = b.addedTime ?? 0;
+  // Minute and addedTime are coerced because a Realtime payload is not a
+  // typed row — see the id note below. A row that arrives without a minute
+  // sorts to the front rather than turning the whole comparison into NaN,
+  // which would leave the array in an arbitrary order.
+  const aMinute = Number.isFinite(a?.minute) ? a.minute : 0;
+  const bMinute = Number.isFinite(b?.minute) ? b.minute : 0;
+  if (aMinute !== bMinute) return aMinute - bMinute;
+
+  const aAdded = Number.isFinite(a?.addedTime) ? (a.addedTime as number) : 0;
+  const bAdded = Number.isFinite(b?.addedTime) ? (b.addedTime as number) : 0;
   if (aAdded !== bAdded) return aAdded - bAdded;
-  return a.id.localeCompare(b.id);
+
+  // `String(...)` rather than `a.id.localeCompare(...)`, and this is a real
+  // crash rather than defensive padding.
+  //
+  // Supabase Realtime delivers `payload.new` as an EMPTY OBJECT when the
+  // subscriber cannot read the row the change refers to — RLS, a replica
+  // identity that does not include the column, a replication edge. The
+  // fixture-events hook merged that straight into the timeline, so the array
+  // gained an entry whose id was `undefined`, and the next sort called
+  // `undefined.localeCompare` and threw. Inside a client render that reaches
+  // the nearest error boundary, which on the Match Centre is the tab strip:
+  // the founder saw "Match detail didn't load" over a live match, and only
+  // over a live match, because it takes a real event arriving to trigger it.
+  //
+  // The hook now drops an id-less payload before it ever gets here (see
+  // use-realtime-fixture-events.ts). This is the second line of defence: an
+  // ordering function must not be the thing that takes a page down.
+  return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
 }
 
 /** Which side of the timeline's centre spine an event belongs on. */

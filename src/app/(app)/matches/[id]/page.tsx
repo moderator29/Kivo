@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { MapPin, Share2 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -9,6 +10,8 @@ import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
+import { resolveBackgroundSrc } from "@/lib/kivo-assets";
+import { SHARE_BACKGROUND_LAYERS } from "@/lib/share-cards/backgrounds";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
@@ -334,13 +337,56 @@ export default async function MatchCentrePage({
       ? `${fixture.home_team?.name ?? "Home"} ${fixture.home_score} - ${fixture.away_score} ${fixture.away_team?.name ?? "Away"} — on KIVO.`
       : `${fixture.home_team?.name ?? "Home"} vs ${fixture.away_team?.name ?? "Away"} — on KIVO.`;
 
+  // Null for a signed-out visitor and for anyone who has never chosen one —
+  // the banner then keeps exactly the gradient it always had.
+  const matchBannerSrc = profile ? resolveBackgroundSrc(profile) : null;
+
   return (
     // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
     // resolved content cross-dissolves in over MatchDetailLoading's skeleton
     // instead of hard-cutting — the header card below keeps its own nested
     // FadeIn too (a slightly different entrance, harmless to layer).
     <FadeIn className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <FadeIn className="kivo-glass-brand sticky top-2 z-10 flex flex-col gap-4 rounded-2xl p-5">
+      {/* The match banner's backdrop is the viewer's OWN chosen background —
+          the same `profiles.background_id` / upload that drives the share card
+          below it and their profile cover. It used to be `kivo-glass-brand`, a
+          fixed blue-violet gradient baked into the page, which the founder's
+          words for were "that hardcore match banner ... make it editable from
+          background ones".
+
+          One choice, three surfaces, and nothing new to configure: a fan who
+          picks a cover in the share panel on this very page sees the banner
+          above it change too. `resolveBackgroundSrc` returns null for a
+          profile that has chosen nothing and for a signed-out visitor, and the
+          banner then falls back to exactly the gradient it always had — so the
+          default look is unchanged and this is additive.
+
+          The scrim is not decoration: the KIVO covers are busy renders, and a
+          scoreline straight onto one is illegible. Same reasoning, and the
+          same layer, that SHARE_BACKGROUND_LAYERS.scrim applies to the card. */}
+      <FadeIn
+        className={`sticky top-2 z-10 flex flex-col gap-4 overflow-hidden rounded-2xl p-5 ${
+          matchBannerSrc ? "border border-hairline bg-surface-1" : "kivo-glass-brand"
+        }`}
+      >
+        {matchBannerSrc && (
+          <>
+            <Image
+              src={matchBannerSrc}
+              alt=""
+              aria-hidden="true"
+              fill
+              sizes="(max-width: 672px) 100vw, 672px"
+              className="pointer-events-none -z-10 object-cover"
+              priority={false}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -z-10"
+              style={{ background: SHARE_BACKGROUND_LAYERS.scrim }}
+            />
+          </>
+        )}
         {/* Match-centre-only keyframes: a breathing live badge, an expanding
             "on air" ring on its dot, and a brief scale-in for the score on
             load. Scoped here (not globals.css) since this page is the only

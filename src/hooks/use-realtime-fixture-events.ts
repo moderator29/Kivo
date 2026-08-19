@@ -126,6 +126,9 @@ export function useRealtimeFixtureEvents(
 
     function merge(event: MatchEvent) {
       if (cancelled) return;
+      // Belt and braces: nothing without an id may enter the array the
+      // timeline sorts, whatever route it arrived by.
+      if (!event.id) return;
       setEvents((prev) => {
         const without = prev.filter((e) => e.id !== event.id);
         return [...without, event].sort(compareTimelineEvents);
@@ -139,6 +142,14 @@ export function useRealtimeFixtureEvents(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "fixture_events", filter: `fixture_id=eq.${fixtureId}` },
         (payload) => {
+          // An id-less payload is dropped here rather than merged. Supabase
+          // Realtime delivers `payload.new` as an EMPTY OBJECT when this
+          // client cannot read the row the change refers to, and a merged
+          // `{ id: undefined }` used to reach the sort and throw
+          // `undefined.localeCompare` — which, inside a client render, took
+          // the whole Match Centre tab strip down behind its error boundary.
+          // Only ever on a live match, because it takes a real event arriving.
+          if (!payload.new?.id) return;
           if (eventsRef.current.some((e) => e.id === payload.new.id)) return;
           void toMatchEvent(payload.new).then(merge);
         },
@@ -147,6 +158,7 @@ export function useRealtimeFixtureEvents(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "fixture_events", filter: `fixture_id=eq.${fixtureId}` },
         (payload) => {
+          if (!payload.new?.id) return;
           void toMatchEvent(payload.new).then(merge);
         },
       )
