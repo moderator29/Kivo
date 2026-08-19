@@ -38,6 +38,29 @@ describe("compareTimelineEvents", () => {
   it("treats a null added time as zero rather than sorting it apart from 0", () => {
     expect(compareTimelineEvents(event("a", 45, null), event("b", 45, 0))).toBeLessThan(0);
   });
+
+  it("does not throw on an event with no id", () => {
+    // The crash the founder hit as "Match detail didn't load" over a LIVE
+    // match. Supabase Realtime delivers `payload.new` as an empty object when
+    // the subscriber cannot read the row, that merged as `{ id: undefined }`,
+    // and the next sort called `undefined.localeCompare`. Inside a client
+    // render that reaches the error boundary and takes the whole tab strip.
+    const broken = { id: undefined, minute: 12, addedTime: null } as unknown as OrderableEvent;
+    expect(() => [broken, event("a", 30)].sort(compareTimelineEvents)).not.toThrow();
+    expect(() => compareTimelineEvents(broken, broken)).not.toThrow();
+  });
+
+  it("does not throw on a payload with no minute either", () => {
+    // Same empty-object payload: every field is absent, not just the id. A
+    // NaN comparison would leave the array in an arbitrary order rather than
+    // throwing, which is quieter and just as wrong.
+    const empty = {} as unknown as OrderableEvent;
+    const sorted = [empty, event("a", 30), event("b", 10)].sort(compareTimelineEvents);
+    expect(sorted).toHaveLength(3);
+    // The real events keep their own relative order regardless of the junk.
+    const real = sorted.filter((e) => e.id).map((e) => e.id);
+    expect(real).toEqual(["b", "a"]);
+  });
 });
 
 describe("resolveEventSide", () => {
