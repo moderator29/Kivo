@@ -42,6 +42,21 @@ import { SHARE_CARD_CANVAS, type ShareCardData, type ShareStat, type ShareTeamRe
  * by the route, which does the fetching and the format sniffing. */
 export type ImageResolver = (url: string | null | undefined) => string | null;
 
+/**
+ * The card palette is fixed dark, and does NOT follow the viewer's theme.
+ *
+ * That is a decision, not an omission. A card is a file that leaves KIVO — it
+ * lands in someone's WhatsApp, and that person has no theme preference in this
+ * product to honour. Rendering a pale card for a light-theme sender and a dark
+ * one for everybody else would mean the same fixture produced two different
+ * artefacts, and the light one would have to be redesigned from scratch
+ * against artwork (the KIVO backgrounds) that is dark in every variant.
+ *
+ * The *sheet* around the card is a different question and does follow the
+ * theme: `share-sheet.tsx` is built entirely from KIVO's theme tokens, with no
+ * hardcoded colour anywhere in it, so the controls, the picker and the status
+ * line all swap with the rest of the app while the artefact stays constant.
+ */
 const C = {
   text: "#f8faff",
   muted: "#cbd5e1",
