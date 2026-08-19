@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { isUuid } from "@/lib/params";
 import Link from "next/link";
 import { Trophy, History, Users, MapPin } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -35,7 +36,16 @@ type TeamCompareData = {
   squadCount: number;
 };
 
+/**
+ * SECURITY_REVIEW.md F10. `id` reaches an `.or()` below, and `.or()` takes a
+ * hand-built string rather than binding its values — so an id from
+ * `?a=`/`?b=` would land in PostgREST filter SYNTAX. Checked here as well as
+ * at the call site, so the function is safe on its own terms rather than
+ * relying on every future caller remembering to validate first.
+ */
 async function getTeamCompareData(supabase: Supabase, id: string): Promise<TeamCompareData | null> {
+  if (!isUuid(id)) return null;
+
   const [{ data: team }, { data: standingsRows }, { data: recent }, { count: squadCount }] = await Promise.all([
     supabase
       .from("teams")
@@ -201,7 +211,10 @@ export default async function TeamComparePage({
   }));
 
   const hasSelection = Boolean(a) && Boolean(b);
-  const validSelection = hasSelection && a !== b;
+  // A non-uuid `?a=`/`?b=` is treated exactly like a team that does not exist:
+  // the page already has an honest state for that, and it keeps a tampered
+  // query string from being distinguishable from a stale link.
+  const validSelection = hasSelection && a !== b && isUuid(a ?? "") && isUuid(b ?? "");
 
   let teamA: TeamCompareData | null = null;
   let teamB: TeamCompareData | null = null;

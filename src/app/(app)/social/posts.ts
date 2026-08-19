@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isUuid } from "@/lib/params";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
@@ -278,15 +279,30 @@ export async function fetchPostsPage(
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
 
-    if (options?.cursor) {
+    // SECURITY_REVIEW.md F10. `.or()` takes a hand-built string, unlike
+    // `.eq()` and `.ilike()` which bind their values — so anything
+    // interpolated here lands in PostgREST filter SYNTAX, not in a parameter.
+    // This cursor comes from the client, and the argument that it is safe to
+    // accept was right about the VALUES and missed where they end up.
+    //
+    // Rather than shape-test the strings and pass them through, both halves
+    // are rebuilt from parsed values: the id must be a uuid, and the timestamp
+    // is re-serialised from a parsed Date. So what reaches the filter is a
+    // string this code constructed, not one the caller sent. A malformed
+    // cursor falls through to the first page — a caller who tampers with it
+    // gets ordinary results rather than an error that would tell them their
+    // input reached the query planner.
+    const cursor = options?.cursor;
+    const cursorAt = cursor ? new Date(cursor.createdAt) : null;
+    const cursorIsUsable = Boolean(cursor && isUuid(cursor.id) && cursorAt && !Number.isNaN(cursorAt.getTime()));
+
+    if (cursor && cursorIsUsable && cursorAt) {
       // "Strictly older than the last row I showed" — the tuple comparison
       // (created_at, id) < (cursor.createdAt, cursor.id), written the way
       // PostgREST expresses it. Immune to rows being inserted while the reader
       // is paging, which is exactly what offset paging is not.
-      const { createdAt, id } = options.cursor;
-      query = query
-        .or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`)
-        .limit(limit + 1);
+      const at = cursorAt.toISOString();
+      query = query.or(`created_at.lt.${at},and(created_at.eq.${at},id.lt.${cursor.id})`).limit(limit + 1);
     } else {
       query = query.range(offset, offset + limit);
     }
