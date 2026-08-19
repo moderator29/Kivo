@@ -1,15 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { motion } from "motion/react";
-import { Activity, CalendarClock, ListOrdered, Swords, TrendingUp } from "lucide-react";
 import { FormBadges } from "@/components/teams/form-badges";
+import { Section } from "@/components/ui/section";
+import { ListSurface, ListRow } from "@/components/ui/list-surface";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { EVENT_LABEL, isGoalEventType } from "@/lib/football/event-labels";
 import type { FormSummary } from "@/lib/football/form-engine";
 import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
+import { roundText } from "@/lib/football/round-label";
 
 /**
  * The Match Centre's front page.
@@ -59,28 +61,34 @@ export type OverviewStandingsRow = {
   position: number | null;
 };
 
-function SectionCard({
-  icon: Icon,
+/**
+ * One region of the front page.
+ *
+ * This used to be a local `SectionCard`: a glass box with an 11px caps title
+ * and an icon, repeated five times down the page. Five surfaces of identical
+ * weight is exactly the "stack of cards with no shape" the shared primitives
+ * exist to end — nothing on the screen said which of these was the headline
+ * and which was context, because they all looked the same.
+ *
+ * So the region itself has no surface now. Its content brings one only where
+ * the content genuinely is a unit: a plotted chart, a list of rows, a grid of
+ * numbers. Prose does not, and neither does a heading.
+ */
+function OverviewSection({
   title,
   action,
   children,
 }: {
-  icon: typeof Activity;
   title: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
+  // `as="h3"`: these sit under the match's own heading, and a skipped level is
+  // the most common way a well-built page still reads as a jumble aloud.
   return (
-    <section className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
-          <Icon className="h-4 w-4 text-accent" strokeWidth={1.75} aria-hidden />
-          {title}
-        </h3>
-        {action}
-      </div>
+    <Section as="h3" title={title} action={action}>
       {children}
-    </section>
+    </Section>
   );
 }
 
@@ -171,10 +179,15 @@ function MatchFlow({
           );
         })}
       </div>
+      {/* The words "above" and "below" cost each club name about seven
+          characters of a 137px cell on a phone, which was enough to truncate
+          both of them. The arrow says the same thing in one glyph. The whole
+          row is aria-hidden — the sr-only list underneath states each event's
+          side in full — so nothing here is the only carrier of anything. */}
       <div aria-hidden className="flex items-start justify-between gap-2 text-[10px] uppercase tracking-wide text-foreground-subtle">
-        <span className="min-w-0 flex-1 truncate">{homeTeamName} above</span>
+        <span className="min-w-0 flex-1 truncate">▲ {homeTeamName}</span>
         <span className="shrink-0">{status === "finished" ? "full time" : `${lastMinute}'`}</span>
-        <span className="min-w-0 flex-1 truncate text-right">{awayTeamName} below</span>
+        <span className="min-w-0 flex-1 truncate text-right">{awayTeamName} ▼</span>
       </div>
       <ul className="sr-only">
         {marked.map((event) => (
@@ -186,21 +199,6 @@ function MatchFlow({
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function FormRow({ teamName, form }: { teamName: string; form: FormSummary }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">{teamName}</span>
-        <span className="text-[11px] text-foreground-subtle">
-          {form.wins}W {form.draws}D {form.losses}L · {form.goalsScored}-{form.goalsConceded}
-          {form.pointsPerMatch !== null ? ` · ${form.pointsPerMatch} pts/match` : ""}
-        </span>
-      </div>
-      <FormBadges form={form.sequence} />
     </div>
   );
 }
@@ -231,31 +229,6 @@ function capitalise(text: string): string {
 function formatAreaList(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
-/**
- * How a fixture's round reads on screen.
- *
- * Two columns hold two different facts and neither replaces the other:
- * `round_label` is the provider's own string ("Regular Season - 12",
- * "Quarter-finals") and `matchday` is the number parsed out of it, which is
- * null for any round that has none.
- *
- * The label wins when there is one, because it is what the competition calls
- * the round. But API-Football's league labels are machine-shaped — "Regular
- * Season - 12" is not how anyone says it — so that one exact shape is rewritten
- * to "Matchday 12" and every other label is passed through untouched. Narrow on
- * purpose: a rewrite that tried to prettify arbitrary labels would eventually
- * mangle a real round name, and "Quarter-finals" needs no help.
- */
-export function roundText(facts: Pick<MatchOverviewFacts, "roundLabel" | "matchday">): string | null {
-  const label = facts.roundLabel?.trim();
-  if (label) {
-    const regularSeason = /^regular season\s*-\s*(\d+)$/i.exec(label);
-    if (regularSeason) return `Matchday ${regularSeason[1]}`;
-    return label;
-  }
-  return facts.matchday !== null ? `Matchday ${facts.matchday}` : null;
 }
 
 export function MatchOverview({
@@ -291,7 +264,7 @@ export function MatchOverview({
    * words ("line-ups", "stats", "the timeline"), decided by the tab strip so
    * this panel and the strip cannot disagree about what is missing. */
   missingAreas: string[];
-  onOpenTab: (tab: "Timeline" | "H2H" | "Standings" | "Room") => void;
+  onOpenTab: (tab: "timeline" | "h2h" | "standings" | "room") => void;
 }) {
   const started = facts.status !== "scheduled";
   const venue = [facts.venueName, facts.venueCity].filter(Boolean).join(", ");
@@ -339,22 +312,22 @@ export function MatchOverview({
   // Declared once and placed twice (see the two call sites below) so the same
   // card cannot drift into two versions of itself.
   const factsCard = (
-    <SectionCard icon={CalendarClock} title="Match facts">
-      <div className="flex flex-col divide-y divide-hairline-soft">
-        {factRows.map((fact, index) => (
-          <motion.div
-            key={fact.label}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: index * 0.03, ease: [0.22, 1, 0.36, 1] }}
-            className="flex items-baseline justify-between gap-3 py-2"
-          >
-            <span className="text-xs text-foreground-subtle">{fact.label}</span>
-            <span className="text-right text-sm font-medium text-foreground">{fact.value}</span>
-          </motion.div>
+    <OverviewSection title="Match facts">
+      {/* One surface, hairline-divided rows — not one card per fact. Rows are
+          written out rather than using `<ListRow>`, because its `trailing` slot
+          is built for a score or a count and sets tabular figures: right for a
+          rating, wrong for "Northgate Park, Northgate". The container is still
+          the shared one, so the divider weight and the surface match every
+          other list in the product. */}
+      <ListSurface>
+        {factRows.map((fact) => (
+          <li key={fact.label} className="flex min-h-11 items-baseline justify-between gap-3 px-4 py-3">
+            <span className="shrink-0 text-sm text-foreground-subtle">{fact.label}</span>
+            <span className="min-w-0 text-right text-sm font-medium text-foreground">{fact.value}</span>
+          </li>
         ))}
-      </div>
-    </SectionCard>
+      </ListSurface>
+    </OverviewSection>
   );
 
   const afterKickOff = missingAreas.filter((area) => area !== "line-ups");
@@ -376,11 +349,13 @@ export function MatchOverview({
       {!started && factsCard}
 
       {events.length > 0 && (
-        <SectionCard
-          icon={Activity}
+        <OverviewSection
           title="Match flow"
-          action={<TabLink label="Full timeline" onClick={() => onOpenTab("Timeline")} />}
+          action={<TabLink label="Full timeline" onClick={() => onOpenTab("timeline")} />}
         >
+          {/* A plotted axis genuinely is one unit, so this is one of the few
+              places on the front page that earns a surface of its own. */}
+          <div className="kivo-glass rounded-2xl p-4">
           <MatchFlow
             events={events}
             homeTeamId={homeTeamId}
@@ -388,24 +363,33 @@ export function MatchOverview({
             awayTeamName={awayTeamName}
             status={facts.status}
           />
-        </SectionCard>
+          </div>
+        </OverviewSection>
       )}
 
       {(homeForm || awayForm) && (
-        <SectionCard icon={TrendingUp} title="Form">
-          <div className="flex flex-col gap-3">
-            {homeForm ? (
-              <FormRow teamName={homeTeamName} form={homeForm} />
-            ) : (
-              <p className="text-xs text-foreground-subtle">KIVO holds no finished matches for {homeTeamName} yet.</p>
-            )}
-            <div className="h-px bg-hairline-soft" />
-            {awayForm ? (
-              <FormRow teamName={awayTeamName} form={awayForm} />
-            ) : (
-              <p className="text-xs text-foreground-subtle">KIVO holds no finished matches for {awayTeamName} yet.</p>
-            )}
-          </div>
+        <OverviewSection title="Form">
+          <ListSurface>
+            {[
+              { name: homeTeamName, form: homeForm },
+              { name: awayTeamName, form: awayForm },
+            ].map((side) => (
+              <ListRow
+                key={side.name}
+                title={side.name}
+                subtitle={
+                  side.form
+                    ? // Record and goals, and nothing after them: the badges on
+                      // the right take the width a third clause needs, and a
+                      // subtitle that ends in "2 pts/…" is worse than one that
+                      // stops at something whole.
+                      `${side.form.wins}W ${side.form.draws}D ${side.form.losses}L · ${side.form.goalsScored}-${side.form.goalsConceded}`
+                    : "No finished matches on record yet."
+                }
+                trailing={side.form ? <FormBadges form={side.form.sequence} /> : null}
+              />
+            ))}
+          </ListSurface>
           {/* The sample is part of the claim. Five results is the window; a
               club with two finished matches on record gets its two, labelled,
               rather than a five-badge strip padded out of nothing. */}
@@ -414,43 +398,34 @@ export function MatchOverview({
               ? "Recent results only — one of these clubs has too few finished matches on record for this to be a real form line yet."
               : "Last five finished matches, most recent first."}
           </p>
-        </SectionCard>
+        </OverviewSection>
       )}
 
       {headToHead && (
-        <SectionCard
-          icon={Swords}
+        <OverviewSection
           title="Head to head"
-          action={h2hTotal > 0 ? <TabLink label="All meetings" onClick={() => onOpenTab("H2H")} /> : undefined}
+          action={h2hTotal > 0 ? <TabLink label="All meetings" onClick={() => onOpenTab("h2h")} /> : undefined}
         >
           {h2hTotal === 0 ? (
             <p className="text-sm text-foreground-muted">
               This is the first meeting between {homeTeamName} and {awayTeamName} on KIVO&apos;s record.
             </p>
           ) : (
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                { value: headToHead.teamAWins, label: `${homeTeamName} wins` },
-                { value: headToHead.draws, label: "Draws" },
-                { value: headToHead.teamBWins, label: `${awayTeamName} wins` },
-              ].map((cell) => (
-                <div key={cell.label} className="rounded-xl bg-surface-1 px-2 py-2">
-                  <div className="text-xl font-bold tabular-nums text-foreground">{cell.value}</div>
-                  <div className="text-[10px] uppercase leading-tight tracking-wide text-foreground-subtle">{cell.label}</div>
-                </div>
-              ))}
-            </div>
+            <StatGrid columns={3}>
+              <StatBlock label={`${homeTeamName} wins`} value={headToHead.teamAWins} />
+              <StatBlock label="Draws" value={headToHead.draws} />
+              <StatBlock label={`${awayTeamName} wins`} value={headToHead.teamBWins} />
+            </StatGrid>
           )}
-        </SectionCard>
+        </OverviewSection>
       )}
 
       {tableRows.length > 0 && (
-        <SectionCard
-          icon={ListOrdered}
+        <OverviewSection
           title="In the table"
-          action={<TabLink label="Full table" onClick={() => onOpenTab("Standings")} />}
+          action={<TabLink label="Full table" onClick={() => onOpenTab("standings")} />}
         >
-          <div className="flex flex-col">
+          <div className="kivo-glass flex flex-col rounded-2xl p-2">
             <div aria-hidden className="flex items-center gap-2 px-2 pb-1 text-[10px] uppercase tracking-wide text-foreground-subtle">
               <span className="w-5 text-right">#</span>
               <span className="w-4" />
@@ -467,7 +442,7 @@ export function MatchOverview({
               />
             ))}
           </div>
-        </SectionCard>
+        </OverviewSection>
       )}
 
       {started && factsCard}
