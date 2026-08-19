@@ -175,9 +175,9 @@ function CompareColumn({ team }: { team: TeamCompareData }) {
 export default async function TeamComparePage({
   searchParams,
 }: {
-  searchParams: Promise<{ a?: string; b?: string }>;
+  searchParams: Promise<{ a?: string; b?: string; c?: string }>;
 }) {
-  const { a, b } = await searchParams;
+  const { a, b, c } = await searchParams;
   const supabase = createServerSupabaseClient();
 
   const { count: teamCount } = await supabase.from("teams").select("id", { count: "exact", head: true });
@@ -211,22 +211,38 @@ export default async function TeamComparePage({
   }));
 
   const hasSelection = Boolean(a) && Boolean(b);
-  // A non-uuid `?a=`/`?b=` is treated exactly like a team that does not exist:
-  // the page already has an honest state for that, and it keeps a tampered
-  // query string from being distinguishable from a stale link.
-  const validSelection = hasSelection && a !== b && isUuid(a ?? "") && isUuid(b ?? "");
 
-  let teamA: TeamCompareData | null = null;
-  let teamB: TeamCompareData | null = null;
-  if (validSelection && a && b) {
-    // `a`/`b` are already guaranteed truthy here by `validSelection` (it's
-    // `Boolean(a) && Boolean(b) && a !== b`) — this extra check is only so
-    // TypeScript can narrow `string | undefined` to `string` itself, instead
-    // of asserting it with `!`.
-    [teamA, teamB] = await Promise.all([getTeamCompareData(supabase, a), getTeamCompareData(supabase, b)]);
+  // `?c=` is optional: two teams is still the whole feature, and every link
+  // shared before the third slot existed has to keep working exactly as it
+  // did. A `?c=` that is present but malformed is treated as a bad request
+  // rather than quietly ignored — silently dropping a third team the user
+  // asked for would show them a two-team comparison and call it what they
+  // requested.
+  const requestedIds = [a, b, ...(c === undefined ? [] : [c])];
+
+  // A non-uuid id is treated exactly like a team that does not exist: the page
+  // already has an honest state for that, and it keeps a tampered query string
+  // from being distinguishable from a stale link. Validated here AND inside
+  // getTeamCompareData (SECURITY_REVIEW F10) — the ids reach an `.or()` filter
+  // string, so the function stays safe on its own terms rather than trusting
+  // this caller to have checked first.
+  const validSelection =
+    hasSelection &&
+    requestedIds.every((id) => isUuid(id ?? "")) &&
+    new Set(requestedIds).size === requestedIds.length;
+
+  let teams: TeamCompareData[] = [];
+  if (validSelection) {
+    const loaded = await Promise.all(
+      requestedIds.map((id) => getTeamCompareData(supabase, id as string)),
+    );
+    // All or nothing. A three-team comparison silently rendering two columns
+    // because one id no longer resolves is a worse answer than saying so.
+    teams = loaded.every((team): team is TeamCompareData => team !== null) ? loaded : [];
   }
 
-  const notFoundSelection = validSelection && (!teamA || !teamB);
+  const notFoundSelection = validSelection && teams.length === 0;
+  const [teamA, teamB] = teams;
 
   // RECOMMENDATIONS.md item 161: this page is the "team pages" surface for
   // head-to-head — a per-rival widget on every /teams/[id] isn't required
@@ -234,7 +250,21 @@ export default async function TeamComparePage({
   // team"), so a dedicated record between exactly the two teams someone
   // picked belongs on the page built for picking two teams, not duplicated
   // on the single-team page too.
-  const headToHead = teamA && teamB ? await getHeadToHead(supabase, teamA.id, teamB.id) : null;
+  // Head-to-head is inherently pairwise, so three teams means three records,
+  // each labelled with the pair it belongs to. Rendering one of them and
+  // calling it "head to head" while a third club sits in the columns above
+  // would be a record attributed to the wrong set of teams.
+  const pairs: [TeamCompareData, TeamCompareData][] = [];
+  for (let i = 0; i < teams.length; i += 1) {
+    for (let j = i + 1; j < teams.length; j += 1) pairs.push([teams[i], teams[j]]);
+  }
+  const headToHeadRecords = await Promise.all(
+    pairs.map(async ([left, right]) => ({
+      left,
+      right,
+      record: await getHeadToHead(supabase, left.id, right.id),
+    })),
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -244,12 +274,12 @@ export default async function TeamComparePage({
       </FadeIn>
 
       <FadeIn delay={0.08}>
-        <TeamComparePicker teams={teamOptions} initialA={a} initialB={b} />
+        <TeamComparePicker teams={teamOptions} initialA={a} initialB={b} initialC={c} />
       </FadeIn>
 
       {hasSelection && !validSelection && (
         <FadeIn delay={0.14} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-          Choose two different teams to compare.
+          Choose two or three different teams to compare.
         </FadeIn>
       )}
 
@@ -267,16 +297,24 @@ export default async function TeamComparePage({
       {teamA && teamB && (
         <>
           <FadeIn delay={0.14} className="kivo-glass rounded-2xl p-6">
-            <div className="grid grid-cols-2 gap-6">
-              <CompareColumn team={teamA} />
-              <CompareColumn team={teamB} />
+            {/* Three columns do not fit a phone at a readable size, so the row
+                scrolls sideways instead of crushing every figure. Two columns
+                keep the layout they always had. */}
+            <div className={teams.length > 2 ? "-mx-2 overflow-x-auto px-2" : ""}>
+              <div className={`grid gap-6 ${teams.length > 2 ? "min-w-[34rem] grid-cols-3" : "grid-cols-2"}`}>
+                {teams.map((team) => (
+                  <CompareColumn key={team.id} team={team} />
+                ))}
+              </div>
             </div>
           </FadeIn>
 
-          {headToHead && (
-            <FadeIn delay={0.17}>
-              <HeadToHeadCard teamA={teamA} teamB={teamB} record={headToHead} />
-            </FadeIn>
+          {headToHeadRecords.map(({ left, right, record }) =>
+            record ? (
+              <FadeIn key={`${left.id}-${right.id}`} delay={0.17}>
+                <HeadToHeadCard teamA={left} teamB={right} record={record} />
+              </FadeIn>
+            ) : null,
           )}
 
           <FadeIn delay={0.2} className="flex flex-col gap-2 text-center text-[11px] text-foreground-subtle">
@@ -297,7 +335,7 @@ export default async function TeamComparePage({
 
       {!hasSelection && (
         <FadeIn delay={0.14} className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-          Pick two teams above to see how they stack up.
+          Pick two teams above to see how they stack up — or three.
         </FadeIn>
       )}
     </div>
