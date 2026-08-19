@@ -67,6 +67,22 @@ type StreamEvent =
   | { type: "done" }
   | { type: "error"; error: string };
 
+/**
+ * The two failures a reader must be able to tell apart: something broke and
+ * may work next time, versus KIVO is pointed at a model that does not exist.
+ * Deliberately names the environment variable rather than the model string, so
+ * whoever reads it knows where to go without KIVO echoing a value back.
+ */
+function aiStreamErrorMessage(err: unknown): string {
+  const status = (err as { status?: unknown } | null)?.status;
+  const type = (err as { error?: { type?: unknown } } | null)?.error?.type;
+  const looksUnknownModel = status === 404 || type === "not_found_error";
+
+  return looksUnknownModel
+    ? "KIVO is configured with an AI model this account cannot reach. This will not fix itself — the AI_MODEL setting needs correcting."
+    : "AI Copilot is temporarily unavailable. Try again in a moment.";
+}
+
 export async function POST(req: Request) {
   const profile = await getOrCreateProfile();
   if (!profile) {
@@ -307,7 +323,18 @@ export async function POST(req: Request) {
         send({ type: "done" });
       } catch (err) {
         logError("api.ai.chat.anthropicStreamingRequest", err);
-        send({ type: "error", error: "AI Copilot is temporarily unavailable. Try again in a moment." });
+        // A misconfigured AI_MODEL is not a transient failure and must not be
+        // reported as one. "Try again in a moment" is a promise that the next
+        // attempt might work; with a model name Anthropic does not recognise,
+        // every attempt fails identically forever, and the reader is told to
+        // keep waiting for something that will never arrive. Worse, it points
+        // the founder at an outage rather than at their own environment
+        // variable, which is the one place the fix actually is.
+        //
+        // Anthropic answers an unknown model with a 404 carrying a
+        // `not_found_error`. Read defensively — this is an error object from a
+        // network boundary, so nothing about its shape is guaranteed.
+        send({ type: "error", error: aiStreamErrorMessage(err) });
       } finally {
         controller.close();
       }
