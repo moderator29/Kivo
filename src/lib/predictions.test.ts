@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  CORRECT_PREDICTION_POINTS,
+  CORRECT_PREDICTION_XP,
   MIN_MOTM_VOTES,
   PREDICTION_TYPE_POINTS,
+  computeStreaks,
+  predictionXp,
   motmVoteFromOptions,
   resolvePrediction,
   type FixtureFacts,
@@ -256,5 +260,74 @@ describe("an unresolvable verdict never carries points", () => {
       expect(verdict.points).toBeNull();
       expect(verdict.reason).toBeTruthy();
     }
+  });
+});
+
+describe("computeStreaks", () => {
+  const day = (n: number) => new Date(Date.UTC(2026, 0, n)).toISOString();
+
+  it("counts consecutive correct picks by kickoff, not by submission order", () => {
+    // Deliberately supplied out of order: the function sorts by kickoff.
+    const streaks = computeStreaks([
+      { pointsAwarded: 3, kickoffAt: day(3) },
+      { pointsAwarded: 3, kickoffAt: day(1) },
+      { pointsAwarded: 3, kickoffAt: day(2) },
+    ]);
+    expect(streaks).toEqual({ current: 3, best: 3 });
+  });
+
+  it("resets the current run on a miss but remembers the best", () => {
+    const streaks = computeStreaks([
+      { pointsAwarded: 3, kickoffAt: day(1) },
+      { pointsAwarded: 3, kickoffAt: day(2) },
+      { pointsAwarded: 3, kickoffAt: day(3) },
+      { pointsAwarded: 0, kickoffAt: day(4) },
+      { pointsAwarded: 3, kickoffAt: day(5) },
+    ]);
+    expect(streaks).toEqual({ current: 1, best: 3 });
+  });
+
+  /**
+   * The invariant this whole design turns on. An unresolvable prediction is
+   * absent from the input — its points_awarded is null, which every caller
+   * filters on — so the run must span it as though the fixture were never
+   * predicted. If someone ever changes a caller's filter to
+   * `resolution is not null`, an unresolvable row arrives carrying
+   * pointsAwarded 0 and silently breaks real streaks. This test is the
+   * tripwire for that.
+   */
+  it("spans a gap where KIVO could not settle a prediction", () => {
+    const withGap = computeStreaks([
+      { pointsAwarded: 3, kickoffAt: day(1) },
+      // day(2) was unresolvable, so it is not here at all.
+      { pointsAwarded: 3, kickoffAt: day(3) },
+    ]);
+    expect(withGap).toEqual({ current: 2, best: 2 });
+
+    // What it would look like if an unresolvable row leaked in as a zero.
+    const ifItLeaked = computeStreaks([
+      { pointsAwarded: 3, kickoffAt: day(1) },
+      { pointsAwarded: 0, kickoffAt: day(2) },
+      { pointsAwarded: 3, kickoffAt: day(3) },
+    ]);
+    expect(ifItLeaked.current).toBe(1);
+  });
+
+  it("is zero for someone with nothing settled yet", () => {
+    expect(computeStreaks([])).toEqual({ current: 0, best: 0 });
+  });
+});
+
+describe("XP is proportional to difficulty and unchanged for winners", () => {
+  it("keeps the winner award byte-identical to what it always was", () => {
+    expect(PREDICTION_TYPE_POINTS.winner).toBe(CORRECT_PREDICTION_POINTS);
+    expect(predictionXp("winner")).toBe(CORRECT_PREDICTION_XP);
+  });
+
+  it("never awards XP for a type it could not settle", () => {
+    // resolvePrediction is the only thing that decides points, and it returns
+    // null for unresolvable — so there is no path from "unresolvable" to XP.
+    const verdict = resolvePrediction(pick({ type: "motm", playerId: "p" }), facts({ motm: null }));
+    expect(verdict.points).toBeNull();
   });
 });

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { awardBadge, awardXp, evaluateBadgeCriteria, hasBadge } from "@/lib/rewards";
+import { awardBadge, evaluateBadgeCriteria, hasBadge } from "@/lib/rewards";
+import { awardSocialPostXp } from "@/lib/xp-policy";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
 import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
@@ -15,14 +16,10 @@ import { logError } from "@/lib/log";
 
 const MAX_POST_LENGTH = 2000;
 
-// Item 141: create_post's own rate limit (5/60s below) only throttles
-// posting speed, not XP over a full day — someone posting every couple of
-// minutes all day would still farm unlimited XP. This is a second,
-// XP-specific check on the same rate_limit_events/checkRateLimit machinery,
-// keyed separately so it never blocks the post itself, only whether this one
-// awards XP: past the cap, checkRateLimit still records the attempt (so the
-// window keeps sliding) but posting keeps working with no XP.
-const MAX_XP_POSTS_PER_DAY = 10;
+// Item 141's daily XP allowance now lives in src/lib/xp-policy.ts, with the
+// award itself, because two later call sites (the templated Room polls) did
+// the same +2 award and skipped the cap entirely — a rule that has to be
+// remembered is not a rule. See awardSocialPostXp.
 
 // RECOMMENDATIONS.md item 172: mirrors poll_options' own DB constraints
 // (poll_options_position_range 0-3, poll_options_label_length 1-80) so a
@@ -108,11 +105,7 @@ export async function createPost(formData: FormData) {
   // Item 141: XP itself is capped separately from the post succeeding — a
   // user past today's XP cap keeps posting normally, they just stop earning
   // XP for it until the 24h window rolls over.
-  const xpAllowance = await checkRateLimit(`user:${profile.id}`, "create_post_xp", MAX_XP_POSTS_PER_DAY, 60 * 60 * 24);
-  await Promise.all([
-    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community", `post:${created.id}`) : Promise.resolve(),
-    awardBadge(profile.id, "first_post"),
-  ]);
+  await Promise.all([awardSocialPostXp(profile.id, created.id), awardBadge(profile.id, "first_post")]);
 
   await maybeAwardTenPostsBadge(supabase, profile.id);
   // KIVO_NEXT_GEN KN-92: every badge whose condition is a countable fact is now
@@ -194,12 +187,8 @@ export async function createPoll(formData: FormData) {
     return { error: "Couldn't publish your poll. Try again." };
   }
 
-  const xpAllowance = await checkRateLimit(`user:${profile.id}`, "create_post_xp", MAX_XP_POSTS_PER_DAY, 60 * 60 * 24);
-  await Promise.all([
-    // KN-91: same key shape as createPost above — a poll is a post.
-    xpAllowance.ok ? awardXp(profile.id, 2, "Posted in the community", `post:${post.id}`) : Promise.resolve(),
-    awardBadge(profile.id, "first_post"),
-  ]);
+  // KN-91: same key shape as createPost above — a poll is a post.
+  await Promise.all([awardSocialPostXp(profile.id, post.id), awardBadge(profile.id, "first_post")]);
 
   await maybeAwardTenPostsBadge(supabase, profile.id);
   // KIVO_NEXT_GEN KN-92: every badge whose condition is a countable fact is now

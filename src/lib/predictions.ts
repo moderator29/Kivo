@@ -31,9 +31,34 @@ export type StreakSummary = { current: number; best: number };
  * accuracy, so streak and accuracy can never quietly disagree about what
  * counts as a hit.
  *
- * Shared by /predictions/mine (display) and scorePredictions
- * (predictions-actions.ts, badge award criteria for three_prediction_streak)
- * so the two can't drift into different definitions of "streak".
+ * Shared by /predictions/mine (display), Home's prediction summary
+ * (src/lib/home/data.ts) and scorePredictions (predictions-actions.ts, badge
+ * award criteria for three_prediction_streak) so the three can't drift into
+ * different definitions of "streak".
+ *
+ * WHAT BREAKS A STREAK, stated exactly, because it is now a three-way answer
+ * and only two of the three are obvious:
+ *
+ *   correct       extends it.
+ *   incorrect     breaks it, and resets the run to zero.
+ *   unresolvable  does NEITHER. It is not in this input at all.
+ *
+ * That third case is the one that needs saying out loud. A prediction KIVO
+ * could not settle — the events never synced, the Room never voted — is not a
+ * hit and is not a miss, because KIVO never found out. Breaking someone's
+ * eight-match run over a fixture whose statistics feed failed would be
+ * punishing them for an outage; extending it would be crediting them for a
+ * result nobody checked. So an unresolvable row is skipped, and the run spans
+ * straight across the gap.
+ *
+ * Every caller is responsible for passing only settled rows, and every caller
+ * does it the same way: `points_awarded is not null`. That filter is exactly
+ * equivalent to "not unresolvable", and it is equivalent by construction, not
+ * by luck — `predictions_unresolvable_has_no_points` (migration 0079) makes it
+ * impossible for an unresolvable row to carry points. Anyone tempted to
+ * re-express the filter as `resolution is not null` should not: that would
+ * include unresolvable rows, whose points_awarded is null, and every one of
+ * them would then read as a miss.
  */
 export function computeStreaks(scoredRows: { pointsAwarded: number; kickoffAt: string }[]): StreakSummary {
   const chronological = [...scoredRows].sort(

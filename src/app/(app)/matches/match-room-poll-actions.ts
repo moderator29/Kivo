@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { awardBadge, awardXp } from "@/lib/rewards";
+import { awardBadge } from "@/lib/rewards";
+import { awardSocialPostXp } from "@/lib/xp-policy";
 import { logError } from "@/lib/log";
 import {
   REFEREE_DECISION_OPTIONS,
@@ -105,7 +106,7 @@ export async function createMotmPoll(fixtureId: string) {
   const labels = starters.map((row) => row.player!.known_as || row.player!.full_name);
   const playerIds = starters.map((row) => row.player!.id);
 
-  const { error } = await supabase.rpc("create_templated_poll", {
+  const { data: postId, error } = await supabase.rpc("create_templated_poll", {
     p_fixture_id: fixtureId,
     p_poll_kind: "motm",
     p_question: MOTM_QUESTION,
@@ -113,12 +114,16 @@ export async function createMotmPoll(fixtureId: string) {
     p_player_ids: playerIds,
   });
 
-  if (error) {
+  if (error || !postId) {
     logError("matches.match-room-poll-actions.createMotmPoll", error);
     return { error: "Couldn't start the vote. Try again." };
   }
 
-  await Promise.all([awardXp(profile.id, 2, "Posted in the community", `motm-poll:${fixtureId}`), awardBadge(profile.id, "first_post")]);
+  // Through the shared XP policy, not a bespoke award: a templated poll is a
+  // post, so it earns the same 2 XP against the same daily allowance and the
+  // same `post:<id>` identity as every other piece of community content. This
+  // award used to bypass that allowance entirely.
+  await Promise.all([awardSocialPostXp(profile.id, postId), awardBadge(profile.id, "first_post")]);
 
   revalidatePath(`/matches/${fixtureId}`);
   revalidatePath("/social");
@@ -154,7 +159,7 @@ export async function createRefereePoll(fixtureId: string, decision: RefereeDeci
   if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase.rpc("create_templated_poll", {
+  const { data: postId, error } = await supabase.rpc("create_templated_poll", {
     p_fixture_id: fixtureId,
     p_poll_kind: "referee_decision",
     p_question: refereeDecisionQuestion(decision, minute),
@@ -164,15 +169,17 @@ export async function createRefereePoll(fixtureId: string, decision: RefereeDeci
     p_player_ids: REFEREE_VERDICTS.map(() => null) as unknown as string[],
   });
 
-  if (error) {
+  if (error || !postId) {
     logError("matches.match-room-poll-actions.createRefereePoll", error);
     return { error: "Couldn't start the poll. Try again." };
   }
 
-  await Promise.all([
-    awardXp(profile.id, 2, "Posted in the community", `ref-poll:${fixtureId}:${decision}:${minute ?? "na"}`),
-    awardBadge(profile.id, "first_post"),
-  ]);
+  // Keyed on the real post, not on the question the user typed. The previous
+  // key — `ref-poll:<fixture>:<decision>:<minute>` — was built from the
+  // caller's own inputs, so one fixture offered 5 decisions x 131 minute
+  // values = 655 distinct "already awarded?" keys, each worth another 2 XP,
+  // bounded only by the 5-per-minute posting limit. See src/lib/xp-policy.ts.
+  await Promise.all([awardSocialPostXp(profile.id, postId), awardBadge(profile.id, "first_post")]);
 
   revalidatePath(`/matches/${fixtureId}`);
   revalidatePath("/social");

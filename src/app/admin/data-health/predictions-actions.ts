@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { awardBadge, awardXp, evaluateBadgeCriteria } from "@/lib/rewards";
+import { awardBadge, evaluateBadgeCriteria, reconcileXp } from "@/lib/rewards";
+import { predictionXpReason } from "@/lib/xp-policy";
 import { logAudit } from "@/lib/audit";
 import {
   PREDICTION_TYPE_LABEL,
@@ -15,7 +16,6 @@ import {
   resolvePrediction,
   type FixtureFactEvent,
   type FixtureFacts,
-  type PredictionType,
 } from "@/lib/predictions";
 import { logError } from "@/lib/log";
 
@@ -165,6 +165,11 @@ export async function scorePredictions(): Promise<{
    * admin rather than hidden, because "nothing happened" and "forty rows are
    * waiting on a details sync" look identical from a count alone. */
   unresolvedCount?: number;
+  /** Rows that had already been settled and now say something different —
+   * a corrected score, a detail sync that landed, a fixed scoring bug. XP is
+   * reconciled for each, so this number is also "how many people's totals
+   * moved". */
+  adjustedCount?: number;
 }> {
   const profile = await getOrCreateProfile();
   if (!profile || !canManageFootballData(profile.role)) {
@@ -190,29 +195,41 @@ export async function scorePredictions(): Promise<{
     away_score: fixture.away_score as number,
   }));
   if (scoredFixtures.length === 0) {
-    return { error: null, recordsProcessed: 0, unresolvedCount: 0 };
+    return { error: null, recordsProcessed: 0, unresolvedCount: 0, adjustedCount: 0 };
   }
 
   const fixtureIds = scoredFixtures.map((fixture) => fixture.id);
 
   const service = createServiceRoleSupabaseClient();
-  const { data: unscored, error: predictionsError } = await service
+  // Every prediction on a finished fixture, not only the unsettled ones.
+  //
+  // This used to filter `points_awarded is null`, which made the pass strictly
+  // one-directional: once a row was settled it was never looked at again. That
+  // is wrong in three real situations, and all three now exist. An unresolvable
+  // row settles for real once its detail sync lands. An audited admin data
+  // correction can change a final score after predictions were scored against
+  // the old one. And a fixed scoring bug has to be able to re-run.
+  //
+  // Re-reading settled rows costs a bounded read of predictions on finished
+  // fixtures per admin-triggered run, and writes nothing where the verdict is
+  // unchanged — which is the overwhelmingly common case.
+  const { data: allPredictions, error: predictionsError } = await service
     .from("predictions")
     .select(
       `id, profile_id, fixture_id, prediction_type, predicted_outcome, predicted_home_score,
-       predicted_away_score, predicted_player_id, predicted_total_goals, predicted_cards, predicted_corners`,
+       predicted_away_score, predicted_player_id, predicted_total_goals, predicted_cards,
+       predicted_corners, points_awarded, resolution`,
     )
-    .in("fixture_id", fixtureIds)
-    .is("points_awarded", null);
+    .in("fixture_id", fixtureIds);
 
   if (predictionsError) {
     logError("admin.data-health.predictions-actions.loadUnscoredPredictions", predictionsError);
     return { error: "Couldn't load predictions to score. Try again." };
   }
 
-  const rows = unscored ?? [];
+  const rows = allPredictions ?? [];
   if (rows.length === 0) {
-    return { error: null, recordsProcessed: 0, unresolvedCount: 0 };
+    return { error: null, recordsProcessed: 0, unresolvedCount: 0, adjustedCount: 0 };
   }
 
   // Only load facts for the fixtures that actually have something waiting.
@@ -225,32 +242,57 @@ export async function scorePredictions(): Promise<{
   const now = new Date().toISOString();
   let processed = 0;
   let unresolved = 0;
+  let adjusted = 0;
 
   for (const row of rows) {
     const fixtureFacts = facts.get(row.fixture_id);
     if (!fixtureFacts) continue;
 
     const verdict = resolvePrediction(pickFromRow(row), fixtureFacts);
+    const verdictUnchanged = row.resolution === verdict.resolution && row.points_awarded === verdict.points;
 
-    const { error: updateError } = await service
-      .from("predictions")
-      .update({
-        points_awarded: verdict.points,
-        resolution: verdict.resolution,
-        unresolvable_reason: verdict.reason,
-        resolved_at: now,
-        // Locked either way: the match has finished, so the pick is final
-        // whether or not KIVO can settle it yet.
-        locked_at: now,
-      })
-      .eq("id", row.id);
+    if (!verdictUnchanged) {
+      const { error: updateError } = await service
+        .from("predictions")
+        .update({
+          points_awarded: verdict.points,
+          resolution: verdict.resolution,
+          unresolvable_reason: verdict.reason,
+          resolved_at: now,
+          // Locked either way: the match has finished, so the pick is final
+          // whether or not KIVO can settle it yet.
+          locked_at: now,
+        })
+        .eq("id", row.id);
 
-    if (updateError) {
-      logError("admin.data-health.predictions-actions.scorePrediction", updateError, {
-        detail: `Failed to score prediction ${row.id}`,
-      });
-      continue;
+      if (updateError) {
+        logError("admin.data-health.predictions-actions.scorePrediction", updateError, {
+          detail: `Failed to score prediction ${row.id}`,
+        });
+        continue;
+      }
+
+      // A row that had already been settled and now says something different
+      // is the case worth counting separately: it means real, previously
+      // reported numbers moved, and an admin should know that happened rather
+      // than reading it as a routine pass.
+      if (row.resolution !== null) adjusted += 1;
     }
+
+    // Reconciled every run, changed or not. This is the only thing that can
+    // take XP back off a prediction whose verdict moved — including the case
+    // that used to be silently impossible: a correct prediction re-scored
+    // against a corrected final score, which previously kept its XP forever.
+    // A no-change run writes nothing, because the delta is zero.
+    const { changed, delta } = await reconcileXp(
+      row.profile_id,
+      `prediction:${row.id}`,
+      verdict.resolution === "correct" ? predictionXp(row.prediction_type) : 0,
+      verdict.resolution === "correct"
+        ? predictionXpReason(PREDICTION_TYPE_LABEL[row.prediction_type])
+        : `Prediction re-scored · ${PREDICTION_TYPE_LABEL[row.prediction_type]}`,
+    );
+    void delta;
 
     if (verdict.resolution === "unresolvable") {
       // Deliberately not counted as processed: nothing was settled. Counting
@@ -262,8 +304,12 @@ export async function scorePredictions(): Promise<{
     }
 
     processed += 1;
-    if (verdict.resolution === "correct") {
-      await awardCorrectPrediction(service, row.id, row.profile_id, row.prediction_type);
+    // Badges only when this row genuinely became correct in this run. Running
+    // the badge sweep for every already-correct prediction on every pass would
+    // re-evaluate the whole catalogue for every user, every time, to award
+    // nothing.
+    if (verdict.resolution === "correct" && (changed || !verdictUnchanged)) {
+      await awardPredictionBadges(service, row.profile_id);
     }
   }
 
@@ -271,30 +317,24 @@ export async function scorePredictions(): Promise<{
     fixturesConsidered: scoredFixtures.length,
     recordsProcessed: processed,
     unresolvedCount: unresolved,
+    adjustedCount: adjusted,
   });
 
   revalidatePath("/predictions");
   revalidatePath("/admin/data-health");
+  revalidatePath("/rewards");
 
-  return { error: null, recordsProcessed: processed, unresolvedCount: unresolved };
+  return { error: null, recordsProcessed: processed, unresolvedCount: unresolved, adjustedCount: adjusted };
 }
 
 /**
- * XP and badges for one genuinely correct prediction, unchanged in shape from
- * the winner-only version — the only difference is that XP now scales with
- * the type's own difficulty, at exactly the ratio the winner type always
- * used, so a winner pick still awards the same 15 XP it always did.
+ * Badges for one genuinely correct prediction.
+ *
+ * XP is no longer awarded here — `reconcileXp` in the loop above owns it, so
+ * that the same code path handles the award, the re-award and the take-back.
+ * Splitting them was the point: an award function can only ever add.
  */
-async function awardCorrectPrediction(
-  service: ServiceClient,
-  predictionId: string,
-  profileId: string,
-  type: PredictionType,
-): Promise<void> {
-  // KN-91: keyed on the prediction, so re-running this scoring pass — which
-  // an admin can do at any time, and which a partial failure invites —
-  // cannot credit the same correct prediction twice.
-  await awardXp(profileId, predictionXp(type), `Correct ${PREDICTION_TYPE_LABEL[type].toLowerCase()} prediction`, `prediction:${predictionId}`);
+async function awardPredictionBadges(service: ServiceClient, profileId: string): Promise<void> {
   await awardBadge(profileId, "first_prediction_correct");
   // KIVO_NEXT_GEN KN-92: the criteria-driven half of the catalogue, evaluated
   // off the same real scoring event.

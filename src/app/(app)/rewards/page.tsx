@@ -16,8 +16,19 @@ const item = getNavItem("rewards");
 
 export const metadata: Metadata = { title: item.label };
 
-type XpHistoryEntry = { amount: number; reason: string; created_at: string };
-type XpHistoryLine = { key: string; amount: number; reason: string; created_at: string; count: number };
+type XpHistoryEntry = { amount: number; reason: string; created_at: string; source_key: string | null };
+type XpHistoryLine = {
+  key: string;
+  amount: number;
+  reason: string;
+  created_at: string;
+  count: number;
+  /** Carried through from the run's first row so the line can link by the
+   * award's real `kind:` prefix rather than by matching its prose — see
+   * xpReasonLink. Every row in a collapsed run shares an amount and a reason,
+   * so they share a kind too. */
+  source_key: string | null;
+};
 
 /** Collapses consecutive rows within a day that share the same amount and
  * reason into one line with a count (item 236: a dozen "+2 XP — Posted in
@@ -35,7 +46,14 @@ function collapseConsecutiveXpEntries(entries: XpHistoryEntry[]): XpHistoryLine[
     if (last && last.amount === entry.amount && last.reason === entry.reason) {
       last.count += 1;
     } else {
-      lines.push({ key: entry.created_at, amount: entry.amount, reason: entry.reason, created_at: entry.created_at, count: 1 });
+      lines.push({
+        key: entry.created_at,
+        amount: entry.amount,
+        reason: entry.reason,
+        created_at: entry.created_at,
+        count: 1,
+        source_key: entry.source_key,
+      });
     }
   }
   return lines;
@@ -111,7 +129,11 @@ export default async function RewardsPage() {
       supabase.rpc("get_xp_total", { p_profile_id: profile.id }),
       supabase.from("user_badges").select("badge_id, awarded_at"),
       supabase.from("badges").select("id, code, name, description, icon_url").order("created_at", { ascending: true }),
-      supabase.from("xp_ledger").select("amount, reason, created_at").order("created_at", { ascending: false }).limit(30),
+      supabase
+        .from("xp_ledger")
+        .select("amount, reason, created_at, source_key")
+        .order("created_at", { ascending: false })
+        .limit(30),
       // Real current/longest daily-activity streak, derived live from this
       // profile's own xp_ledger rows — see get_activity_streak() for the
       // full "qualifying day" definition and reasoning.
@@ -119,7 +141,16 @@ export default async function RewardsPage() {
       // Just enough of this week's xp_ledger to know which real days were
       // active, for the Mon-Sun strip below. Same own-rows RLS as the XP
       // history query above — never another user's activity.
-      supabase.from("xp_ledger").select("created_at").gte("created_at", weekStartUtc.toISOString()),
+      supabase
+        .from("xp_ledger")
+        .select("created_at")
+        // amount > 0 for the same reason migration 0100 added it to
+        // get_activity_streak: a negative reconciliation row records that KIVO
+        // took XP back after a re-score, not that this person was here that
+        // day. The two must agree, or the week strip and the streak pill on
+        // the same screen would disagree about which days counted.
+        .gt("amount", 0)
+        .gte("created_at", weekStartUtc.toISOString()),
     ]);
 
   const totalXp = xpTotal ?? 0;
@@ -317,7 +348,7 @@ export default async function RewardsPage() {
                     // inventing a relationship the schema doesn't hold — this
                     // links the reason *category* to its surface instead, and
                     // renders plain text for any reason it doesn't recognise.
-                    const link = xpReasonLink(line.reason);
+                    const link = xpReasonLink(line.reason, line.source_key);
                     return (
                     <div key={line.key} className="flex items-center justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
