@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { readList } from "@/lib/query-result";
+import { readClubs } from "@/lib/football/club-directory";
+import { TEAM_PICKER_LIMIT } from "@/lib/profile-picker";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 
@@ -28,22 +29,23 @@ export default async function OnboardingPage() {
   // Only offer the favourite-team step when there's real, synced data to
   // pick from — an empty picker on a brand-new environment would be a dead
   // end, not a personalization step.
+  //
+  // `readClubs` rather than `order by name limit 60`: the alphabetical head of
+  // a real club table is reserve and youth sides, and this is the first screen
+  // of the product. It opens on the clubs KIVO profiles actually follow, and
+  // the panel below it can search the whole table for anything else — see
+  // src/lib/football/club-directory.ts for why follow counts are the only
+  // ordering signal KIVO is allowed to have.
+  //
+  // Deliberately tolerant of failure, and it is the uncomfortable call on this
+  // page. OnboardingFlow drops the two club steps when this list is empty, so
+  // a failed read silently costs a first-time user the club-picking questions
+  // — recoverable in Settings, but only once they know to look. The
+  // alternative is worse: blocking the one flow that stands between a new
+  // account and the app, on a transient read. So it degrades, and `readClubs`
+  // logs, rather than vanishing into a `??`.
   const supabase = createServerSupabaseClient();
-  // Deliberately tolerant, and it is the uncomfortable call on this page.
-  // OnboardingFlow drops the two club steps when this list is empty, so a
-  // failed read silently costs a first-time user the club-picking questions —
-  // recoverable in Settings, but only once they know to look. The alternative
-  // is worse: blocking the one flow that stands between a new account and the
-  // app, on a transient read. So it degrades, and it logs, rather than
-  // vanishing into a `??`.
-  const teamsOutcome = readList(
-    await supabase
-      .from("teams")
-      .select("id, name, short_name, crest_url")
-      .order("name", { ascending: true })
-      .limit(60),
-    "onboarding.teams",
-  );
+  const clubs = await readClubs(supabase, { limit: TEAM_PICKER_LIMIT });
 
   return (
     <div className="relative flex min-h-screen flex-col items-center overflow-hidden bg-background px-4 py-8">
@@ -65,7 +67,7 @@ export default async function OnboardingPage() {
         // verified, in which case resolveViewerProfile() provisions the
         // placeholder (src/lib/profile.ts). Both land here needing to pick.
         needsUsername={profile.username.startsWith("user_")}
-        availableTeams={teamsOutcome.rows}
+        availableTeams={clubs.clubs}
         // The KIVO avatar this profile was assigned at creation
         // (randomKivoAvatarId, in getOrCreateProfile) — passed so the
         // completion screen can show the user their own real avatar even if

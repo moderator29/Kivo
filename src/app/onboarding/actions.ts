@@ -12,6 +12,8 @@ import { isSupportedTimeZone } from "@/lib/timezone";
 // how the rule drifts.
 import { USERNAME_PATTERN, normalizeUsername } from "@/lib/auth-shared";
 import { logError } from "@/lib/log";
+import { readClubs } from "@/lib/football/club-directory";
+import { TEAM_PICKER_LIMIT, type PickerTeam } from "@/lib/profile-picker";
 
 const ONBOARDING_COMPLETE_XP = 10;
 
@@ -55,6 +57,29 @@ export type OnboardingCompletion = {
  * check itself failed) so the UI can stay silent rather than show a false
  * positive/negative.
  */
+/**
+ * The club search behind onboarding's two club steps.
+ *
+ * Onboarding used to render `select … from teams order by name limit 60` as a
+ * fixed grid with no search at all — so on the live database a first-time user
+ * was offered sixty reserve and youth sides, and if their club was not among
+ * them there was no way to ask for it. That is the first screen of the
+ * product, and it was the screen most likely to convince somebody KIVO does
+ * not know about their football.
+ *
+ * Same `readClubs` as /profile/club and /settings/clubs, so all three now
+ * agree on which clubs and in what order. See src/lib/football/club-directory.ts
+ * for the ordering and why it is the only honest one available.
+ */
+export async function searchOnboardingClubs(query: string): Promise<{ teams: PickerTeam[] }> {
+  const profile = await getOrCreateProfile();
+  if (!profile) return { teams: [] };
+
+  const supabase = createServerSupabaseClient();
+  const page = await readClubs(supabase, { query, limit: TEAM_PICKER_LIMIT });
+  return { teams: page.clubs };
+}
+
 export async function checkUsername(username: string): Promise<{ available: boolean | null }> {
   const trimmed = normalizeUsername(username);
   if (!USERNAME_PATTERN.test(trimmed)) {

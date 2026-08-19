@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { escapeLikePattern } from "@/lib/text";
 import { logError } from "@/lib/log";
+import { readClubs } from "@/lib/football/club-directory";
 
 export type ClubOption = { id: string; name: string; shortName: string | null; crestUrl: string | null; country: string | null };
 
@@ -14,10 +14,16 @@ const CLUB_RESULTS_LIMIT = 12;
 /**
  * Teams to choose from in /settings/clubs.
  *
- * With a query, a plain name search. Without one, the clubs KIVO actually has
- * the most followers for — real counts via `get_most_followed_teams` (0040),
- * the same honest "Popular, not Trending" signal the search page uses. If
- * nothing is synced yet the list is genuinely empty and the picker says so;
+ * Now the same `readClubs` the profile picker and onboarding use
+ * (src/lib/football/club-directory.ts), so the three surfaces cannot disagree
+ * about which clubs exist or in what order they come. This one had the better
+ * answer first — most-followed clubs ahead of the alphabet, via
+ * `get_most_followed_teams` — but it only applied to the empty query and only
+ * here; `search_clubs_ranked` (migration 0108) does the same thing for a typed
+ * search too, in SQL, and does not need a second round trip to hydrate the
+ * ids.
+ *
+ * If nothing is synced yet the list is genuinely empty and the picker says so;
  * it never falls back to a hardcoded list of famous clubs.
  */
 export async function searchClubs(query: string): Promise<{ error: string | null; clubs: ClubOption[] }> {
@@ -29,38 +35,14 @@ export async function searchClubs(query: string): Promise<{ error: string | null
   if (!rateLimit.ok) return { error: rateLimit.error, clubs: [] };
 
   const supabase = createServerSupabaseClient();
+  const page = await readClubs(supabase, { query: trimmed, limit: CLUB_RESULTS_LIMIT });
 
-  if (trimmed.length < 2) {
-    const { data: popular } = await supabase.rpc("get_most_followed_teams", { p_limit: CLUB_RESULTS_LIMIT });
-    const ids = (popular ?? []).map((row) => row.team_id);
-    if (ids.length === 0) {
-      // Nobody follows anything yet — fall back to whatever clubs exist at
-      // all, alphabetically, rather than showing an empty picker on a
-      // database that does have teams in it.
-      const { data } = await supabase
-        .from("teams")
-        .select("id, name, short_name, crest_url, country")
-        .order("name")
-        .limit(CLUB_RESULTS_LIMIT);
-      return { error: null, clubs: (data ?? []).map(toClubOption) };
-    }
-    const { data } = await supabase.from("teams").select("id, name, short_name, crest_url, country").in("id", ids);
-    const byId = new Map((data ?? []).map((t) => [t.id, t]));
-    return { error: null, clubs: ids.map((id) => byId.get(id)).filter(Boolean).map((t) => toClubOption(t!)) };
-  }
+  // "Could not look" and "nothing matched" are different facts and this picker
+  // has always distinguished them — `readClubs` reports the first as `failed`
+  // rather than as an empty list.
+  if (page.failed) return { error: "Couldn't search clubs. Try again.", clubs: [] };
 
-  const { data, error } = await supabase
-    .from("teams")
-    .select("id, name, short_name, crest_url, country")
-    .ilike("name", `%${escapeLikePattern(trimmed)}%`)
-    .order("name")
-    .limit(CLUB_RESULTS_LIMIT);
-
-  if (error) {
-    logError("searchClubs.failed", error);
-    return { error: "Couldn't search clubs. Try again.", clubs: [] };
-  }
-  return { error: null, clubs: (data ?? []).map(toClubOption) };
+  return { error: null, clubs: page.clubs.map(toClubOption) };
 }
 
 function toClubOption(team: {

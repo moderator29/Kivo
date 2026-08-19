@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { COUNTRY_CODES } from "@/lib/countries";
-import { escapeLikePattern } from "@/lib/text";
 import { TEAM_PICKER_LIMIT, type PickerTeam } from "@/lib/profile-picker";
+import { readClubs } from "@/lib/football/club-directory";
 import { logError } from "@/lib/log";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
@@ -238,36 +238,32 @@ export async function updateFavouriteTeam(teamId: string | null) {
 /**
  * Club search for the "change the club you support" picker.
  *
- * Server-side rather than filtering a preloaded list in the browser: `teams`
- * is the one table in this schema that grows without bound as competitions are
- * synced, and shipping all of it to a phone to filter three characters against
- * would be the wrong shape the moment real data lands. `escapeLikePattern`
- * keeps a `%` or `_` typed by a user from turning into a wildcard — the same
- * treatment /players and /fantasy already give their own searches.
+ * Server-side rather than filtering a preloaded list in the browser, and now
+ * server-*ranked* too: `teams` is the one table in this schema that grows
+ * without bound as competitions are synced, so the filtering AND the ordering
+ * belong where the indexes are. `readClubs`
+ * (src/lib/football/club-directory.ts) is the single implementation behind
+ * this, onboarding's club step and /settings/clubs — the three previously had
+ * three different answers to "which clubs, in what order", and only one of
+ * them was any good.
  *
- * Returns the alphabetical head of the table for an empty query, so the picker
- * has something real to show before anyone types. Today that is an empty list,
- * because the live project has zero teams synced; the page says so plainly
- * rather than rendering an empty box.
+ * Every filter is optional and null means "do not narrow by this", so one
+ * action serves the opening list, a typed search and either filter.
  */
-export async function searchTeams(query: string): Promise<{ teams: PickerTeam[] }> {
+export async function searchTeams(
+  query: string,
+  filters: { competitionId?: string | null; country?: string | null } = {},
+): Promise<{ teams: PickerTeam[]; ranked: boolean; failed: boolean }> {
   const profile = await getOrCreateProfile();
-  if (!profile) return { teams: [] };
+  if (!profile) return { teams: [], ranked: false, failed: false };
 
-  const trimmed = query.trim();
   const supabase = createServerSupabaseClient();
-  let request = supabase
-    .from("teams")
-    .select("id, name, short_name, crest_url, country")
-    .order("name", { ascending: true })
-    .limit(TEAM_PICKER_LIMIT);
+  const page = await readClubs(supabase, {
+    query,
+    competitionId: filters.competitionId ?? null,
+    country: filters.country ?? null,
+    limit: TEAM_PICKER_LIMIT,
+  });
 
-  if (trimmed) request = request.ilike("name", `%${escapeLikePattern(trimmed)}%`);
-
-  const { data, error } = await request;
-  if (error) {
-    logError("profile.searchTeams", error);
-    return { teams: [] };
-  }
-  return { teams: data ?? [] };
+  return { teams: page.clubs, ranked: page.ranked, failed: page.failed };
 }

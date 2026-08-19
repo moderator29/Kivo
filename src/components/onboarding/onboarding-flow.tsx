@@ -5,11 +5,17 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { StaticImageData } from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Search, Sparkles, X } from "lucide-react";
 import kivoIntroArtwork from "../../../public/brand/kivo-artwork-hero.webp";
 import kivoUsernameArtwork from "../../../public/brand/kivo-artwork-social.webp";
 import kivoTeamArtwork from "../../../public/brand/kivo-artwork-action.webp";
-import { saveUsernameStep, finishOnboarding, skipOnboarding, checkUsername } from "@/app/onboarding/actions";
+import {
+  saveUsernameStep,
+  finishOnboarding,
+  skipOnboarding,
+  checkUsername,
+  searchOnboardingClubs,
+} from "@/app/onboarding/actions";
 import type { AlertPreset, OnboardingCompletion } from "@/app/onboarding/actions";
 import type { AwardedBadge } from "@/lib/rewards";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -18,15 +24,14 @@ import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { CountUp } from "@/components/ui/count-up";
 import { useDeviceTimeZone } from "@/lib/use-device-timezone";
 import { USERNAME_PATTERN, normalizeUsername } from "@/lib/auth-shared";
+import type { PickerTeam } from "@/lib/profile-picker";
 
 const AVAILABILITY_DEBOUNCE_MS = 450;
+const CLUB_SEARCH_DEBOUNCE_MS = 300;
 
-type Team = {
-  id: string;
-  name: string;
-  short_name: string | null;
-  crest_url: string | null;
-};
+/** The same club shape the profile picker and /settings/clubs use, so the
+ * three surfaces cannot drift apart on what a club is. */
+type Team = PickerTeam;
 
 // The pageable slides of the carousel, in order. "success" isn't part of this
 // list on purpose — it's a one-way completion screen reached only after a real
@@ -590,6 +595,99 @@ export function UsernamePanel({
   );
 }
 
+/**
+ * The club search shared by both club steps.
+ *
+ * Onboarding's grid used to be the first sixty clubs alphabetically and
+ * nothing else — no search box, so a user whose club was not in that sixty had
+ * no way to say so and the step read as "KIVO does not have your club". The
+ * seed list is now ordered (see src/app/onboarding/page.tsx) and this is the
+ * way past it: the same server-side search the rest of the product uses,
+ * debounced, with out-of-order responses dropped.
+ */
+function useClubSearch(seed: Team[]) {
+  const [query, setQuery] = useState("");
+  const [teams, setTeams] = useState(seed);
+  const [searching, setSearching] = useState(false);
+  const requestId = useRef(0);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, []);
+
+  function onQueryChange(next: string) {
+    setQuery(next);
+    if (debounce.current) clearTimeout(debounce.current);
+    setSearching(true);
+    const id = ++requestId.current;
+    debounce.current = setTimeout(() => {
+      searchOnboardingClubs(next)
+        .then((result) => {
+          if (requestId.current !== id) return;
+          setTeams(result.teams);
+          setSearching(false);
+        })
+        .catch(() => {
+          if (requestId.current !== id) return;
+          setSearching(false);
+        });
+    }, CLUB_SEARCH_DEBOUNCE_MS);
+  }
+
+  return { query, teams, searching, onQueryChange };
+}
+
+/** The search field above either club grid. Its own component so the two
+ * steps cannot drift into looking like two different controls. */
+function ClubSearchField({
+  query,
+  searching,
+  onChange,
+  disabled,
+}: {
+  query: string;
+  searching: boolean;
+  onChange: (next: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="kivo-field flex w-full items-center gap-2 px-3.5 py-2.5">
+      <Search className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+      <input
+        value={query}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder="Search clubs"
+        aria-label="Search clubs"
+        className="w-full bg-transparent text-left text-sm text-foreground outline-none placeholder:text-foreground-subtle disabled:opacity-50"
+      />
+      {searching && (
+        <span className="block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
+      )}
+    </div>
+  );
+}
+
+/** Said once, under both grids: what the order is and that KIVO is not
+ * ranking clubs by an opinion it does not hold. */
+function ClubOrderNote({ query, empty }: { query: string; empty: boolean }) {
+  if (empty) {
+    return (
+      <p className="w-full text-left text-[11px] leading-relaxed text-foreground-subtle">
+        {query.trim() ? `No club matches “${query.trim()}”.` : "No clubs to show."}
+      </p>
+    );
+  }
+  return (
+    <p className="w-full text-left text-[11px] leading-relaxed text-foreground-subtle">
+      Clubs other KIVO fans follow come first, then A–Z. Can&apos;t see yours? Search for it.
+    </p>
+  );
+}
+
 export function TeamPanel({
   teams,
   selectedTeamId,
@@ -605,6 +703,8 @@ export function TeamPanel({
   onContinue: () => void;
   onSkip: () => void;
 }) {
+  const { query, teams: visibleTeams, searching, onQueryChange } = useClubSearch(teams);
+
   return (
     <div className="flex flex-col items-center gap-6 text-center">
       <HeroArt src={kivoTeamArtwork} />
@@ -618,8 +718,11 @@ export function TeamPanel({
         </p>
       </div>
 
+      <ClubSearchField query={query} searching={searching} onChange={onQueryChange} disabled={pending} />
+      <ClubOrderNote query={query} empty={visibleTeams.length === 0} />
+
       <div className="grid max-h-56 w-full grid-cols-2 gap-2 overflow-y-auto pr-1">
-        {teams.map((team) => {
+        {visibleTeams.map((team) => {
           const isSelected = selectedTeamId === team.id;
           return (
             <button
@@ -686,6 +789,7 @@ export function ClubsPanel({
   onSkip: () => void;
 }) {
   const followCount = selectedIds.length + (favouriteTeamId ? 1 : 0);
+  const { query, teams: visibleTeams, searching, onQueryChange } = useClubSearch(teams);
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
@@ -701,8 +805,11 @@ export function ClubsPanel({
         </p>
       </div>
 
+      <ClubSearchField query={query} searching={searching} onChange={onQueryChange} disabled={pending} />
+      <ClubOrderNote query={query} empty={visibleTeams.length === 0} />
+
       <div className="grid max-h-56 w-full grid-cols-2 gap-2 overflow-y-auto pr-1">
-        {teams.map((team) => {
+        {visibleTeams.map((team) => {
           const isFavourite = team.id === favouriteTeamId;
           const isSelected = isFavourite || selectedIds.includes(team.id);
           return (
