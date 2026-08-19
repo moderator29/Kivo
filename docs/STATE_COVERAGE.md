@@ -276,16 +276,27 @@ flash a shape for less time than it takes to read.
 
 ---
 
-## Not fixed here — owned by other agents
+## Found outside this pass's files
 
-Reported rather than edited, per the file ownership on this branch:
+Reported rather than edited, per the file ownership on this branch. Kept here
+after the fact, because the pattern is the useful part.
 
-- **`src/app/(app)/matches/[id]/page.tsx`** (actively contended) — two
-  `{ data: fixture }` reads without `error`, both gating `notFound()`. A failed
-  read on the highest-traffic detail page in the product renders "that doesn't
-  exist" about a real fixture. One-line fix each with `readRow`.
+- **`src/app/(app)/matches/[id]/page.tsx`** — **fixed** by its owner in
+  `c060707`. Two `{ data: fixture }` reads without `error`, both gating
+  `notFound()`, on the highest-traffic detail page in the product: a failed read
+  told people a real fixture did not exist. Now `readRow` for the fixture and
+  `readOptionalRow` in `generateMetadata`, since a page title is not worth a
+  500.
 - **`src/app/(app)/players/[id]/page.tsx`** and
-  **`src/app/(app)/transfers/[id]/page.tsx`** — same pattern, same one-line
-  fix; both had uncommitted changes from another agent when this pass ran.
-- **`src/components/predictions/prediction-card.tsx`** — `pct()` divides by
-  `total` with no zero guard on the path where every count is zero.
+  **`src/app/(app)/transfers/[id]/page.tsx`** — **still open**. Same pattern,
+  same one-line fix; both were being actively edited when this pass ran and
+  when it was audited.
+
+Checked and **not** a defect, recorded so nobody re-raises it:
+
+- **`src/components/predictions/prediction-card.tsx`** — `pct()` looks like an
+  unguarded divide by `total`, and is not one. `ConsensusBar` returns `null` at
+  `total === 0`, and again below `MIN_MEANINGFUL_SAMPLE` (3), before `pct` is
+  defined at all; by the time the arithmetic exists in scope `total >= 3`. The
+  guard sits eight lines above the division, which is why it reads as a risk on
+  a sweep. It is not one.
