@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MapPin, Share2 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
@@ -31,14 +32,20 @@ import { getRoomVerdictExtras } from "@/lib/football/room-verdict";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = createServerSupabaseClient();
-  const { data: fixture } = await supabase
-    .from("fixtures")
-    .select(
-      `home_team:teams!fixtures_home_team_id_fkey(name),
-       away_team:teams!fixtures_away_team_id_fkey(name)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // readOptionalRow, not readRow: a title is not worth a 500. A failed read
+  // here is logged and falls back to the generic title, and the page itself
+  // still gets its own chance to load the fixture properly below.
+  const fixture = readOptionalRow(
+    await supabase
+      .from("fixtures")
+      .select(
+        `home_team:teams!fixtures_home_team_id_fkey(name),
+         away_team:teams!fixtures_away_team_id_fkey(name)`,
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    "matches.detail.metadata",
+  );
 
   if (!fixture?.home_team?.name || !fixture?.away_team?.name) return { title: "Match" };
 
@@ -64,17 +71,28 @@ export default async function MatchCentrePage({
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const { data: fixture } = await supabase
-    .from("fixtures")
-    .select(
-      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
-       home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
-       away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
-       competition:competitions(name, short_name),
-       venue:venues(id, name, city)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // `{ data: fixture }` with the error discarded used to gate `notFound()`
+  // directly, which meant a dropped connection or an expired token on the
+  // most-opened detail page in the product rendered "that doesn't exist"
+  // about a fixture that exists perfectly well. A 404 is a claim about the
+  // world; a failed read is a fact about the request, and the two must not
+  // share a branch. readRow throws on error so the error boundary handles it
+  // as what it is, and returns null only for a fixture that genuinely is not
+  // there.
+  const fixture = readRow(
+    await supabase
+      .from("fixtures")
+      .select(
+        `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
+         home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+         away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
+         competition:competitions(name, short_name),
+         venue:venues(id, name, city)`,
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    "matches.detail",
+  );
 
   if (!fixture) notFound();
 
