@@ -16,10 +16,11 @@ import { HeatmapView } from "@/components/matches/heatmap-view";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
 import type { PositionalObservation } from "@/lib/football/positional-types";
-import type { FixtureStatus } from "@/lib/football/fixture-status";
+import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
 import { LocalDateTime } from "@/components/ui/relative-time";
+import { useRealtimeFixtureEvents } from "@/hooks/use-realtime-fixture-events";
 
-type MatchEvent = {
+export type MatchEvent = {
   id: string;
   eventType: keyof typeof EVENT_LABEL;
   minute: number;
@@ -337,10 +338,19 @@ function TimelineEventCard({
   event,
   side,
   teamName,
+  justArrived,
 }: {
   event: MatchEvent;
   side: EventSide;
   teamName: string | null;
+  /** This event arrived (or was corrected) over Realtime a moment ago. Reuses
+   * the same `kivo-row-flash` wash LiveFixtureList uses for a row that just
+   * changed, so "something moved" reads identically wherever a fan meets it.
+   * Decorative only — the event's own text carries the information, so a
+   * reader who never sees the flash loses nothing. globals.css already clamps
+   * `animation-duration` globally under prefers-reduced-motion, which is what
+   * makes this safe without a per-class opt-out. */
+  justArrived: boolean;
 }) {
   const Icon = EVENT_ICON[event.eventType];
   const scored = isGoalEventType(event.eventType);
@@ -350,6 +360,7 @@ function TimelineEventCard({
       className={[
         "kivo-glass flex items-start gap-2.5 rounded-xl p-3 text-left",
         scored ? "ring-1 ring-accent/25" : "",
+        justArrived ? "kivo-row-flash" : "",
         side === "home" ? "sm:flex-row-reverse sm:text-right" : "",
         side === null ? "sm:justify-center sm:text-center" : "",
       ]
@@ -391,12 +402,17 @@ function TimelineEventCard({
 
 function TimelineTab({
   events,
+  liveIds,
   homeTeamId,
   awayTeamId,
   homeTeamName,
   awayTeamName,
 }: {
   events: MatchEvent[];
+  /** Ids that landed over Realtime while this page has been open — the rows
+   * that get the brief flash. Empty on a server-rendered load, so opening a
+   * finished match never lights up its whole timeline. */
+  liveIds: ReadonlySet<string>;
   homeTeamId: string;
   awayTeamId: string;
   homeTeamName: string;
@@ -471,7 +487,9 @@ function TimelineTab({
                 }
                 aria-hidden={side !== "home"}
               >
-                {side === "home" && <TimelineEventCard event={event} side="home" teamName={homeTeamName} />}
+                {side === "home" && (
+                  <TimelineEventCard event={event} side="home" teamName={homeTeamName} justArrived={liveIds.has(event.id)} />
+                )}
               </div>
 
               <span
@@ -491,8 +509,12 @@ function TimelineTab({
                 }
                 aria-hidden={side === "home"}
               >
-                {side === "away" && <TimelineEventCard event={event} side="away" teamName={awayTeamName} />}
-                {side === null && <TimelineEventCard event={event} side={null} teamName={null} />}
+                {side === "away" && (
+                  <TimelineEventCard event={event} side="away" teamName={awayTeamName} justArrived={liveIds.has(event.id)} />
+                )}
+                {side === null && (
+                  <TimelineEventCard event={event} side={null} teamName={null} justArrived={liveIds.has(event.id)} />
+                )}
               </div>
             </motion.div>
           );
@@ -957,6 +979,17 @@ function MatchCentreTabsInner({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // The hero above these tabs has been Realtime-driven since migration 0038,
+  // so the score already ticked over on a goal while the timeline underneath
+  // still claimed nothing had happened. Same publication, nothing was
+  // subscribed to it. Only live while the match can still produce events —
+  // see the hook's own `enabled` note.
+  const { events: liveEvents, liveIds } = useRealtimeFixtureEvents(
+    fixtureId,
+    events,
+    preMatch.status === "scheduled" || isLiveStatus(preMatch.status),
+  );
+
   // KN-53: a data tab earns its place by holding data. The Heatmap has no
   // positional source wired up at all yet (see HeatmapTab), so today it is
   // always in the collapsed group — which is more honest than a permanently
@@ -970,7 +1003,7 @@ function MatchCentreTabsInner({
   // observations once here, pass them into HeatmapTab, and key availability
   // off their length so the strip and the panel cannot disagree.
   const dataTabAvailability: Record<(typeof DATA_TABS)[number], boolean> = {
-    Timeline: events.length > 0,
+    Timeline: liveEvents.length > 0,
     Stats: stats.length > 0,
     Lineups: lineups.length > 0,
     Heatmap: false,
@@ -1102,7 +1135,8 @@ function MatchCentreTabsInner({
         {active === "Overview" && <OverviewTab preMatch={preMatch} />}
         {active === "Timeline" && (
           <TimelineTab
-            events={events}
+            events={liveEvents}
+            liveIds={liveIds}
             homeTeamId={homeTeamId}
             awayTeamId={awayTeamId}
             homeTeamName={homeTeamName}
