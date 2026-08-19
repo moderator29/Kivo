@@ -381,7 +381,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       <FadeIn delay={0.25} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Season stats
+          Across synced matches
         </h2>
         {hasMatchData ? (
           // Six cells with assists, five without, and the wide grid follows the
@@ -398,6 +398,25 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
             No match data yet.
           </div>
+        )}
+
+        {/* These were headed "Season stats", which was false in two ways at
+            once. They are not a season: computePlayerMatchStats counts KIVO's
+            own synced lineups and fixture_events with no season filter at all.
+            And they are not one competition: every synced match is counted in
+            here together.
+            PlayerSeasonStatisticsPanel, which renders above this block, shows
+            the provider's own per-competition figures instead — so for any
+            player whose fixtures are only partly synced, the two WILL
+            disagree. Until now the page offered no way to tell why, which made
+            two true sets of numbers read as one contradiction. Naming the
+            scope is the whole fix; the numbers were never wrong. */}
+        {hasMatchData && (
+          <p className="px-1 text-[11px] leading-relaxed text-foreground-subtle">
+            Counted from the {stats.appearances} finished{" "}
+            {stats.appearances === 1 ? "match" : "matches"} KIVO has synced for {displayName}, across all
+            competitions. The by-competition table above splits the provider&apos;s own figures instead.
+          </p>
         )}
       </FadeIn>
 
