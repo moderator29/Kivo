@@ -11,6 +11,8 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { parseSocialFilter, resolveFeedScope, SOCIAL_FILTER_LABELS } from "@/lib/social-filters";
 import { fetchPostsPage } from "./posts";
+import { fetchTrendingRooms } from "./trending";
+import { TrendingPanel } from "@/components/social/trending-panel";
 
 export const metadata: Metadata = { title: "Social" };
 
@@ -47,6 +49,10 @@ export default async function SocialPage({
     if (targetPosts.length > 0) posts = [...targetPosts, ...pageOne];
   }
 
+  // Signed-in only: `get_trending_match_rooms` is granted to `authenticated`,
+  // and a guest has no Room to be sent into anyway.
+  const trending = profile ? await fetchTrendingRooms() : null;
+
   return (
     <div className="kivo-page">
       <PageHeader title="Community" description="Takes, polls and match talk from KIVO fans." />
@@ -54,6 +60,18 @@ export default async function SocialPage({
       <FadeIn delay={0.04}>
         <ComposeEntry signedIn={Boolean(profile)} avatarUrl={profile ? resolveAvatarSrc(profile) : null} />
       </FadeIn>
+
+      {/* Above the feed rather than beside it: on a phone there is no beside,
+          and "what is everyone in right now" is the question this page is
+          most often opened to answer. Wrapped so a failure here can never take
+          the feed down with it — trending is context, the feed is the page. */}
+      {trending && (
+        <FadeIn delay={0.05}>
+          <WidgetErrorBoundary context="social.trending" label="Match rooms people are in">
+            <TrendingPanel result={trending} />
+          </WidgetErrorBoundary>
+        </FadeIn>
+      )}
 
       {/* Only shown signed in — every filter but "All" is scoped to the
           viewer's own follows or their own club, so a guest's tabs could only

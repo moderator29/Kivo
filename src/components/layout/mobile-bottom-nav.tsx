@@ -41,7 +41,7 @@ export function MobileBottomNav({ viewerProfile }: { viewerProfile: ViewerProfil
       className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-30 lg:hidden"
       aria-label="Primary"
     >
-      <div className="kivo-glass-brand flex items-center justify-around gap-1 rounded-full p-2 shadow-float">
+      <div className="kivo-glass-brand flex items-center justify-around gap-1 rounded-2xl p-2 shadow-float">
         {barItems.map((item) => (
           <BarTab key={item.id} href={item.href} label={item.label} active={isActiveRoute(pathname, item.href)}>
             <item.icon className="relative z-10 h-5 w-5 shrink-0" strokeWidth={1.75} />
@@ -99,7 +99,7 @@ function BarTab({
       aria-current={active ? "page" : undefined}
       aria-label={active ? undefined : label}
       className={cn(
-        "kivo-focus relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[13px] font-semibold transition-all active:scale-95",
+        "kivo-focus relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold transition-all active:scale-95",
         active ? "text-on-accent" : "text-foreground-subtle hover:text-foreground-muted",
       )}
     >
@@ -107,7 +107,7 @@ function BarTab({
         <motion.span
           aria-hidden="true"
           layoutId="mobile-nav-active"
-          className="kivo-gradient-prime kivo-glow-soft absolute inset-0 rounded-full"
+          className="kivo-gradient-prime kivo-glow-soft absolute inset-0 rounded-xl"
           transition={{ type: "spring", stiffness: 500, damping: 40 }}
         />
       )}

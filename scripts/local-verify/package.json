@@ -1,0 +1,13 @@
+{
+  "name": "kivo-local-verify",
+  "private": true,
+  "type": "module",
+  "description": "Local verification harness: a Supabase-shaped API over a throwaway Postgres, so the application can be driven against real rows. Deliberately its own package so `npm ci` at the repo root never prunes it and it never appears in the app's dependency tree.",
+  "scripts": {
+    "start": "node server/index.mjs"
+  },
+  "dependencies": {
+    "jose": "^6.1.0",
+    "pg": "^8.16.3"
+  }
+}

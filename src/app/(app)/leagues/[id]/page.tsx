@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LocalDateTime } from "@/components/ui/relative-time";
-import { Shield, ArrowLeft } from "lucide-react";
+import { Shield } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
@@ -15,8 +15,11 @@ import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { readRow } from "@/lib/query-result";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
+import { TopScorersPanel } from "@/components/football/top-scorers-panel";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -38,12 +41,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function LeagueDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeagueDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ season?: string }>;
+}) {
   const { id } = await params;
+  const { season: requestedSeasonId } = await searchParams;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: competition }, isFollowing, standingsLastSyncedAt] = await Promise.all([
+  const [competitionResult, isFollowing, standingsLastSyncedAt] = await Promise.all([
     supabase
       .from("competitions")
       .select("id, name, short_name, country, logo_url, seasons(id, name, is_current)")
@@ -63,28 +73,64 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
     getLastSyncedAt(["standing"]),
   ]);
 
+  // A failed read is not a missing competition. readRow throws so the route's
+  // error boundary handles it, and only a genuinely absent row reaches
+  // notFound() — see src/lib/query-result.ts.
+  const competition = readRow(competitionResult, "leagues.detail");
   if (!competition) notFound();
 
-  const currentSeason = competition.seasons?.find((s) => s.is_current) ?? competition.seasons?.[0];
+  // Newest first, so the switcher reads the way a fan thinks about seasons and
+  // "the first one" is a sensible fallback rather than whatever the join
+  // happened to return. `provider_year` is not selected here, so ordering is by
+  // the season's own name, which the provider writes as the "2025/26" span.
+  const seasons = [...(competition.seasons ?? [])].sort((left, right) => right.name.localeCompare(left.name));
 
-  const { data: standings } = currentSeason
+  const currentSeason = seasons.find((s) => s.is_current) ?? seasons[0];
+
+  // `?season=` may only ever name a season belonging to THIS competition.
+  // Anything else — another competition's season, a deleted one, a hand-edited
+  // id — falls back to the current season rather than rendering one
+  // competition's table under another's name and logo. That is the same class
+  // of error as pairing two numbers whose scopes differ: every figure would be
+  // real, and the page around them would be wrong about what they describe.
+  const activeSeason = seasons.find((s) => s.id === requestedSeasonId) ?? currentSeason;
+
+  const { data: standings } = activeSeason
     ? await supabase
         .from("standings")
         .select("team_id, played, won, drawn, lost, goals_for, goals_against, points, position, team:teams(id, name, crest_url)")
-        .eq("season_id", currentSeason.id)
+        .eq("season_id", activeSeason.id)
         .order("position", { ascending: true })
     : { data: null };
 
-  const { data: upcoming } = currentSeason
+  const { data: upcoming } = activeSeason
     ? await supabase
         .from("fixtures")
         .select(
           `id, kickoff_at, home_team:teams!fixtures_home_team_id_fkey(name, crest_url), away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
         )
-        .eq("season_id", currentSeason.id)
+        .eq("season_id", activeSeason.id)
         .eq("status", "scheduled")
         .gt("kickoff_at", new Date().toISOString())
         .order("kickoff_at", { ascending: true })
+        .limit(10)
+    : { data: null };
+
+  // Results: the other half of a season, and the page only ever showed
+  // fixtures that hadn't happened. Finished only — a postponed or abandoned
+  // match has no result to report, and listing one under "Results" with a
+  // blank score would invite the reader to supply their own.
+  const { data: results } = activeSeason
+    ? await supabase
+        .from("fixtures")
+        .select(
+          `id, kickoff_at, home_score, away_score, home_team:teams!fixtures_home_team_id_fkey(name, crest_url), away_team:teams!fixtures_away_team_id_fkey(name, crest_url)`,
+        )
+        .eq("season_id", activeSeason.id)
+        .eq("status", "finished")
+        .not("home_score", "is", null)
+        .not("away_score", "is", null)
+        .order("kickoff_at", { ascending: false })
         .limit(10)
     : { data: null };
 
@@ -99,13 +145,48 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
           <h1 className="text-xl font-semibold text-foreground">{competition.name}</h1>
           <p className="text-xs text-foreground-subtle">
             {competition.country ?? "International"}
-            {currentSeason ? ` · ${currentSeason.name}` : ""}
+            {activeSeason ? ` · ${activeSeason.name}` : ""}
           </p>
         </FadeIn>
         <FadeIn delay={0.1}>
           <FollowButton targetType="competition" targetId={competition.id} initialFollowing={isFollowing} signedIn={viewerIsSignedIn(profile)} />
         </FadeIn>
       </div>
+
+      {/* Only when there is genuinely something to switch between. One synced
+          season renders no control, because a picker with a single option is
+          chrome pretending to be a choice. Plain links rather than a client
+          control: the whole page is server-rendered per season, so each season
+          gets a real URL that can be shared and opened in a new tab. */}
+      {seasons.length > 1 && (
+        <FadeIn delay={0.13} className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Season</h2>
+          <div
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+            role="group"
+            aria-label="Season"
+          >
+            {seasons.map((season) => {
+              const isActive = season.id === activeSeason?.id;
+              return (
+                <Link
+                  key={season.id}
+                  href={`/leagues/${competition.id}?season=${season.id}`}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`kivo-focus shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    isActive
+                      ? "bg-accent text-on-accent"
+                      : "kivo-glass-sharp text-foreground-muted hover:text-foreground"
+                  }`}
+                >
+                  {season.name}
+                  {season.is_current && !isActive ? " · now" : ""}
+                </Link>
+              );
+            })}
+          </div>
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.15} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
@@ -115,10 +196,10 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
         {!standings || standings.length === 0 ? (
           <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
             Standings haven&apos;t been synced yet for this competition.
-            {currentSeason && canManageFootballData(profile?.role) && (
+            {activeSeason && canManageFootballData(profile?.role) && (
               <InlineSyncButton
                 label="Sync standings"
-                action={triggerStandingsSync.bind(null, currentSeason.id)}
+                action={triggerStandingsSync.bind(null, activeSeason.id)}
                 hint="Needs this competition's fixtures synced first, so it has a provider mapping."
               />
             )}
@@ -201,20 +282,72 @@ export default async function LeagueDetailPage({ params }: { params: Promise<{ i
         )}
       </FadeIn>
 
+      {/* Results sit after the fixtures list: a league page is read forwards
+          first ("who plays next") and backwards second. Rendered only when
+          there is a real finished match with a real score — an empty
+          "Results" heading on a season that has not kicked off yet says
+          nothing the fixtures list above has not already said. */}
+      {results && results.length > 0 && (
+        <FadeIn delay={0.21} className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Latest results</h2>
+          <div className="flex flex-col gap-2">
+            {results.map((fixture) => (
+              <Link
+                key={fixture.id}
+                href={`/matches/${fixture.id}`}
+                className="kivo-glass kivo-focus flex items-center justify-between gap-3 rounded-xl p-3 text-sm transition-colors hover:bg-surface-2"
+              >
+                <span className="min-w-0 flex-1 truncate text-foreground">
+                  {fixture.home_team?.name ?? "Home"} vs {fixture.away_team?.name ?? "Away"}
+                </span>
+                <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                  {fixture.home_score} - {fixture.away_score}
+                </span>
+                <span className="shrink-0 text-xs text-foreground-subtle">
+                  <LocalDateTime iso={fixture.kickoff_at} format="dayTime" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </FadeIn>
+      )}
+
+      {/* Before the coverage panel, because it is content rather than an
+          explanation of missing content — and its own empty state already names
+          which of "not synced", "this source can't", and "not established" it
+          is, using the same registry the panel below reads. */}
+      <TopScorersPanel
+        competitionId={competition.id}
+        seasonId={activeSeason?.id ?? null}
+        seasonLabel={activeSeason?.name ?? null}
+      />
+
       {/* KIVO_NEXT_GEN KN-103. Placed after the table and fixtures rather than
           before them: it answers "why is that section empty", which is only a
           question once you have seen the empty section. */}
+      {/* Deliberately the CURRENT season, not the one being viewed: this panel
+          answers "what can this source do for this competition now", which
+          does not change because the reader is looking at an older table. */}
       <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
 
-      <FadeIn delay={0.25} className="self-center">
-        <Link
-          href="/leagues"
-          className="flex items-center gap-1 text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3 w-3" strokeWidth={2} />
-          Back to leagues
-        </Link>
-      </FadeIn>
+      {/* Renders nothing when the season has no placed standings rows, which
+          is the honest state for a competition KIVO has fixtures but no table
+          for yet. */}
+      {activeSeason && (
+        <FadeIn delay={0.24} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+          <ShareCardPanel
+            kind="league-table"
+            id={activeSeason.id}
+            // The card has to be the season on screen. Sharing the current
+            // season's table from a page showing 2023/24 would be a real table
+            // under the wrong year.
+            shareUrl={`/leagues/${competition.id}?season=${activeSeason.id}`}
+            shareText={`${competition.name} table on KIVO.`}
+            heading="Share the table"
+            description="Pick a background. The preview is the exact image you save."
+          />
+        </FadeIn>
+      )}
     </div>
   );
 }

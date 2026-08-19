@@ -80,7 +80,7 @@ export function ComposeForm({
             }}
             aria-pressed={mode === value}
             className={cn(
-              "kivo-focus relative flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
+              "kivo-focus relative flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors",
               mode === value ? "text-foreground" : "text-foreground-subtle hover:text-foreground",
             )}
           >

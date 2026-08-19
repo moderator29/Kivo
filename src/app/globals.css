@@ -552,17 +552,21 @@ h3 {
 
   /* Recessed rail for segmented controls and tab strips (the Social/People and
      Plan/Debug/Ask rows in the reference set). Pair with `.kivo-segment-item`. */
+  /* Control radius, not a pill. The founder has asked repeatedly for
+     rectangular controls and `design-system.ts`'s Control role is explicit:
+     "Anything pressable: button, chip, field, tab" is rounded-xl (0.75rem).
+     The track drops one step above its items so the ladder still reads. */
   .kivo-segment {
     background: var(--surface-track);
     border: 1px solid var(--hairline-soft);
-    border-radius: 9999px;
+    border-radius: 0.875rem;
     padding: 3px;
     display: inline-flex;
     gap: 2px;
   }
 
   .kivo-segment-item {
-    border-radius: 9999px;
+    border-radius: 0.75rem;
     transition: background-color var(--kivo-dur-base) var(--kivo-ease-out),
       color var(--kivo-dur-base) var(--kivo-ease-out),
       box-shadow var(--kivo-dur-base) var(--kivo-ease-out);

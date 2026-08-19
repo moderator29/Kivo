@@ -356,21 +356,39 @@ where f.status in ('finished', 'live', 'halftime')
 
 -- -----------------------------------------------------------------------------
 -- 7. Lineups — a legal 4-3-3 for both sides of every match already under way
+--
+--    "Legal" is the whole requirement and it was not met by taking the first
+--    eleven of a squad ordered by position: that produced two goalkeepers,
+--    five defenders, four midfielders and no forwards at all, under a shirt
+--    reading 4-3-3. Every surface that renders an XI then renders a team that
+--    could not take the field, and a heatmap anchored to a formation slot
+--    inherits the nonsense. The eleven is picked per position instead.
 -- -----------------------------------------------------------------------------
 insert into lineups (fixture_id, team_id, player_id, is_starting, shirt_number, position, formation)
 select
   f.id, side.team_id, ranked.id,
-  ranked.rn <= 11,
+  -- 1 goalkeeper, 4 defenders, 3 midfielders, 3 forwards. The bench is what is
+  -- left: the second keeper, a defender and two midfielders.
+  case ranked.position
+    when 'Goalkeeper' then ranked.rn_in_position <= 1
+    when 'Defender' then ranked.rn_in_position <= 4
+    when 'Midfielder' then ranked.rn_in_position <= 3
+    else ranked.rn_in_position <= 3
+  end,
   ranked.rn::smallint,
   ranked.position,
   '4-3-3'
 from fixtures f
 join lateral (values (f.home_team_id), (f.away_team_id)) as side(team_id) on true
 join lateral (
-  select pl.id, pl.position, row_number() over (
-    order by case pl.position
-      when 'Goalkeeper' then 0 when 'Defender' then 1 when 'Midfielder' then 2 else 3 end, pl.id
-  ) as rn
+  select
+    pl.id,
+    pl.position,
+    row_number() over (
+      order by case pl.position
+        when 'Goalkeeper' then 0 when 'Defender' then 1 when 'Midfielder' then 2 else 3 end, pl.id
+    ) as rn,
+    row_number() over (partition by pl.position order by pl.id) as rn_in_position
   from players pl where pl.current_team_id = side.team_id
 ) ranked on ranked.rn <= 15
 where f.status in ('finished', 'live', 'halftime')

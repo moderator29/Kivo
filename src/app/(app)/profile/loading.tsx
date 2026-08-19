@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Mirrors the real page's shape: cover band, overlapping avatar, identity
@@ -6,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  * once the data lands. */
 export default function ProfileLoading() {
   return (
-    <div className="kivo-page">
+    <PageSkeleton className="kivo-page" label="Loading your profile">
       <div className="kivo-glass overflow-hidden rounded-3xl">
         <Skeleton className="h-32 w-full rounded-none sm:h-44" />
         <div className="px-4 pb-5 sm:px-6">
@@ -31,6 +32,6 @@ export default function ProfileLoading() {
         <Skeleton className="h-11 w-full rounded-none" />
         <Skeleton className="h-40 w-full rounded-2xl" />
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

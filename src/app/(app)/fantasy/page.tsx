@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { carryForwardFantasyRoster, ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
 import { canManageFootballData } from "@/lib/admin";
@@ -8,6 +10,8 @@ import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-action
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
+import { GameweekScorecard } from "./gameweek-scorecard";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
@@ -38,7 +42,7 @@ export default async function FantasyPage({
 
   const supabase = createServerSupabaseClient();
 
-  const [{ data: teams }, { data: currentSeasons }] = await Promise.all([
+  const [teamsResult, currentSeasonsResult] = await Promise.all([
     supabase
       .from("fantasy_teams")
       .select("id, name")
@@ -51,12 +55,29 @@ export default async function FantasyPage({
       .order("name", { ascending: true }),
   ]);
 
-  const seasonOptions = (currentSeasons ?? []).map((s) => ({
+  const teamsOutcome = readList(teamsResult, "fantasy.myTeams");
+  const seasonsOutcome = readList(currentSeasonsResult, "fantasy.currentSeasons");
+
+  // The empty branch of this page is not an empty state — it is FantasyOnboarding,
+  // which asks the reader to create a squad. Reaching it on a failed read tells
+  // an existing manager they have no team and invites them to start over, which
+  // is the single most destructive thing this page could get wrong.
+  if (teamsOutcome.failed || seasonsOutcome.failed) {
+    return (
+      <LoadFailed
+        title="Fantasy"
+        description="KIVO couldn't read your fantasy squads just now. Nothing has been lost — this page would otherwise ask you to create a team you may already have. Try again."
+      />
+    );
+  }
+
+  const teams = teamsOutcome.rows;
+  const seasonOptions = seasonsOutcome.rows.map((s) => ({
     id: s.id,
     label: [s.competition?.short_name ?? s.competition?.name, s.name].filter(Boolean).join(" · ") || s.name,
   }));
 
-  if (!teams || teams.length === 0) {
+  if (teams.length === 0) {
     return <FantasyOnboarding availableSeasons={seasonOptions} />;
   }
 
@@ -88,7 +109,7 @@ export default async function FantasyPage({
     // to read every team in the league, not just the viewer's own).
     supabase
       .from("fantasy_points")
-      .select("points, gameweek:fantasy_gameweeks(number)")
+      .select("points, gameweek:fantasy_gameweeks(id, number)")
       .eq("fantasy_team_id", activeTeam.id),
   ]);
   const leaderboard = {
@@ -108,10 +129,11 @@ export default async function FantasyPage({
   // (written by scoreFantasyGameweek), this is purely a new read of it.
   // Sorted client-side by the joined gameweek number rather than relying on
   // the query builder's cross-table ordering support.
-  const pointsHistory = (pointsHistoryRows ?? [])
-    .filter((row): row is typeof row & { gameweek: { number: number } } => row.gameweek !== null)
-    .map((row) => ({ gameweekNumber: row.gameweek.number, points: row.points }))
+  const scoredGameweeks = (pointsHistoryRows ?? [])
+    .filter((row): row is typeof row & { gameweek: { id: string; number: number } } => row.gameweek !== null)
+    .map((row) => ({ gameweekId: row.gameweek.id, gameweekNumber: row.gameweek.number, points: row.points }))
     .sort((a, b) => a.gameweekNumber - b.gameweekNumber);
+  const pointsHistory = scoredGameweeks.map(({ gameweekNumber, points }) => ({ gameweekNumber, points }));
 
   const { data: gameweek } = await supabase
     .from("fantasy_gameweeks")
@@ -119,6 +141,28 @@ export default async function FantasyPage({
     .eq("season_id", league.season_id)
     .eq("is_current", true)
     .maybeSingle();
+
+  /**
+   * Which gameweek the itemised scorecard is about.
+   *
+   * Not simply the current one. `is_current` is the earliest gameweek whose
+   * DEADLINE is still ahead, and a deadline is that gameweek's own first
+   * kickoff — so the moment Saturday's football starts, "current" means next
+   * week. Binding the scorecard to it meant the breakdown for the gameweek a
+   * manager had just watched was never on this page at any point: unscored
+   * while it was current, and no longer current once it had been scored.
+   *
+   * So: the current gameweek when it has a score, and otherwise the most
+   * recent gameweek that does. Read from the points rows already loaded above,
+   * so this costs nothing extra.
+   */
+  const latestScored = scoredGameweeks.at(-1) ?? null;
+  const scorecardGameweek =
+    gameweek && scoredGameweeks.some((row) => row.gameweekId === gameweek.id)
+      ? { id: gameweek.id, number: gameweek.number }
+      : latestScored
+        ? { id: latestScored.gameweekId, number: latestScored.gameweekNumber }
+        : null;
 
   let initialRoster: {
     playerId: string;
@@ -143,11 +187,31 @@ export default async function FantasyPage({
          player:players(id, full_name, known_as, position, current_team_id, team:teams(id, name, short_name, crest_url))`;
 
   if (gameweek) {
-    let { data: roster } = await supabase
-      .from("fantasy_rosters")
-      .select(ROSTER_SELECT)
-      .eq("fantasy_team_id", activeTeam.id)
-      .eq("gameweek_id", gameweek.id);
+    const rosterOutcome = readList(
+      await supabase
+        .from("fantasy_rosters")
+        .select(ROSTER_SELECT)
+        .eq("fantasy_team_id", activeTeam.id)
+        .eq("gameweek_id", gameweek.id),
+      "fantasy.roster",
+    );
+
+    // Gated before the carry-forward below, and that is the reason rather
+    // than a side effect. `!roster || roster.length === 0` used to treat a
+    // failed read as "this team has no squad this gameweek", which is the
+    // trigger for a *write* — carrying an earlier squad forward on top of one
+    // that may already exist. A failed read must never be allowed to start
+    // writing.
+    if (rosterOutcome.failed) {
+      return (
+        <LoadFailed
+          title="Your squad"
+          description="KIVO couldn't read your squad for this gameweek. It hasn't been cleared — try again rather than picking it over."
+        />
+      );
+    }
+
+    let roster: typeof rosterOutcome.rows | null = rosterOutcome.rows;
 
     // A new gameweek starts with zero roster rows for every team — carry the
     // team's most recent earlier squad forward instead of showing an empty
@@ -241,6 +305,33 @@ export default async function FantasyPage({
           carriedForwardFromGameweek={carriedForwardFromGameweek}
         />
       </WidgetErrorBoundary>
+
+      {/* The itemised score, below the builder because it answers a question
+          the builder raises rather than one it asks. Renders nothing at all
+          until the gameweek has actually been scored — see the component. */}
+      {scorecardGameweek && (
+        <WidgetErrorBoundary context="fantasyScorecard" label="Your gameweek scorecard">
+          <GameweekScorecard
+            fantasyTeamId={activeTeam.id}
+            gameweekId={scorecardGameweek.id}
+            gameweekNumber={scorecardGameweek.number}
+          />
+        </WidgetErrorBoundary>
+      )}
+
+      {/* Only a gameweek that has actually been scored produces a card — an
+          unscored week would render as 0 points, which reads as a bad week
+          rather than as "nothing calculated yet". */}
+      <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+        <ShareCardPanel
+          kind="fantasy-performance"
+          id={activeTeam.id}
+          shareUrl="/fantasy"
+          shareText={`${activeTeam.name} on KIVO Fantasy.`}
+          heading="Share your gameweek"
+          description="Pick a background. The preview is the exact image you save."
+        />
+      </div>
     </FadeIn>
   );
 }

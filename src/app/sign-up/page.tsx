@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { redirect } from "next/navigation";
 import { FadeIn } from "@/components/ui/fade-in";
 import { EmailCodeForm } from "@/components/auth/email-code-form";
@@ -17,19 +18,26 @@ export const dynamic = "force-dynamic";
 export default async function SignUpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect_url?: string | string[] }>;
+  searchParams: Promise<{ redirect_url?: string | string[]; add?: string | string[] }>;
 }) {
   // Guest-gated actions (like, predict, send, post) send guests here with
   // ?redirect_url=<the page they were on> so signing up actually returns them
   // to what they were doing. Sanitized here AND again inside the action — this
   // value originates in a URL anyone can craft.
-  const redirectTo = sanitizeRedirectPath((await searchParams).redirect_url);
+  const params = await searchParams;
+  const redirectTo = sanitizeRedirectPath(params.redirect_url);
+
+  // Mirrors /sign-in: a signed-in visitor is normally sent away from here, but
+  // the account switcher's "Add account" can legitimately land someone who is
+  // already signed in on a form for a brand-new account. Their current session
+  // is untouched until a new code is verified.
+  const addAccount = (Array.isArray(params.add) ? params.add[0] : params.add) === "1";
 
   // Same reasoning as /sign-in: resolved through the profile, not the bare
   // session, so a session whose profile won't load terminates here instead of
   // being volleyed between this page and the app group forever.
   const viewer = await resolveViewerProfile();
-  if (viewer.status === "ready") {
+  if (viewer.status === "ready" && !addAccount) {
     redirect(redirectTo ?? "/home");
   }
   if (viewer.status === "unavailable") {
@@ -38,6 +46,15 @@ export default async function SignUpPage({
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
+      {/* Sign-in and sign-up are reached from the landing page, from the
+          marketing footer, and from every gated action in the product. Without
+          this the only way back out is the browser's own control, which a
+          phone in standalone/PWA mode does not show. Falls back to the landing
+          page for anybody who arrived here from outside KIVO. */}
+      <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+12px)] z-20">
+        <BackLink href="/" label="KIVO" />
+      </div>
+
       <div className="kivo-aurora" aria-hidden="true">
         <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
         <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
@@ -51,7 +68,7 @@ export default async function SignUpPage({
 
         {isAuthConfigured() ? (
           <FadeIn delay={0.12} className="flex w-full flex-col items-center gap-4">
-            <EmailCodeForm mode="sign-up" redirectTo={redirectTo} />
+            <EmailCodeForm mode="sign-up" redirectTo={redirectTo} addAccount={addAccount} />
             <p className="max-w-xs text-center text-xs text-foreground-subtle">
               By creating an account, you agree to KIVO&apos;s{" "}
               <Link href="/terms" className="text-accent transition-colors hover:text-foreground">

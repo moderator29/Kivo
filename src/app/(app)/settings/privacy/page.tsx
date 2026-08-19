@@ -8,6 +8,8 @@ import { ActivityPrivacyToggle } from "@/components/settings/activity-privacy-to
 import { OtherDevicesSection } from "@/components/settings/other-devices-section";
 import { SettingsCard, SettingsPageShell } from "@/components/settings/settings-shell";
 import { getSettingsSection } from "@/lib/settings-sections";
+import { BlockedAccountsSection } from "@/components/settings/blocked-accounts-section";
+import { getBlockedProfiles } from "@/lib/blocks";
 
 export const metadata: Metadata = { title: getSettingsSection("privacy").label };
 
@@ -15,18 +17,29 @@ export default async function PrivacySettingsPage() {
   const profile = await getOrCreateProfile();
   if (!profile) redirect(await signInHref());
 
+  const blocked = await getBlockedProfiles();
+
   return (
     <SettingsPageShell sectionId="privacy">
       <SettingsCard title="Activity">
         <ActivityPrivacyToggle initialShowActivityPublicly={profile.show_activity_publicly} />
       </SettingsCard>
 
-      <SettingsCard title="Other devices" delay={0.04}>
+      {/* Migration 0086. Sits above devices because it is the one on this page
+          somebody actually comes looking for. */}
+      <SettingsCard title="Blocked accounts" delay={0.04}>
+        <BlockedAccountsSection blocked={blocked} />
+      </SettingsCard>
+
+      <SettingsCard title="Other devices" delay={0.08}>
         <OtherDevicesSection />
       </SettingsCard>
 
-      <SettingsCard title="This device" delay={0.08}>
-        <p className="text-xs text-foreground-subtle">Sign out of KIVO on this device.</p>
+      <SettingsCard title="This device" delay={0.12}>
+        <p className="text-xs text-foreground-subtle">
+          Signs you out of KIVO on this device — including any other accounts you&apos;ve kept signed in for
+          switching.
+        </p>
         {/* A plain form posting to the server action, rather than a client
             component wrapping a button: the action already redirects, and this
             way the control still works with JavaScript disabled. */}

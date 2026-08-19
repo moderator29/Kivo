@@ -23,7 +23,7 @@ const FAQS: { question: string; answer: string }[] = [
   {
     question: "Is KIVO free, and do I need an account?",
     answer:
-      "Browsing is free and needs no account: scores, standings, teams, players, Match Centre and the AI Copilot's public answers are all open the moment you land. You're only asked to sign up, for free, the moment you want to act, like posting in a Match Room, submitting a prediction, or building a fantasy squad.",
+      "KIVO is free, and yes — you need an account for all of it. There is no half-open preview: scores, Match Centre, fantasy, predictions and the Copilot all sit behind the door, because KIVO is built around the clubs you follow and none of that works without knowing whose football this is. Signing up is one email and a six-digit code, with no password to invent and nothing to pay.",
   },
   {
     question: "What are Match Rooms?",

@@ -354,7 +354,7 @@ export function CommandPalette({ showTrigger = true }: { showTrigger?: boolean }
                               key={term}
                               type="button"
                               onClick={() => runRecentSearch(term)}
-                              className="rounded-full border border-hairline px-3 py-1 text-xs text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                              className="rounded-xl border border-hairline px-3 py-1 text-xs text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                             >
                               {term}
                             </button>

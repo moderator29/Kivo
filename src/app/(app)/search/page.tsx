@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getPopularTeams, searchPlatform } from "@/app/(app)/search-actions";
+import { getPopularTeams, getSearchCoverage, searchPlatform } from "@/app/(app)/search-actions";
 import { SearchSurface } from "@/components/search/search-surface";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -20,11 +20,14 @@ export default async function SearchPage({
   const { q } = await searchParams;
   const initialQuery = (q ?? "").slice(0, 80);
 
-  const [{ results, error }, popularTeams] = await Promise.all([
+  const [{ results, error }, popularTeams, coverage] = await Promise.all([
     initialQuery.trim().length >= 2
       ? searchPlatform(initialQuery)
       : Promise.resolve({ results: [], error: null as string | null }),
     getPopularTeams(),
+    // Real counts, so "no matches" can explain itself rather than implying
+    // the index is complete and the query was wrong.
+    getSearchCoverage(),
   ]);
 
   return (
@@ -35,6 +38,7 @@ export default async function SearchPage({
         initialResults={results}
         initialError={error}
         popularTeams={popularTeams}
+        coverage={coverage}
       />
     </div>
   );

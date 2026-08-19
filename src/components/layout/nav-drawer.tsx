@@ -6,13 +6,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "motion/react";
-import { Menu, UserRound, Copy, Check, Plus } from "lucide-react";
+import { Menu, UserRound, Copy, Check, Plus, UsersRound, Search } from "lucide-react";
 import { isActiveRoute, NAV_ITEMS, type NavItem } from "@/lib/navigation";
 import { buildNavGroups } from "@/lib/nav-groups";
 import { getViewerNavStats, type ViewerNavStats } from "@/app/(app)/nav-actions";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { AccountSwitcherSheet } from "@/components/auth/account-switcher-sheet";
 import type { ViewerProfileSummary } from "./app-shell";
 
 /** Past this much leftward travel (or this much leftward flick), the gesture
@@ -53,6 +54,7 @@ export function NavDrawer({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [stats, setStats] = useState<ViewerNavStats | null>(null);
   // "Are we in the browser yet" as a read of an external fact rather than as
   // state React owns — the same useSyncExternalStore shape (and reasoning) the
@@ -75,13 +77,19 @@ export function NavDrawer({
   }
 
   const homeItem = NAV_ITEMS.find((item) => item.id === "home");
+  const searchItem = NAV_ITEMS.find((item) => item.id === "search");
   // Deliberately the complete set, bottom-bar destinations included. Hiding
   // the four tabs left "Watch" holding one item and "Community" holding one
   // item — group headings over lists of one, which read as a bug — and it made
   // the drawer a different map from the desktop sidebar. A menu is an index of
   // the product; a destination appearing both here and in the tab bar is how
   // every app with both surfaces works.
-  const groups = buildNavGroups({ isAdmin });
+  // Search is pinned above the groups as an action rather than listed inside
+  // Shortcuts, so it is excluded here — otherwise it would appear twice in
+  // one panel. NAV_GROUPS itself is untouched: it is the single point of
+  // failure that makes /managers and /venues reachable at all, and the way to
+  // move one entry is to exclude it at the call site, not to rewrite the map.
+  const groups = buildNavGroups({ isAdmin, exclude: ["search"] });
 
   useFocusTrap(open, panelRef, () => setOpen(false), { restoreFocusRef: triggerRef });
 
@@ -177,7 +185,19 @@ export function NavDrawer({
               className="absolute inset-y-0 left-0 flex w-[85vw] max-w-[22rem] touch-pan-y flex-col border-r border-hairline-soft bg-surface-3/95 shadow-float backdrop-blur-2xl"
             >
               {viewerProfile && (
-                <IdentityBlock viewer={viewerProfile} stats={stats} />
+                <IdentityBlock
+                  viewer={viewerProfile}
+                  stats={stats}
+                  onOpenSwitcher={() => {
+                    // The drawer goes away as the sheet arrives. Two
+                    // simultaneous focus traps fight each other — the drawer's
+                    // would pull Tab back out of the sheet — and a sheet
+                    // stacked over a drawer over the page is three layers deep
+                    // on a phone.
+                    setOpen(false);
+                    setSwitcherOpen(true);
+                  }}
+                />
               )}
 
               <nav
@@ -187,6 +207,27 @@ export function NavDrawer({
                   viewerProfile ? "border-t border-hairline-soft pt-4" : "pt-[calc(env(safe-area-inset-top)+1rem)]",
                 )}
               >
+                {/* An action, not a destination, and above the groups for the
+                    same reason the desktop sidebar puts it there: on a phone
+                    there is no ⌘K, so this row is the only deliberate way into
+                    search that exists, and it was previously the fourth-from-
+                    last row of the last group in a scrolling panel. */}
+                {searchItem && (
+                  <Link
+                    href={searchItem.href}
+                    aria-current={isActiveRoute(pathname, searchItem.href) ? "page" : undefined}
+                    className="kivo-glass kivo-focus mb-2 flex items-center gap-3 rounded-2xl px-3.5 py-3 transition-colors hover:bg-surface-2"
+                  >
+                    <Search className="h-[18px] w-[18px] shrink-0 text-accent" strokeWidth={1.75} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium text-foreground">Search KIVO</span>
+                      <span className="truncate text-[11px] text-foreground-subtle">
+                        Clubs, players, competitions, managers, venues
+                      </span>
+                    </span>
+                  </Link>
+                )}
+
                 {homeItem && <DrawerRow item={homeItem} pathname={pathname} aiConfigured={aiConfigured} />}
                 {groups.map((group) => (
                   <div key={group.label} className="flex flex-col">
@@ -216,13 +257,26 @@ export function NavDrawer({
           </AnimatePresence>,
           document.body,
         )}
+
+      {/* Mounted here, outside the drawer's own AnimatePresence, on purpose:
+          opening the switcher closes the drawer, and a sheet rendered inside
+          the drawer would be unmounted by that same click. It portals itself. */}
+      <AccountSwitcherSheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </>
   );
 }
 
 /** Identity first, at full size: who you are is the thing you came to this
  * panel to act on, not a 32px row above a list. */
-function IdentityBlock({ viewer, stats }: { viewer: ViewerProfileSummary; stats: ViewerNavStats | null }) {
+function IdentityBlock({
+  viewer,
+  stats,
+  onOpenSwitcher,
+}: {
+  viewer: ViewerProfileSummary;
+  stats: ViewerNavStats | null;
+  onOpenSwitcher: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const handle = `@${viewer.username}`;
 
@@ -271,7 +325,7 @@ function IdentityBlock({ viewer, stats }: { viewer: ViewerProfileSummary; stats:
 
         <Link
           href="/settings"
-          className="kivo-glass-sharp kivo-focus shrink-0 rounded-full px-4 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
+          className="kivo-glass-sharp kivo-focus shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
         >
           Manage
         </Link>
@@ -325,6 +379,21 @@ function IdentityBlock({ viewer, stats }: { viewer: ViewerProfileSummary; stats:
           </span>
         </div>
       )}
+
+      {/* The switcher's home. It belongs in the identity block rather than in
+          the nav list below, because it acts on who you are, not on where you
+          are going — the same reason Appearance sits in its own footer instead
+          of pretending to be a destination. Nothing is fetched until it is
+          actually opened. */}
+      <button
+        type="button"
+        onClick={onOpenSwitcher}
+        aria-haspopup="dialog"
+        className="kivo-focus flex w-full items-center gap-2.5 rounded-xl border border-hairline bg-surface-2/60 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+      >
+        <UsersRound className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+        <span className="flex-1 truncate text-sm font-semibold text-foreground">Switch account</span>
+      </button>
     </div>
   );
 }

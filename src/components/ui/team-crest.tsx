@@ -44,8 +44,11 @@ export function TeamCrest({
     );
   }
   return (
+    // surface-2, not surface-1: in light mode surface-1 is pure white, so a
+    // crest-less club rendered a near-invisible outline on a white card — and
+    // that is every club until crests are synced.
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-surface-1"
+      className="flex shrink-0 items-center justify-center rounded-full bg-surface-2"
       style={{ width: size, height: size }}
     >
       <Shield className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />

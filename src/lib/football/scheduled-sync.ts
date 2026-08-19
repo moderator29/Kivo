@@ -6,9 +6,19 @@ import type { Database } from "@/lib/supabase/types";
 import { FOOTBALL_LIVE_POLLING_ENABLED, getActiveProviderStatus } from "@/lib/football";
 import { syncTodayFixtures, type SyncTriggerSource } from "@/lib/football/sync";
 import { syncStandings } from "@/lib/football/sync-match-details";
-import { isAuthorizedCronRequest, isFixtureWorthSyncing } from "@/lib/football/live-worker-rules";
+import { isAuthorizedCronRequest } from "@/lib/football/live-worker-rules";
+import { planLiveSync, type LiveFixtureSnapshot } from "@/lib/football/live-sync-planner";
+import {
+  PROVIDER_REQUEST_BUDGETS,
+  REQUEST_BUDGET_WINDOW_SECONDS,
+  pruneProviderRequestSpend,
+  readBudgetUsage,
+  reserveProviderRequests,
+} from "@/lib/football/request-budget";
 import { logError } from "@/lib/log";
 import { pruneRateLimitEvents } from "@/lib/rate-limit";
+import { rescoreLiveGameweeks } from "@/lib/fantasy-live-scoring";
+import { EMPTY_SETTLEMENT, settlePredictionsBestEffort } from "@/lib/prediction-settlement";
 
 /**
  * The automated sync worker, shared by both scheduled entry points:
@@ -48,10 +58,18 @@ import { pruneRateLimitEvents } from "@/lib/rate-limit";
  *      logic proven under concurrent/overlapping worker runs — not built".
  *      KN-82 replaced the original two-minute heuristic with a real lease;
  *      see step 3 in the code below.)
- *   5. Quota floor — is there enough of today's provider quota left to
- *      spend automatically, unsupervised? (See QUOTA_SAFETY_FLOOR below.)
- *   6. Is anything in `fixtures` actually live/halftime, or scheduled to kick
- *      off within IMMINENT_WINDOW_MINUTES? Nothing live/imminent -> no-op.
+ *   5. The plan (`live-sync-planner.ts`): is anything actually in play, is
+ *      there budget left, and is it time yet? This one gate replaced two —
+ *      the old "is anything live" check and the old quota floor — because
+ *      neither of them bounded TOTAL spend, which was the real hole. The
+ *      floor only refused once the provider's own remaining count was already
+ *      at ten, and that count is null until some request has recorded one, so
+ *      on a fresh day the exact window where a once-a-minute worker is most
+ *      likely to run away was the window where the guard was asleep.
+ *   6. The reservation (`request-budget.ts`, migration 0091): an atomic
+ *      consume against this worker's own allowance. Asking and spending are
+ *      one statement, so two workers cannot both pass a check and both spend,
+ *      and a refusal means the provider client is never constructed at all.
  *
  * Only once every one of those passes does this spend a real provider call,
  * via the exact same syncTodayFixtures() the admin "Sync now" button and
@@ -203,7 +221,7 @@ const DAILY_STANDINGS_BUDGET = 5;
  * Best-effort throughout: a failure here must not make the fixtures sync — the
  * important half — report itself as broken.
  */
-async function syncStaleStandings(): Promise<{ synced: number }> {
+async function syncStaleStandings(reserveOne: () => Promise<boolean>): Promise<{ synced: number }> {
   try {
     const supabase = createServiceRoleSupabaseClient();
 
@@ -250,6 +268,11 @@ async function syncStaleStandings(): Promise<{ synced: number }> {
 
     let synced = 0;
     for (const season of targets) {
+      // Reserved per table, immediately before the request. The cap above is
+      // how many tables are CHOSEN; this is what makes it a cap on what is
+      // SPENT — the two can otherwise disagree the moment somebody raises the
+      // constant without thinking about the tier.
+      if (!(await reserveOne())) break;
       const result = await syncStandings(season.id);
       if (result.status !== "failed") synced += 1;
     }
@@ -258,6 +281,127 @@ async function syncStaleStandings(): Promise<{ synced: number }> {
     logError("cron.sync-daily.standings", error);
     return { synced: 0 };
   }
+}
+
+/**
+ * The stable prefix each planner skip reason is deduplicated on.
+ *
+ * Every one of these is a STANDING CONDITION rather than an event, which is
+ * what earns suppression (see `logSkippedRun`). At one firing a minute, an
+ * unsuppressed "pacing" row would be 1,440 rows a day saying the worker is
+ * working normally — a table full of one sentence rather than a decision
+ * history. `cron.job_run_details` (migration 0067) still records every firing
+ * independently, so "did it even run" never depended on this table.
+ */
+const SKIP_SUPPRESSION_PREFIX: Record<"nothing_live" | "quota_floor" | "budget_exhausted" | "pacing", string> = {
+  nothing_live: "Skipped: Nothing is in play",
+  quota_floor: "Skipped: The provider reports",
+  budget_exhausted: "Skipped: The live worker has spent its whole allowance",
+  pacing: "Skipped: Last refresh was",
+};
+
+/**
+ * How long a fixture may sit in `live`/`halftime` without the live feed
+ * mentioning it before KIVO treats it as having disappeared.
+ *
+ * Generous on purpose. The live feed is polled at a derived pace that can be as
+ * slow as fifteen minutes, so anything shorter would call a fixture missing
+ * simply because the worker had not looked recently. This is "the worker has
+ * looked, more than once, and this match was not there".
+ */
+const RECONCILE_STALE_MINUTES = 35;
+
+/** At most one dated fetch per invocation, whatever has disappeared. One
+ * request settles every fixture on the same day at once, and a worker that
+ * could spend several per firing would have a second unbounded path in it. */
+const RECONCILE_FETCH_LIMIT = 1;
+
+/**
+ * The bounded fallback for fixtures that vanished from the live feed.
+ *
+ * `/fixtures?live=all` returns ONLY in-play matches, so a fixture that goes
+ * final between two polls stops appearing — and without this its last written
+ * state is an in-play scoreline that stays on the product until the next daily
+ * sync. That is not a stale score, it is a permanently wrong one, and it is the
+ * decisive argument against using the live feed alone.
+ *
+ * THE BOUND MATTERS AS MUCH AS THE FALLBACK. A fixture also disappears when the
+ * provider hiccups, when a match is briefly misreported, or during a short
+ * outage. If every disappearance meant "keep asking until it is final", a
+ * flapping provider would cost one request per minute per fixture — the exact
+ * runaway this whole pass exists to remove. So:
+ *
+ *   - exactly one dated fetch per disappearance, tracked by
+ *     `fixtures.live_reconciled_at` against `provider_last_seen_at`. A second
+ *     attempt happens only if the fixture came back and vanished again, which
+ *     is a genuinely new disappearance rather than a retry of the same one;
+ *   - the attempt is marked as made even when the fetch FAILS. A failed request
+ *     has already been spent, and retrying it immediately spends another;
+ *   - it comes out of the live worker's own allowance, with no exemption. An
+ *     allowance with a carve-out is not a ceiling;
+ *   - at most one fetch per invocation.
+ *
+ * If the dated fetch does not show the fixture as finished, nothing more
+ * happens here. The daily baseline will settle it, and KN-86's absence flagging
+ * will raise it for a human if it never resolves.
+ */
+async function reconcileDisappearedFixtures(supabase: ServiceClient, providerLabel: string): Promise<number> {
+  const staleBefore = new Date(Date.now() - RECONCILE_STALE_MINUTES * 60_000).toISOString();
+
+  const { data: stranded, error } = await supabase
+    .from("fixtures")
+    .select("id, kickoff_at, provider_last_seen_at, live_reconciled_at")
+    .in("status", ["live", "halftime"])
+    .lt("provider_last_seen_at", staleBefore)
+    .limit(20);
+
+  if (error) {
+    logError("cron.sync-live.reconcile-query", error);
+    return 0;
+  }
+
+  const candidates = (stranded ?? []).filter(
+    (fixture) =>
+      fixture.provider_last_seen_at !== null &&
+      (fixture.live_reconciled_at === null ||
+        new Date(fixture.live_reconciled_at).getTime() < new Date(fixture.provider_last_seen_at).getTime()),
+  );
+  if (candidates.length === 0) return 0;
+
+  const reservation = await reserveProviderRequests(supabase, providerLabel, "live", RECONCILE_FETCH_LIMIT);
+  if (!reservation.allowed) {
+    // Deliberately NOT marked as attempted. Nothing was spent, so nothing was
+    // attempted, and these fixtures should be reconciled once the allowance
+    // frees up rather than being written off.
+    return 0;
+  }
+
+  // One dated fetch settles every fixture on that day at once. The oldest
+  // stranded fixture's own day is used rather than "today", because a match
+  // that kicked off at 23:00 UTC and went final after midnight belongs to
+  // yesterday's fixture list.
+  const targetDate = candidates
+    .map((fixture) => fixture.kickoff_at.slice(0, 10))
+    .sort()[0];
+
+  const result = await syncTodayFixtures("cron", { targetDate });
+
+  // Marked whatever happened, including on failure. See this function's doc
+  // comment: a failed request has already been spent.
+  const { error: markError } = await supabase
+    .from("fixtures")
+    .update({ live_reconciled_at: new Date().toISOString() })
+    .in(
+      "id",
+      candidates.map((fixture) => fixture.id),
+    );
+  if (markError) logError("cron.sync-live.reconcile-mark", markError);
+
+  if (result.status === "failed") {
+    logError("cron.sync-live.reconcile-fetch", result.error ?? "dated reconciliation fetch failed", { targetDate });
+  }
+
+  return candidates.length;
 }
 
 /**
@@ -319,7 +463,30 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
    */
   const triggerSource: SyncTriggerSource = mode === "daily" ? "daily" : "cron";
 
-  const supabase = createServiceRoleSupabaseClient();
+  // The same posture as the CRON_SECRET branch above, and for a sharper
+  // reason. `createServiceRoleSupabaseClient()` throws *synchronously*
+  // ("supabaseKey is required.") when SUPABASE_SERVICE_ROLE_KEY is absent or
+  // was never copied into this environment. Unguarded, that throw escaped the
+  // route entirely: Vercel's scheduled call got a bare 500 with no body, no
+  // `sync_runs` row was written, and Data Health's automation panel therefore
+  // reported "Never run" — which is *true*, and indistinguishable from
+  // "CRON_SECRET is missing", from "vercel.json was never deployed", and from
+  // "this plan does not run crons". Three unrelated causes, one symptom, on
+  // the one surface built specifically to stop that happening.
+  //
+  // Verified by running the built app with the key absent: `GET
+  // /api/cron/sync-daily` with a valid bearer token returned 500 with an empty
+  // body and logged `supabaseKey is required.` A deployment problem must name
+  // itself.
+  let supabase: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    supabase = createServiceRoleSupabaseClient();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is not configured" },
+      { status: 500 },
+    );
+  }
   // Sync, side-effect-free — never constructs a provider client or spends
   // quota just to label a log row (see its doc comment in src/lib/football/index.ts).
   const { name: activeProviderName } = getActiveProviderStatus();
@@ -337,6 +504,62 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
   // cannot fail this request or change any decision made below it.
   const pruned = await pruneRateLimitEvents();
   if (pruned > 0) console.info(`Cron: pruned ${pruned} expired rate_limit_events rows`);
+
+  // The request ledger only ever answers questions about a trailing window, so
+  // anything older than a few of them is dead weight. Same contract as above:
+  // bounded per call, best-effort, cannot fail this request or change any
+  // decision below it.
+  const prunedSpend = await pruneProviderRequestSpend(supabase);
+  if (prunedSpend > 0) console.info(`Cron: pruned ${prunedSpend} expired provider_request_spend rows`);
+
+  /**
+   * Settle predictions, and score fantasy gameweeks that are already over.
+   *
+   * Deliberately here — above every football gate below it, next to the
+   * janitors, and for the same reason they are here. Neither of these spends a
+   * provider request: every input is a row KIVO already holds, so gating them
+   * behind "is a provider configured", "is anything live", "is there budget
+   * left" or the sync lease would mean the one thing that has to happen every
+   * day only happens on days KIVO also had quota to spend. That inversion is
+   * how a fan ends up making a correct call that is never scored.
+   *
+   * Daily only. The live worker fires once a minute and settles as part of its
+   * own success path further down, right after a sync that may have just
+   * written the full-time score — which is what gets a prediction settled
+   * within a minute of the whistle rather than within a day of it.
+   *
+   * Best-effort by contract, like the prunes above: neither can fail this
+   * request or change any decision made below it.
+   */
+  let settlement = EMPTY_SETTLEMENT;
+  let dailyFantasyGameweeksScored = 0;
+  if (mode === "daily") {
+    settlement = await settlePredictionsBestEffort(supabase);
+    try {
+      // The live path re-scores gameweeks that are in play; nothing was scoring
+      // the ones that had simply finished on a deployment where the live worker
+      // is not armed — which is every deployment until the founder arms it.
+      // Same function, same provisional/final semantics, once a day.
+      const dailyScoring = await rescoreLiveGameweeks(supabase);
+      dailyFantasyGameweeksScored = dailyScoring.gameweeksScored;
+    } catch (error) {
+      logError("cron.sync-daily.fantasy-scoring", error);
+    }
+  }
+
+  /**
+   * The three numbers, on every exit a daily run can take — not only the happy
+   * one. "Settled 0, unresolved 40" and "the sync skipped so nothing ran" are
+   * different facts, and a response that only reports settlement when the
+   * football sync also succeeded makes them indistinguishable. That is the same
+   * failure mode Data Health's automation panel exists to prevent.
+   */
+  const settlementReport = {
+    predictionsSettled: settlement.settled,
+    predictionsUnresolved: settlement.unresolved,
+    predictionsAdjusted: settlement.adjusted,
+    fantasyGameweeksScored: dailyFantasyGameweeksScored,
+  };
 
   // 1. The real gate. Never flip this from code — see FOOTBALL_LIVE_POLLING_ENABLED's
   // own doc comment.
@@ -363,7 +586,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       reason: "Skipped: no real football data provider is configured (API_FOOTBALL_KEY unset).",
       suppressIfRecentPrefix: "Skipped: no real football data provider",
     });
-    return NextResponse.json({ ok: true, decision: "no_provider_configured" });
+    return NextResponse.json({ ok: true, decision: "no_provider_configured", ...settlementReport });
   }
 
   // 3. Dedup. This used to be a heuristic: "is there a cron-triggered
@@ -399,7 +622,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       triggerSource,
       reason: `Skipped: dedup check failed, refusing to risk a concurrent run (${dedupError.message}).`,
     });
-    return NextResponse.json({ ok: false, decision: "dedup_check_failed" }, { status: 500 });
+    return NextResponse.json({ ok: false, decision: "dedup_check_failed", ...settlementReport }, { status: 500 });
   }
 
   if (heldLock) {
@@ -408,14 +631,13 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       triggerSource,
       reason: `Skipped: a ${heldLock.holder ?? "unknown"} sync run holds the fixtures lock (since ${heldLock.acquired_at}, lease until ${heldLock.expires_at}).`,
     });
-    return NextResponse.json({ ok: true, decision: "already_running" });
+    return NextResponse.json({ ok: true, decision: "already_running", ...settlementReport });
   }
 
-  // 4. Quota floor — same real, persisted provider_quota_remaining reading
-  // Data Health's own "requests left today" pill uses (src/lib/football/last-synced.ts),
-  // not a fresh provider call just to check. Unknown (null, e.g. no sync has
-  // ever recorded a reading) is never treated as "low" — that would be
-  // guessing, not protecting.
+  // 4. The provider's own remaining count, read from the durable record rather
+  // than by spending a request to ask. Passed to the planner, which treats null
+  // as "KIVO has never recorded a reading" and never as "we are out" — guessing
+  // low is not protecting, it is refusing to work.
   const { data: latestQuotaRun } = await supabase
     .from("sync_runs")
     .select("provider_quota_remaining")
@@ -425,41 +647,24 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
     .maybeSingle();
   const quotaRemaining = latestQuotaRun?.provider_quota_remaining ?? null;
 
-  if (quotaRemaining !== null && quotaRemaining <= QUOTA_SAFETY_FLOOR) {
-    await logSkippedRun(supabase, {
-      provider: providerLabel,
-      triggerSource,
-      reason: `Skipped: provider quota too low to spend automatically (${quotaRemaining} requests remaining, safety floor is ${QUOTA_SAFETY_FLOOR}).`,
-      quotaRemaining,
-      // A standing condition too: the quota does not recover until the
-      // provider's daily reset, so this would otherwise repeat for hours.
-      suppressIfRecentPrefix: "Skipped: provider quota too low",
-    });
-    return NextResponse.json({ ok: true, decision: "quota_floor", quotaRemaining });
-  }
-
-  // 5. Is anything actually worth a provider call right now? The query does
-  // only cheap, coarse filtering at the database level — any live/halftime
-  // row, or any scheduled row kicking off by the imminent window's upper
-  // bound (existing indexes on fixtures(status)/fixtures(kickoff_at), see
-  // migrations 0001/0021, already cover this) — capped at 50 candidates,
-  // comfortably more than this platform will ever have concurrently
-  // live/imminent. The real, precise decision — including the stale-ceiling
-  // lower bound that keeps a fixture the provider never flipped out of
-  // 'scheduled' from looking "imminent" forever — is isFixtureWorthSyncing
-  // (src/lib/football/live-worker-rules.ts), the single tested source of
-  // truth for "is this fixture worth syncing," run per candidate row here
-  // rather than duplicated as a second, untested raw SQL expression.
-  // `imminentBy` is a server-computed ISO string, never user input, so
-  // interpolating it into a raw .or() filter string is safe (contrast the
-  // UUID params this codebase validates before doing the same — see
-  // src/lib/params.ts and getHeadToHead's doc comment in
-  // src/lib/football/head-to-head.ts).
-  // The baseline run has nothing to check here: its whole job is to fetch
-  // today's fixtures so that fixtures exist at all, and gating that on
-  // "is one of the fixtures we do not have live right now" would mean an empty
-  // database could never fill itself.
+  // ---------------------------------------------------------------------------
+  // The daily baseline. Budgeted from its own allowance, which the live worker
+  // cannot reach — so a live worker that has spent everything still leaves
+  // tomorrow's fixtures able to sync.
+  // ---------------------------------------------------------------------------
   if (mode === "daily") {
+    const reservation = await reserveProviderRequests(supabase, providerLabel, "daily");
+    if (!reservation.allowed) {
+      await logSkippedRun(supabase, {
+        provider: providerLabel,
+        triggerSource,
+        reason: `Skipped: the daily baseline has spent its allowance (${reservation.spentInWindow} of ${reservation.limit} in the last 24 hours).`,
+        quotaRemaining,
+        suppressIfRecentPrefix: "Skipped: the daily baseline has spent",
+      });
+      return NextResponse.json({ ok: true, decision: "budget_exhausted", mode, ...settlementReport });
+    }
+
     const dailyResult = await syncTodayFixtures("daily");
 
     /**
@@ -474,8 +679,15 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
      * day, **least-recently-synced first**, fills every table in within days
      * and then keeps them all rolling — which is the right trade for data that
      * changes at most once a matchday.
+     *
+     * Each table now also reserves before it is fetched, so the cap is enforced
+     * by the ledger rather than only by a constant that a future edit could
+     * raise without noticing what it costs.
      */
-    const standings = await syncStaleStandings();
+    const standings = await syncStaleStandings(async () => {
+      const perTable = await reserveProviderRequests(supabase, providerLabel, "daily");
+      return perTable.allowed;
+    });
 
     return NextResponse.json(
       {
@@ -485,17 +697,31 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
         status: dailyResult.status,
         recordsProcessed: dailyResult.recordsProcessed,
         standingsSeasonsSynced: standings.synced,
+        ...settlementReport,
         error: dailyResult.error ?? null,
       },
       { status: dailyResult.status === "failed" ? 500 : 200 },
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // The live worker.
+  // ---------------------------------------------------------------------------
+  // The database query stays coarse and cheap — any live/halftime row, or any
+  // scheduled row kicking off by the imminent window's upper bound (existing
+  // indexes on fixtures(status)/fixtures(kickoff_at), migrations 0001/0021,
+  // already cover it), capped at 50 candidates. Every real judgment is the
+  // planner's, which is pure and unit-tested; duplicating any of it as a second
+  // raw SQL expression would create a second, untested source of truth for how
+  // a hundred-request budget is spent.
+  //
+  // `imminentBy` is a server-computed ISO string, never user input, so
+  // interpolating it into a raw .or() filter is safe.
   const imminentBy = new Date(Date.now() + IMMINENT_WINDOW_MINUTES * 60_000).toISOString();
 
   const { data: candidateFixtures, error: fixturesError } = await supabase
     .from("fixtures")
-    .select("id, status, kickoff_at")
+    .select("id, status, kickoff_at, minute_elapsed, updated_at")
     .or(`status.eq.live,status.eq.halftime,and(status.eq.scheduled,kickoff_at.lte.${imminentBy})`)
     .limit(50);
 
@@ -510,29 +736,119 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
     return NextResponse.json({ ok: false, decision: "fixtures_check_failed" }, { status: 500 });
   }
 
-  const hasRelevantFixture = (candidateFixtures ?? []).some((fixture) =>
-    isFixtureWorthSyncing(fixture.status, fixture.kickoff_at, {
-      imminentWindowMinutes: IMMINENT_WINDOW_MINUTES,
-      staleScheduledCeilingHours: STALE_SCHEDULED_CEILING_HOURS,
-    }),
-  );
+  const snapshots: LiveFixtureSnapshot[] = (candidateFixtures ?? []).map((fixture) => ({
+    status: fixture.status,
+    kickoffAt: fixture.kickoff_at,
+    minuteElapsed: fixture.minute_elapsed,
+    updatedAt: fixture.updated_at,
+  }));
 
-  if (!hasRelevantFixture) {
+  // The ledger is READ here, not consumed. The planner needs the numbers to
+  // derive a pace, which is not a spend — merging the read and the reservation
+  // would mean every pacing decision consumed a request, including the ones
+  // that decide not to spend.
+  const usage = await readBudgetUsage(supabase, providerLabel);
+  const liveUsage = usage.find((entry) => entry.bucket === "live");
+
+  const plan = planLiveSync({
+    now: new Date(),
+    fixtures: snapshots,
+    lastSpendAt: liveUsage?.lastSpendAt ?? null,
+    budget: {
+      limit: liveUsage?.limit ?? PROVIDER_REQUEST_BUDGETS.live,
+      spentInWindow: liveUsage?.spentInWindow ?? 0,
+      windowSeconds: REQUEST_BUDGET_WINDOW_SECONDS,
+      oldestSpendAt: liveUsage?.oldestSpendAt ?? null,
+    },
+    quotaRemaining,
+    quotaFloor: QUOTA_SAFETY_FLOOR,
+    imminentWindowMinutes: IMMINENT_WINDOW_MINUTES,
+    staleScheduledCeilingHours: STALE_SCHEDULED_CEILING_HOURS,
+  });
+
+  if (plan.action === "skip") {
+    // "Pacing" is the one skip reason that is neither a standing condition nor
+    // something going wrong — it is the normal heartbeat between refreshes, and
+    // at one firing a minute it would otherwise write a row every minute of
+    // every live match. Suppressed like the other standing conditions; the
+    // scheduler's own `cron.job_run_details` (migration 0067) still records
+    // that the worker ran, so nothing about "did it fire" depends on this table.
     await logSkippedRun(supabase, {
       provider: providerLabel,
       triggerSource,
-      reason: `Skipped: nothing live/halftime and nothing scheduled within ${IMMINENT_WINDOW_MINUTES} minutes.`,
+      reason: `Skipped: ${plan.detail}`,
       quotaRemaining,
-      suppressIfRecentPrefix: "Skipped: nothing live/halftime",
+      suppressIfRecentPrefix: SKIP_SUPPRESSION_PREFIX[plan.reason],
     });
-    return NextResponse.json({ ok: true, decision: "nothing_live" });
+    return NextResponse.json({
+      ok: true,
+      decision: plan.reason,
+      nextEligibleAt: plan.nextEligibleAt,
+    });
   }
 
-  // Every guard passed and something is genuinely live/imminent — spend a
-  // real provider call through the exact same path "Sync now" uses.
-  // syncTodayFixtures writes its own sync_runs row (status running ->
-  // success/partial/failed, trigger_source 'cron') — no separate logging here.
-  const result = await syncTodayFixtures("cron");
+  // 6. The reservation. This is the enforcement, and it is deliberately the
+  // last thing before the request: a refusal here means the provider client is
+  // never constructed and nothing is spent, and because the consume is atomic,
+  // two workers cannot both be told yes.
+  const reservation = await reserveProviderRequests(supabase, providerLabel, "live");
+  if (!reservation.allowed) {
+    await logSkippedRun(supabase, {
+      provider: providerLabel,
+      triggerSource,
+      reason: `Skipped: the live worker has spent its allowance (${reservation.spentInWindow} of ${reservation.limit} in the last 24 hours). Scores will not refresh until some of it frees up.`,
+      quotaRemaining,
+      suppressIfRecentPrefix: "Skipped: the live worker has spent",
+    });
+    return NextResponse.json({ ok: true, decision: "budget_exhausted" });
+  }
+
+  // `/fixtures?live=all` rather than a whole day: one request refreshes every
+  // in-play match at once, and it cannot be thrown off by a match that belongs
+  // to tomorrow's date in some timezone. syncTodayFixtures writes its own
+  // sync_runs row (trigger_source 'cron') — no separate logging here.
+  const result = await syncTodayFixtures("cron", { source: "live" });
+
+  // The live feed returns ONLY in-play matches, so a fixture that went final
+  // between two polls has simply vanished from it — and its last written state
+  // would be an in-play scoreline that stays on the product until the next
+  // daily sync. Not stale: wrong. This is the bounded fallback.
+  const reconciled = await reconcileDisappearedFixtures(supabase, providerLabel);
+
+  /**
+   * Fantasy points that move during a match.
+   *
+   * Runs here rather than on its own schedule because it depends entirely on
+   * what the sync above just wrote, and because it must never cause a provider
+   * request — it reads only KIVO's own tables, so it adds nothing to the
+   * budget this invocation already reserved.
+   *
+   * Best-effort by contract: the fixtures sync has already succeeded by this
+   * point, and a fantasy scoring failure must not make it report itself as
+   * broken. Every row it writes carries `status = 'provisional'` and the
+   * fixture counts that explain why, so a mid-match total says what it is
+   * rather than looking settled.
+   */
+  let fantasyGameweeksScored = 0;
+  try {
+    const liveScoring = await rescoreLiveGameweeks(supabase);
+    fantasyGameweeksScored = liveScoring.gameweeksScored;
+  } catch (error) {
+    logError("cron.sync-live.fantasy-scoring", error);
+  }
+
+  /**
+   * And settle predictions, on the same terms: the sync immediately above may
+   * have just written a full-time score, and this is what turns that into a
+   * settled prediction within a minute of the whistle rather than within a day
+   * of it. Costs nothing against the provider — the request for this minute has
+   * already been spent, and settlement reads only KIVO's own rows.
+   *
+   * Only on the success path, which is the throttle: the live worker fires
+   * every minute, but this runs at the planner's pace rather than the
+   * scheduler's, so a quiet hour does no settlement work at all.
+   */
+  const liveSettlement = await settlePredictionsBestEffort(supabase);
 
   return NextResponse.json(
     {
@@ -540,6 +856,14 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       decision: "synced",
       status: result.status,
       recordsProcessed: result.recordsProcessed,
+      paceMinutes: Number(plan.paceMinutes.toFixed(2)),
+      nextEligibleAt: plan.nextEligibleAt,
+      budget: { spent: reservation.spentInWindow, limit: reservation.limit },
+      reconciledFixtures: reconciled,
+      fantasyGameweeksScored,
+      predictionsSettled: liveSettlement.settled,
+      predictionsUnresolved: liveSettlement.unresolved,
+      predictionsAdjusted: liveSettlement.adjusted,
       error: result.error ?? null,
     },
     { status: result.status === "failed" ? 500 : 200 },

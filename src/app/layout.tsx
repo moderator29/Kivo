@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import { KivoInkFilter } from "@/components/theme/ink-filter";
 import { DEFAULT_THEME, THEME_COLOR } from "@/lib/theme";
+import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -13,23 +14,46 @@ const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
 });
 
+// Geist Mono is used on exactly four surfaces — the error reference code, the
+// sign-in code input, and two invite-code fields in the prediction leagues
+// panel. None of them is public, and `next/font` preloaded the face on every
+// route regardless: a second render-blocking request, 22.6 KB, ahead of the
+// typeface the page is actually set in, on a pipe that moves ~50 KB/s.
+//
+// `preload: false` stops the request on routes that never use it. `display:
+// "optional"` means that where it IS used the browser either has it almost
+// immediately or keeps the fallback and never swaps — the swap is the reflow,
+// and the reflow was the CLS.
+//
+// The explicit `fallback` list is the part that is easy to leave out and
+// shouldn't be. Next's `adjustFontFallback` emits a size-adjusted face anchored
+// to `src: local("Arial")`, and Android has no Arial: the `local()` never
+// matches, the metric-matched face is dropped, and the adjustment silently does
+// nothing on exactly the devices this product is being launched for. Naming
+// monospace families Android actually ships makes the fallback real.
+//
+// Measured, /support: two font requests (49.2 KB) -> one (26.6 KB), and CLS
+// 0.209 worst-case -> 0.0155 stable. See docs/PERFORMANCE.md.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
+  display: "optional",
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
 });
 
-// `||`, not `??`: an env var Vercel knows about but that hasn't been given a
-// value yet resolves to `""`, not `undefined` — `""  ?? fallback` still
-// evaluates to `""`, and `new URL("")` throws, which fails the entire build
-// (metadata objects are evaluated at build time). This must never throw
-// regardless of what's configured, so every env var used below falls back to
-// a working default the same way.
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+// Resolved through src/lib/site-url.ts rather than read from the environment
+// here: metadata is evaluated at build time, so this must never throw no
+// matter what is configured, and an env var Vercel knows about but has not
+// been given a value resolves to `""` rather than `undefined`. siteUrl()
+// handles both, and falls back to Vercel's own production URL before it falls
+// back to localhost (KN-20).
+const site = siteUrl();
 const description =
   "KIVO is a premium football fan platform: live scores, an AI Copilot grounded in real data, match rooms, fantasy, and predictions. Built for football lovers.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(site),
   title: {
     default: "KIVO: Football. Together. Live.",
     template: "%s | KIVO",
@@ -39,7 +63,7 @@ export const metadata: Metadata = {
     title: "KIVO: Football. Together. Live.",
     description,
     type: "website",
-    url: siteUrl,
+    url: site,
     siteName: "KIVO",
     // Image itself comes from opengraph-image.tsx (file-based metadata takes
     // priority over this object per Next's docs), so no `images` entry here.

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 export function FeedFilterTabs({ active }: { active: SocialFilter }) {
   return (
     <nav aria-label="Feed filter" className="-mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
-      <ul className="flex w-max items-center gap-1 rounded-full border border-hairline bg-surface-1 p-1">
+      <ul className="flex w-max items-center gap-1 rounded-2xl border border-hairline bg-surface-1 p-1">
         {SOCIAL_FILTERS.map((filter) => {
           const isActive = filter === active;
           return (
@@ -27,7 +27,7 @@ export function FeedFilterTabs({ active }: { active: SocialFilter }) {
                 aria-current={isActive ? "page" : undefined}
                 scroll={false}
                 className={cn(
-                  "kivo-focus relative flex items-center rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
+                  "kivo-focus relative flex items-center rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors",
                   isActive ? "text-on-accent" : "text-foreground-subtle hover:text-foreground",
                 )}
               >
@@ -35,7 +35,7 @@ export function FeedFilterTabs({ active }: { active: SocialFilter }) {
                   <motion.span
                     aria-hidden="true"
                     layoutId="social-filter-active"
-                    className="kivo-gradient-prime absolute inset-0 rounded-full"
+                    className="kivo-gradient-prime absolute inset-0 rounded-xl"
                     transition={{ type: "spring", stiffness: 480, damping: 40 }}
                   />
                 )}

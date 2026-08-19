@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Target } from "lucide-react";
+import { Target } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
 import { staggerDelay } from "@/lib/stagger";
-import { PREDICTION_OUTCOME_LABEL, computeStreaks, predictionResultInfo } from "@/lib/predictions";
+import {
+  PREDICTION_PICK_COLUMNS,
+  PREDICTION_TYPE_LABEL,
+  computeStreaks,
+  describePredictionPick,
+  pickFromRow,
+  predictionResultInfo,
+} from "@/lib/predictions";
 
 export const metadata: Metadata = { title: "My Predictions" };
 
@@ -49,13 +58,11 @@ export default async function MyPredictionsPage() {
   // real total alongside that page so the stats block can honestly disclose
   // when it's only covering a slice, instead of silently under-reporting a
   // user's lifetime record.
-  const {
-    data: predictionRows,
-    count: totalPredictionCount,
-  } = await supabase
+  const predictionsResult = await supabase
     .from("predictions")
     .select(
-      `id, predicted_outcome, points_awarded, created_at,
+      `id, points_awarded, created_at, ${PREDICTION_PICK_COLUMNS},
+       player:players!predictions_predicted_player_id_fkey(id, full_name, known_as),
        fixture:fixtures(
          id, kickoff_at, status, home_score, away_score,
          home_team:teams!fixtures_home_team_id_fkey(id, name, crest_url),
@@ -68,11 +75,29 @@ export default async function MyPredictionsPage() {
     .order("created_at", { ascending: false })
     .limit(100);
 
+  // This page computes an accuracy percentage, a streak and a per-competition
+  // record. Every one of those is a claim about the reader, and every one of
+  // them is derived from this single read — so a failure does not produce a
+  // page missing its numbers, it produces a page full of confident zeroes and
+  // a "you haven't predicted anything yet" that is flatly untrue.
+  const predictionsOutcome = readList(predictionsResult, "predictions.mine");
+
+  if (predictionsOutcome.failed) {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+        <LoadFailed
+          title="Your predictions"
+          description="KIVO couldn't read your prediction history just now. Your record hasn't changed — try again rather than reading a zero it can't stand behind."
+        />
+      </div>
+    );
+  }
+
   // `fixture_id` cascades on fixture delete (RECOMMENDATIONS item 47), so this
   // should never actually be null in practice — filtered defensively anyway
   // rather than rendering a broken row.
-  const rows = (predictionRows ?? []).filter((row) => row.fixture !== null);
-  const totalPredictions = totalPredictionCount ?? rows.length;
+  const rows = predictionsOutcome.rows.filter((row) => row.fixture !== null);
+  const totalPredictions = predictionsResult.count ?? rows.length;
   const isTruncatedHistory = totalPredictions > rows.length;
 
   const scoredRows = rows.filter((row) => row.points_awarded !== null);
@@ -114,13 +139,6 @@ export default async function MyPredictionsPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-1">
-        <Link
-          href="/predictions"
-          className="flex items-center gap-1 text-xs text-foreground-subtle hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3 w-3" strokeWidth={2} />
-          Back to predictions
-        </Link>
         <h1 className="text-xl font-semibold text-foreground">My Predictions</h1>
         <p className="text-sm text-foreground-subtle">Your prediction history and record.</p>
       </FadeIn>
@@ -217,7 +235,12 @@ export default async function MyPredictionsPage() {
               const fixture = row.fixture!;
               const competitionName = fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition";
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-              const result = predictionResultInfo(fixture.status, row.points_awarded);
+              const result = predictionResultInfo(
+                fixture.status,
+                row.points_awarded,
+                row.resolution,
+                row.unresolvable_reason,
+              );
               const ResultIcon = result.icon;
 
               return (
@@ -265,10 +288,16 @@ export default async function MyPredictionsPage() {
                     </div>
 
                     <div className="flex items-center justify-between gap-2 border-t border-hairline-soft pt-3">
-                      <span className="text-xs text-foreground-muted">
-                        You picked{" "}
+                      <span className="min-w-0 flex-1 text-xs text-foreground-muted">
+                        {/* Six types share this row now, so the type is named
+                            rather than implied — "2-1" and "3-4 cards" are not
+                            self-describing the way "Home" was. */}
+                        {PREDICTION_TYPE_LABEL[row.prediction_type]}:{" "}
                         <span className="font-semibold text-foreground">
-                          {PREDICTION_OUTCOME_LABEL[row.predicted_outcome]}
+                          {describePredictionPick(
+                            pickFromRow(row),
+                            row.player?.known_as ?? row.player?.full_name ?? null,
+                          )}
                         </span>
                       </span>
                       <ResultBadgeReveal isCorrect={(row.points_awarded ?? 0) > 0} className={result.className}>

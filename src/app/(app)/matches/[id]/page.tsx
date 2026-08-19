@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MapPin, Share2 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
+import { getActiveProviderStatus } from "@/lib/football";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
@@ -12,12 +14,13 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
-import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { MatchShareCard } from "@/components/matches/match-share-card";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { YourPredictionCard } from "@/components/matches/your-prediction-card";
+import { PREDICTION_PICK_COLUMNS, pickFromRow } from "@/lib/predictions";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
@@ -30,14 +33,20 @@ import { getRoomVerdictExtras } from "@/lib/football/room-verdict";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = createServerSupabaseClient();
-  const { data: fixture } = await supabase
-    .from("fixtures")
-    .select(
-      `home_team:teams!fixtures_home_team_id_fkey(name),
-       away_team:teams!fixtures_away_team_id_fkey(name)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // readOptionalRow, not readRow: a title is not worth a 500. A failed read
+  // here is logged and falls back to the generic title, and the page itself
+  // still gets its own chance to load the fixture properly below.
+  const fixture = readOptionalRow(
+    await supabase
+      .from("fixtures")
+      .select(
+        `home_team:teams!fixtures_home_team_id_fkey(name),
+         away_team:teams!fixtures_away_team_id_fkey(name)`,
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    "matches.detail.metadata",
+  );
 
   if (!fixture?.home_team?.name || !fixture?.away_team?.name) return { title: "Match" };
 
@@ -63,17 +72,28 @@ export default async function MatchCentrePage({
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const { data: fixture } = await supabase
-    .from("fixtures")
-    .select(
-      `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
-       home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
-       away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
-       competition:competitions(name, short_name),
-       venue:venues(id, name, city)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // `{ data: fixture }` with the error discarded used to gate `notFound()`
+  // directly, which meant a dropped connection or an expired token on the
+  // most-opened detail page in the product rendered "that doesn't exist"
+  // about a fixture that exists perfectly well. A 404 is a claim about the
+  // world; a failed read is a fact about the request, and the two must not
+  // share a branch. readRow throws on error so the error boundary handles it
+  // as what it is, and returns null only for a fixture that genuinely is not
+  // there.
+  const fixture = readRow(
+    await supabase
+      .from("fixtures")
+      .select(
+        `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
+         home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+         away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
+         competition:competitions(id, name, short_name),
+         venue:venues(id, name, city)`,
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    "matches.detail",
+  );
 
   if (!fixture) notFound();
 
@@ -91,6 +111,10 @@ export default async function MatchCentrePage({
     ? await getRoomVerdictExtras(supabase, id, fixture.kickoff_at)
     : { busiestMinute: null, topReaction: null };
 
+  // Read once, above the parallel block, because two things below need it and
+  // it is a pure environment read rather than a query.
+  const activeProvider = getActiveProviderStatus();
+
   const [
     { data: events },
     { data: lineups },
@@ -103,8 +127,17 @@ export default async function MatchCentrePage({
     ownFanRating,
     fanRatingSummary,
     { data: managers },
-    { data: ownPrediction },
+    { data: ownPredictions },
     viewerFantasyRosterBySeason,
+    // KN-53's own stated limitation, now closeable. That comment says the
+    // Overview tab "cannot distinguish 'the provider does not support this for
+    // this competition' from 'nobody has synced it yet', so it claims only the
+    // second, which is the one thing that is always true." The coverage
+    // registry (migration 0082) is the provider's own answer to the first, and
+    // it is one filtered row on a public-select table — cheap enough for the
+    // most-opened page in the product, and read with the ordinary client
+    // because `provider_coverage_select_public` allows it.
+    { data: coverageRow },
   ] = await Promise.all([
     supabase
       .from("fixture_events")
@@ -117,7 +150,7 @@ export default async function MatchCentrePage({
       .order("minute", { ascending: true }),
     supabase
       .from("lineups")
-      .select("team_id, is_starting, shirt_number, position, formation, player:players(id, full_name, known_as)")
+      .select("team_id, is_starting, shirt_number, position, formation, grid, player:players(id, full_name, known_as)")
       .eq("fixture_id", id),
     supabase
       .from("fixture_statistics")
@@ -166,14 +199,20 @@ export default async function MatchCentrePage({
           .order("updated_at", { ascending: false })
       : Promise.resolve({ data: null }),
     // RECOMMENDATIONS.md item 293: predictions_select_own already scopes this
-    // to the caller's own row — no RLS change, no RPC needed.
+    // to the caller's own rows — no RLS change, no RPC needed.
+    //
+    // No longer maybeSingle(): a fixture now carries up to six predictions
+    // from one person (one per type, per predictions_unique_per_fixture_type),
+    // so this reads all of them and YourPredictionCard lists what it finds.
     profile
       ? supabase
           .from("predictions")
-          .select("predicted_outcome, points_awarded")
+          .select(
+            `id, points_awarded, ${PREDICTION_PICK_COLUMNS},
+             player:players!predictions_predicted_player_id_fkey(id, full_name, known_as)`,
+          )
           .eq("fixture_id", id)
           .eq("profile_id", profile.id)
-          .maybeSingle()
       : Promise.resolve({ data: null }),
     // RECOMMENDATIONS.md item 294: real fantasy_rosters -> lineups player-id
     // cross-reference for LineupsTab's "In your XI" pill — see
@@ -182,6 +221,16 @@ export default async function MatchCentrePage({
     profile
       ? getViewerFantasyRosterBySeasons(supabase, profile.id, [fixture.season_id])
       : Promise.resolve(new Map<string, ViewerFantasyRosterMap>()),
+    fixture.competition?.id && activeProvider.name
+      ? supabase
+          .from("provider_coverage")
+          .select("fixture_events, fixture_lineups, fixture_statistics, retrieved_at")
+          .eq("provider", activeProvider.name)
+          .eq("competition_id", fixture.competition.id)
+          .order("season_year", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const viewerFantasyRoster = viewerFantasyRosterBySeason.get(fixture.season_id) ?? new Map();
@@ -276,6 +325,12 @@ export default async function MatchCentrePage({
         })))
       : null;
   const matchUrl = absoluteUrl(`/matches/${fixture.id}`);
+  // The text a native share sheet sends alongside the picture. Built from the
+  // same real fixture row the card is, so the two can never disagree.
+  const shareText =
+    fixture.home_score != null && fixture.away_score != null
+      ? `${fixture.home_team?.name ?? "Home"} ${fixture.home_score} - ${fixture.away_score} ${fixture.away_team?.name ?? "Away"} — on KIVO.`
+      : `${fixture.home_team?.name ?? "Home"} vs ${fixture.away_team?.name ?? "Away"} — on KIVO.`;
 
   return (
     // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
@@ -388,13 +443,19 @@ export default async function MatchCentrePage({
 
       {/* RECOMMENDATIONS.md item 293: the caller's own real prediction for
           this exact fixture — renders nothing when they haven't made one
-          (ownPrediction is null in that case, predictions_select_own already
+          (the list is empty in that case, predictions_select_own already
           scoped this to their own row). */}
-      {ownPrediction && (
+      {ownPredictions && ownPredictions.length > 0 && (
         <FadeIn delay={0.09}>
           <YourPredictionCard
-            predictedOutcome={ownPrediction.predicted_outcome}
-            pointsAwarded={ownPrediction.points_awarded}
+            predictions={ownPredictions.map((row) => ({
+              id: row.id,
+              pick: pickFromRow(row),
+              playerName: row.player?.known_as ?? row.player?.full_name ?? null,
+              pointsAwarded: row.points_awarded,
+              resolution: row.resolution,
+              unresolvableReason: row.unresolvable_reason,
+            }))}
             status={fixture.status}
           />
         </FadeIn>
@@ -435,19 +496,6 @@ export default async function MatchCentrePage({
         </FadeIn>
       )}
 
-      {/* RECOMMENDATIONS.md item 161: only shown when these two teams have
-          at least one prior finished meeting on record — a debut fixture
-          between them shouldn't render a zero-state card here. */}
-      {headToHead && headToHead.meetings.length > 0 && fixture.home_team && fixture.away_team && (
-        <FadeIn delay={0.11}>
-          <HeadToHeadCard
-            teamA={{ name: fixture.home_team.name, shortName: fixture.home_team.short_name }}
-            teamB={{ name: fixture.away_team.name, shortName: fixture.away_team.short_name }}
-            record={headToHead}
-          />
-        </FadeIn>
-      )}
-
       {/* RECOMMENDATIONS.md's MatchShareCard feature: a real, dynamic share
           card for this exact fixture -- never rendered for a fixture with no
           resolved teams (shareCardData is null in that case). */}
@@ -458,6 +506,27 @@ export default async function MatchCentrePage({
             Share this match
           </h2>
           <MatchShareCard fixtureId={fixture.id} data={shareCardData} matchUrl={matchUrl} />
+
+          {/* The template card above composites this fixture onto one fixed
+              piece of KIVO artwork. These two sit on whichever background the
+              user picks, which is the founder's own instruction for the card
+              set — see src/lib/share-cards/. The prediction panel renders
+              nothing at all unless this viewer actually called this match. */}
+          <ShareCardPanel
+            kind="live-score"
+            id={fixture.id}
+            shareUrl={`/matches/${fixture.id}`}
+            shareText={shareText}
+            heading="Score card"
+            description="Pick a background. The preview is the exact image you save."
+          />
+          <ShareCardPanel
+            kind="prediction"
+            id={fixture.id}
+            shareUrl={`/matches/${fixture.id}`}
+            shareText={shareText}
+            heading="Your call on this match"
+          />
         </FadeIn>
       )}
 
@@ -487,6 +556,32 @@ export default async function MatchCentrePage({
               venueName: fixture.venue?.name ?? null,
               venueCity: fixture.venue?.city ?? null,
             }}
+            // RECOMMENDATIONS.md item 161, now as a Match Centre tab rather
+            // than a card stranded below the whole tab strip. Null unless both
+            // clubs resolved, and the tab itself is only offered when there is
+            // a real prior meeting on record — a debut fixture between them
+            // shows no H2H tab at all rather than an empty one.
+            // The provider's own statement, passed through untouched: a false
+            // is a denial it made, a null is KIVO not knowing. The Overview
+            // panel is the only reader, and it says nothing on a null.
+            competitionCoverage={
+              coverageRow
+                ? {
+                    events: coverageRow.fixture_events,
+                    lineups: coverageRow.fixture_lineups,
+                    statistics: coverageRow.fixture_statistics,
+                  }
+                : null
+            }
+            headToHead={
+              headToHead && fixture.home_team && fixture.away_team
+                ? {
+                    teamA: { name: fixture.home_team.name, shortName: fixture.home_team.short_name },
+                    teamB: { name: fixture.away_team.name, shortName: fixture.away_team.short_name },
+                    record: headToHead,
+                  }
+                : null
+            }
             viewerFantasyRoster={viewerFantasyRosterForTab}
             events={(events ?? []).map((e) => ({
               id: e.id,
@@ -506,6 +601,7 @@ export default async function MatchCentrePage({
               shirtNumber: l.shirt_number,
               position: l.position,
               formation: l.formation,
+              grid: l.grid,
               playerId: l.player?.id ?? "",
               playerName: l.player?.known_as ?? l.player?.full_name ?? "Unknown player",
             }))}
@@ -525,13 +621,6 @@ export default async function MatchCentrePage({
           />
         </WidgetErrorBoundary>
       </FadeIn>
-
-      <Link
-        href="/matches"
-        className="self-center text-xs text-foreground-subtle underline decoration-hairline-strong underline-offset-4 hover:text-foreground-muted"
-      >
-        Back to today&apos;s matches
-      </Link>
     </FadeIn>
   );
 }

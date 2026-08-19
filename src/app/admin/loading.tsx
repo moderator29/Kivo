@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AdminLoading() {
   return (
-    <div className="flex flex-col gap-6">
+    <PageSkeleton className="flex flex-col gap-6" label="Loading the admin section">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-4 w-64" />
@@ -13,6 +14,6 @@ export default function AdminLoading() {
         ))}
       </div>
       <Skeleton className="h-32 w-full rounded-2xl" />
-    </div>
+    </PageSkeleton>
   );
 }

@@ -1,10 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import { Radio } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FixtureGroups, type LiveListFixture } from "@/components/matches/live-fixture-list";
+import { CompetitionFilter, type CompetitionFilterOption } from "@/components/matches/competition-filter";
 import { isLiveStatus } from "@/lib/football/fixture-status";
 import { useRealtimeFixtures } from "@/hooks/use-realtime-fixtures";
+
+/** The competitions actually represented in the list, in the order they first
+ * appear — same first-appearance ordering `groupFixturesByCompetition` uses,
+ * so the sheet's rows and the page's sections read in the same order. */
+function competitionOptions(fixtures: LiveListFixture[]): CompetitionFilterOption[] {
+  const byId = new Map<string, CompetitionFilterOption>();
+  for (const fixture of fixtures) {
+    const competition = fixture.competition;
+    if (!competition?.id) continue;
+    const existing = byId.get(competition.id);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    byId.set(competition.id, {
+      id: competition.id,
+      name: competition.name,
+      shortName: competition.short_name,
+      logoUrl: competition.logo_url ?? null,
+      count: 1,
+    });
+  }
+  return [...byId.values()];
+}
 
 /**
  * The whole body of /live below the heading, as one client component.
@@ -47,8 +73,28 @@ export function LiveCentreSections({
   providerLabel: string | null;
 }) {
   const all = useRealtimeFixtures(fixtures);
-  const live = all.filter((f) => isLiveStatus(f.status));
-  const notLive = all.filter((f) => !isLiveStatus(f.status));
+
+  /**
+   * The competition filter is client state here, not a query param the way
+   * `/matches` does it, and the difference is not an inconsistency — it is
+   * what the two pages are. `/matches` is a server-rendered view of one
+   * calendar day, so its filter is part of the address. This list is owned by
+   * a live subscription: a navigation would tear down the channel and rebuild
+   * it to show a subset of rows this component already holds. Filtering in
+   * place keeps every row live while it is hidden, so unfiltering shows the
+   * current score rather than the one from when the filter went on.
+   */
+  const [competitionId, setCompetitionId] = useState<string | null>(null);
+  const options = competitionOptions(all);
+  // A competition that had a fixture when the filter was set can genuinely
+  // leave the list (a late kickoff finishing, a realtime status change taking
+  // the last row out of the window). Falling back to the whole list beats
+  // holding an empty one behind a filter the user can no longer see the reason
+  // for.
+  const activeId = options.some((option) => option.id === competitionId) ? competitionId : null;
+  const visible = activeId ? all.filter((fixture) => fixture.competition?.id === activeId) : all;
+  const live = visible.filter((f) => isLiveStatus(f.status));
+  const notLive = visible.filter((f) => !isLiveStatus(f.status));
 
   return (
     <>
@@ -58,6 +104,13 @@ export function LiveCentreSections({
             ? `Matches in progress right now${providerLabel ? `, synced from ${providerLabel}` : ""}.`
             : "Nothing in play right now. Here's what's on today."}
         </p>
+        <CompetitionFilter
+          options={options}
+          selectedId={activeId}
+          totalCount={all.length}
+          onSelect={setCompetitionId}
+          className="shrink-0"
+        />
       </FadeIn>
 
       {live.length > 0 && (

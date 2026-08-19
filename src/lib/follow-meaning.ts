@@ -16,11 +16,20 @@
  *   "a player you follow was involved").
  * - **user** — the Following tab of the feed
  *   (src/app/(app)/social/posts.ts) and a `new_follower` notification to them.
- * - **competition** — deliberately the flattest sentence of the four, because
- *   following a competition genuinely does nothing beyond appearing in your
- *   Following list today: there is no competition audience in
- *   match-notifications.ts for it to feed. Saying "you'll get updates" here
- *   would be inventing a feature. When one ships, this line changes with it.
+ * - **competition** — deliberately the flattest sentence of the four, and
+ *   re-checked against every consumer on 2026-08-19 (the audit the
+ *   coordinator asked for after a `.eq("followed_type", "team")` on /home
+ *   made half the graph invisible). A competition follow has exactly two real
+ *   consumers: your Following list, and `buildGroundingContext` in
+ *   src/lib/ai/grounding.ts, which passes the competitions you follow to the
+ *   Copilot as context. It has none in match-notifications.ts, none in
+ *   watchlist-digest.ts and none on /home — all three are scoped to teams and
+ *   players, and deliberately: a division is ~380 fixtures, so a per-goal
+ *   audience would be spam and a 12-item digest would be drowned by one
+ *   matchday. So the sentence says "bookmark, not a subscription" — which is
+ *   still true of alerts — but it no longer claims the follow does *nothing*,
+ *   because the Copilot really does read it. That earlier wording was stale,
+ *   and a stale sentence here is how a built feature gets rebuilt.
  *
  * Kept as data rather than inline JSX so the same sentence is used by the
  * confirmation that appears when you follow *and* by the Following page that
@@ -32,7 +41,8 @@ export type FollowTargetKind = "team" | "player" | "competition" | "user";
 export const FOLLOW_MEANING: Record<FollowTargetKind, string> = {
   team: "Kickoff, goals, red cards and full time reach your notifications, and their fixtures lead your home screen.",
   player: "You'll hear when they score, get sent off, or feature in a match KIVO has synced.",
-  competition: "It's saved to your Following list. KIVO doesn't send competition alerts yet — this is a bookmark, not a subscription.",
+  competition:
+    "It's saved to your Following list, and the Copilot uses it as context when you ask about football. KIVO doesn't send competition alerts — this is a bookmark, not a subscription.",
   user: "Their posts show up in your Following feed, and they'll know you followed them.",
 };
 

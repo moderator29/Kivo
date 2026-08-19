@@ -1,4 +1,3 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -7,6 +6,8 @@ import { getFootballDataProvider } from "./index";
 import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedTransfer } from "./types";
+import { notifyTransferRecorded } from "./transfer-notifications";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -66,6 +67,59 @@ async function upsertTransfer(
   if (error || !data) throw error ?? new Error("Failed to insert transfer");
 
   await createMapping(supabase, providerName, "transfer", transfer.providerId, data.id);
+
+  // Follow alerts fire from this branch only — a row KIVO has genuinely never
+  // held before. The update branch above returns before reaching here, so
+  // re-running this sync over a player's existing history notifies nobody. The
+  // first sync of a long career is still a burst, and that is correct: those
+  // moves are new to KIVO and to everyone following the clubs involved.
+  //
+  // Deliberately not allowed to fail the sync: a notification problem must
+  // never turn a successfully stored transfer into a failed run.
+  try {
+    const names = await loadTransferPartyNames(supabase, playerId, fromTeamId, toTeamId);
+    if (names) {
+      await notifyTransferRecorded(supabase, {
+        transferId: data.id,
+        playerId,
+        playerName: names.playerName,
+        fromTeamId,
+        fromTeamName: names.fromTeamName,
+        toTeamId,
+        toTeamName: names.toTeamName,
+      });
+    }
+  } catch (notifyError) {
+    logError("football.sync-transfers.notifyTransferRecorded", notifyError);
+  }
+}
+
+/**
+ * The display names the alert's summary line needs, read back from the rows
+ * that were just written against. Returns null when the player row itself is
+ * missing, which would make any sentence about the move unwritable — better no
+ * alert than one addressed to nobody in particular.
+ */
+async function loadTransferPartyNames(
+  supabase: ServiceClient,
+  playerId: string,
+  fromTeamId: string | null,
+  toTeamId: string | null,
+): Promise<{ playerName: string; fromTeamName: string | null; toTeamName: string | null } | null> {
+  const [{ data: player }, { data: fromTeam }, { data: toTeam }] = await Promise.all([
+    supabase.from("players").select("full_name, known_as").eq("id", playerId).maybeSingle(),
+    fromTeamId
+      ? supabase.from("teams").select("name").eq("id", fromTeamId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    toTeamId ? supabase.from("teams").select("name").eq("id", toTeamId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+
+  if (!player) return null;
+  return {
+    playerName: player.known_as ?? player.full_name,
+    fromTeamName: fromTeam?.name ?? null,
+    toTeamName: toTeam?.name ?? null,
+  };
 }
 
 /**

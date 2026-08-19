@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { BarChart3, Plus, Send, PenSquare, X } from "lucide-react";
+import { BarChart3, Gavel, Plus, Send, PenSquare, Trophy, X } from "lucide-react";
 import { createPost, createPoll } from "@/app/(app)/social/actions";
+import { createMotmPoll, createRefereePoll } from "@/app/(app)/matches/match-room-poll-actions";
+import { REFEREE_DECISION_OPTIONS, type RefereeDecision } from "@/lib/match-room-polls";
 
 const MAX_LENGTH = 2000;
 
@@ -62,10 +64,15 @@ const MAX_POLL_OPTION_LENGTH = 80;
  * Two rules the templates hold to.
  *
  * **Options are real or they are blank.** "Who wins?" offers the two clubs'
- * actual names and a draw, because those come from the fixture. "Man of the
- * match" pre-fills the question and leaves the options empty, because the
- * honest answer set is the players this person watched, and KIVO offering a
- * shortlist would be picking candidates on their behalf.
+ * actual names and a draw, because those come from the fixture.
+ *
+ * The two poll types the brief names explicitly — man of the match, and
+ * referee decisions — are no longer templates at all. They are first-class
+ * kinds (migration 0078), posted through TemplatedPollActions below, and the
+ * MOTM ballot is seeded from the fixture's REAL synced starting XIs. That is
+ * not KIVO choosing a shortlist: the players who started are a fact, not an
+ * opinion about who is worth voting for. When the lineup has not been synced,
+ * the action says so plainly and posts nothing.
  *
  * **A poll is fan opinion and must never read as a KIVO prediction**
  * (RECOMMENDATIONS items 178/246). A "who wins?" poll is fine — it is what the
@@ -91,22 +98,14 @@ const POLL_TEMPLATES: PollTemplate[] = [
     buildOptions: (home, away) => [home, "Draw", away],
     availableWhen: (isFinished) => !isFinished,
   },
-  {
-    id: "motm",
-    chip: "Man of the match",
-    question: "Man of the match?",
-    // Deliberately blank. Naming candidates would be KIVO choosing who is worth
-    // voting for, and the lineup is often not synced anyway.
-    buildOptions: () => ["", ""],
-    availableWhen: () => true,
-  },
-  {
-    id: "ref",
-    chip: "Was that a penalty?",
-    question: "Was that a penalty?",
-    buildOptions: () => ["Yes", "No", "Not sure"],
-    availableWhen: () => true,
-  },
+  // "Man of the match" and "Referee decision" used to live here as freeform
+  // templates that pre-filled this same text box. They have moved out, to
+  // TemplatedPollActions below, because the brief names them as poll *types*
+  // and a pre-filled text box is not a type: five seconds after posting, KIVO
+  // cannot tell such a poll apart from any other, so nothing downstream can
+  // read it. They are now real `posts.poll_kind` rows (migration 0078) —
+  // which is also what lets a man-of-the-match *prediction* be settled
+  // against the room's answer instead of being permanently unresolvable.
 ];
 
 export function RoomComposer({
@@ -300,6 +299,8 @@ function SignedInRoomComposer({
               <div className="flex flex-col gap-1.5 pb-1.5 pr-1.5">
                 {/* KN-100: one tap for the three questions the founding brief
                     names by example. Everything they fill in is editable. */}
+                <TemplatedPollActions fixtureId={fixtureId} disabled={pending} />
+
                 {templates.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {templates.map((template) => (
@@ -362,6 +363,157 @@ function SignedInRoomComposer({
       {error && (
         <p className="px-1 text-xs text-critical" role="status" aria-live="polite">
           {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+
+/**
+ * The two poll types the founding brief names, as one tap each.
+ *
+ * Separated from the freeform builder above by a hairline, because they are a
+ * different kind of act: the builder asks the author to write a question, and
+ * these two ask a question KIVO already knows how to ask — and, crucially,
+ * knows how to read back afterwards.
+ *
+ * Man of the match is a single button because the ballot is not a choice the
+ * author makes: it is the fixture's real starting XIs. Referee decision opens
+ * one row of chips, because "which decision" is genuinely the author's to
+ * pick and there is no honest way to infer it.
+ */
+function TemplatedPollActions({ fixtureId, disabled }: { fixtureId: string; disabled: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [refOpen, setRefOpen] = useState(false);
+  const [decision, setDecision] = useState<RefereeDecision | null>(null);
+  const [minute, setMinute] = useState("");
+
+  const busy = pending || disabled;
+
+  function startMotm() {
+    setError(null);
+    setDone(null);
+    startTransition(async () => {
+      const result = await createMotmPoll(fixtureId);
+      if (result.error) setError(result.error);
+      else setDone("Man-of-the-match vote posted to the room.");
+    });
+  }
+
+  function startReferee() {
+    if (!decision) return;
+    setError(null);
+    setDone(null);
+    const trimmed = minute.trim();
+    startTransition(async () => {
+      const result = await createRefereePoll(fixtureId, decision, trimmed === "" ? null : Number(trimmed));
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setDone("Referee-decision poll posted to the room.");
+      setRefOpen(false);
+      setDecision(null);
+      setMinute("");
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-b border-hairline-soft pb-2">
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={startMotm}
+          className="kivo-glass-sharp flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium text-foreground-muted transition-colors hover:text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <Trophy className="h-3 w-3 shrink-0" strokeWidth={2} />
+          Man of the match
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          aria-expanded={refOpen}
+          onClick={() => {
+            setRefOpen((open) => !open);
+            setError(null);
+            setDone(null);
+          }}
+          className={`kivo-glass-sharp flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+            refOpen ? "text-accent" : "text-foreground-muted hover:text-foreground"
+          }`}
+        >
+          <Gavel className="h-3 w-3 shrink-0" strokeWidth={2} />
+          Referee decision
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {refOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5">
+                {REFEREE_DECISION_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={busy}
+                    aria-pressed={decision === option.id}
+                    onClick={() => setDecision(option.id)}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+                      decision === option.id
+                        ? "border-transparent bg-accent-strong text-on-accent"
+                        : "border-hairline text-foreground-muted hover:bg-surface-2"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={minute}
+                  onChange={(event) => setMinute(event.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
+                  inputMode="numeric"
+                  placeholder="Minute (optional)"
+                  aria-label="Minute of the decision, optional"
+                  className="kivo-focusable min-w-0 flex-1 rounded-lg border border-hairline bg-surface-inset px-2.5 py-1.5 text-xs text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={busy || !decision}
+                  onClick={startReferee}
+                  className="kivo-gradient-prime shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                >
+                  Ask the room
+                </button>
+              </div>
+              <p className="text-[10px] text-foreground-subtle">
+                The minute is your own note about which incident you mean — KIVO does not check it against the match
+                events, because a disputed decision often is not one.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {error && (
+        <p className="text-[11px] text-warning" role="status" aria-live="polite">
+          {error}
+        </p>
+      )}
+      {done && (
+        <p className="text-[11px] text-live" role="status" aria-live="polite">
+          {done}
         </p>
       )}
     </div>

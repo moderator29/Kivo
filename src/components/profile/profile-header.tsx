@@ -4,6 +4,7 @@ import { CalendarDays, Camera, MapPin, ShieldPlus } from "lucide-react";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { ProfileCover } from "@/components/profile/profile-cover";
+import { CopyHandle } from "@/components/profile/copy-handle";
 import { getCountryName } from "@/lib/countries";
 import { formatMonthYear, formatNumber } from "@/lib/format";
 
@@ -89,7 +90,7 @@ export function ProfileHeader({
           <Link
             href="/profile/background"
             aria-label="Change your cover image"
-            className="kivo-focus absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-hairline bg-surface-3 px-3 py-1.5 text-xs font-medium text-foreground shadow-soft transition hover:border-hairline-strong"
+            className="kivo-focus absolute right-3 top-3 flex items-center gap-1.5 rounded-xl border border-hairline bg-surface-3 px-3 py-1.5 text-xs font-medium text-foreground shadow-soft transition hover:border-hairline-strong"
           >
             <Camera className="h-3.5 w-3.5" strokeWidth={2} />
             Cover
@@ -126,7 +127,7 @@ export function ProfileHeader({
               fix that instead; a visitor gets nothing extra, because "this
               person has not set a name" is not information about them. */}
           {displayName ? (
-            <p className="truncate text-sm text-foreground-subtle">@{username}</p>
+            <CopyHandle username={username} />
           ) : owner ? (
             <Link
               href="/profile/edit/name"
@@ -140,7 +141,7 @@ export function ProfileHeader({
         {club ? (
           <Link
             href={`/teams/${club.id}`}
-            className="kivo-focus mt-3 inline-flex w-fit max-w-full items-center gap-2 rounded-full border border-hairline bg-surface-1 py-1.5 pl-1.5 pr-3.5 transition hover:border-hairline-strong"
+            className="kivo-focus mt-3 inline-flex w-fit max-w-full items-center gap-2 rounded-xl border border-hairline bg-surface-1 py-1.5 pl-1.5 pr-3.5 transition hover:border-hairline-strong"
           >
             <TeamCrest crestUrl={club.crestUrl} name={club.name} size={22} />
             <span className="truncate text-xs font-medium text-foreground">
@@ -151,7 +152,7 @@ export function ProfileHeader({
           owner && (
             <Link
               href="/profile/club"
-              className="kivo-focus mt-3 inline-flex w-fit items-center gap-2 rounded-full border border-dashed border-hairline-strong px-3.5 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground"
+              className="kivo-focus mt-3 inline-flex w-fit items-center gap-2 rounded-xl border border-dashed border-hairline-strong px-3.5 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground"
             >
               <ShieldPlus className="h-3.5 w-3.5" strokeWidth={2} />
               Add the club you support

@@ -6,7 +6,12 @@ import { scorePredictions } from "@/app/admin/data-health/predictions-actions";
 
 export function ScorePredictionsButton() {
   const [pending, startTransition] = useTransition();
-  const [result, setResult] = useState<{ error: string | null; recordsProcessed?: number } | null>(null);
+  const [result, setResult] = useState<{
+    error: string | null;
+    recordsProcessed?: number;
+    unresolvedCount?: number;
+    adjustedCount?: number;
+  } | null>(null);
 
   function handleClick() {
     if (pending) return;
@@ -43,7 +48,16 @@ export function ScorePredictionsButton() {
           ) : (
             <>
               <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              Scored {result.recordsProcessed ?? 0} prediction{result.recordsProcessed === 1 ? "" : "s"}
+              {/* Two separate numbers on purpose. Folding rows KIVO declined
+                  to settle into the "scored" count would make a pass that
+                  resolved nothing look like a pass that worked. */}
+              Settled {result.recordsProcessed ?? 0} prediction{result.recordsProcessed === 1 ? "" : "s"}
+              {(result.unresolvedCount ?? 0) > 0 &&
+                ` · ${result.unresolvedCount} left unresolved (data not synced)`}
+              {/* An adjustment means previously reported numbers moved. It is
+                  the one outcome worth noticing on a routine pass, so it is
+                  never folded into the settled count. */}
+              {(result.adjustedCount ?? 0) > 0 && ` · ${result.adjustedCount} re-scored, XP reconciled`}
             </>
           )}
         </p>

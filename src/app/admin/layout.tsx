@@ -5,6 +5,8 @@ import { hasAdminAccess } from "@/lib/admin";
 import { getAuthUser } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
+import { BackNavigationTracker } from "@/components/layout/back-navigation-tracker";
+import { RouteBackLink } from "@/components/ui/back-link";
 
 // The nav list lives in src/lib/admin-nav.ts and is imported by the two client
 // nav components directly. It must NOT come back here as a prop: a lucide icon
@@ -43,9 +45,20 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // item 74.
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
+      {/* Renders nothing — see src/hooks/use-in-app-history.ts. */}
+      <BackNavigationTracker />
       <AdminMobileNav />
       <AdminSidebar />
-      <main className="flex-1 px-4 py-6 lg:px-10 lg:py-8">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col gap-4 px-4 py-6 lg:px-10 lg:py-8">
+        {/* /admin's own navigation is a sidebar at lg+ and a hamburger drawer
+            below it, so on a phone every page under here — Moderation, Users,
+            Data health, Support, Design system — was a screen you tapped into
+            with nothing on it that points back out. One control, in the same
+            place on every admin page: up to the Overview from a sub-page, out
+            to KIVO from the Overview itself. */}
+        <RouteBackLink tone="inline" />
+        {children}
+      </main>
     </div>
   );
 }

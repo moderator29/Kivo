@@ -1,27 +1,39 @@
-import { CheckCircle2, CircleDashed, CircleSlash } from "lucide-react";
+import { CheckCircle2, CircleDashed, CircleHelp, CircleSlash } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { getCompetitionCoverage } from "@/lib/football/coverage";
+import { getOrCreateProfile } from "@/lib/profile";
+import { canManageFootballData } from "@/lib/admin";
+import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { triggerCoverageSync } from "@/app/admin/data-health/provider-data-actions";
 
 /**
- * "KIVO knows / KIVO doesn't", per competition (KN-103).
+ * "KIVO knows / KIVO doesn't", per competition (KN-103, now reading the real
+ * coverage registry from migration 0082).
  *
- * The point is the middle state. Anyone can render "no data"; what makes an
+ * The point is the middle states. Anyone can render "no data"; what makes an
  * empty tab bearable is knowing whether waiting will help. So each row is one
- * of three things, and they are visually distinct:
+ * of four things, and they are visually distinct:
  *
- *   Present     — a real count.
- *   Not synced  — the provider can supply it, nobody has asked yet.
- *   Unavailable — the active provider has no endpoint for it, so waiting will
- *                 never change this.
+ *   Have it         — a real count.
+ *   Not synced yet  — the provider says it publishes this; nobody has asked.
+ *   Not available   — the provider says it does not publish this here. Waiting
+ *                     will never change it.
+ *   Not established — nobody has asked the provider what it publishes for this
+ *                     competition, so KIVO does not know.
  *
- * This is the honest interim for the coverage registry (RECOMMENDATIONS item
- * 299): it tells people what to expect instead of hiding a tab and letting them
- * conclude the feature is broken.
+ * The fourth state is new with the registry and it is not a cop-out: before it,
+ * an unsynced registry made every gap look like "not synced yet", which is
+ * itself a claim — it asserts the provider CAN supply something KIVO never
+ * checked. Saying "not established" is the only honest thing to render when
+ * nothing has been established, and it resolves itself the first time the
+ * registry is synced.
  */
 const STATE_STYLE = {
   present: { icon: CheckCircle2, className: "text-live", label: "Have it" },
   "not-synced": { icon: CircleDashed, className: "text-foreground-subtle", label: "Not synced yet" },
   unsupported: { icon: CircleSlash, className: "text-warning", label: "Not available" },
+  unknown: { icon: CircleHelp, className: "text-foreground-subtle", label: "Not established" },
 } as const;
 
 export async function CompetitionCoveragePanel({
@@ -33,6 +45,13 @@ export async function CompetitionCoveragePanel({
 }) {
   const coverage = await getCompetitionCoverage(competitionId, currentSeasonId);
 
+  // The registry sync is a single provider request that answers this question
+  // for EVERY competition at once, which is why the button is offered here — at
+  // the exact moment an admin is looking at a row that says "not established"
+  // — rather than only buried on Data Health.
+  const profile = await getOrCreateProfile();
+  const canSync = profile !== null && canManageFootballData(profile.role);
+
   return (
     <FadeIn className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
       <div className="flex flex-col gap-1">
@@ -40,8 +59,9 @@ export async function CompetitionCoveragePanel({
           What KIVO has for this competition
         </h2>
         <p className="text-xs text-foreground-subtle">
-          Counted from KIVO&apos;s own database right now. An empty section below says which of two things it is:
-          nobody has synced it yet, or the current data source simply doesn&apos;t publish it.
+          Counted from KIVO&apos;s own database right now. An empty section below says which of three things it is:
+          nobody has synced it yet, the current data source doesn&apos;t publish it for this competition, or KIVO
+          hasn&apos;t established which of those it is.
         </p>
       </div>
 
@@ -65,14 +85,45 @@ export async function CompetitionCoveragePanel({
       </ul>
 
       {coverage.providerLabel ? (
-        <p className="text-[11px] text-foreground-subtle">
-          &ldquo;Not available&rdquo; means {coverage.providerLabel} has no endpoint for it — syncing more often
-          won&apos;t produce it. Changing data source would.
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] text-foreground-subtle">
+            &ldquo;Not available&rdquo; means {coverage.providerLabel} doesn&apos;t publish it for this competition —
+            syncing more often won&apos;t produce it. Changing data source would.
+          </p>
+          {/* Where the "not available" answers come from is itself worth
+              stating: a provider's own declaration and KIVO's reading of its
+              endpoint list are different levels of evidence, and a reader
+              deciding whether to keep waiting deserves to know which one they
+              are looking at. */}
+          {coverage.registrySynced ? (
+            <p className="text-[11px] text-foreground-subtle">
+              Based on {coverage.providerLabel}&apos;s own published coverage for this competition
+              {coverage.registryRetrievedAt ? (
+                <>
+                  , last checked <LocalDateTime iso={coverage.registryRetrievedAt} format="dayTime" />
+                </>
+              ) : null}
+              .
+            </p>
+          ) : (
+            <p className="text-[11px] text-foreground-subtle">
+              KIVO hasn&apos;t yet read {coverage.providerLabel}&apos;s published coverage for this competition, so
+              anything marked &ldquo;not established&rdquo; is genuinely unknown rather than unavailable.
+            </p>
+          )}
+        </div>
       ) : (
         <p className="text-[11px] text-foreground-subtle">
           No football data source is configured on this deployment yet, so nothing can be synced at all.
         </p>
+      )}
+
+      {canSync && coverage.providerLabel && (
+        <InlineSyncButton
+          label={coverage.registrySynced ? "Refresh coverage" : "Read published coverage"}
+          action={triggerCoverageSync.bind(null, undefined)}
+          hint="One request, and it answers this for every competition at once."
+        />
       )}
     </FadeIn>
   );

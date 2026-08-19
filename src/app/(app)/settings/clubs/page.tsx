@@ -5,6 +5,8 @@ import { ChevronRight, ShieldHalf } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { signInHref } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { RivalClubPicker } from "@/components/settings/rival-club-picker";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { SettingsCard, SettingsPageShell } from "@/components/settings/settings-shell";
@@ -30,11 +32,21 @@ export default async function ClubSettingsPage() {
 
   const ids = [profile.favourite_team_id, profile.rival_team_id].filter((id): id is string => Boolean(id));
   let clubById = new Map<string, ClubOption>();
+  // The profile already says which clubs these are; this read only turns two
+  // ids into two names. Failing it silently renders "You haven't chosen one
+  // yet" at somebody who chose years ago — and the obvious next action is to
+  // choose again, overwriting a setting that was never lost. That is why this
+  // one is gated rather than tolerated, despite being a settings page.
+  let clubsFailed = false;
   if (ids.length > 0) {
     const supabase = createServerSupabaseClient();
-    const { data } = await supabase.from("teams").select("id, name, short_name, crest_url, country").in("id", ids);
+    const outcome = readList(
+      await supabase.from("teams").select("id, name, short_name, crest_url, country").in("id", ids),
+      "settings.clubs",
+    );
+    clubsFailed = outcome.failed;
     clubById = new Map(
-      (data ?? []).map((t) => [
+      outcome.rows.map((t) => [
         t.id,
         { id: t.id, name: t.name, shortName: t.short_name, crestUrl: t.crest_url, country: t.country },
       ]),
@@ -43,6 +55,18 @@ export default async function ClubSettingsPage() {
 
   const supported = profile.favourite_team_id ? clubById.get(profile.favourite_team_id) ?? null : null;
   const rival = profile.rival_team_id ? clubById.get(profile.rival_team_id) ?? null : null;
+
+  if (clubsFailed) {
+    return (
+      <SettingsPageShell sectionId="clubs">
+        <LoadFailed
+          tone="section"
+          title="Your clubs"
+          description="KIVO couldn't read which clubs you've chosen. They haven't changed — try again rather than picking them over."
+        />
+      </SettingsPageShell>
+    );
+  }
 
   return (
     <SettingsPageShell sectionId="clubs">

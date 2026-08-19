@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SocialLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 lg:px-8">
+    <PageSkeleton label="Loading the community feed">
       <Skeleton className="h-7 w-32" />
       <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
         <Skeleton className="h-16 w-full" />
@@ -22,6 +23,6 @@ export default function SocialLoading() {
           <Skeleton className="h-5 w-14" />
         </div>
       ))}
-    </div>
+    </PageSkeleton>
   );
 }

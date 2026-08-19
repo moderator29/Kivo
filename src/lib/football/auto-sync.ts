@@ -6,6 +6,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 import { getActiveProviderStatus } from "./index";
 import { syncTodayFixtures } from "./sync";
+import { reserveProviderRequests } from "./request-budget";
 
 /**
  * Automatic, on-demand football data freshness — the thing that makes KIVO
@@ -55,6 +56,15 @@ import { syncTodayFixtures } from "./sync";
  * 5. **The quota floor**, the same absolute threshold the cron worker and Data
  *    Health's amber pill already use, so a human debugging with "Sync now"
  *    always has room left that automation will not spend.
+ * 5b. **A real daily allowance** (migration 0091), added 2026-08-19 and the
+ *    only guard here that bounds TOTAL spend. Everything above bounds the RATE:
+ *    a three-minute cooldown permits twenty attempts an hour, which is 480 a
+ *    day against a hundred-a-day tier. Nothing had hit that because nothing has
+ *    driven enough traffic to, but it is a bound that did not exist — and
+ *    unlike the live worker, this path is not behind a flag anybody has to turn
+ *    on. It fires from ordinary page views, today. The reservation is atomic
+ *    and its ceiling lives in the database, so this path cannot spend into the
+ *    live worker's allowance or into the headroom reserved for a human.
  * 6. **Never throws.** This is invisible background work attached to somebody
  *    else's page view; a failure belongs in a log and a `sync_runs` row.
  *
@@ -129,6 +139,7 @@ export type AutoSyncDecision =
   | { decision: "cooling_down" }
   | { decision: "already_running" }
   | { decision: "quota_floor"; quotaRemaining: number }
+  | { decision: "budget_exhausted" }
   | { decision: "synced"; recordsProcessed: number }
   | { decision: "unavailable" };
 
@@ -145,6 +156,10 @@ export type AutoSyncDeps = {
   supabase: SupabaseClient<Database> | null;
   now: number;
   syncFixtures: () => Promise<{ recordsProcessed: number }>;
+  /** Returns whether one provider request may be spent. Real implementation is
+   * the atomic ledger consume; injectable so the guard ladder can be tested
+   * without a database. */
+  reserveRequest: () => Promise<boolean>;
 };
 
 /** The decision, extracted so it can be reasoned about (and tested) without a
@@ -237,6 +252,20 @@ export async function runAutoSyncIfStale(
   const quotaRemaining = latestQuotaRun?.provider_quota_remaining ?? null;
   if (quotaRemaining !== null && quotaRemaining <= QUOTA_SAFETY_FLOOR) {
     return { decision: "quota_floor", quotaRemaining };
+  }
+
+  // The last thing before the spend, and the only guard here that is enforced
+  // rather than advisory: asking and spending are one atomic statement, so two
+  // simultaneous page views cannot both be told yes. A refusal means the
+  // provider client is never constructed.
+  //
+  // Injectable alongside `syncFixtures` so the guard ladder stays testable
+  // without a database — a budget that could only be exercised in production
+  // would be a budget nobody had ever seen refuse.
+  const reserve =
+    deps?.reserveRequest ?? (() => reserveProviderRequests(supabase, providerName, "auto").then((r) => r.allowed));
+  if (!(await reserve())) {
+    return { decision: "budget_exhausted" };
   }
 
   const result = await (deps?.syncFixtures ?? (() => syncTodayFixtures("auto")))();

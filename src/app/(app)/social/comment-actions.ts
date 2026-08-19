@@ -1,6 +1,5 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
@@ -8,8 +7,10 @@ import { awardBadge } from "@/lib/rewards";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { aggregateReactions, type ReactionType } from "@/lib/reactions";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { shouldNotify } from "@/lib/notification-preferences";
+import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
+import { blockExistsBetween } from "@/lib/blocks";
 import { buildNotification } from "@/lib/notification-payloads";
+import { logError } from "@/lib/log";
 
 // Matches the `comments_body_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length between 1 and 1000).
@@ -131,10 +132,30 @@ async function notifyComment(
 
   if (recipientId === commenter.id) return;
 
-  const serviceClient = createServiceRoleSupabaseClient();
+  // Best-effort, and the client construction has to be inside the guard.
+  // `createServiceRoleSupabaseClient()` throws synchronously ("supabaseKey is
+  // required.") when SUPABASE_SERVICE_ROLE_KEY is absent — and this runs
+  // *after* the real write has already committed, so an unguarded throw turned
+  // a successful comment into a Server Action error. The user was told it
+  // failed, and it had not: they retry, and undo the thing that worked. A
+  // missing notification is the honest cost of a missing key; a lie about
+  // whether the comment landed is not.
+  let serviceClient: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    serviceClient = createServiceRoleSupabaseClient();
+  } catch {
+    return;
+  }
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, recipientId, "social_alerts_enabled"))) return;
+
+  // Migration 0086: a block silences the bell as well as the feed. Checked in
+  // both directions — either party having blocked the other is reason enough
+  // not to write the row — and before the write rather than filtering at read
+  // time, because a notification that was never produced cannot leak that a
+  // block exists.
+  if (await blockExistsBetween(serviceClient, recipientId, commenter.id)) return;
 
   // KN-90: the typed constructor. This producer is the one that most needed
   // it — the actor keys used to be built with a computed property name
@@ -163,7 +184,9 @@ async function notifyComment(
           replier_display_name: commenter.display_name,
         });
 
-  const { error } = await serviceClient.from("notifications").insert(notification);
+  const { error } = await serviceClient
+    .from("notifications")
+    .insert(await withQuietHours(serviceClient, notification, "social_alerts_enabled"));
   if (error) logError("social.comment-actions.createCommentNotification", error);
 }
 

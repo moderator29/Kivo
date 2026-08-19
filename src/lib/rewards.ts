@@ -176,3 +176,77 @@ export async function evaluateBadgeCriteria(profileId: string): Promise<number> 
     return 0;
   }
 }
+
+/**
+ * Brings the ledger's total for one source in line with what that source is
+ * now genuinely worth, by writing the difference as a new row.
+ *
+ * This is what makes `xp_ledger` a ledger rather than an append-only list of
+ * good news. Every XP award in KIVO up to now was one-directional: a
+ * prediction scored correct wrote +15 and there was no path that could ever
+ * take it back. That is fine while a verdict can only be reached once, and it
+ * stopped being fine the moment predictions gained a third state. An
+ * unresolvable prediction settles later; an admin data correction can change a
+ * final score after the fact; a scoring bug can be fixed and re-run. In every
+ * one of those cases the honest answer is not "edit the old row" — the old row
+ * records something that really did happen at a real time — it is a second
+ * row that says what changed.
+ *
+ * So: sum what this source has already paid out, compare to what it should now
+ * pay out, and write the delta. Running it twice with nothing changed writes
+ * nothing, because the delta is zero. A user asking "why did my XP drop" gets
+ * a dated line with a reason on it instead of a mystery.
+ *
+ * `sourcePrefix` must identify the real-world thing (`prediction:<id>`), not
+ * the attempt. Adjustments are keyed `<prefix>:adj:<n>` so they are unique,
+ * ordered, and still recognisably the same source — and so the unique
+ * (profile_id, source_key) index keeps a retried adjustment from landing
+ * twice.
+ */
+export async function reconcileXp(
+  profileId: string,
+  sourcePrefix: string,
+  desiredTotal: number,
+  reason: string,
+): Promise<{ changed: boolean; delta: number }> {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data: existing, error: readError } = await supabase
+      .from("xp_ledger")
+      .select("amount")
+      .eq("profile_id", profileId)
+      .like("source_key", `${sourcePrefix}%`);
+
+    if (readError) {
+      logError("rewards.reconcileXp.read", readError, { profileId, sourcePrefix });
+      return { changed: false, delta: 0 };
+    }
+
+    const rows = existing ?? [];
+    const current = rows.reduce((sum, row) => sum + row.amount, 0);
+    const delta = desiredTotal - current;
+    // xp_ledger_amount_nonzero rejects a zero row, which is exactly right:
+    // "nothing changed" is not a ledger entry.
+    if (delta === 0) return { changed: false, delta: 0 };
+
+    const { error } = await supabase.from("xp_ledger").insert({
+      profile_id: profileId,
+      amount: delta,
+      reason,
+      source_key: rows.length === 0 ? sourcePrefix : `${sourcePrefix}:adj:${rows.length}`,
+    });
+
+    if (error) {
+      // 23505 means this exact adjustment is already recorded — a retry, not a
+      // failure, same rule as awardXp.
+      if (error.code === "23505") return { changed: false, delta: 0 };
+      logError("rewards.reconcileXp.write", error, { profileId, sourcePrefix, delta });
+      return { changed: false, delta: 0 };
+    }
+
+    return { changed: true, delta };
+  } catch (error) {
+    logError("rewards.reconcileXp", error, { profileId, sourcePrefix });
+    return { changed: false, delta: 0 };
+  }
+}

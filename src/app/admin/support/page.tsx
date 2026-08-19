@@ -1,5 +1,7 @@
 import { LifeBuoy, Lock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canHandleSupport } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -25,7 +27,7 @@ export default async function AdminSupportPage() {
   const permitted = canHandleSupport(profile?.role);
 
   const supabase = createServerSupabaseClient();
-  const { data: requests } = permitted
+  const requestsResult = permitted
     ? await supabase
         .from("support_requests")
         .select("id, created_at, reply_email, topic, message, status, internal_note, handled_at")
@@ -34,9 +36,13 @@ export default async function AdminSupportPage() {
         .order("status", { ascending: true })
         .order("created_at", { ascending: true })
         .limit(PAGE_SIZE)
-    : { data: null };
+    : { data: [], error: null };
 
-  const rows = requests ?? [];
+  // This queue is the only route back in for a user whose sign-in code never
+  // arrived. "No open requests" is a claim that nobody is locked out, and a
+  // failed read makes it while people are waiting.
+  const requestsOutcome = readList(requestsResult, "admin.supportRequests");
+  const rows = requestsOutcome.rows;
   const openCount = rows.filter((row) => row.status === "open").length;
 
   return (
@@ -69,6 +75,12 @@ export default async function AdminSupportPage() {
             </p>
           </div>
         </FadeIn>
+      ) : requestsOutcome.failed ? (
+        <LoadFailed
+          tone="section"
+          title="The support queue"
+          description="KIVO couldn't read the support requests. An empty queue here would mean nobody is locked out, and right now that cannot be confirmed — try again."
+        />
       ) : rows.length === 0 ? (
         <FadeIn className="rounded-2xl border border-hairline bg-surface-inset p-6 text-sm text-foreground-muted">
           Nobody has asked for help yet. This is a real empty queue, not a missing feed.

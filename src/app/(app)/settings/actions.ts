@@ -13,14 +13,62 @@ import {
 } from "@/lib/notification-preferences";
 import type { Database } from "@/lib/supabase/types";
 import { logError } from "@/lib/log";
+import { parseClockTime } from "@/lib/quiet-hours";
 
 // Matches the `profiles_bio_length` check constraint in
 // supabase/migrations/0001_kivo_core_schema.sql (char_length(bio) <= 500).
 const MAX_BIO_LENGTH = 500;
 
-export async function getNotificationPreferences(
-  profileId: string,
-): Promise<Record<NotificationPreferenceColumn, boolean>> {
+export type QuietHoursSettings = { enabled: boolean; start: string; end: string };
+
+/**
+ * The quiet-hours window as stored, or the column defaults when this profile
+ * has never saved a preference row. Separate from getNotificationPreferences
+ * because that one returns a `Record<column, boolean>` and quiet hours are not
+ * booleans — folding them in would have meant widening a type every caller
+ * treats as a toggle map.
+ */
+export async function getQuietHours(): Promise<QuietHoursSettings> {
+  // SECURITY_REVIEW.md F13. This used to take a `profileId` and query with it.
+  // Nothing leaked, because notification_preferences_all_own restricts the read
+  // to the caller — but that is RLS rescuing an action that asked the caller
+  // who they were, and it failed in the wrong direction: no rows reads as "no
+  // preferences saved", so a caller passing somebody else's id was handed the
+  // DEFAULTS as though they were that person's real settings. A confident wrong
+  // answer, which is worse here than an error would have been.
+  //
+  // A server action is a public endpoint. The caller's identity is never an
+  // argument.
+  const profile = await getOrCreateProfile();
+  if (!profile) return { enabled: false, start: "22:00", end: "07:00" };
+
+  const supabase = createServerSupabaseClient();
+  const { data } = await supabase
+    .from("notification_preferences")
+    .select("quiet_hours_enabled, quiet_hours_start, quiet_hours_end")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+
+  // Mirrors migration 0088's own column defaults. Off, because KIVO cannot
+  // guess when anybody sleeps and a window nobody asked for would quietly hold
+  // back notifications they were expecting.
+  if (!data) return { enabled: false, start: "22:00", end: "07:00" };
+  return {
+    enabled: data.quiet_hours_enabled,
+    // Postgres returns `time` as "HH:MM:SS"; the <input type="time"> that
+    // renders it wants "HH:MM", and parseClockTime reads both.
+    start: data.quiet_hours_start.slice(0, 5),
+    end: data.quiet_hours_end.slice(0, 5),
+  };
+}
+
+export async function getNotificationPreferences(): Promise<
+  Record<NotificationPreferenceColumn, boolean>
+> {
+  // SECURITY_REVIEW.md F13, same reasoning as getQuietHours above.
+  const profile = await getOrCreateProfile();
+  if (!profile) return { ...NOTIFICATION_PREFERENCE_DEFAULTS };
+
   const supabase = createServerSupabaseClient();
   // Column list kept as a literal (not NOTIFICATION_PREFERENCE_COLUMNS.join(","))
   // so supabase-js can infer the row type from the query string itself; the
@@ -30,7 +78,7 @@ export async function getNotificationPreferences(
     .select(
       "email_enabled, push_enabled, in_app_enabled, marketing_emails_enabled, match_alerts_enabled, social_alerts_enabled, prediction_alerts_enabled, fantasy_alerts_enabled",
     )
-    .eq("profile_id", profileId)
+    .eq("profile_id", profile.id)
     .maybeSingle();
 
   if (!data) return { ...NOTIFICATION_PREFERENCE_DEFAULTS };
@@ -84,6 +132,12 @@ export async function updateNotificationPreference(column: NotificationPreferenc
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
 
+  // Generous: the notifications screen is a wall of toggles and somebody
+  // setting it up flips most of them in a burst. This exists so an endpoint
+  // that writes to the database on every tap is not completely unbounded.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_preferences", 60, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
   const supabase = createServerSupabaseClient();
   // upsert with only { profile_id, [column]: value } in the payload leaves
   // every other column untouched on conflict (ON CONFLICT DO UPDATE SET only
@@ -102,6 +156,52 @@ export async function updateNotificationPreference(column: NotificationPreferenc
   return { error: null };
 }
 
+/**
+ * Quiet hours (migration 0088). One action for the whole window rather than
+ * three, because the three fields are one setting: a start with no end is not
+ * a half-saved preference, it is an incoherent one.
+ *
+ * Validated here as well as in the database because the failure this catches
+ * is a user typing something odd, and a readable sentence beats a constraint
+ * code. `start === end` is rejected outright: it reads as both "never" and
+ * "always", so it is allowed to mean neither.
+ */
+export async function updateQuietHours(input: { enabled: boolean; start: string; end: string }) {
+  const profile = await getOrCreateProfile();
+  if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_preferences", 60, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
+
+  const start = parseClockTime(input.start);
+  const end = parseClockTime(input.end);
+  if (start === null || end === null) {
+    return { error: "Enter both times as HH:MM." };
+  }
+  if (start === end) {
+    return { error: "Pick a start and end that are different times." };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase.from("notification_preferences").upsert(
+    {
+      profile_id: profile.id,
+      quiet_hours_enabled: input.enabled,
+      quiet_hours_start: input.start,
+      quiet_hours_end: input.end,
+    },
+    { onConflict: "profile_id" },
+  );
+
+  if (error) {
+    logError("settings.updateQuietHours", error);
+    return { error: "Something went wrong. Try again." };
+  }
+
+  revalidatePath("/settings/notifications");
+  return { error: null };
+}
+
 export async function updateProfileDetails(formData: FormData) {
   const bio = String(formData.get("bio") ?? "").trim();
   const countryRaw = String(formData.get("country") ?? "").trim().toUpperCase();
@@ -116,6 +216,11 @@ export async function updateProfileDetails(formData: FormData) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  // A bio is user-authored text on a public profile, which makes this the one
+  // profile field worth bounding for its own sake and not only for write cost.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_profile", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
@@ -143,6 +248,9 @@ export async function updateProfileDetails(formData: FormData) {
 export async function updateActivityVisibility(showActivityPublicly: boolean) {
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_profile", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
@@ -185,6 +293,9 @@ export async function updateTimezone(timezone: string | null) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_profile", 20, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase

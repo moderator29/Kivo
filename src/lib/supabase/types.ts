@@ -161,6 +161,42 @@ export type Database = {
         }
         Relationships: []
       }
+      blocks: {
+        Row: {
+          blocked_profile_id: string
+          blocker_profile_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_profile_id: string
+          blocker_profile_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_profile_id?: string
+          blocker_profile_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_profile_id_fkey"
+            columns: ["blocked_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_blocker_profile_id_fkey"
+            columns: ["blocker_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           author_profile_id: string
@@ -520,32 +556,147 @@ export type Database = {
           },
         ]
       }
-      fantasy_points: {
+      fantasy_point_breakdowns: {
         Row: {
+          appearance_points: number
+          assist_points: number
+          assists: number
+          card_points: number
+          clean_sheet_points: number
+          clean_sheets: number
           created_at: string
           fantasy_team_id: string
+          gameweek_id: string
+          goal_points: number
+          goals: number
+          id: string
+          is_starting: boolean
+          multiplier: number
+          own_goal_points: number
+          own_goals: number
+          player_id: string
+          red_cards: number
+          scoring_model_version: string
+          total_points: number
+          updated_at: string
+          yellow_cards: number
+        }
+        Insert: {
+          appearance_points?: number
+          assist_points?: number
+          assists?: number
+          card_points?: number
+          clean_sheet_points?: number
+          clean_sheets?: number
+          created_at?: string
+          fantasy_team_id: string
+          gameweek_id: string
+          goal_points?: number
+          goals?: number
+          id?: string
+          is_starting: boolean
+          multiplier?: number
+          own_goal_points?: number
+          own_goals?: number
+          player_id: string
+          red_cards?: number
+          scoring_model_version: string
+          total_points: number
+          updated_at?: string
+          yellow_cards?: number
+        }
+        Update: {
+          appearance_points?: number
+          assist_points?: number
+          assists?: number
+          card_points?: number
+          clean_sheet_points?: number
+          clean_sheets?: number
+          created_at?: string
+          fantasy_team_id?: string
+          gameweek_id?: string
+          goal_points?: number
+          goals?: number
+          id?: string
+          is_starting?: boolean
+          multiplier?: number
+          own_goal_points?: number
+          own_goals?: number
+          player_id?: string
+          red_cards?: number
+          scoring_model_version?: string
+          total_points?: number
+          updated_at?: string
+          yellow_cards?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fantasy_point_breakdowns_fantasy_team_id_fkey"
+            columns: ["fantasy_team_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_point_breakdowns_gameweek_id_fkey"
+            columns: ["gameweek_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_gameweeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_point_breakdowns_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fantasy_points: {
+        Row: {
+          computed_at: string | null
+          created_at: string
+          fantasy_team_id: string
+          fixtures_finished: number | null
+          fixtures_total: number | null
+          fixtures_with_events: number | null
           gameweek_id: string
           id: string
           points: number
           scoring_model_version: string | null
+          status: string
+          transfer_points_cost: number
           updated_at: string
         }
         Insert: {
+          computed_at?: string | null
           created_at?: string
           fantasy_team_id: string
+          fixtures_finished?: number | null
+          fixtures_total?: number | null
+          fixtures_with_events?: number | null
           gameweek_id: string
           id?: string
           points?: number
           scoring_model_version?: string | null
+          status?: string
+          transfer_points_cost?: number
           updated_at?: string
         }
         Update: {
+          computed_at?: string | null
           created_at?: string
           fantasy_team_id?: string
+          fixtures_finished?: number | null
+          fixtures_total?: number | null
+          fixtures_with_events?: number | null
           gameweek_id?: string
           id?: string
           points?: number
           scoring_model_version?: string | null
+          status?: string
+          transfer_points_cost?: number
           updated_at?: string
         }
         Relationships: [
@@ -623,6 +774,33 @@ export type Database = {
           },
         ]
       }
+      fantasy_scoring_rulesets: {
+        Row: {
+          created_at: string
+          effective_from: string
+          retired_at: string | null
+          rules: Json
+          summary: string[]
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string
+          retired_at?: string | null
+          rules: Json
+          summary: string[]
+          version: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          retired_at?: string | null
+          rules?: Json
+          summary?: string[]
+          version?: string
+        }
+        Relationships: []
+      }
       fantasy_teams: {
         Row: {
           created_at: string
@@ -661,6 +839,68 @@ export type Database = {
             columns: ["owner_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fantasy_transfers: {
+        Row: {
+          created_at: string
+          fantasy_team_id: string
+          gameweek_id: string
+          id: string
+          is_free: boolean
+          player_in_id: string
+          player_out_id: string
+          points_cost: number
+        }
+        Insert: {
+          created_at?: string
+          fantasy_team_id: string
+          gameweek_id: string
+          id?: string
+          is_free: boolean
+          player_in_id: string
+          player_out_id: string
+          points_cost?: number
+        }
+        Update: {
+          created_at?: string
+          fantasy_team_id?: string
+          gameweek_id?: string
+          id?: string
+          is_free?: boolean
+          player_in_id?: string
+          player_out_id?: string
+          points_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fantasy_transfers_fantasy_team_id_fkey"
+            columns: ["fantasy_team_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_transfers_gameweek_id_fkey"
+            columns: ["gameweek_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_gameweeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_transfers_player_in_id_fkey"
+            columns: ["player_in_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_transfers_player_out_id_fkey"
+            columns: ["player_out_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
@@ -726,6 +966,148 @@ export type Database = {
           },
           {
             foreignKeyName: "fixture_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixture_player_statistics: {
+        Row: {
+          assists: number | null
+          blocks: number | null
+          created_at: string
+          dribbled_past: number | null
+          dribbles_attempted: number | null
+          dribbles_succeeded: number | null
+          duels_total: number | null
+          duels_won: number | null
+          fixture_id: string
+          fouls_committed: number | null
+          fouls_drawn: number | null
+          goals: number | null
+          goals_conceded: number | null
+          id: string
+          interceptions: number | null
+          is_substitute: boolean | null
+          minutes_played: number | null
+          offsides: number | null
+          pass_accuracy: number | null
+          passes_key: number | null
+          passes_total: number | null
+          penalties_committed: number | null
+          penalties_missed: number | null
+          penalties_saved: number | null
+          penalties_scored: number | null
+          penalties_won: number | null
+          player_id: string
+          position: string | null
+          provider_rating: number | null
+          red_cards: number | null
+          saves: number | null
+          shots_on_target: number | null
+          shots_total: number | null
+          tackles_total: number | null
+          team_id: string
+          updated_at: string
+          yellow_cards: number | null
+        }
+        Insert: {
+          assists?: number | null
+          blocks?: number | null
+          created_at?: string
+          dribbled_past?: number | null
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fixture_id: string
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          is_substitute?: boolean | null
+          minutes_played?: number | null
+          offsides?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_committed?: number | null
+          penalties_missed?: number | null
+          penalties_saved?: number | null
+          penalties_scored?: number | null
+          penalties_won?: number | null
+          player_id: string
+          position?: string | null
+          provider_rating?: number | null
+          red_cards?: number | null
+          saves?: number | null
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id: string
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Update: {
+          assists?: number | null
+          blocks?: number | null
+          created_at?: string
+          dribbled_past?: number | null
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fixture_id?: string
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          is_substitute?: boolean | null
+          minutes_played?: number | null
+          offsides?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_committed?: number | null
+          penalties_missed?: number | null
+          penalties_saved?: number | null
+          penalties_scored?: number | null
+          penalties_won?: number | null
+          player_id?: string
+          position?: string | null
+          provider_rating?: number | null
+          red_cards?: number | null
+          saves?: number | null
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id?: string
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixture_player_statistics_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixture_player_statistics_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixture_player_statistics_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -836,6 +1218,7 @@ export type Database = {
           home_team_id: string
           id: string
           kickoff_at: string
+          live_reconciled_at: string | null
           matchday: number | null
           minute_elapsed: number | null
           provider_last_seen_at: string | null
@@ -856,6 +1239,7 @@ export type Database = {
           home_team_id: string
           id?: string
           kickoff_at: string
+          live_reconciled_at?: string | null
           matchday?: number | null
           minute_elapsed?: number | null
           provider_last_seen_at?: string | null
@@ -876,6 +1260,7 @@ export type Database = {
           home_team_id?: string
           id?: string
           kickoff_at?: string
+          live_reconciled_at?: string | null
           matchday?: number | null
           minute_elapsed?: number | null
           provider_last_seen_at?: string | null
@@ -957,14 +1342,95 @@ export type Database = {
           },
         ]
       }
+      injuries: {
+        Row: {
+          competition_id: string | null
+          created_at: string
+          fixture_id: string | null
+          id: string
+          player_id: string
+          provider: string
+          reason: string | null
+          reported_on: string | null
+          season_id: string | null
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          competition_id?: string | null
+          created_at?: string
+          fixture_id?: string | null
+          id?: string
+          player_id: string
+          provider: string
+          reason?: string | null
+          reported_on?: string | null
+          season_id?: string | null
+          status: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: string | null
+          created_at?: string
+          fixture_id?: string | null
+          id?: string
+          player_id?: string
+          provider?: string
+          reason?: string | null
+          reported_on?: string | null
+          season_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "injuries_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lineups: {
         Row: {
           created_at: string
           fixture_id: string
           formation: string | null
+          grid: string | null
           id: string
           is_starting: boolean
-          pitch_heatmap: Json | null
           player_id: string
           position: string | null
           shirt_number: number | null
@@ -974,9 +1440,9 @@ export type Database = {
           created_at?: string
           fixture_id: string
           formation?: string | null
+          grid?: string | null
           id?: string
           is_starting?: boolean
-          pitch_heatmap?: Json | null
           player_id: string
           position?: string | null
           shirt_number?: number | null
@@ -986,9 +1452,9 @@ export type Database = {
           created_at?: string
           fixture_id?: string
           formation?: string | null
+          grid?: string | null
           id?: string
           is_starting?: boolean
-          pitch_heatmap?: Json | null
           player_id?: string
           position?: string | null
           shirt_number?: number | null
@@ -1159,6 +1625,9 @@ export type Database = {
           prediction_alerts_enabled: boolean
           profile_id: string
           push_enabled: boolean
+          quiet_hours_enabled: boolean
+          quiet_hours_end: string
+          quiet_hours_start: string
           social_alerts_enabled: boolean
           updated_at: string
         }
@@ -1172,6 +1641,9 @@ export type Database = {
           prediction_alerts_enabled?: boolean
           profile_id: string
           push_enabled?: boolean
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
           social_alerts_enabled?: boolean
           updated_at?: string
         }
@@ -1185,6 +1657,9 @@ export type Database = {
           prediction_alerts_enabled?: boolean
           profile_id?: string
           push_enabled?: boolean
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: string
+          quiet_hours_start?: string
           social_alerts_enabled?: boolean
           updated_at?: string
         }
@@ -1198,28 +1673,66 @@ export type Database = {
           },
         ]
       }
-      notifications: {
+      notification_mutes: {
         Row: {
           created_at: string
           id: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          target_id?: string
+          target_type?: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_mutes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          dedupe_key: string | null
+          id: string
           payload: Json
           profile_id: string
+          quiet_until: string | null
           read_at: string | null
           type: string
         }
         Insert: {
           created_at?: string
+          dedupe_key?: string | null
           id?: string
           payload?: Json
           profile_id: string
+          quiet_until?: string | null
           read_at?: string | null
           type: string
         }
         Update: {
           created_at?: string
+          dedupe_key?: string | null
           id?: string
           payload?: Json
           profile_id?: string
+          quiet_until?: string | null
           read_at?: string | null
           type?: string
         }
@@ -1229,6 +1742,281 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_aliases: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          note: string | null
+          player_id: string
+          provider: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          player_id: string
+          provider?: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          player_id?: string
+          provider?: string | null
+          source?: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_aliases_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_heatmaps: {
+        Row: {
+          actions_without_period: number
+          anchor: Json | null
+          class_mix: Json
+          derivation: string
+          engine_version: number
+          fixture_id: string
+          generated_at: string
+          grid: Json
+          id: string
+          inputs_fingerprint: string
+          period: string
+          player_id: string
+          sources: string[]
+          team_id: string
+          total_actions: number
+        }
+        Insert: {
+          actions_without_period?: number
+          anchor?: Json | null
+          class_mix?: Json
+          derivation: string
+          engine_version: number
+          fixture_id: string
+          generated_at?: string
+          grid: Json
+          id?: string
+          inputs_fingerprint: string
+          period: string
+          player_id: string
+          sources?: string[]
+          team_id: string
+          total_actions?: number
+        }
+        Update: {
+          actions_without_period?: number
+          anchor?: Json | null
+          class_mix?: Json
+          derivation?: string
+          engine_version?: number
+          fixture_id?: string
+          generated_at?: string
+          grid?: Json
+          id?: string
+          inputs_fingerprint?: string
+          period?: string
+          player_id?: string
+          sources?: string[]
+          team_id?: string
+          total_actions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_heatmaps_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_heatmaps_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_heatmaps_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_season_statistics: {
+        Row: {
+          appearances: number | null
+          assists: number | null
+          blocks: number | null
+          competition_id: string | null
+          competition_name: string | null
+          created_at: string
+          dribbles_attempted: number | null
+          dribbles_succeeded: number | null
+          duels_total: number | null
+          duels_won: number | null
+          fouls_committed: number | null
+          fouls_drawn: number | null
+          goals: number | null
+          goals_conceded: number | null
+          id: string
+          interceptions: number | null
+          lineups: number | null
+          minutes_played: number | null
+          pass_accuracy: number | null
+          passes_key: number | null
+          passes_total: number | null
+          penalties_missed: number | null
+          penalties_scored: number | null
+          player_id: string
+          position: string | null
+          provider: string
+          provider_competition_id: string
+          provider_rating: number | null
+          provider_team_id: string | null
+          red_cards: number | null
+          retrieved_at: string
+          saves: number | null
+          season_id: string | null
+          season_year: number
+          shots_on_target: number | null
+          shots_total: number | null
+          tackles_total: number | null
+          team_id: string | null
+          team_name: string | null
+          updated_at: string
+          yellow_cards: number | null
+        }
+        Insert: {
+          appearances?: number | null
+          assists?: number | null
+          blocks?: number | null
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          lineups?: number | null
+          minutes_played?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_missed?: number | null
+          penalties_scored?: number | null
+          player_id: string
+          position?: string | null
+          provider: string
+          provider_competition_id: string
+          provider_rating?: number | null
+          provider_team_id?: string | null
+          red_cards?: number | null
+          retrieved_at?: string
+          saves?: number | null
+          season_id?: string | null
+          season_year: number
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id?: string | null
+          team_name?: string | null
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Update: {
+          appearances?: number | null
+          assists?: number | null
+          blocks?: number | null
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          lineups?: number | null
+          minutes_played?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_missed?: number | null
+          penalties_scored?: number | null
+          player_id?: string
+          position?: string | null
+          provider?: string
+          provider_competition_id?: string
+          provider_rating?: number | null
+          provider_team_id?: string | null
+          red_cards?: number | null
+          retrieved_at?: string
+          saves?: number | null
+          season_id?: string | null
+          season_year?: number
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id?: string | null
+          team_name?: string | null
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_season_statistics_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_season_statistics_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_season_statistics_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_season_statistics_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -1285,6 +2073,7 @@ export type Database = {
           created_at: string
           id: string
           label: string
+          player_id: string | null
           position: number
           post_id: string
         }
@@ -1292,6 +2081,7 @@ export type Database = {
           created_at?: string
           id?: string
           label: string
+          player_id?: string | null
           position: number
           post_id: string
         }
@@ -1299,10 +2089,18 @@ export type Database = {
           created_at?: string
           id?: string
           label?: string
+          player_id?: string | null
           position?: number
           post_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "poll_options_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "poll_options_post_id_fkey"
             columns: ["post_id"]
@@ -1367,6 +2165,7 @@ export type Database = {
           id: string
           is_edited: boolean
           is_system: boolean
+          poll_kind: Database["public"]["Enums"]["poll_kind"] | null
           updated_at: string
         }
         Insert: {
@@ -1377,6 +2176,7 @@ export type Database = {
           id?: string
           is_edited?: boolean
           is_system?: boolean
+          poll_kind?: Database["public"]["Enums"]["poll_kind"] | null
           updated_at?: string
         }
         Update: {
@@ -1387,6 +2187,7 @@ export type Database = {
           id?: string
           is_edited?: boolean
           is_system?: boolean
+          poll_kind?: Database["public"]["Enums"]["poll_kind"] | null
           updated_at?: string
         }
         Relationships: [
@@ -1487,8 +2288,24 @@ export type Database = {
           id: string
           locked_at: string | null
           points_awarded: number | null
-          predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
+          predicted_away_score: number | null
+          predicted_cards: Database["public"]["Enums"]["cards_band"] | null
+          predicted_corners: Database["public"]["Enums"]["corners_band"] | null
+          predicted_home_score: number | null
+          predicted_outcome:
+            | Database["public"]["Enums"]["prediction_outcome"]
+            | null
+          predicted_player_id: string | null
+          predicted_total_goals:
+            | Database["public"]["Enums"]["total_goals_band"]
+            | null
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
           profile_id: string
+          resolution:
+            | Database["public"]["Enums"]["prediction_resolution"]
+            | null
+          resolved_at: string | null
+          unresolvable_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -1497,8 +2314,24 @@ export type Database = {
           id?: string
           locked_at?: string | null
           points_awarded?: number | null
-          predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
+          predicted_away_score?: number | null
+          predicted_cards?: Database["public"]["Enums"]["cards_band"] | null
+          predicted_corners?: Database["public"]["Enums"]["corners_band"] | null
+          predicted_home_score?: number | null
+          predicted_outcome?:
+            | Database["public"]["Enums"]["prediction_outcome"]
+            | null
+          predicted_player_id?: string | null
+          predicted_total_goals?:
+            | Database["public"]["Enums"]["total_goals_band"]
+            | null
+          prediction_type?: Database["public"]["Enums"]["prediction_type"]
           profile_id: string
+          resolution?:
+            | Database["public"]["Enums"]["prediction_resolution"]
+            | null
+          resolved_at?: string | null
+          unresolvable_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -1507,8 +2340,24 @@ export type Database = {
           id?: string
           locked_at?: string | null
           points_awarded?: number | null
-          predicted_outcome?: Database["public"]["Enums"]["prediction_outcome"]
+          predicted_away_score?: number | null
+          predicted_cards?: Database["public"]["Enums"]["cards_band"] | null
+          predicted_corners?: Database["public"]["Enums"]["corners_band"] | null
+          predicted_home_score?: number | null
+          predicted_outcome?:
+            | Database["public"]["Enums"]["prediction_outcome"]
+            | null
+          predicted_player_id?: string | null
+          predicted_total_goals?:
+            | Database["public"]["Enums"]["total_goals_band"]
+            | null
+          prediction_type?: Database["public"]["Enums"]["prediction_type"]
           profile_id?: string
+          resolution?:
+            | Database["public"]["Enums"]["prediction_resolution"]
+            | null
+          resolved_at?: string | null
+          unresolvable_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1517,6 +2366,13 @@ export type Database = {
             columns: ["fixture_id"]
             isOneToOne: false
             referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predictions_predicted_player_id_fkey"
+            columns: ["predicted_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
           {
@@ -1637,6 +2493,89 @@ export type Database = {
           },
         ]
       }
+      provider_coverage: {
+        Row: {
+          competition_id: string | null
+          competition_name: string | null
+          created_at: string
+          fixture_events: boolean | null
+          fixture_lineups: boolean | null
+          fixture_player_statistics: boolean | null
+          fixture_statistics: boolean | null
+          id: string
+          injuries: boolean | null
+          odds: boolean | null
+          players: boolean | null
+          predictions: boolean | null
+          provider: string
+          provider_competition_id: string
+          raw: Json | null
+          retrieved_at: string
+          season_year: number
+          standings: boolean | null
+          top_assists: boolean | null
+          top_cards: boolean | null
+          top_scorers: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          fixture_events?: boolean | null
+          fixture_lineups?: boolean | null
+          fixture_player_statistics?: boolean | null
+          fixture_statistics?: boolean | null
+          id?: string
+          injuries?: boolean | null
+          odds?: boolean | null
+          players?: boolean | null
+          predictions?: boolean | null
+          provider: string
+          provider_competition_id: string
+          raw?: Json | null
+          retrieved_at?: string
+          season_year: number
+          standings?: boolean | null
+          top_assists?: boolean | null
+          top_cards?: boolean | null
+          top_scorers?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          fixture_events?: boolean | null
+          fixture_lineups?: boolean | null
+          fixture_player_statistics?: boolean | null
+          fixture_statistics?: boolean | null
+          id?: string
+          injuries?: boolean | null
+          odds?: boolean | null
+          players?: boolean | null
+          predictions?: boolean | null
+          provider?: string
+          provider_competition_id?: string
+          raw?: Json | null
+          retrieved_at?: string
+          season_year?: number
+          standings?: boolean | null
+          top_assists?: boolean | null
+          top_cards?: boolean | null
+          top_scorers?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_coverage_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_mappings: {
         Row: {
           created_at: string
@@ -1667,6 +2606,30 @@ export type Database = {
           provider?: string
           provider_entity_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      provider_request_spend: {
+        Row: {
+          bucket: string
+          id: number
+          provider: string
+          requests: number
+          spent_at: string
+        }
+        Insert: {
+          bucket: string
+          id?: number
+          provider: string
+          requests?: number
+          spent_at?: string
+        }
+        Update: {
+          bucket?: string
+          id?: number
+          provider?: string
+          requests?: number
+          spent_at?: string
         }
         Relationships: []
       }
@@ -2172,6 +3135,44 @@ export type Database = {
         }
         Relationships: []
       }
+      team_aliases: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          note: string | null
+          provider: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+          team_id: string
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          provider?: string | null
+          source: Database["public"]["Enums"]["entity_alias_source"]
+          team_id: string
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          provider?: string | null
+          source?: Database["public"]["Enums"]["entity_alias_source"]
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_aliases_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           country: string | null
@@ -2212,6 +3213,86 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      top_scorers: {
+        Row: {
+          appearances: number | null
+          assists: number | null
+          captured_at: string
+          competition_id: string
+          created_at: string
+          goals: number | null
+          id: string
+          minutes_played: number | null
+          penalties_scored: number | null
+          player_id: string
+          rank: number
+          season_id: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          appearances?: number | null
+          assists?: number | null
+          captured_at?: string
+          competition_id: string
+          created_at?: string
+          goals?: number | null
+          id?: string
+          minutes_played?: number | null
+          penalties_scored?: number | null
+          player_id: string
+          rank: number
+          season_id: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          appearances?: number | null
+          assists?: number | null
+          captured_at?: string
+          competition_id?: string
+          created_at?: string
+          goals?: number | null
+          id?: string
+          minutes_played?: number | null
+          penalties_scored?: number | null
+          player_id?: string
+          rank?: number
+          season_id?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "top_scorers_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "top_scorers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "top_scorers_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "top_scorers_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2396,6 +3477,20 @@ export type Database = {
         }
         Returns: string
       }
+      consume_provider_requests: {
+        Args: {
+          p_bucket: string
+          p_count?: number
+          p_provider: string
+          p_window_seconds: number
+        }
+        Returns: {
+          allowed: boolean
+          oldest_spend_at: string
+          request_limit: number
+          spent_in_window: number
+        }[]
+      }
       consume_rate_limit: {
         Args: {
           p_action: string
@@ -2404,6 +3499,16 @@ export type Database = {
           p_window_seconds: number
         }
         Returns: boolean
+      }
+      create_templated_poll: {
+        Args: {
+          p_fixture_id: string
+          p_labels: string[]
+          p_player_ids: string[]
+          p_poll_kind: Database["public"]["Enums"]["poll_kind"]
+          p_question: string
+        }
+        Returns: string
       }
       evaluate_badge_criteria: {
         Args: { p_profile_id: string }
@@ -2440,6 +3545,16 @@ export type Database = {
         Args: { p_fixture_id: string }
         Returns: {
           avg_rating: number
+          rating_count: number
+        }[]
+      }
+      get_fan_sentiment: {
+        Args: { p_fixture_ids: string[] }
+        Returns: {
+          avg_rating: number
+          fixture_id: string
+          poll_count: number
+          poll_vote_count: number
           rating_count: number
         }[]
       }
@@ -2485,6 +3600,16 @@ export type Database = {
         Returns: {
           follower_count: number
           team_id: string
+        }[]
+      }
+      get_motm_poll_result: {
+        Args: { p_fixture_id: string }
+        Returns: {
+          label: string
+          option_id: string
+          player_id: string
+          post_id: string
+          vote_count: number
         }[]
       }
       get_my_followers: {
@@ -2535,6 +3660,16 @@ export type Database = {
           settled: number
           total_points: number
           username: string
+        }[]
+      }
+      get_prediction_type_breakdown: {
+        Args: { p_profile_id: string }
+        Returns: {
+          correct_count: number
+          points: number
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
+          settled_count: number
+          unresolvable_count: number
         }[]
       }
       get_predictions_leaderboard: {
@@ -2626,6 +3761,24 @@ export type Database = {
           position: number
         }[]
       }
+      get_trending_match_rooms: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          comment_count: number
+          fixture_id: string
+          participant_count: number
+          post_count: number
+        }[]
+      }
+      get_trending_posts: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          comment_count: number
+          participant_count: number
+          post_id: string
+          reaction_count: number
+        }[]
+      }
       get_user_head_to_head: {
         Args: { p_other_profile_id: string }
         Returns: {
@@ -2685,6 +3838,11 @@ export type Database = {
         Args: { p_payload: Json; p_type: string }
         Returns: boolean
       }
+      provider_request_limit: { Args: { p_bucket: string }; Returns: number }
+      prune_provider_request_spend: {
+        Args: { p_max_rows?: number }
+        Returns: number
+      }
       prune_rate_limit_events: {
         Args: { p_max_rows?: number; p_older_than_seconds?: number }
         Returns: number
@@ -2703,6 +3861,17 @@ export type Database = {
           p_sync_run_id?: string
         }
         Returns: string
+      }
+      record_entity_alias: {
+        Args: {
+          p_alias: string
+          p_entity_id: string
+          p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
+          p_note?: string
+          p_provider?: string
+          p_source: Database["public"]["Enums"]["entity_alias_source"]
+        }
+        Returns: boolean
       }
       record_standings_snapshot: {
         Args: {
@@ -2830,6 +3999,10 @@ export type Database = {
         }
         Returns: string
       }
+      upsert_notifications_superseding: {
+        Args: { p_rows: Json }
+        Returns: number
+      }
       vote_on_poll: {
         Args: { p_option_id: string; p_post_id: string }
         Returns: undefined
@@ -2838,6 +4011,8 @@ export type Database = {
     Enums: {
       ai_message_role: "system" | "user" | "assistant" | "tool"
       avatar_type: "kivo" | "uploaded"
+      cards_band: "cards_0_2" | "cards_3_4" | "cards_5_plus"
+      corners_band: "corners_0_8" | "corners_9_12" | "corners_13_plus"
       data_anomaly_type:
         | "score_regression"
         | "status_regression"
@@ -2846,6 +4021,7 @@ export type Database = {
         | "provider_disagreement"
       delivery_channel: "push" | "email" | "sms" | "in_app"
       delivery_status: "pending" | "sent" | "delivered" | "failed"
+      entity_alias_source: "provider" | "merge" | "admin" | "rename"
       fixture_event_type:
         | "goal"
         | "own_goal"
@@ -2868,7 +4044,16 @@ export type Database = {
       follow_target_type: "team" | "player" | "competition" | "user"
       moderation_status: "active" | "shadow_muted" | "suspended" | "banned"
       moderation_target_type: "post" | "comment" | "profile"
+      poll_kind: "motm" | "referee_decision"
       prediction_outcome: "home_win" | "draw" | "away_win"
+      prediction_resolution: "correct" | "incorrect" | "unresolvable"
+      prediction_type:
+        | "winner"
+        | "correct_score"
+        | "first_scorer"
+        | "total_goals"
+        | "cards_corners"
+        | "motm"
       provider_entity_type:
         | "competition"
         | "season"
@@ -2881,6 +4066,11 @@ export type Database = {
         | "transfer"
         | "lineup"
         | "standing"
+        | "fixture_player_statistic"
+        | "coverage"
+        | "injury"
+        | "top_scorer"
+        | "player_season_statistic"
       reaction_target_type: "post" | "comment"
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
@@ -2893,6 +4083,7 @@ export type Database = {
         | "data_correction"
         | "other"
       sync_status: "running" | "success" | "partial" | "failed" | "skipped"
+      total_goals_band: "goals_0_1" | "goals_2_3" | "goals_4_plus"
       transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
         | "user"
@@ -3032,6 +4223,8 @@ export const Constants = {
     Enums: {
       ai_message_role: ["system", "user", "assistant", "tool"],
       avatar_type: ["kivo", "uploaded"],
+      cards_band: ["cards_0_2", "cards_3_4", "cards_5_plus"],
+      corners_band: ["corners_0_8", "corners_9_12", "corners_13_plus"],
       data_anomaly_type: [
         "score_regression",
         "status_regression",
@@ -3041,6 +4234,7 @@ export const Constants = {
       ],
       delivery_channel: ["push", "email", "sms", "in_app"],
       delivery_status: ["pending", "sent", "delivered", "failed"],
+      entity_alias_source: ["provider", "merge", "admin", "rename"],
       fixture_event_type: [
         "goal",
         "own_goal",
@@ -3065,7 +4259,17 @@ export const Constants = {
       follow_target_type: ["team", "player", "competition", "user"],
       moderation_status: ["active", "shadow_muted", "suspended", "banned"],
       moderation_target_type: ["post", "comment", "profile"],
+      poll_kind: ["motm", "referee_decision"],
       prediction_outcome: ["home_win", "draw", "away_win"],
+      prediction_resolution: ["correct", "incorrect", "unresolvable"],
+      prediction_type: [
+        "winner",
+        "correct_score",
+        "first_scorer",
+        "total_goals",
+        "cards_corners",
+        "motm",
+      ],
       provider_entity_type: [
         "competition",
         "season",
@@ -3078,6 +4282,11 @@ export const Constants = {
         "transfer",
         "lineup",
         "standing",
+        "fixture_player_statistic",
+        "coverage",
+        "injury",
+        "top_scorer",
+        "player_season_statistic",
       ],
       reaction_target_type: ["post", "comment"],
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
@@ -3092,6 +4301,7 @@ export const Constants = {
         "other",
       ],
       sync_status: ["running", "success", "partial", "failed", "skipped"],
+      total_goals_band: ["goals_0_1", "goals_2_3", "goals_4_plus"],
       transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [
         "user",

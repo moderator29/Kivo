@@ -100,7 +100,7 @@ export function SupportRequestRow({ request }: { request: SupportRequestView }) 
             type="button"
             disabled={pending || (next === status && !dirty)}
             onClick={() => save(next)}
-            className={`kivo-focusable rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`kivo-focusable rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               next === status
                 ? "border-accent bg-accent/10 text-accent"
                 : "border-hairline bg-surface-inset text-foreground-muted hover:text-foreground"

@@ -8,12 +8,16 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FormBadges } from "@/components/teams/form-badges";
 import { resultFor, type FormResult } from "@/lib/football/results";
 import { parseUuidParam } from "@/lib/params";
+import { readOptionalRow, readRow } from "@/lib/query-result";
 import { calculateAge } from "@/lib/format";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = createServerSupabaseClient();
-  const { data: manager } = await supabase.from("managers").select("full_name").eq("id", id).maybeSingle();
+  const manager = readOptionalRow(
+    await supabase.from("managers").select("full_name").eq("id", id).maybeSingle(),
+    "managers.metadata",
+  );
   if (!manager) return { title: "Manager" };
 
   const description = `${manager.full_name} on KIVO: nationality, current club, and that club's recent form.`;
@@ -30,14 +34,20 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
   const id = parseUuidParam(rawId);
   const supabase = createServerSupabaseClient();
 
-  const { data: manager } = await supabase
-    .from("managers")
-    .select(
-      `id, full_name, nationality, date_of_birth,
+  // readRow throws when the lookup failed and returns null only when the row
+  // genuinely is not there, so a dropped connection can no longer render
+  // "that doesn't exist" about a manager who does. See src/lib/query-result.ts.
+  const manager = readRow(
+    await supabase
+      .from("managers")
+      .select(
+        `id, full_name, nationality, date_of_birth,
        current_team:teams(id, name, short_name, crest_url)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    "managers.detail",
+  );
 
   if (!manager) notFound();
 

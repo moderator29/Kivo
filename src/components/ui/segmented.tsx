@@ -84,7 +84,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              "kivo-focus relative flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold transition-colors",
+              "kivo-focus relative flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl font-semibold transition-colors",
               size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3.5 py-1.5 text-xs",
               selected ? "text-foreground" : "text-foreground-subtle hover:text-foreground",
             )}
@@ -93,7 +93,7 @@ export function Segmented<T extends string>({
               <motion.span
                 layoutId={layoutId}
                 aria-hidden="true"
-                className="absolute inset-0 rounded-full bg-surface-raised shadow-soft"
+                className="absolute inset-0 rounded-xl bg-surface-raised shadow-soft"
                 transition={{ type: "spring", stiffness: 420, damping: 34 }}
               />
             )}

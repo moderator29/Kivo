@@ -1,10 +1,12 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { isKivoAvatarId } from "@/lib/kivo-assets";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { pruneSupersededUploads } from "@/lib/storage-uploads";
+import { logError } from "@/lib/log";
 
 // Matches the `avatars` Storage bucket's own file_size_limit/allowed_mime_types
 // (supabase/migrations/0043_kivo_avatar_background_system.sql) — checked here
@@ -25,11 +27,11 @@ const ALLOWED_AVATAR_MIME_TYPES: Record<string, string> = {
  * 231/232, KIVO_AVATAR_IDS) as the active avatar. Clears avatar_uploaded_url
  * (required by profiles_avatar_type_fields_match) but never deletes the
  * underlying Storage object if the user had one — switching away just stops
- * referencing it as active, per this feature's own spec. The user's own
- * uploaded image is therefore still sitting in Storage if they switch back
- * to "Upload your own photo" and upload again; there is no separate
+ * referencing it as active, per this feature's own spec. There is no
  * "restore my old upload without re-uploading" path, deliberately — see
- * profiles_avatar_type_fields_match's null-when-inactive shape.
+ * profiles_avatar_type_fields_match's null-when-inactive shape — and an
+ * upload only survives until two further uploads supersede it
+ * (pruneSupersededUploads), so switching away is not a way to keep one.
  */
 export async function selectKivoAvatar(kivoId: string) {
   if (!isKivoAvatarId(kivoId)) {
@@ -38,6 +40,10 @@ export async function selectKivoAvatar(kivoId: string) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  // Cheap write, but still a write on a public endpoint with no other bound.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "update_appearance", 30, 60);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
@@ -62,11 +68,16 @@ export async function selectKivoAvatar(kivoId: string) {
  * bucket's own RLS policies (avatars_insert_own etc.) key off by comparing
  * the first path segment to auth.uid()::text
  * (supabase/migrations/0053_supabase_auth_identity.sql) — then makes it the
- * active avatar. Never overwrites/deletes a prior upload (a fresh timestamped
- * path every time), so an in-flight request referencing the old URL is never
- * broken out from under it; an old, no-longer-referenced object is just left
- * in place (this feature deliberately doesn't build a cleanup path — see this
- * action's module doc and RECOMMENDATIONS.md for the follow-up idea).
+ * active avatar. Never overwrites a prior upload (a fresh timestamped path
+ * every time), so an in-flight request referencing the old URL is never broken
+ * out from under it.
+ *
+ * Anything older than the immediately-previous object is then swept by
+ * `pruneSupersededUploads`. The never-delete rule this used to document was a
+ * deliberate trade with no ceiling: nothing in the product ever removed one of
+ * these files, so a user who changed their avatar fifty times owned fifty
+ * full-size images forever. Keeping one predecessor preserves the reason the
+ * trade existed while giving it a bound.
  */
 export async function uploadAvatar(formData: FormData) {
   const file = formData.get("avatar");
@@ -84,6 +95,13 @@ export async function uploadAvatar(formData: FormData) {
 
   const profile = await getOrCreateProfile();
   if (!profile) return { error: "You must be signed in." };
+
+  // An upload is the most expensive thing an ordinary account can ask this
+  // product to do: 5MB of transfer and a permanent object, on an endpoint that
+  // had no bound of any kind. Ten minutes for five uploads is far more than
+  // choosing an avatar takes and far less than a script needs to be a problem.
+  const rateLimit = await checkRateLimit(`user:${profile.id}`, "upload_avatar", 5, 600);
+  if (!rateLimit.ok) return { error: rateLimit.error };
 
   const supabase = createServerSupabaseClient();
 
@@ -119,6 +137,12 @@ export async function uploadAvatar(formData: FormData) {
     logError("settings.avatar-actions.saveUploadedAvatar", error);
     return { error: "Something went wrong. Try again." };
   }
+
+  // Only after the profile points at the new object: if this ran first, a
+  // failure between the two would leave the row referencing a file that had
+  // just been deleted. See pruneSupersededUploads for why one predecessor is
+  // kept rather than none.
+  await pruneSupersededUploads(supabase, "avatars", profile.auth_user_id, path);
 
   revalidatePath("/settings");
   revalidatePath("/profile");

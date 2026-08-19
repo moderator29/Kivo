@@ -74,6 +74,28 @@ Every user-owned table (`profiles`, `fantasy_teams`, `predictions`, ...) is RLS-
 - `get_fan_rating_summary(p_fixture_id)` (0032) — cross-user fan rating average on `FanRatingCard`, same real-sample floor.
 - `get_poll_results(p_post_id)` (0032) — cross-user poll vote counts for in-feed polls.
 
+## Match events reach the conversation (built — do not rebuild)
+
+The directive asks that a goal or a red card *becomes* conversation rather than only a scoreline. That is built, and it is easy to miss because there is no feature page called "match reactions" — the wiring is one branch inside the sync layer:
+
+`syncFixtureDetails` → `upsertFixtureEvent` → on a **real, first-time** event insert only, two single-purpose modules are called side by side:
+
+- `src/lib/football/match-room-system-posts.ts` writes a system-authored post into that fixture's Match Room ("⚽ GOAL — Player Name (Team), 67'"). That is the conversational half: the Room is already alive when the first fan opens it, seeded entirely from real synced events.
+- `src/lib/football/match-notifications.ts` writes to `notifications` for the audience that follows either club or the player involved. That is the alerting half.
+
+Two things keep it honest, both in migration `0047_match_room_system_posts.sql`: a real, permanent `kivo_system` profile row satisfies `posts.author_profile_id` (no fabricated persona), and `posts.is_system` can only be set by a service-role write, so a fan can never dress their own post up as an official KIVO update. The Room feed renders these with their own treatment, and real-time push (`use-realtime-room-posts`) delivers them without a refresh.
+
+If you are about to build "goal reactions", check the Room first — the goal is already in it.
+
+### Fan sentiment (built — do not rebuild, and do not turn it into a word)
+
+Also easy to miss, and audited again on 2026-08-19. Fan sentiment reaches a reader in two places, both from real rows:
+
+- **`/social`**, in the trending panel: `SentimentLine` (`src/components/social/trending-panel.tsx`) over `sentimentReading` (`src/lib/trending.ts`) — the fan ratings people actually submitted plus the votes actually cast on that room's polls, inside a stated window.
+- **`/matches/[id]`** after full time: `MatchVerdictCard` shows the fan rating average and count, plus real Room reaction totals, and renders nothing at all below a real sample floor.
+
+Both print **a number and a count, never a word.** "Positive" and "mixed" are boundaries somebody picked, and printing one hides that choice behind a label; "3.8 from 41 fans" is a fact the reader interprets themselves. There is deliberately no sentiment *score*, no per-moment rating (`fan_ratings` rates the fixture, not a moment — migration 0032) and no text analysis of what people wrote. If a future pass is tempted to add a sentiment label, that is the thing this design is refusing, not something it forgot.
+
 ## Admin
 
 `/admin` is a separate route tree with its own layout, gated server-side by `hasAdminAccess(profile.role)` (never a client-only check) — RLS on every admin-touched table backs this up independently, so a bypassed UI guard still can't read/write data the role doesn't own.

@@ -7,7 +7,12 @@
  * second-highest-value unit-test target in the codebase after
  * fantasy-rules.ts's validateRoster.
  */
-import type { FixtureStatus, NormalizedMatchEventType, NormalizedTransferType } from "../types";
+import type {
+  FixtureStatus,
+  NormalizedInjuryStatus,
+  NormalizedMatchEventType,
+  NormalizedTransferType,
+} from "../types";
 
 /**
  * Maps API-Football's fixture `status.short` code onto our fixture_status enum.
@@ -147,4 +152,84 @@ export function mapTransferType(feeText: string | null): NormalizedTransferType 
   // digit is a reliable enough signal that this is a genuine paid transfer.
   if (/\d/.test(t)) return "transfer";
   return "unknown";
+}
+
+/**
+ * A player's formation slot, parsed out of the provider's raw `grid` string.
+ *
+ * API-Football publishes this on `/fixtures/lineups`'s `startXI` entries as
+ * `"row:col"`, where row 1 is the goalkeeper's line and rows count upfield.
+ * That is the entire published semantic; `col`'s direction (whether column 1 is
+ * the team's left or its right) is not something this build could confirm — see
+ * the top of `src/lib/football/heatmap/player-position-mapper.ts` for how that
+ * uncertainty is handled rather than guessed away.
+ *
+ * Returns null for anything that is not two positive integers separated by a
+ * colon, including the empty strings and nulls every substitute carries. A
+ * malformed grid is not an error and is not logged: a bench player having none
+ * is the ordinary case, not an anomaly.
+ */
+export function parsePitchGrid(grid: string | null | undefined): { row: number; col: number } | null {
+  if (typeof grid !== "string") return null;
+  const match = /^\s*(\d+)\s*:\s*(\d+)\s*$/.exec(grid);
+  if (!match) return null;
+  const row = Number(match[1]);
+  const col = Number(match[2]);
+  if (!Number.isInteger(row) || !Number.isInteger(col) || row < 1 || col < 1) return null;
+  return { row, col };
+}
+
+/**
+ * Maps API-Football's `/injuries` `player.type` field onto KIVO's injury status.
+ *
+ * The provider publishes two values in practice — "Missing Fixture" (definitely
+ * out) and "Questionable" (a doubt) — but that is an observed convention rather
+ * than a documented enum, so anything else returns "unknown" rather than being
+ * defaulted into "out". Telling a fan a player is ruled out when the provider
+ * only said something KIVO could not parse is exactly the kind of confident
+ * wrongness this codebase refuses.
+ */
+export function mapInjuryStatus(type: string | null | undefined): NormalizedInjuryStatus {
+  if (typeof type !== "string") return "unknown";
+  const t = type.trim().toLowerCase();
+  if (t.length === 0) return "unknown";
+  if (t.includes("missing") || t.includes("out")) return "out";
+  if (t.includes("questionable") || t.includes("doubt")) return "doubtful";
+  return "unknown";
+}
+
+/**
+ * Reads one numeric field out of a provider payload without ever inventing one.
+ *
+ * Providers are inconsistent about how a number arrives: a real number, a
+ * numeric string, a percentage string ("84%"), or null. All four are handled.
+ * Anything else — an empty string, a word, a boolean, an object — becomes null,
+ * because "the provider did not report this" and "the provider reported zero"
+ * are different facts and this codebase is not allowed to merge them.
+ *
+ * Exported (unlike the internal `parseStatNumber` above, which it shares logic
+ * with deliberately rather than by accident) because the per-player and
+ * per-season payloads are deeply nested objects rather than a flat {type,value}
+ * list, so their adapters need this directly.
+ */
+export function parseProviderNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const cleaned = value.trim().replace("%", "");
+  if (cleaned.length === 0) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Reads one boolean coverage flag without collapsing "unknown" into "false".
+ *
+ * The coverage registry's whole value is the three-way distinction between
+ * supported, unsupported and unstated. A missing key must stay null: rendering
+ * an absent flag as "this competition does not support lineups" would be KIVO
+ * asserting a limitation the provider never claimed.
+ */
+export function parseCoverageFlag(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }

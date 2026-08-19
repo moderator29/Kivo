@@ -16,7 +16,7 @@ import { ADMIN_NAV_ITEM, NAV_ITEMS, type NavItem } from "./navigation";
  * surface the complete nav set.
  */
 export const NAV_GROUPS: { label: string; ids: string[] }[] = [
-  { label: "Watch", ids: ["live", "matches", "news"] },
+  { label: "Watch", ids: ["live", "matches", "highlights", "news"] },
   { label: "Play", ids: ["fantasy", "predictions", "rewards"] },
   // KN-30 adds managers and venues here. They belong with teams/players/leagues
   // rather than anywhere else: they are the same thing — a list of football
@@ -29,7 +29,9 @@ export const NAV_GROUPS: { label: string; ids: string[] }[] = [
   // The second group in the founder's reference: the handful of destinations
   // that are about the account rather than about football. /notifications and
   // /support were both already built and both unreachable from the nav.
-  { label: "Shortcuts", ids: ["search", "notifications", "settings", "support"] },
+  // `saved` and `transparency` join this group for the reason NAV_ITEMS gives
+  // for adding them at all: both are built routes that no navigation listed.
+  { label: "Shortcuts", ids: ["search", "notifications", "saved", "transparency", "settings", "support"] },
 ];
 
 export type NavGroup = { label: string; items: NavItem[] };

@@ -4,6 +4,7 @@ import { MobileBottomNav } from "./mobile-bottom-nav";
 import { TopBar } from "./top-bar";
 import { OfflineBanner } from "./offline-banner";
 import { RouteFocus } from "./route-focus";
+import { BackNavigationTracker } from "./back-navigation-tracker";
 import { PreviewModeBanner } from "./preview-mode-banner";
 import { ModerationBanner, type ModerationBannerInfo } from "./moderation-banner";
 import { AppChrome } from "./app-chrome";
@@ -64,6 +65,10 @@ export function AppShell({
   return (
     <div className="relative flex min-h-screen bg-background" style={previewMode ? { paddingTop: 36 } : undefined}>
       <RouteFocus />
+      {/* Renders nothing. Keeps the in-app history counter that every back
+          control reads honest across tab routes too — see
+          src/hooks/use-in-app-history.ts. */}
+      <BackNavigationTracker />
       {previewMode && <PreviewModeBanner />}
       {/* Much quieter than the landing page's aurora — app pages are
           information-dense, so this is just enough breathing motion behind

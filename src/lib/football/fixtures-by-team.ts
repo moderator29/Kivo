@@ -58,27 +58,59 @@ export function chunkTeamIds(teamIds: readonly string[], size: number = TEAM_ID_
  * union is necessarily inside the union of the latest-N prefixes, exactly as
  * the earliest N is.
  */
+/**
+ * The outcome of a chunked fetch, keeping "there are none" and "we could not
+ * find out" apart — the same distinction `readList` draws in
+ * src/lib/query-result.ts, and it matters more here than almost anywhere.
+ *
+ * This function issues 2N requests and merges them. `data ?? []` per response
+ * meant a single failed chunk was silently dropped from the merge, and the
+ * caller received a *shorter list that looked complete*. That is worse than
+ * the empty-vs-failed collapse everywhere else in the codebase: an empty list
+ * at least announces itself, whereas nine fixtures where there should be
+ * twelve looks exactly like nine fixtures. And it degrades in the same cruel
+ * direction the `.or()` bug did — more followed clubs means more chunks, so
+ * the most engaged user is the likeliest to be quietly under-served.
+ *
+ * `failed` is therefore true if **any** sub-query failed, and `rows` carries
+ * whatever did come back so a caller that genuinely prefers partial data can
+ * still opt into it deliberately. Neither current caller does.
+ */
+export type TeamFixturesOutcome<Row> = { failed: boolean; rows: Row[] };
+
 export async function fetchFixturesForTeams<Row extends { id: string; kickoff_at: string }>(
   teamIds: readonly string[],
   limit: number,
-  query: (column: "home_team_id" | "away_team_id", ids: string[]) => PromiseLike<{ data: Row[] | null }>,
+  query: (
+    column: "home_team_id" | "away_team_id",
+    ids: string[],
+  ) => PromiseLike<{ data: Row[] | null; error?: { message: string } | null }>,
   order: "asc" | "desc" = "asc",
-): Promise<Row[]> {
+): Promise<TeamFixturesOutcome<Row>> {
   const chunks = chunkTeamIds(teamIds);
-  if (chunks.length === 0) return [];
+  // No teams is a real, complete answer: this viewer follows nobody.
+  if (chunks.length === 0) return { failed: false, rows: [] };
 
   const results = await Promise.all(
     chunks.flatMap((ids) => [query("home_team_id", ids), query("away_team_id", ids)]),
   );
 
+  let failed = false;
   const byId = new Map<string, Row>();
-  for (const { data } of results) {
-    for (const row of data ?? []) {
+  for (const result of results) {
+    if (result.error) {
+      failed = true;
+      continue;
+    }
+    for (const row of result.data ?? []) {
       // A fixture between two followed teams comes back from both sides.
       if (!byId.has(row.id)) byId.set(row.id, row);
     }
   }
 
   const direction = order === "desc" ? -1 : 1;
-  return [...byId.values()].sort((a, b) => direction * a.kickoff_at.localeCompare(b.kickoff_at)).slice(0, limit);
+  const rows = [...byId.values()]
+    .sort((a, b) => direction * a.kickoff_at.localeCompare(b.kickoff_at))
+    .slice(0, limit);
+  return { failed, rows };
 }

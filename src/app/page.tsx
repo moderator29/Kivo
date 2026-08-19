@@ -8,6 +8,7 @@ import { FeatureCard } from "@/components/marketing/feature-card";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { FaqSection } from "@/components/marketing/faq-section";
 import { InsidePreview } from "@/components/marketing/inside-preview";
+import { NAV_ITEMS } from "@/lib/navigation";
 
 // This page used to be `"use client"` in full just so two elements could
 // float via `motion.div` — that shipped React, `motion` and the whole page
@@ -194,24 +195,142 @@ const WHY_KIVO = [
   },
 ];
 
+// This section used to promise "browse free, no account needed — no wall
+// before the product", which stopped being true the day KIVO closed the door
+// on the whole app. It is now the single most important thing on this page to
+// get right: a landing page that promises free browsing and then shows a
+// sign-in form is the exact moment a visitor decides the product lies to
+// them, and the door is real (src/app/(app)/layout.tsx redirects every route
+// behind it). So the page says so up front, and spends the space explaining
+// that getting in takes one email and one code rather than pretending there
+// is nothing to get past.
 const HOW_IT_WORKS = [
   {
-    icon: ShieldCheck,
-    title: "Browse free, no account needed",
+    icon: UserPlus,
+    title: "Your email. Nothing else.",
     description:
-      "Scores, standings, teams, players, Match Centre, the AI Copilot's public answers: all viewable the moment you land, exactly like Sofascore or Flashscore. No wall before the product.",
+      "No password to invent, remember or lose — KIVO has no password field anywhere, so there is nothing about you to leak. No phone number, no card, no social account.",
   },
   {
-    icon: UserPlus,
-    title: "Sign up only when you act",
+    icon: ShieldCheck,
+    title: "A six-digit code, once",
     description:
-      "Like a post, submit a prediction, build a fantasy squad, join the conversation: that's the moment KIVO asks you to sign up, and it takes you straight back to what you were doing.",
+      "It lands in your inbox in seconds. Type it and you are in. The same code is how you sign back in on a new phone later, so there is nothing to reset.",
   },
   {
     icon: Sparkles,
-    title: "Play, predict, and follow along",
+    title: "Pick your club, and it is your KIVO",
     description:
-      "Once you're in: build a fantasy squad, back your predictions, follow your club, and let the AI Copilot answer from KIVO's own verified data.",
+      "Choose the club you actually support and a handle. From that moment the home screen leads with your team's next match, your fantasy deadline and the calls you have not made.",
+  },
+];
+
+// Real, checkable properties of how this thing is built, not adjectives.
+// Each line maps to something in the codebase:
+// - Server Components: this page and every app route render on the server;
+//   the landing route ships no page-level client JS at all (see the comment
+//   at the top of this file).
+// - Realtime: migrations 0038/0042 put fixtures, fixture_events and posts in
+//   the supabase_realtime publication; src/hooks/use-realtime-fixtures.ts,
+//   use-realtime-fixture-events.ts and use-realtime-room-posts.ts subscribe
+//   with server-side filters, so a goal arrives as one small push instead of
+//   the page being re-downloaded on a timer.
+// - Share cards: src/lib/share-cards/ + match-share-card.tsx, which renders a
+//   WhatsApp-shaped share alongside the others.
+// - Reduced motion: globals.css clamps animation-duration under
+//   prefers-reduced-motion, and every Motion animation respects it too.
+// One match, start to finish, using only behaviour that exists. Checked
+// against the code rather than written as a pitch:
+// - Home ordering and the "why this card is here" reason: src/lib/home-lead.ts.
+// - Prediction lock at kickoff: (app)/predictions/actions.ts enforces it
+//   server-side, not just in the UI.
+// - Fantasy deadline countdown: (app)/fantasy/deadline-countdown.tsx.
+// - Lineups and the positioned pitch: match-centre-tabs.tsx + lineup-pitch.tsx,
+//   which draws a pitch only when both teams' positions are real.
+// - Score without a refresh, and the timeline event landing on the scoring
+//   club's side: use-realtime-fixtures.ts, use-realtime-fixture-events.ts.
+// - The Room's own goal announcement: match-room-system-posts.ts.
+// - Notifications: match-notifications.ts (goal, red card, kickoff, fulltime).
+// - Fan rating only after the whistle: fan-rating-card.tsx, and
+//   fan_ratings_insert_own would reject an earlier one anyway.
+// - Scoring from the real result and real events: predictions/actions.ts,
+//   fantasy-scoring.ts.
+const MATCHDAY = [
+  {
+    step: "Before kick-off",
+    description:
+      "KIVO opens on your club's next match, and every card tells you why it is there. Call the result before the whistle — the lock is enforced on the server, so nobody is backdating anything — and the fantasy deadline is counting down next to it.",
+  },
+  {
+    step: "Team news",
+    description:
+      "Lineups land and the shape is drawn: a real positioned pitch when both teams' positions are genuinely known, two honest lists when they are not. KIVO never draws one side's formation and lists the other's, because that would suggest it knows more about one team than it does.",
+  },
+  {
+    step: "The goal",
+    description:
+      "The score moves without you touching anything, the event appears on the scoring club's side of the timeline, the Room announces it, and your phone buzzes if you asked it to. If VAR takes it back, all of that reverses — a timeline still crediting a goal the scoreline dropped is the loudest way an app can lie.",
+  },
+  {
+    step: "Half-time and full-time",
+    description:
+      "Possession, shots, cards, and a whole advanced breakdown a tap deeper. When the whistle goes you can rate the performance, and the verdict card reads the Room back to you: the busiest minute, what the crowd actually made of it.",
+  },
+  {
+    step: "Afterwards",
+    description:
+      "Your prediction is scored from the real result, your fantasy points from the real match events, both traceable to the rows they came from. Then the card goes to the group chat, and it links straight back to the match it came from.",
+  },
+];
+
+// Every one of these is a real, reachable surface, not a policy sentence:
+// /settings/data (DataExportSection), /settings/delete-account (deleteAccount
+// in (app)/settings/actions.ts, which clears storage objects as well as rows),
+// /settings/privacy (blocked accounts, other devices), and the auth flow
+// itself, which has no password field anywhere in the product.
+const YOUR_DATA = [
+  {
+    title: "Nothing to steal",
+    description:
+      "There is no password field anywhere in KIVO, so there is no password of yours to lose in a breach. Signing in is a code sent to the inbox you already control.",
+  },
+  {
+    title: "Take a copy whenever",
+    description:
+      "Settings has an export that hands you your own data as a file. Not a request form, not a support ticket — a button that produces the file.",
+  },
+  {
+    title: "Leaving actually deletes",
+    description:
+      "Delete your account and it removes your rows and the files behind them, including the avatar and background you uploaded. Not a flag on a record that keeps everything.",
+  },
+  {
+    title: "You control the room",
+    description:
+      "Block an account and they are gone from your feed. Sign out a device you no longer have. Both live in settings, not behind an email to support.",
+  },
+];
+
+const BUILT_FOR = [
+  {
+    title: "It does not poll your data away",
+    description:
+      "A goal reaches you as a single small push over an already-open connection, not by re-downloading the page every thirty seconds. Watching a full match costs a fraction of what a refresh loop would.",
+  },
+  {
+    title: "The page arrives already rendered",
+    description:
+      "Screens are built on the server and sent as finished HTML, so KIVO reads on a mid-range phone and a slow connection instead of waiting on a pile of JavaScript to boot first.",
+  },
+  {
+    title: "Made to be sent to a group chat",
+    description:
+      "Every share card is generated for the place it is going — WhatsApp first, because that is where the argument is actually happening — and it deep-links back to the exact match, table or prediction it came from.",
+  },
+  {
+    title: "It calms down when you ask it to",
+    description:
+      "Turn on reduced motion at the system level and every animation on KIVO stops, without taking any information with it. Colour is never the only way something is said.",
   },
 ];
 
@@ -252,6 +371,23 @@ const FOOTER_LINKS: { heading: string; note?: string; links: { label: string; hr
 ];
 
 export default function LandingPage() {
+  // The AI Copilot is fully built and switches on with ANTHROPIC_API_KEY —
+  // which is exactly why the nav inside the app marks it Coming Soon until
+  // that key is set (src/lib/navigation.ts). This page has to agree with the
+  // product a visitor is about to walk into: claiming five live features and
+  // then showing them a Coming Soon panel on one of them is the same broken
+  // promise this page just removed from its own sign-up copy. Read here
+  // rather than via isAiConfigured() so the highest-traffic route in the
+  // product does not pull the Anthropic SDK into its module graph; only the
+  // boolean is ever rendered.
+  const aiIsLive = Boolean(process.env.ANTHROPIC_API_KEY);
+
+  // Sourced from the nav rather than restated, so the two can never disagree
+  // about what KIVO does not have yet.
+  const notYetBuilt = NAV_ITEMS.filter(
+    (item) => item.status === "coming-soon" && item.id !== "ai" && Boolean(item.comingSoonBlocker),
+  );
+
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip bg-background">
       <div className="kivo-aurora-page" aria-hidden="true">
@@ -416,7 +552,9 @@ export default function LandingPage() {
               Everything a matchday needs, actually built out
             </h2>
             <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
-              Not a roadmap. Five features, each already live, each grounded in real data.
+              {aiIsLive
+                ? "Not a roadmap. Five features, each already live, each grounded in real data."
+                : "Not a roadmap. Four are live today and the Copilot is built and waiting on its key — all five grounded in real data."}
             </p>
           </ScrollReveal>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -481,12 +619,52 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* The only section on the page that describes the product as time
+            passing rather than as a list of parts. Every beat is real
+            behaviour — see MATCHDAY's comment for where each one lives. */}
+        <section className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-16 lg:px-12">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">A matchday</span>
+            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Ninety minutes, the way KIVO runs them
+            </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              Nothing described here is planned. This is the product as it stands today, in the order you would
+              meet it.
+            </p>
+          </ScrollReveal>
+          <ol className="flex flex-col gap-3">
+            {MATCHDAY.map((beat, index) => (
+              <ScrollReveal
+                key={beat.step}
+                delay={index * 0.05}
+                className="kivo-glass flex flex-col gap-2 rounded-2xl p-6 sm:flex-row sm:gap-6"
+              >
+                <div className="flex shrink-0 items-center gap-3 sm:w-40 sm:flex-col sm:items-start sm:gap-2">
+                  <span
+                    aria-hidden
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-1 text-xs font-semibold tabular-nums text-foreground-subtle"
+                  >
+                    {index + 1}
+                  </span>
+                  <h3 className="text-base font-semibold text-foreground">{beat.step}</h3>
+                </div>
+                <p className="text-sm leading-relaxed text-foreground-muted">{beat.description}</p>
+              </ScrollReveal>
+            ))}
+          </ol>
+        </section>
+
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
           <ScrollReveal className="flex flex-col items-center gap-3 text-center">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">How it works</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Getting in</span>
             <h2 className="text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
-              Look around free. Sign up when you&apos;re ready to play.
+              One email. One code. No password, ever.
             </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              KIVO is behind a door, and we would rather say that here than after you have clicked. It opens in
+              about a minute, and there is no password on the other side of it to forget.
+            </p>
           </ScrollReveal>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {HOW_IT_WORKS.map((step, index) => (
@@ -494,6 +672,104 @@ export default function LandingPage() {
                 <step.icon className="h-8 w-8 text-accent" strokeWidth={1.5} />
                 <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
                 <p className="text-sm leading-relaxed text-foreground-muted">{step.description}</p>
+              </ScrollReveal>
+            ))}
+          </div>
+        </section>
+
+        {/* How it is built, said as consequences a fan would actually feel
+            rather than as architecture. Every line here maps to something real
+            in the codebase — see BUILT_FOR's own comment for which. */}
+        <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Built for the phone you have</span>
+            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Fast on a real connection, not a demo one
+            </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              KIVO starts in Nigeria, so none of this is theoretical. The data a match costs you was a design
+              decision, not an afterthought.
+            </p>
+          </ScrollReveal>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {BUILT_FOR.map((item, index) => (
+              <ScrollReveal
+                key={item.title}
+                delay={index * 0.06}
+                className="kivo-glass flex flex-col gap-2 rounded-2xl p-6"
+              >
+                <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-foreground-muted">{item.description}</p>
+              </ScrollReveal>
+            ))}
+          </div>
+        </section>
+
+        {/* The section most products do not run. It is here because the
+            alternative is worse: a fan who expects news or highlights and
+            finds neither concludes KIVO is unfinished, when in truth both are
+            blocked on rights nobody can code around. Read straight from the
+            nav's own Coming Soon entries (src/lib/navigation.ts) rather than
+            restated here, so the promise on this page and the panel a user
+            reaches inside the app cannot drift apart. Renders nothing at all
+            if that list is ever empty. */}
+        {notYetBuilt.length > 0 && (
+          <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
+            <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Not built yet</span>
+              <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+                What KIVO does not have, and exactly why
+              </h2>
+              <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+                Both of these are in the navigation, described in full, marked as not built. Neither is waiting on
+                effort.
+              </p>
+            </ScrollReveal>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {notYetBuilt.map((item, index) => (
+                <ScrollReveal
+                  key={item.id}
+                  delay={index * 0.06}
+                  className="kivo-glass flex flex-col gap-3 rounded-2xl p-6"
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="h-6 w-6 shrink-0 text-accent" strokeWidth={1.75} />
+                    <h3 className="text-base font-semibold text-foreground">{item.label}</h3>
+                    <span className="ml-auto shrink-0 rounded-full border border-hairline bg-surface-1 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                      Not built
+                    </span>
+                  </div>
+                  <p className="text-sm leading-relaxed text-foreground-muted">{item.comingSoonDescription}</p>
+                  <p className="text-sm leading-relaxed text-foreground-subtle">{item.comingSoonBlocker}</p>
+                </ScrollReveal>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Written as reachable surfaces rather than as a policy paragraph —
+            every claim here is a button that exists in settings today. See
+            YOUR_DATA's comment for where each one lives. */}
+        <section className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-16 lg:px-12">
+          <ScrollReveal className="flex flex-col items-center gap-3 text-center">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Your account</span>
+            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Easy to join, and just as easy to leave
+            </h2>
+            <p className="max-w-xl text-sm text-foreground-muted lg:text-base">
+              A product that makes it hard to walk away is telling you something. Every one of these is a button in
+              settings, not a policy sentence.
+            </p>
+          </ScrollReveal>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {YOUR_DATA.map((item, index) => (
+              <ScrollReveal
+                key={item.title}
+                delay={index * 0.06}
+                className="kivo-glass flex flex-col gap-2 rounded-2xl p-6"
+              >
+                <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-foreground-muted">{item.description}</p>
               </ScrollReveal>
             ))}
           </div>
@@ -511,6 +787,36 @@ export default function LandingPage() {
           </ScrollReveal>
           <ScrollReveal delay={0.08}>
             <FaqSection />
+          </ScrollReveal>
+        </section>
+
+        {/* A page this long has to end somewhere other than the footer. The
+            two buttons are the same pair as the hero's, since by here the
+            visitor has decided and should not have to scroll back up. */}
+        <section className="mx-auto w-full max-w-5xl px-6 pb-20 pt-8 lg:px-12">
+          <ScrollReveal className="kivo-glass-brand flex flex-col items-center gap-5 rounded-3xl px-6 py-12 text-center lg:px-12">
+            <h2 className="max-w-xl text-3xl font-semibold tracking-tight text-foreground lg:text-4xl">
+              Pick your club. The rest arranges itself around it.
+            </h2>
+            <p className="max-w-lg text-sm leading-relaxed text-foreground-muted lg:text-base">
+              One email and a six-digit code, and KIVO opens on your team&apos;s next match instead of somebody
+              else&apos;s.
+            </p>
+            <div className="flex flex-col items-center gap-3 sm:flex-row">
+              <Link
+                href="/sign-up"
+                className="kivo-gradient-prime kivo-glow kivo-raise flex min-h-12 items-center gap-2 rounded-xl px-6 text-sm font-semibold text-on-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              >
+                Create your free account
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+              </Link>
+              <Link
+                href="/sign-in"
+                className="flex min-h-12 items-center rounded-xl border border-hairline px-6 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              >
+                I already have one
+              </Link>
+            </div>
           </ScrollReveal>
         </section>
       </main>

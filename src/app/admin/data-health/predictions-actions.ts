@@ -3,150 +3,72 @@
 import { revalidatePath } from "next/cache";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
-import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { awardBadge, awardXp, evaluateBadgeCriteria } from "@/lib/rewards";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
-import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP, computeStreaks } from "@/lib/predictions";
+import { settlePredictions } from "@/lib/prediction-settlement";
 import { logError } from "@/lib/log";
 
-type PredictionOutcome = "home_win" | "draw" | "away_win";
-
-function realOutcome(homeScore: number, awayScore: number): PredictionOutcome {
-  if (homeScore > awayScore) return "home_win";
-  if (awayScore > homeScore) return "away_win";
-  return "draw";
-}
-
 /**
- * On-demand admin pass, same shape as the football syncs on this page: no
- * cron, an admin triggers it, it processes what's real and reports what it
- * did. Scores every not-yet-scored prediction against real, already-synced
- * fixture results (`fixtures.status = 'finished'` with real home_score/
- * away_score, never a guessed or fabricated result), writes `points_awarded`
- * and `locked_at`, and awards XP for correct picks via the shared ledger
- * helper. Runs under the service-role client because it writes points onto
- * other users' rows, which `predictions_update_own_unlocked` (correctly)
- * never allows a plain client to do.
+ * The admin-triggered settlement pass.
+ *
+ * The engine itself is `settlePredictions` (`src/lib/prediction-settlement.ts`)
+ * and this is now one of two callers rather than the only door — the daily
+ * scheduled sync runs the same function unconditionally, which is what stops a
+ * deployed KIVO leaving a correct call unscored forever. What is left here is
+ * exactly the part a scheduler cannot have: an authenticated admin, an audit
+ * row naming who ran it, and cache invalidation for the pages that show the
+ * result.
+ *
+ * Kept as a button on purpose even though the schedule now covers it. An admin
+ * who has just corrected a final score, or who has just synced a fixture's
+ * events by hand, should not have to wait until tomorrow to see the predictions
+ * resettle against what they fixed.
  */
-export async function scorePredictions(): Promise<{ error: string | null; recordsProcessed?: number }> {
+export async function scorePredictions(): Promise<{
+  error: string | null;
+  recordsProcessed?: number;
+  /** Rows this pass genuinely could not settle. Surfaced rather than hidden,
+   * because "nothing happened" and "forty rows are waiting on a details sync"
+   * look identical from a single count. */
+  unresolvedCount?: number;
+  /** Rows that had already been settled and now say something different. XP is
+   * reconciled for each, so this number is also "how many people's totals
+   * moved". */
+  adjustedCount?: number;
+}> {
   const profile = await getOrCreateProfile();
   if (!profile || !canManageFootballData(profile.role)) {
     return { error: "You don't have football data admin access." };
   }
 
-  const supabase = createServerSupabaseClient();
-  const { data: finishedFixtures, error: fixturesError } = await supabase
-    .from("fixtures")
-    .select("id, home_score, away_score")
-    .eq("status", "finished")
-    .not("home_score", "is", null)
-    .not("away_score", "is", null);
-
-  if (fixturesError) {
-    logError("admin.data-health.predictions-actions.loadFinishedFixturesScoring", fixturesError);
-    return { error: "Couldn't load finished fixtures. Try again." };
-  }
-
-  const scoredFixtures = finishedFixtures ?? [];
-  if (scoredFixtures.length === 0) {
-    return { error: null, recordsProcessed: 0 };
-  }
-
-  const outcomeByFixture = new Map(
-    scoredFixtures.map((f) => [f.id, realOutcome(f.home_score as number, f.away_score as number)]),
-  );
-  const fixtureIds = scoredFixtures.map((f) => f.id);
-
+  // Service-role because this writes points onto other users' rows, which
+  // `predictions_update_own_unlocked` (correctly) never allows a plain client
+  // to do.
   const service = createServiceRoleSupabaseClient();
-  const { data: unscored, error: predictionsError } = await service
-    .from("predictions")
-    .select("id, profile_id, fixture_id, predicted_outcome")
-    .in("fixture_id", fixtureIds)
-    .is("points_awarded", null);
 
-  if (predictionsError) {
-    logError("admin.data-health.predictions-actions.loadUnscoredPredictions", predictionsError);
-    return { error: "Couldn't load predictions to score. Try again." };
-  }
-
-  const rows = unscored ?? [];
-  if (rows.length === 0) {
-    return { error: null, recordsProcessed: 0 };
-  }
-
-  const now = new Date().toISOString();
-  let processed = 0;
-
-  for (const row of rows) {
-    const outcome = outcomeByFixture.get(row.fixture_id);
-    if (!outcome) continue;
-
-    const correct = row.predicted_outcome === outcome;
-    const points = correct ? CORRECT_PREDICTION_POINTS : 0;
-
-    const { error: updateError } = await service
-      .from("predictions")
-      .update({ points_awarded: points, locked_at: now })
-      .eq("id", row.id);
-
-    if (updateError) {
-      logError("admin.data-health.predictions-actions.scorePrediction", updateError, { detail: `Failed to score prediction ${row.id}` });
-      continue;
-    }
-
-    processed += 1;
-    if (correct) {
-      // KN-91: keyed on the prediction, so re-running this scoring pass — which
-      // an admin can do at any time, and which a partial failure invites —
-      // cannot credit the same correct prediction twice.
-      await awardXp(row.profile_id, CORRECT_PREDICTION_XP, "Correct match prediction", `prediction:${row.id}`);
-      await awardBadge(row.profile_id, "first_prediction_correct");
-      // KN-92: the criteria-driven half of the catalogue, evaluated off the
-      // same real scoring event. The hardcoded awards above stay for now —
-      // this is additive, and removing them is a separate, riskier change than
-      // making the catalogue extensible was.
-      await evaluateBadgeCriteria(row.profile_id);
-
-      // Real running total, not a guessed streak — counts this user's
-      // actually-scored correct predictions straight from the predictions
-      // table (points_awarded is only ever set by this same scoring pass).
-      const { count: correctCount } = await service
-        .from("predictions")
-        .select("id", { count: "exact", head: true })
-        .eq("profile_id", row.profile_id)
-        .gt("points_awarded", 0);
-      if ((correctCount ?? 0) >= 5) {
-        await awardBadge(row.profile_id, "five_predictions_correct");
-      }
-
-      // RECOMMENDATIONS item 169: a real streak, computed the same way
-      // /predictions/mine displays one (computeStreaks, ordered by fixture
-      // kickoff_at) — awarded the moment this user's own scored history
-      // genuinely reaches a 3-run, never guessed or assumed from this single
-      // row alone.
-      const { data: scoredHistory } = await service
-        .from("predictions")
-        .select("points_awarded, fixture:fixtures(kickoff_at)")
-        .eq("profile_id", row.profile_id)
-        .not("points_awarded", "is", null);
-      const streaks = computeStreaks(
-        (scoredHistory ?? [])
-          .filter((p) => p.fixture !== null)
-          .map((p) => ({ pointsAwarded: p.points_awarded ?? 0, kickoffAt: p.fixture!.kickoff_at })),
-      );
-      if (streaks.current >= 3) {
-        await awardBadge(row.profile_id, "three_prediction_streak");
-      }
-    }
+  let result;
+  try {
+    result = await settlePredictions(service);
+  } catch (error) {
+    logError("admin.data-health.predictions-actions.scorePredictions", error);
+    return { error: "Couldn't settle predictions. Try again." };
   }
 
   await logAudit(profile.id, "score_predictions", "predictions", {
-    fixturesConsidered: scoredFixtures.length,
-    recordsProcessed: processed,
+    fixturesConsidered: result.fixturesConsidered,
+    recordsProcessed: result.settled,
+    unresolvedCount: result.unresolved,
+    adjustedCount: result.adjusted,
   });
 
   revalidatePath("/predictions");
   revalidatePath("/admin/data-health");
+  revalidatePath("/rewards");
 
-  return { error: null, recordsProcessed: processed };
+  return {
+    error: null,
+    recordsProcessed: result.settled,
+    unresolvedCount: result.unresolved,
+    adjustedCount: result.adjusted,
+  };
 }

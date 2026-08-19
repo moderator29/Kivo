@@ -1,7 +1,7 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 // Duplicated locally rather than imported, matching the existing convention
 // (params.ts and /transfers/page.tsx each keep their own copy too) — this one

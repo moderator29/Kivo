@@ -6,7 +6,15 @@ import { updateNotificationPreference } from "@/app/(app)/settings/actions";
 import type { NotificationPreferenceColumn } from "@/lib/notification-preferences";
 
 const PREFERENCE_ROWS: { column: NotificationPreferenceColumn; label: string; description: string }[] = [
-  { column: "match_alerts_enabled", label: "Match alerts", description: "Kickoff, goals and full-time for teams you follow." },
+  // Kept an accurate list rather than a short one: this single toggle is the
+  // only control over all of it (see MATCH_NOTIFICATION_COLUMN in
+  // match-notifications.ts), so a user deciding whether to switch it off is
+  // entitled to know everything it governs.
+  {
+    column: "match_alerts_enabled",
+    label: "Match alerts",
+    description: "Team news, kickoff, goals, penalties, red cards, half time and full time for teams you follow.",
+  },
   { column: "prediction_alerts_enabled", label: "Prediction alerts", description: "Results and leaderboard movement for your predictions." },
   { column: "fantasy_alerts_enabled", label: "Fantasy alerts", description: "Gameweek deadlines and fantasy team news." },
   { column: "social_alerts_enabled", label: "Social alerts", description: "Likes, comments and new followers." },

@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, UserRound } from "lucide-react";
+import { ArrowLeftRight, BadgeCheck, ChevronRight, UserRound } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
 import { formatDate } from "@/lib/format";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
+import { TRANSFER_STATUS_LABEL } from "@/lib/football/transfer-status";
 import { loadMoreTransfers } from "@/app/(app)/transfers/actions";
 import type { TeamRef, TransferFilterParams, TransferListItem } from "@/app/(app)/transfers/shared";
 
@@ -108,10 +109,33 @@ export function TransfersList({
               </div>
 
               <div className="flex items-center justify-between gap-3 border-t border-hairline-soft pt-3">
-                <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
-                  {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
-                </span>
-                <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  {/* The only status KIVO's transfer data supports. The page
+                      header explains why there is not a second one, rather
+                      than the product quietly shipping fewer filters than the
+                      spec asked for. See transfer-status.ts. */}
+                  <span className="flex items-center gap-1 rounded-full border border-live/40 bg-live/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-live">
+                    <BadgeCheck className="h-3 w-3" strokeWidth={2} />
+                    {TRANSFER_STATUS_LABEL}
+                  </span>
+                  <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+                    {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
+                  </span>
+                  {/* A fee that was never disclosed is not a dash and is not a
+                      zero — the chip simply is not there. */}
+                  {transfer.fee_text && (
+                    <span className="rounded-full border border-achievement/40 bg-achievement/10 px-2 py-0.5 text-[11px] font-semibold text-achievement">
+                      {transfer.fee_text}
+                    </span>
+                  )}
+                </div>
+                <Link
+                  href={`/transfers/${transfer.id}`}
+                  className="kivo-focus flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-accent transition hover:text-accent-strong"
+                >
+                  Details
+                  <ChevronRight className="h-3 w-3" strokeWidth={2} />
+                </Link>
               </div>
             </div>
           </FadeIn>

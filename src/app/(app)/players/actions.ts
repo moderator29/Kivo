@@ -1,12 +1,12 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { positionGroup, type PositionGroup } from "@/app/(app)/fantasy/fantasy-rules";
 import { escapeLikePattern } from "@/lib/text";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { getOrCreateProfile } from "@/lib/profile";
 import { RESULTS_LIMIT } from "./constants";
+import { logError } from "@/lib/log";
 
 export type PlayerSearchResult = {
   id: string;

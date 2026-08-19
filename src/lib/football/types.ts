@@ -103,6 +103,23 @@ export interface NormalizedLineupEntry {
   isStarting: boolean;
   shirtNumber: number | null;
   position: string | null;
+  /** The provider's own formation slot for this player, as a raw "row:col"
+   * string (API-Football reports e.g. "1:1" for the goalkeeper, "2:4" for the
+   * right-most player in the second line). Null for every substitute, and null
+   * whenever the provider omits it.
+   *
+   * This is the only genuinely *positional* field API-Football publishes, and
+   * it arrives free on a request KIVO already makes — the same reasoning that
+   * put `photoUrl` on NormalizedPlayer. It is a formation slot, NOT tracking
+   * data: it says where a player lined up, never where they went. Everything
+   * downstream that consumes it (see `src/lib/football/heatmap/`) is required
+   * to label what it produces as derived rather than observed.
+   *
+   * Deliberately kept as the provider's raw string rather than parsed here:
+   * the row/column semantics are a provider quirk, so parsing belongs in the
+   * normalizer that owns that quirk (`parsePitchGrid` in
+   * providers/normalizers.ts), not in the shared type. */
+  grid: string | null;
 }
 
 export interface NormalizedTeamLineup {
@@ -211,6 +228,200 @@ export interface NormalizedTransfer {
   transferType: NormalizedTransferType;
 }
 
+/**
+ * One player's own statistics for one fixture, as reported by a per-fixture
+ * player-statistics endpoint (API-Football: `/fixtures/players?fixture={id}`).
+ *
+ * Every numeric field is `number | null`, and null means "the provider did not
+ * report this", never zero. That distinction carries real weight here: a
+ * midfielder with `tacklesTotal: null` is a midfielder KIVO knows nothing about,
+ * and one with `tacklesTotal: 0` made no tackles. Anything derived from these
+ * numbers has to be able to tell those apart, or it will present ignorance as a
+ * fact about the player.
+ *
+ * **There are no coordinates on this type, because the provider publishes
+ * none.** These are counts of things a player did, not places they did them.
+ * See `docs/HEATMAP_ENGINE.md` for what may and may not be built on top of that.
+ */
+export interface NormalizedPlayerFixtureStatistics {
+  playerProviderId: string;
+  playerName: string;
+  teamProviderId: string;
+  /** Minutes actually played. Null when unreported; 0 is a real answer for an
+   * unused substitute. */
+  minutesPlayed: number | null;
+  /** The provider's coarse position code for how this player was deployed in
+   * this match (API-Football uses single letters: G, D, M, F). Free text on
+   * purpose, same convention as NormalizedPlayer.position. */
+  position: string | null;
+  /** True when the player came off the bench, false when they started, null
+   * when the provider does not say. */
+  isSubstitute: boolean | null;
+  /** The provider's own match rating (API-Football reports a 0-10 string).
+   * KIVO's `rating-engine.ts` computes its own separate rating and the two are
+   * never mixed — this is the provider's opinion, stored as the provider's. */
+  providerRating: number | null;
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  goals: number | null;
+  assists: number | null;
+  goalsConceded: number | null;
+  saves: number | null;
+  passesTotal: number | null;
+  passesKey: number | null;
+  passAccuracy: number | null;
+  tacklesTotal: number | null;
+  blocks: number | null;
+  interceptions: number | null;
+  duelsTotal: number | null;
+  duelsWon: number | null;
+  dribblesAttempted: number | null;
+  dribblesSucceeded: number | null;
+  dribbledPast: number | null;
+  foulsDrawn: number | null;
+  foulsCommitted: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  offsides: number | null;
+  penaltiesWon: number | null;
+  penaltiesCommitted: number | null;
+  penaltiesScored: number | null;
+  penaltiesMissed: number | null;
+  penaltiesSaved: number | null;
+}
+
+/** One fixture's per-player statistics for both sides. Null (not an empty
+ * array) from a provider that has nothing published for this fixture, same
+ * "nothing yet" convention as getLineups/getFixtureStatistics. */
+export interface NormalizedFixturePlayerStatistics {
+  fixtureProviderId: string;
+  players: NormalizedPlayerFixtureStatistics[];
+}
+
+/**
+ * What a provider says it supports for one competition in one season.
+ *
+ * This is the provider's own declaration, read from its leagues endpoint — not
+ * KIVO's inference from empty tables, and not a hand-maintained list. That is
+ * the entire point of the coverage registry: "this competition structurally
+ * cannot fill this tab" and "nobody has synced this tab yet" are different
+ * facts, and only the provider can tell KIVO the first one.
+ *
+ * Every flag is `boolean | null`. Null means the provider did not state a
+ * position on this capability, which is genuinely different from stating
+ * `false` — a null must render as "unknown", never as "unsupported".
+ */
+export interface NormalizedCompetitionCoverage {
+  competitionProviderId: string;
+  competitionName: string;
+  /** The provider's own season identifier — API-Football uses the starting
+   * year as an integer (2025 for the 2025/26 season). */
+  season: number;
+  fixtureEvents: boolean | null;
+  fixtureLineups: boolean | null;
+  fixtureStatistics: boolean | null;
+  /** Per-PLAYER per-fixture statistics — the flag that decides whether a
+   * heatmap has any event basis at all for this competition. */
+  fixturePlayerStatistics: boolean | null;
+  standings: boolean | null;
+  players: boolean | null;
+  topScorers: boolean | null;
+  topAssists: boolean | null;
+  topCards: boolean | null;
+  injuries: boolean | null;
+  predictions: boolean | null;
+  odds: boolean | null;
+  /** The raw coverage object exactly as the provider sent it, so a capability
+   * KIVO has not modelled yet is preserved rather than silently discarded, and
+   * so a future reader can check KIVO's mapping against the source. */
+  raw: unknown;
+}
+
+/** Whether a player is out or a doubt, as the provider classifies it. "unknown"
+ * exists for the same reason every other enum here has one: an unmapped
+ * provider string must say so rather than be filed under a status KIVO made up. */
+export type NormalizedInjuryStatus = "out" | "doubtful" | "unknown";
+
+export interface NormalizedInjury {
+  /** Synthetic composite key — the injuries endpoint publishes no stable per-row
+   * id, same situation as events and transfers. */
+  providerId: string;
+  playerProviderId: string;
+  playerName: string;
+  teamProviderId: string | null;
+  /** The fixture the provider attached this report to, when it attached one. */
+  fixtureProviderId: string | null;
+  status: NormalizedInjuryStatus;
+  /** The provider's own free-text reason ("Knee Injury", "Suspended"), stored
+   * verbatim rather than bucketed — bucketing a medical description is exactly
+   * the kind of inference this codebase does not do. */
+  reason: string | null;
+  /** ISO date the report applies to, when the provider dates it. */
+  reportedOn: string | null;
+}
+
+/** One entry in a competition's scoring charts. Ranked by the provider itself;
+ * KIVO stores the provider's order rather than re-sorting, so ties break the
+ * way the competition breaks them rather than the way JavaScript does. */
+export interface NormalizedTopScorer {
+  rank: number;
+  playerProviderId: string;
+  playerName: string;
+  playerPhotoUrl: string | null;
+  teamProviderId: string | null;
+  teamName: string | null;
+  goals: number | null;
+  assists: number | null;
+  penaltiesScored: number | null;
+  appearances: number | null;
+  minutesPlayed: number | null;
+}
+
+/**
+ * One player's aggregate statistics for one competition in one season.
+ *
+ * A player who appeared in a league and a cup has one of these per
+ * competition, which is what makes competition splits and a career breakdown
+ * possible at all. Same null-means-unreported rule as
+ * NormalizedPlayerFixtureStatistics.
+ */
+export interface NormalizedPlayerSeasonStatistics {
+  playerProviderId: string;
+  playerName: string;
+  competitionProviderId: string;
+  competitionName: string | null;
+  season: number;
+  teamProviderId: string | null;
+  teamName: string | null;
+  position: string | null;
+  appearances: number | null;
+  lineups: number | null;
+  minutesPlayed: number | null;
+  providerRating: number | null;
+  goals: number | null;
+  assists: number | null;
+  goalsConceded: number | null;
+  saves: number | null;
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  passesTotal: number | null;
+  passesKey: number | null;
+  passAccuracy: number | null;
+  tacklesTotal: number | null;
+  blocks: number | null;
+  interceptions: number | null;
+  duelsTotal: number | null;
+  duelsWon: number | null;
+  dribblesAttempted: number | null;
+  dribblesSucceeded: number | null;
+  foulsDrawn: number | null;
+  foulsCommitted: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  penaltiesScored: number | null;
+  penaltiesMissed: number | null;
+}
+
 export interface FootballDataProvider {
   readonly name: string;
   /** Most recent remaining-quota count the provider itself reported, or null if
@@ -225,6 +436,17 @@ export interface FootballDataProvider {
    * MockFootballProvider), same honesty convention as getQuotaRemaining. */
   getLastRawResponseSample(): unknown | null;
   getFixturesByDate(date: string): Promise<NormalizedFixture[]>;
+  /**
+   * Every fixture in play right now, in one request.
+   *
+   * The shape that makes a live worker affordable: one call refreshes every
+   * live match at once rather than one call per match. Returns ONLY in-play
+   * matches, so a fixture that has just gone final will be absent — a caller
+   * that needs final states must reconcile separately rather than assume
+   * absence means nothing changed. An empty array is a real answer and the
+   * common one: most of most weeks, nothing is in play.
+   */
+  getLiveFixtures(): Promise<NormalizedFixture[]>;
   getFixtureById(providerId: string): Promise<NormalizedFixture | null>;
   getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]>;
   /** Full current squad for a team. See provider doc comments for exactly which
@@ -242,4 +464,28 @@ export interface FootballDataProvider {
    * (see AGENTS.md: no rumour/reported tier exists on the free tier). Newest-first is
    * not guaranteed by the provider; sync-transfers.ts does not assume an order. */
   getPlayerTransfers(playerProviderId: string): Promise<NormalizedTransfer[]>;
+  /**
+   * Per-player statistics for one fixture. Null when the provider has nothing
+   * published for this fixture — which on a restricted plan or an uncovered
+   * competition is the permanent answer, not a temporary one. Ask the coverage
+   * registry (`getCompetitionCoverage` below) before spending a request on
+   * this: it is the difference between "not yet" and "never".
+   */
+  getFixturePlayerStatistics(fixtureProviderId: string): Promise<NormalizedFixturePlayerStatistics | null>;
+  /**
+   * What this provider declares it supports, per competition, for one season.
+   * Empty array when the provider publishes no such declaration — an empty
+   * result means KIVO knows nothing about coverage, and every consumer must
+   * treat that as "unknown", never as "unsupported".
+   */
+  getCompetitionCoverage(season: number): Promise<NormalizedCompetitionCoverage[]>;
+  /** Current injury/unavailability reports for one competition and season. */
+  getInjuries(competitionProviderId: string, season: number): Promise<NormalizedInjury[]>;
+  /** The competition's scoring chart, in the provider's own ranked order. */
+  getTopScorers(competitionProviderId: string, season: number): Promise<NormalizedTopScorer[]>;
+  /**
+   * One player's season aggregates, one entry per competition they appeared in
+   * that season. Empty array when the provider has nothing for this player.
+   */
+  getPlayerSeasonStatistics(playerProviderId: string, season: number): Promise<NormalizedPlayerSeasonStatistics[]>;
 }

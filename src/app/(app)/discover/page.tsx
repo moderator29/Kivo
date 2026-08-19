@@ -4,6 +4,8 @@ import { Compass, ShieldCheck } from "lucide-react";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { FadeIn } from "@/components/ui/fade-in";
 import { DiscoverCard } from "@/components/discover/discover-card";
+import { SearchSurface } from "@/components/search/search-surface";
+import { getPopularTeams } from "@/app/(app)/search-actions";
 import { getNavItem } from "@/lib/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { staggerDelay } from "@/lib/stagger";
@@ -15,20 +17,40 @@ export const metadata: Metadata = { title: item.label };
 export default async function DiscoverPage() {
   const supabase = createServerSupabaseClient();
 
-  const [{ count: competitionCount }, { count: teamCount }, { count: playerCount }, { count: transferCount }] =
-    await Promise.all([
-      supabase.from("competitions").select("id", { count: "exact", head: true }),
-      supabase.from("teams").select("id", { count: "exact", head: true }),
-      supabase.from("players").select("id", { count: "exact", head: true }),
-      supabase.from("transfers").select("id", { count: "exact", head: true }),
-    ]);
+  // Managers and venues were missing from this hub while being real, built,
+  // navigable list pages — /discover claimed to be "everything KIVO has
+  // synced" and quietly was not. Same counted-or-nothing treatment as the
+  // other four.
+  const [
+    { count: competitionCount },
+    { count: teamCount },
+    { count: playerCount },
+    { count: transferCount },
+    { count: managerCount },
+    { count: venueCount },
+    popularTeams,
+  ] = await Promise.all([
+    supabase.from("competitions").select("id", { count: "exact", head: true }),
+    supabase.from("teams").select("id", { count: "exact", head: true }),
+    supabase.from("players").select("id", { count: "exact", head: true }),
+    supabase.from("transfers").select("id", { count: "exact", head: true }),
+    supabase.from("managers").select("id", { count: "exact", head: true }),
+    supabase.from("venues").select("id", { count: "exact", head: true }),
+    getPopularTeams(),
+  ]);
 
   const leagues = competitionCount ?? 0;
   const teams = teamCount ?? 0;
   const players = playerCount ?? 0;
   const transfers = transferCount ?? 0;
+  const managers = managerCount ?? 0;
+  const venues = venueCount ?? 0;
 
-  if (leagues === 0 && teams === 0 && players === 0 && transfers === 0) {
+  // The search field's own coverage, built from the counts this page already
+  // had to run — no second round of head-counts for the same five tables.
+  const coverage = { teams, players, competitions: leagues, managers, venues };
+
+  if (leagues === 0 && teams === 0 && players === 0 && transfers === 0 && managers === 0 && venues === 0) {
     return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />;
   }
 
@@ -65,7 +87,26 @@ export default async function DiscoverPage() {
       countLabel: transfers === 1 ? "transfer synced" : "transfers synced",
       description: "Confirmed transfers for players synced so far, not the full transfer market.",
     },
-  ];
+    {
+      href: "/managers",
+      icon: "/assets/icons/misc/managers.webp",
+      label: "Managers",
+      count: managers,
+      countLabel: managers === 1 ? "manager synced" : "managers synced",
+      description: "The people in the dugout, and the clubs KIVO has them at.",
+    },
+    {
+      href: "/venues",
+      icon: "/assets/icons/misc/stadiums.webp",
+      label: "Venues",
+      count: venues,
+      countLabel: venues === 1 ? "venue synced" : "venues synced",
+      description: "Grounds, cities and capacities for the stadiums KIVO has fixtures at.",
+    },
+  // A surface with nothing behind it is a dead end dressed as a destination,
+  // so an entity list KIVO has not synced a single row of is left off the hub
+  // entirely rather than shown reading "0 synced".
+  ].filter((surface) => surface.count > 0);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">
@@ -79,6 +120,29 @@ export default async function DiscoverPage() {
             Browse everything KIVO has synced. Leagues, clubs, players and transfers, all in one place.
           </p>
         </div>
+      </FadeIn>
+
+      {/* A real field, not a link to one.
+          
+          The founder moved search out of the HEADER; that was never an
+          instruction to make it hard to find. Discover's entire job is
+          browsing, and a fan who does not yet know what they are looking for
+          lands here — so the field belongs here, working, at the top of the
+          page. It is the same `SearchSurface` /search renders and the same
+          `searchPlatform` action ⌘K calls, in its inline variant: no
+          autofocus (this page has content someone may have come for, and a
+          keyboard springing up over it on a phone is hostile), no URL
+          rewriting, and nothing rendered below it until someone types —
+          because the zero state for this field is the grid underneath it. */}
+      <FadeIn delay={0.06}>
+        <SearchSurface
+          variant="inline"
+          initialQuery=""
+          initialResults={[]}
+          initialError={null}
+          popularTeams={popularTeams}
+          coverage={coverage}
+        />
       </FadeIn>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

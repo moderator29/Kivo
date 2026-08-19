@@ -26,11 +26,26 @@ export function KivoAvatar({
   name,
   size = 40,
   className = "",
+  radiusClassName = "rounded-full",
 }: {
   src: string | null;
   name?: string | null;
   size?: number;
   className?: string;
+  /**
+   * The corner radius, as a Tailwind class. Circular everywhere by default,
+   * which is what every existing caller wants and gets without saying so.
+   *
+   * It is a prop rather than something a caller tacks onto `className` because
+   * the radius is applied to a different element on each of the three branches
+   * below (a cropping wrapper, an `<Image>`, a placeholder box) — and a
+   * `rounded-2xl` appended to `className` would not reliably beat the
+   * `rounded-full` already in the string, since equal-specificity classes are
+   * resolved by stylesheet order, not by the order they appear in the
+   * attribute. The account switcher's rounded-square avatars are the first
+   * caller that needs it.
+   */
+  radiusClassName?: string;
 }) {
   const framing = kivoAvatarFramingForSrc(src);
 
@@ -44,7 +59,7 @@ export function KivoAvatar({
     // uniformly and cannot be stretched.
     return (
       <div
-        className={`relative shrink-0 overflow-hidden rounded-full ${className}`}
+        className={`relative shrink-0 overflow-hidden ${radiusClassName} ${className}`}
         style={{ width: size, height: size }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- see comment above */}
@@ -72,14 +87,14 @@ export function KivoAvatar({
         width={size}
         height={size}
         unoptimized
-        className={`shrink-0 rounded-full object-cover ${className}`}
+        className={`shrink-0 ${radiusClassName} object-cover ${className}`}
         style={{ width: size, height: size }}
       />
     );
   }
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full bg-surface-2 ${className}`}
+      className={`flex shrink-0 items-center justify-center ${radiusClassName} bg-surface-2 ${className}`}
       style={{ width: size, height: size }}
     >
       <CircleUserRound className="h-1/2 w-1/2 text-foreground-subtle" strokeWidth={1.75} />

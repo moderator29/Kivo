@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Generic fallback for every (app) route that doesn't define its own
@@ -9,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // rather than a fake progress bar implying specific, measurable progress.
 export default function AppLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-7 w-56" />
@@ -19,6 +20,6 @@ export default function AppLoading() {
           <Skeleton key={i} className="h-16 w-full rounded-2xl" />
         ))}
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

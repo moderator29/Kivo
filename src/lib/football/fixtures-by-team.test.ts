@@ -27,7 +27,7 @@ describe("chunkTeamIds", () => {
 describe("fetchFixturesForTeams", () => {
   it("issues no query when the viewer follows nobody", async () => {
     const query = vi.fn();
-    expect(await fetchFixturesForTeams([], 10, query)).toEqual([]);
+    expect(await fetchFixturesForTeams([], 10, query)).toEqual({ failed: false, rows: [] });
     expect(query).not.toHaveBeenCalled();
   });
 
@@ -47,7 +47,7 @@ describe("fetchFixturesForTeams", () => {
   it("de-duplicates a fixture returned by both the home and away query", async () => {
     const shared: Row = { id: "f1", kickoff_at: "2026-08-18T12:00:00Z" };
     const out = await fetchFixturesForTeams(["a", "b"], 10, async () => ({ data: [shared] }));
-    expect(out).toEqual([shared]);
+    expect(out).toEqual({ failed: false, rows: [shared] });
   });
 
   it("returns the globally earliest fixtures across chunks, in kickoff order", async () => {
@@ -62,14 +62,16 @@ describe("fetchFixturesForTeams", () => {
       ],
     };
     const out = await fetchFixturesForTeams(["a", "b"], 3, async (column) => ({ data: byColumn[column] }));
-    expect(out.map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(out.rows.map((r) => r.id)).toEqual(["a", "b", "c"]);
   });
 
   it("tolerates a null data payload from any sub-query", async () => {
     const out = await fetchFixturesForTeams(["a"], 5, async (column) =>
       column === "home_team_id" ? { data: null } : { data: [{ id: "x", kickoff_at: "2026-08-18T10:00:00Z" }] },
     );
-    expect(out.map((r) => r.id)).toEqual(["x"]);
+    expect(out.rows.map((r) => r.id)).toEqual(["x"]);
+    // A null payload with no error is a real empty response, not a failure.
+    expect(out.failed).toBe(false);
   });
 });
 
@@ -86,6 +88,35 @@ describe("fetchFixturesForTeams ordering", () => {
       ],
     };
     const out = await fetchFixturesForTeams(["a", "b"], 3, async (column) => ({ data: byColumn[column] }), "desc");
-    expect(out.map((r) => r.id)).toEqual(["d", "c", "b"]);
+    expect(out.rows.map((r) => r.id)).toEqual(["d", "c", "b"]);
+  });
+});
+
+/**
+ * The failure case, which is why this function returns an outcome at all.
+ *
+ * One failed chunk out of six used to vanish into `data ?? []`, and the caller
+ * got a shorter list with no way to tell it was short. A missing fixture does
+ * not announce itself the way a missing list does.
+ */
+describe("fetchFixturesForTeams partial failure", () => {
+  it("reports failure when any sub-query errors, rather than silently returning fewer", async () => {
+    const ids = Array.from({ length: 35 }, (_, i) => id(i)); // 2 chunks, 4 queries
+    let call = 0;
+    const out = await fetchFixturesForTeams(ids, 10, async () => {
+      call += 1;
+      if (call === 2) return { data: null, error: { message: "connection reset" } };
+      return { data: [{ id: `f${call}`, kickoff_at: "2026-08-18T12:00:00Z" }] };
+    });
+
+    expect(out.failed).toBe(true);
+    // The rows that did arrive are still carried, so a caller can choose to
+    // use them — but it has to choose, knowing they are incomplete.
+    expect(out.rows.length).toBeGreaterThan(0);
+  });
+
+  it("is not failed when every sub-query succeeds and simply finds nothing", async () => {
+    const out = await fetchFixturesForTeams(["a"], 10, async () => ({ data: [], error: null }));
+    expect(out).toEqual({ failed: false, rows: [] });
   });
 });

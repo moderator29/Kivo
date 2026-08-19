@@ -1,6 +1,8 @@
 import { Database, Lock, CheckCircle2, XCircle, Loader2, MinusCircle, CircleSlash, Trophy, Activity, ShieldCheck, ListChecks, Clock3, ArrowLeftRight, RadioTower } from "lucide-react";
 import { DISPLAY_LOCALE, formatNumber } from "@/lib/format";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
@@ -14,8 +16,10 @@ import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
 import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
 import { AutomationStatusPanel } from "@/components/admin/automation-status-panel";
+import { LiveWorkerPanel } from "@/components/admin/live-worker-panel";
 import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
 import { TeamMergePanel } from "@/components/admin/team-merge-panel";
@@ -189,23 +193,52 @@ export default async function DataHealthPage() {
   // users' rows, so this count (like the scoring pass itself) goes through
   // the service-role client — read-only here, just to show an honest number
   // rather than making the button a mystery click.
-  const { data: finishedFixtures } = await supabase
-    .from("fixtures")
-    .select("id")
-    .eq("status", "finished")
-    .not("home_score", "is", null)
-    .not("away_score", "is", null);
-  const finishedFixtureIds = (finishedFixtures ?? []).map((f) => f.id);
-  let unscoredPredictions = 0;
-  if (finishedFixtureIds.length > 0) {
-    const service = createServiceRoleSupabaseClient();
-    const { count } = await service
+  // The unbounded "fetch every finished fixture id, then filter predictions by
+  // it" read that used to live here is gone: it grew with the season whether or
+  // not anybody had predicted any of it, and PostgREST's `!inner` expresses the
+  // same question as a filter rather than a fetch. Same inversion the settlement
+  // engine itself now makes (src/lib/prediction-settlement.ts).
+
+  /**
+   * Three real numbers off the `predictions` table, not one.
+   *
+   * The single "awaiting scoring" count conflated two states that mean opposite
+   * things, because `points_awarded is null` is true both for a row nothing has
+   * looked at yet *and* for a row KIVO has examined and honestly declined to
+   * settle. So a fixture whose events were never synced showed up here as work
+   * pending forever, and pressing the button changed the number by nothing —
+   * which reads as a broken job rather than as the data gap it is.
+   *
+   * `lastSettledAt` is the one that answers the question this whole page exists
+   * for: not "is settlement configured" but "has it actually run". The daily
+   * sync now calls the same engine the button does, so a timestamp older than a
+   * day means the schedule is not reaching it, regardless of what any
+   * environment variable says.
+   */
+  const predictionService = createServiceRoleSupabaseClient();
+  const finishedPredictions = () =>
+    predictionService
       .from("predictions")
-      .select("id", { count: "exact", head: true })
-      .in("fixture_id", finishedFixtureIds)
-      .is("points_awarded", null);
-    unscoredPredictions = count ?? 0;
-  }
+      .select("id, fixture:fixtures!inner(status)", { count: "exact", head: true })
+      .eq("fixture.status", "finished");
+
+  const [awaitingResult, unresolvableResult, settledResult, lastSettledResult] = await Promise.all([
+    finishedPredictions().is("resolution", null),
+    finishedPredictions().eq("resolution", "unresolvable"),
+    finishedPredictions().not("points_awarded", "is", null),
+    predictionService
+      .from("predictions")
+      .select("resolved_at")
+      .not("resolved_at", "is", null)
+      .order("resolved_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const unscoredPredictions = awaitingResult.count ?? 0;
+  const unresolvablePredictions = unresolvableResult.count ?? 0;
+  const settledPredictions = settledResult.count ?? 0;
+  const lastSettledAt = lastSettledResult.data?.resolved_at ?? null;
 
   // RECOMMENDATIONS.md item 64: transfers is public-read, so a plain client is
   // enough here (unlike unscoredPredictions above, which needs owner-only RLS
@@ -247,13 +280,23 @@ export default async function DataHealthPage() {
   // sync_runs row rather than reusing that capped list. status/records_processed
   // for the overall totals below, plus started_at/provider_quota_remaining for
   // today's quota trend (RECOMMENDATIONS.md item 213).
-  const { data: allRuns } = await supabase
-    .from("sync_runs")
-    .select("status, records_processed, started_at, provider_quota_remaining");
-  const totalRuns = allRuns?.length ?? 0;
-  const successfulRuns = (allRuns ?? []).filter((r) => r.status === "success").length;
-  const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : null;
-  const totalRecordsProcessed = (allRuns ?? []).reduce((sum, r) => sum + (r.records_processed ?? 0), 0);
+  // The most load-bearing read on this page, and the one where `?? []` was
+  // most expensive. Data Health exists to answer "is anything actually
+  // arriving?", and its own documented failure mode is a layer that was
+  // "built, documented, and quietly never running". A failed read here
+  // reported *zero syncs, ever* — the exact signature of that failure — to
+  // the one person whose job is to tell the difference.
+  const runsOutcome = readList(
+    await supabase.from("sync_runs").select("status, records_processed, started_at, provider_quota_remaining"),
+    "admin.dataHealth.syncRuns",
+  );
+  const allRuns = runsOutcome.rows;
+  // Null, not 0, when the read failed: the panel below is suppressed entirely
+  // rather than printing a total nobody can stand behind.
+  const totalRuns = runsOutcome.failed ? null : allRuns.length;
+  const successfulRuns = allRuns.filter((r) => r.status === "success").length;
+  const successRate = totalRuns !== null && totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : null;
+  const totalRecordsProcessed = allRuns.reduce((sum, r) => sum + (r.records_processed ?? 0), 0);
 
   // Today's quota trend: API-Football's quota resets daily and only counts down
   // as syncs run, so the highest reading seen today is the best available proxy
@@ -262,12 +305,10 @@ export default async function DataHealthPage() {
   // estimated. Matches todayIsoDate()'s UTC-day boundary in
   // src/lib/football/sync.ts.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const todaysQuotaReadings = (allRuns ?? [])
-    .filter(
-      (r): r is typeof r & { provider_quota_remaining: number } =>
-        r.provider_quota_remaining !== null && r.started_at?.slice(0, 10) === todayIso,
-    )
-    .map((r) => r.provider_quota_remaining);
+  const todaysQuotaReadings = allRuns
+    .filter((r) => r.provider_quota_remaining !== null && r.started_at?.slice(0, 10) === todayIso)
+    .map((r) => r.provider_quota_remaining)
+    .filter((reading): reading is number => reading !== null);
   const quotaUsedToday =
     todaysQuotaReadings.length > 0 ? Math.max(...todaysQuotaReadings) - Math.min(...todaysQuotaReadings) : null;
 
@@ -359,7 +400,22 @@ export default async function DataHealthPage() {
                 : "All predictions are scored"}
             </p>
             <p className="text-xs text-foreground-subtle">
-              Scores every prediction against real, finished-fixture results. Correct picks earn {CORRECT_PREDICTION_POINTS} points and {CORRECT_PREDICTION_XP} XP.
+              {settledPredictions} settled · {unscoredPredictions} awaiting · {unresolvablePredictions} unresolvable.{" "}
+              {lastSettledAt ? (
+                <>
+                  Last run <LocalDateTime iso={lastSettledAt} format="dayTime" />.
+                </>
+              ) : (
+                <>Never run.</>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-foreground-subtle">
+              Runs automatically in the daily sync — this button is for after a manual correction, not instead of the
+              schedule. Scores all six prediction types against real, already-synced data: final scores, match events,
+              team statistics and the Room&apos;s own man-of-the-match vote. A winner pick earns{" "}
+              {CORRECT_PREDICTION_POINTS} points and {CORRECT_PREDICTION_XP} XP; harder types earn more.{" "}
+              <span className="text-warning">Unresolvable</span> means the data a type needs was never synced — those
+              are left explicitly unsettled and cost the user nothing, rather than being marked wrong.
             </p>
           </div>
         </div>
@@ -457,7 +513,15 @@ export default async function DataHealthPage() {
         </FadeIn>
       </div>
 
-      {totalRuns > 0 && (
+      {runsOutcome.failed && (
+        <LoadFailed
+          tone="section"
+          title="Sync run totals"
+          description="KIVO couldn't read the sync_runs table. Reporting zero runs here would look exactly like a sync layer that has never fired, which is the one thing this page exists to tell apart — so it reports nothing instead. Try again."
+        />
+      )}
+
+      {totalRuns !== null && totalRuns > 0 && (
         <FadeIn delay={0.13} className="kivo-glass grid grid-cols-2 gap-3 rounded-2xl p-5 sm:grid-cols-4 sm:divide-x sm:divide-hairline-soft">
           <div className="flex flex-col items-center gap-1 text-center">
             <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
@@ -631,6 +695,11 @@ export default async function DataHealthPage() {
       </div>
 
       <AutomationStatusPanel />
+
+      {/* Directly under the "has it ever run" panel, because this is the
+          narrower question that only matters once it has: how much quota
+          automation has spent, on what, and why it is idle right now. */}
+      <LiveWorkerPanel />
 
       {/* KIVO_NEXT_GEN KN-83. Placed with the other data-integrity tools rather
           than in its own screen — it is a repair for a specific condition

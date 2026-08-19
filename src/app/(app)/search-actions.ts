@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { escapeLikePattern } from "@/lib/text";
+import type { SearchCoverage } from "@/lib/search-coverage";
 
 export type SearchResultType = "team" | "player" | "competition" | "manager" | "venue";
 
@@ -180,4 +181,36 @@ export async function searchPlatform(query: string): Promise<{ error: string | n
   }
 
   return { error: null, results };
+}
+
+/**
+ * What the search index actually contains right now, as five real counts.
+ *
+ * Powers the empty state: "no matches" means something completely different
+ * against a full division than it does against an index of two clubs, and
+ * only the caller of this can tell the difference. Head-only counts, so this
+ * costs five index scans and returns no rows.
+ *
+ * A failed count is reported as 0 rather than thrown — the worst outcome is
+ * an empty-state sentence that understates coverage, and that is much better
+ * than a search page that errors because a count did.
+ */
+export async function getSearchCoverage(): Promise<SearchCoverage> {
+  const supabase = createServerSupabaseClient();
+
+  const [teams, players, competitions, managers, venues] = await Promise.all([
+    supabase.from("teams").select("id", { count: "exact", head: true }),
+    supabase.from("players").select("id", { count: "exact", head: true }),
+    supabase.from("competitions").select("id", { count: "exact", head: true }),
+    supabase.from("managers").select("id", { count: "exact", head: true }),
+    supabase.from("venues").select("id", { count: "exact", head: true }),
+  ]);
+
+  return {
+    teams: teams.count ?? 0,
+    players: players.count ?? 0,
+    competitions: competitions.count ?? 0,
+    managers: managers.count ?? 0,
+    venues: venues.count ?? 0,
+  };
 }

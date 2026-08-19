@@ -141,9 +141,34 @@ export type BulkCarryForwardResult = { teamsCarried: number; carried: CarriedFor
  * both succeed, only one actually inserts, and calling this again once rows
  * already exist for the gameweek is a no-op read (the caller only invokes
  * this when its own initial roster query for the gameweek came back empty).
- * Runs under the ordinary RLS-gated client (fantasy_rosters_all_own), never
- * a service-role client — this only ever writes rows for the caller's own
- * fantasy_teams row, which is exactly what that policy already allows.
+ * ## Why this runs as service_role (changed 2026-08-19)
+ *
+ * It used to run on the caller's own RLS-gated client, on the reasoning that
+ * it only ever writes rows for the caller's own team — which
+ * `fantasy_rosters_all_own` allowed. That policy is gone. The security sweep
+ * replaced it with four policies whose INSERT/UPDATE/DELETE arms require
+ * `deadline_at > now()`, closing a real hole (a user could PATCH their squad
+ * after kickoff with the results known).
+ *
+ * That fix is correct, and it makes this caller's classification wrong. This
+ * function writes rows for the CURRENT gameweek, including after its deadline
+ * — which is precisely the moment it exists for, because a manager who never
+ * opened the app before the deadline is exactly who needs their squad carried.
+ * On the user's client that write is now refused, and the failure is silent:
+ * the manager sees an EMPTY squad with the deadline gone and no way to rebuild
+ * it.
+ *
+ * So it moves to the service-role client, and that is an honest
+ * reclassification rather than a way around the policy. Carry-forward is KIVO
+ * applying a documented rule on the manager's behalf; it is not the manager
+ * editing a locked squad. `carryForwardMissingFantasyRosters` below — the
+ * scorer's bulk equivalent, doing the identical thing — already ran this way.
+ *
+ * The safety that the RLS ownership check used to provide is replaced by
+ * construction rather than dropped: every row written below is built from
+ * `fantasyTeamId`, the caller's own team id, and from a prior roster read
+ * scoped to that same id. There is no path by which a different team's id
+ * reaches the insert.
  *
  * Player eligibility: this schema has no injury/availability/suspension/
  * transfer-window-lock concept for players anywhere — `players` only carries
@@ -164,7 +189,19 @@ export async function carryForwardFantasyRoster(
 ): Promise<CarryForwardResult> {
   if (currentGameweekNumber <= 1) return { carriedFromGameweekNumber: null };
 
-  const supabase = createServerSupabaseClient();
+  // See the doc comment above: service-role because the write it performs is
+  // legitimately after the gameweek's deadline, which user-facing policy
+  // (correctly) forbids.
+  let supabase: ServiceClient;
+  try {
+    supabase = createServiceRoleSupabaseClient();
+  } catch (error) {
+    // Missing service-role key. Degrade to not carrying forward rather than
+    // throwing on somebody's page load — the scorer's bulk pass will still
+    // carry the squad before it is scored, so nothing is lost but the notice.
+    logError("fantasy.carryForwardRoster.clientUnavailable", error, { fantasyTeamId });
+    return { carriedFromGameweekNumber: null };
+  }
 
   // Walk back through this season's earlier gameweeks, most recent first,
   // for the last one this team actually built a squad for — a team could

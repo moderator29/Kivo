@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DiscoverLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8">
+    <PageSkeleton className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 lg:px-8" label="Loading Discover">
       <div className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-6">
         <Skeleton className="h-12 w-12 shrink-0 rounded-2xl" />
         <div className="flex flex-1 flex-col gap-2">
@@ -26,6 +27,6 @@ export default function DiscoverLoading() {
           </div>
         ))}
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

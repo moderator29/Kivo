@@ -1,4 +1,3 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
@@ -11,6 +10,7 @@ import {
   type FixtureResultRow,
 } from "./form-engine";
 import { summarizeGoalTiming, type TeamGoalTiming } from "./goal-timing";
+import { logError } from "@/lib/log";
 
 /**
  * KIVO Match Intelligence — unifies H2H (`head-to-head.ts`), team form

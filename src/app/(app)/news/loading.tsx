@@ -1,3 +1,4 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // NewsPage itself renders a static <ComingSoon> with no data fetch, so this
@@ -7,10 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 // zero cost if it never actually shows.
 export default function NewsLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 px-6 py-24 text-center">
+    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 px-6 py-24 text-center" label="Loading News">
       <Skeleton className="h-9 w-9 rounded-full" />
       <Skeleton className="h-5 w-32" />
       <Skeleton className="h-4 w-56" />
-    </div>
+    </PageSkeleton>
   );
 }

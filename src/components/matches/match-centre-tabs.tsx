@@ -4,7 +4,16 @@ import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { EVENT_LABEL } from "@/lib/football/event-labels";
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  CircleSlash,
+  RectangleVertical,
+  ScanEye,
+  Volleyball,
+  type LucideIcon,
+} from "lucide-react";
+import { EVENT_LABEL, isGoalEventType } from "@/lib/football/event-labels";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
 import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-sync-control";
@@ -12,11 +21,15 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
 import { HeatmapView } from "@/components/matches/heatmap-view";
-import type { PositionalObservation } from "@/lib/football/positional-types";
-import type { FixtureStatus } from "@/lib/football/fixture-status";
+import { buildFixtureHeatmaps, hasFixtureHeatmapContent } from "@/lib/football/heatmap/fixture-heatmap";
+import { HeadToHeadCard } from "@/components/football/head-to-head-card";
+import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
+import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
 import { LocalDateTime } from "@/components/ui/relative-time";
+import { useRealtimeFixtureEvents } from "@/hooks/use-realtime-fixture-events";
+import { resolveEventSide, resolveTabFromSlug, type EventSide } from "@/lib/football/match-timeline";
 
-type MatchEvent = {
+export type MatchEvent = {
   id: string;
   eventType: keyof typeof EVENT_LABEL;
   minute: number;
@@ -39,6 +52,18 @@ type LineupEntry = {
    * published for this fixture. Same value repeated across every row for
    * this team_id (denormalized, matching how team_id itself repeats). */
   formation: string | null;
+  /** The provider's own formation slot for this player, "row:col", row 1 being
+   * the goalkeeper's line and counting upfield (migration 0081, synced from
+   * /fixtures/lineups at no extra request cost — the response already carries
+   * it). Null for every substitute and whenever the provider omits it.
+   *
+   * Passed through rather than used directly here: it is the only genuinely
+   * positional field the provider publishes, and `buildFixtureHeatmaps` knows
+   * how to read it. Deliberately NOT used to decide left from right anywhere —
+   * whether column 1 is a team's left or its right is unverified, and a pitch
+   * that draws a right-back on the left looks completely authoritative while
+   * being half the time wrong. */
+  grid: string | null;
   playerId: string;
   playerName: string;
 };
@@ -92,10 +117,11 @@ type MatchCentreTabsProps = {
   fixtureId: string;
   homeTeamId: string;
   awayTeamId: string;
-  /** Real team names (`fixtures.home_team`/`away_team` join in the page),
-   * used only for the Heatmap tab's per-side labels ("<name>'s on-pitch
-   * movement") — every other tab already resolves team identity from
-   * `standings`/`lineups` rows themselves. */
+  /** Real team names (`fixtures.home_team`/`away_team` join in the page).
+   * Needed by every tab that has to say which club a number or an event
+   * belongs to and cannot get it from its own rows: the Timeline's two sides,
+   * the Stats rows' screen-reader alternatives, the Heatmap's per-side labels.
+   * Standings and Lineups still resolve team identity from their own rows. */
   homeTeamName: string;
   awayTeamName: string;
   events: MatchEvent[];
@@ -130,10 +156,40 @@ type MatchCentreTabsProps = {
     venueName: string | null;
     venueCity: string | null;
   };
+  /** Real head-to-head record between these two clubs, computed by
+   * getHeadToHead() from finished fixtures only. Null when either side of
+   * the fixture has no resolved team row — the tab is then not offered at
+   * all rather than rendering a card about two unnamed teams.
+   *
+   * This used to render as a standalone card in the page body *below* these
+   * tabs, which meant a fan had to scroll past the entire tab panel to reach
+   * it. The Master Directive lists H2H as a Match Centre section alongside
+   * Stats, Lineups and Standings, and that is where it belongs. */
+  headToHead: {
+    teamA: { name: string; shortName: string | null };
+    teamB: { name: string; shortName: string | null };
+    record: HeadToHeadRecord;
+  } | null;
+  /** The provider's OWN statement about what it publishes for this fixture's
+   * competition (`provider_coverage`, migration 0082), or null when the
+   * registry has never been synced for it.
+   *
+   * This closes the limitation the KN-53 comment below states about itself: an
+   * empty Timeline, Stats or Lineups tab has two causes that look identical
+   * from here — the provider does not publish that for this competition, or
+   * nobody has synced this fixture yet — and until now the Overview panel
+   * could only claim the second, because it was the only one always true.
+   * `false` means the provider says it does not publish it; `null` means KIVO
+   * has not established either way, and says nothing rather than guessing. */
+  competitionCoverage: {
+    events: boolean | null;
+    lineups: boolean | null;
+    statistics: boolean | null;
+  } | null;
 };
 
 /**
- * KN-53. Details, Stats, Lineups and Heatmap each rendered a near-identical
+ * KN-53. Timeline, Stats, Lineups and Heatmap each rendered a near-identical
  * "hasn't been synced yet" panel, so on a scheduled fixture — which is *every*
  * fixture before kickoff — the user paid four taps to learn one fact, and the
  * tab strip promised four things that were all the same nothing.
@@ -149,21 +205,25 @@ type MatchCentreTabsProps = {
  * has synced it yet" — so the Overview panel says only the second, which is
  * the one thing that is always true.
  */
-const ALL_TABS = ["Overview", "Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"] as const;
+const ALL_TABS = ["Overview", "Timeline", "Stats", "Lineups", "Heatmap", "H2H", "Standings", "Room"] as const;
 type Tab = (typeof ALL_TABS)[number];
 
 /** The tabs that hold provider-synced match detail — the ones that collapse. */
-const DATA_TABS = ["Details", "Stats", "Lineups", "Heatmap"] as const;
+const DATA_TABS = ["Timeline", "Stats", "Lineups", "Heatmap"] as const;
 
 function tabSlug(tab: Tab): string {
   return tab.toLowerCase();
 }
 
-/** Falls back to the *first visible* tab, not to a fixed one: with the data
- * tabs collapsed, `?tab=stats` names a tab that isn't on screen, and landing
- * on a tab the strip doesn't show would leave nothing highlighted. */
+/** Slugs that used to name a tab and still appear in links people have
+ * already shared or bookmarked. "Details" was renamed to "Timeline" (it
+ * always rendered fixture events chronologically — the name just didn't say
+ * so), and an existing `?tab=details` link should land on that same panel
+ * rather than silently falling back to whatever tab happens to be first. */
+const LEGACY_TAB_SLUGS: Record<string, Tab> = { details: "Timeline" };
+
 function tabFromSlug(slug: string | null, visible: readonly Tab[]): Tab {
-  return visible.find((tab) => tabSlug(tab) === slug) ?? visible[0];
+  return resolveTabFromSlug(slug, visible, tabSlug, LEGACY_TAB_SLUGS);
 }
 
 function PlayerNameLink({ playerId, playerName, className }: { playerId: string; playerName: string; className?: string }) {
@@ -173,6 +233,12 @@ function PlayerNameLink({ playerId, playerName, className }: { playerId: string;
       {playerName}
     </Link>
   );
+}
+
+/** "stats", "stats and lineups", "the timeline, stats and lineups". */
+function formatAreaList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -199,8 +265,24 @@ function EmptyState({ message }: { message: string }) {
  * RECOMMENDATIONS.md item 299 — so this claims only the part that is always
  * true.
  */
-function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] }) {
+function OverviewTab({
+  preMatch,
+  competitionCoverage,
+}: {
+  preMatch: MatchCentreTabsProps["preMatch"];
+  competitionCoverage: MatchCentreTabsProps["competitionCoverage"];
+}) {
   const started = preMatch.status !== "scheduled";
+
+  // Only the areas the provider has explicitly said it does NOT publish for
+  // this competition. `null` is not a denial — it means the registry has never
+  // been synced, or has no opinion, and KIVO says nothing rather than inventing
+  // a capability gap it has not established.
+  const unsupported = [
+    competitionCoverage?.events === false ? "the timeline" : null,
+    competitionCoverage?.statistics === false ? "stats" : null,
+    competitionCoverage?.lineups === false ? "lineups" : null,
+  ].filter((label): label is string => label !== null);
   const venue = [preMatch.venueName, preMatch.venueCity].filter(Boolean).join(", ");
 
   const facts: { label: string; value: ReactNode }[] = [
@@ -220,63 +302,329 @@ function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] 
         ))}
       </div>
 
-      <p className="px-1 text-xs leading-relaxed text-foreground-muted">
-        {started
-          ? "Timeline, stats and lineups for this match haven't been synced yet. They'll appear here as their own tabs the moment they land."
-          : "Timeline, stats and lineups appear here as their own tabs once this fixture has been synced — usually around kick-off."}{" "}
-        The Room is open now.
+      {/* Two different sentences, because they are two different facts and a
+          fan acts on them differently: "not synced yet" means wait, and "the
+          provider does not publish this for this competition" means stop
+          waiting. The second is only ever said on the provider's own authority
+          — see `competitionCoverage`. */}
+      {unsupported.length > 0 ? (
+        <p className="px-1 text-xs leading-relaxed text-foreground-muted">
+          {`KIVO's football provider doesn't publish ${formatAreaList(unsupported)} for this competition, so ${
+            unsupported.length === 1 ? "that tab" : "those tabs"
+          } won't fill however long you wait.`}{" "}
+          {unsupported.length < 3
+            ? "Whatever it does publish appears here as its own tab once this fixture has been synced. "
+            : ""}
+          The Room is open now.
+        </p>
+      ) : (
+        <p className="px-1 text-xs leading-relaxed text-foreground-muted">
+          {started
+            ? "Timeline, stats and lineups for this match haven't been synced yet. They'll appear here as their own tabs the moment they land."
+            : "Timeline, stats and lineups appear here as their own tabs once this fixture has been synced — usually around kick-off."}{" "}
+          The Room is open now.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The Master Directive's "live event timeline" for a fixture. This is the tab
+ * that was called "Details" — it has always rendered `fixture_events` in
+ * minute order, the label just never said so, which is why the Match Centre
+ * read as if it had no timeline at all.
+ *
+ * What it is not: full text commentary. The provider's /fixtures/events
+ * returns discrete scoring and disciplinary events only (goals, penalties,
+ * cards, substitutions, VAR reviews) with no ball-by-ball narration on any
+ * tier, so the footnote below says exactly that rather than leaving a fan to
+ * conclude the commentary feed is broken.
+ *
+ * The rebuild here is about one column that was already in the data and never
+ * reached the screen: `team_id`. Every event carried it, and the tab rendered
+ * a flat single-column list, so "Yellow card — J. Smith" told a fan nothing
+ * about *which side* just went down to ten unless they happened to know the
+ * squad by heart. Events now sit on their own club's side of a centre spine,
+ * which is how every football timeline a fan has ever read is laid out, and
+ * the minute runs down the middle so the two columns stay comparable.
+ */
+
+const EVENT_ICON: Record<keyof typeof EVENT_LABEL, LucideIcon> = {
+  goal: Volleyball,
+  own_goal: Volleyball,
+  penalty_goal: Volleyball,
+  penalty_missed: CircleSlash,
+  yellow_card: RectangleVertical,
+  second_yellow_card: RectangleVertical,
+  red_card: RectangleVertical,
+  substitution: ArrowLeftRight,
+  var_review: ScanEye,
+};
+
+/** Colour is never the only signal here (directive item 15): each event also
+ * carries a distinct icon and its full text label, so a red and a yellow card
+ * remain tellable apart without colour vision. */
+const EVENT_TONE: Record<keyof typeof EVENT_LABEL, string> = {
+  goal: "text-accent",
+  own_goal: "text-critical",
+  penalty_goal: "text-accent",
+  penalty_missed: "text-foreground-subtle",
+  yellow_card: "text-warning",
+  second_yellow_card: "text-critical",
+  red_card: "text-critical",
+  substitution: "text-kivo-cyan",
+  var_review: "text-foreground-subtle",
+};
+
+function MinuteLabel({ event }: { event: MatchEvent }) {
+  return (
+    <>
+      {event.minute}
+      {event.addedTime ? `+${event.addedTime}` : ""}&apos;
+    </>
+  );
+}
+
+/**
+ * One event's own card, in both layouts.
+ *
+ * Mobile and desktop are genuinely different here rather than one collapsed
+ * into the other (directive item 10). On a phone, two 1fr columns either side
+ * of a spine would leave each club about 140px of usable width, which is not
+ * enough for "Substitution / A. Player · B. Player", so the mobile layout runs
+ * a single left-aligned column and states the club in the card itself. From
+ * `sm` up there is room for the real two-sided timeline, the alignment carries
+ * the club, and the in-card club line is dropped as redundant.
+ */
+function TimelineEventCard({
+  event,
+  side,
+  teamName,
+  justArrived,
+}: {
+  event: MatchEvent;
+  side: EventSide;
+  teamName: string | null;
+  /** This event arrived (or was corrected) over Realtime a moment ago. Reuses
+   * the same `kivo-row-flash` wash LiveFixtureList uses for a row that just
+   * changed, so "something moved" reads identically wherever a fan meets it.
+   * Decorative only — the event's own text carries the information, so a
+   * reader who never sees the flash loses nothing. globals.css already clamps
+   * `animation-duration` globally under prefers-reduced-motion, which is what
+   * makes this safe without a per-class opt-out. */
+  justArrived: boolean;
+}) {
+  const Icon = EVENT_ICON[event.eventType];
+  const scored = isGoalEventType(event.eventType);
+
+  return (
+    <div
+      className={[
+        "kivo-glass flex items-start gap-2.5 rounded-xl p-3 text-left",
+        scored ? "ring-1 ring-accent/25" : "",
+        justArrived ? "kivo-row-flash" : "",
+        side === "home" ? "sm:flex-row-reverse sm:text-right" : "",
+
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${EVENT_TONE[event.eventType]}`} strokeWidth={1.75} aria-hidden />
+      <div className="flex min-w-0 flex-col">
+        {teamName && (
+          <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle sm:hidden">
+            {teamName}
+          </span>
+        )}
+        <span className={`text-sm ${scored ? "font-semibold text-foreground" : "text-foreground"}`}>
+          {EVENT_LABEL[event.eventType]}
+        </span>
+        {/* A VAR review, and some cards, arrive with no player attached at
+            all. The old copy printed "Unknown player" for those, which reads
+            as "KIVO lost the name" when in fact the event never had one — a
+            small fabrication in the most-read part of the screen. When there
+            is genuinely no player, the detail stands on its own, and when
+            there is no detail either the label alone is the whole event. */}
+        {(event.playerName || event.relatedPlayerName || event.detail) && (
+          <span className="text-xs text-foreground-subtle">
+            {event.playerName && (
+              <PlayerNameLink
+                playerId={event.playerId ?? ""}
+                playerName={event.playerName}
+                className="hover:text-accent hover:underline"
+              />
+            )}
+            {event.relatedPlayerName ? (
+              <>
+                {event.playerName ? " · " : ""}
+                <PlayerNameLink
+                  playerId={event.relatedPlayerId ?? ""}
+                  playerName={event.relatedPlayerName}
+                  className="hover:text-accent hover:underline"
+                />
+              </>
+            ) : null}
+            {event.detail ? `${event.playerName || event.relatedPlayerName ? " · " : ""}${event.detail}` : ""}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimelineTab({
+  events,
+  liveIds,
+  homeTeamId,
+  awayTeamId,
+  homeTeamName,
+  awayTeamName,
+}: {
+  events: MatchEvent[];
+  /** Ids that landed over Realtime while this page has been open — the rows
+   * that get the brief flash. Empty on a server-rendered load, so opening a
+   * finished match never lights up its whole timeline. */
+  liveIds: ReadonlySet<string>;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
+  if (events.length === 0) {
+    // Two different facts, and KIVO cannot tell them apart from here: a match
+    // that genuinely had no goals, cards or substitutions produces exactly the
+    // same empty list as one whose details were never synced. The old copy
+    // asserted the second, so a real goalless game was reported as missing
+    // data. Say both, and say which one KIVO cannot rule out.
+    return (
+      <EmptyState message="No goals, cards or substitutions on record for this match. Either nothing happened worth recording, or this fixture's details haven't been synced yet — KIVO can't tell those apart from here." />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Which column is which club, said once at the top rather than
+          repeated on every row — the alignment then carries the meaning for
+          the rest of the list. */}
+      <div className="hidden grid-cols-[1fr_3rem_1fr] items-center gap-2 px-1 sm:grid">
+        <span className="truncate text-right text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+          {homeTeamName}
+        </span>
+        <span aria-hidden className="text-center text-[10px] uppercase tracking-wide text-foreground-subtle">
+          min
+        </span>
+        <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+          {awayTeamName}
+        </span>
+      </div>
+
+      <div className="relative flex flex-col gap-2">
+        {/* The spine. Decorative only, and behind the rows: the layout above
+            already communicates side without it. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-hairline sm:block"
+        />
+
+        {events.map((event, index) => {
+          const side = resolveEventSide(event.teamId, homeTeamId, awayTeamId);
+          return (
+            <motion.div
+              key={event.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
+              className={`relative grid grid-cols-[2.75rem_1fr] items-center gap-2 ${
+                // An event with no resolvable club has no side to sit on, so
+                // the two-sided desktop layout has nothing to say about it —
+                // straddling the spine just looks like a broken row. It keeps
+                // the single-column shape at every width instead, which reads
+                // as deliberate rather than misplaced.
+                side === null ? "" : "sm:grid-cols-[1fr_3rem_1fr]"
+              }`}
+            >
+              {/* A screen reader gets the side as words, since a grid column
+                  says nothing when the page is read linearly. */}
+              <span className="sr-only">
+                {side === "home" ? homeTeamName : side === "away" ? awayTeamName : "Unattributed"},{" "}
+                <MinuteLabel event={event} />
+              </span>
+
+              {/* DOM order is home / minute / away so the desktop grid places
+                  itself with no reordering. On mobile the minute is pulled to
+                  the front and the unused side's cell is removed from flow
+                  entirely, which is what turns three columns into two. */}
+              <div
+                className={
+                  side === "home"
+                    ? "order-2 sm:order-none"
+                    : side === null
+                      ? // Nothing sits opposite an unattributed event; its row
+                        // stays two-column at every width, so there is no third
+                        // track for an empty cell to occupy.
+                        "hidden"
+                      : "hidden sm:block sm:order-none"
+                }
+                aria-hidden={side !== "home"}
+              >
+                {side === "home" && (
+                  <TimelineEventCard event={event} side="home" teamName={homeTeamName} justArrived={liveIds.has(event.id)} />
+                )}
+              </div>
+
+              <span
+                aria-hidden
+                className="z-10 order-1 mx-auto rounded-full border border-hairline bg-surface-1 px-1.5 py-1 text-center text-[11px] font-semibold tabular-nums text-foreground-subtle sm:order-none"
+              >
+                <MinuteLabel event={event} />
+              </span>
+
+              <div
+                className={
+                  side === "away"
+                    ? "order-2 sm:order-none"
+                    : side === null
+                      ? "order-2"
+                      : "hidden sm:block sm:order-none"
+                }
+                aria-hidden={side === "home"}
+              >
+                {side === "away" && (
+                  <TimelineEventCard event={event} side="away" teamName={awayTeamName} justArrived={liveIds.has(event.id)} />
+                )}
+                {side === null && (
+                  <TimelineEventCard event={event} side={null} teamName={null} justArrived={liveIds.has(event.id)} />
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <p className="px-1 pt-1 text-[11px] leading-relaxed text-foreground-subtle">
+        Goals, penalties, cards, substitutions and VAR reviews. KIVO&apos;s provider does not
+        publish ball-by-ball commentary, so this is the complete event record for the match
+        rather than a shortened one.
       </p>
     </div>
   );
 }
 
-function DetailsTab({ events }: { events: MatchEvent[] }) {
-  if (events.length === 0) {
-    return <EmptyState message="No match events synced yet. The timeline appears once this fixture's details have been synced." />;
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      {events.map((event, index) => (
-        <motion.div
-          key={event.id}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-          className="kivo-glass flex items-center gap-3 rounded-xl p-3"
-        >
-          <span className="w-10 shrink-0 text-right text-xs font-semibold text-foreground-subtle">
-            {event.minute}
-            {event.addedTime ? `+${event.addedTime}` : ""}&apos;
-          </span>
-          <div className="flex flex-col">
-            <span className="text-sm text-foreground">{EVENT_LABEL[event.eventType]}</span>
-            <span className="text-xs text-foreground-subtle">
-              {event.playerId ? (
-                <Link href={`/players/${event.playerId}`} className="hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
-                  {event.playerName ?? "Unknown player"}
-                </Link>
-              ) : (
-                event.playerName ?? "Unknown player"
-              )}
-              {event.relatedPlayerName ? (
-                <>
-                  {" · "}
-                  {event.relatedPlayerId ? (
-                    <Link href={`/players/${event.relatedPlayerId}`} className="hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
-                      {event.relatedPlayerName}
-                    </Link>
-                  ) : (
-                    event.relatedPlayerName
-                  )}
-                </>
-              ) : null}
-              {event.detail ? ` · ${event.detail}` : ""}
-            </span>
-          </div>
-        </motion.div>
-      ))}
-    </div>
-  );
+/**
+ * H2H as a real Match Centre tab.
+ *
+ * The card itself is unchanged and still shared with /teams/compare — only
+ * where it lives moved. Previously it rendered in the fixture page body
+ * underneath the whole tab strip, so reaching a section the directive lists
+ * next to Stats and Standings meant scrolling past every tab panel first.
+ *
+ * The tab is only offered when there is a real prior meeting on record (see
+ * visibleTabs below), so this component never has to render a zero state for
+ * two clubs meeting for the first time.
+ */
+function HeadToHeadTab({ headToHead }: { headToHead: NonNullable<MatchCentreTabsProps["headToHead"]> }) {
+  return <HeadToHeadCard teamA={headToHead.teamA} teamB={headToHead.teamB} record={headToHead.record} />;
 }
 
 /** RECOMMENDATIONS.md item 294: a small real "In your XI" pill (+ captain
@@ -463,62 +811,11 @@ function LineupsTab({
   );
 }
 
-/**
- * RECOMMENDATIONS.md item 228: `HeatmapView`/`HeatmapEngine` were already
- * built and tested; this tab is the "add it as a tab" half of that item now
- * that the product decision has been made. No `PositionalDataProvider` is
- * connected anywhere in KIVO (`positional-types.ts`) — both observations
- * arrays below are always empty, so today this always hits the single
- * unified empty state further down. That is the correct, expected
- * behaviour for every real fixture today, not a bug to paper over with
- * sample/fake data.
- *
- * The per-side split only appears once at least one side has real data to
- * show — until then, rendering two near-identical "positional data
- * unavailable" panels side by side (differing only by team name) reads as
- * a doubled-up placeholder rather than one polished "not available yet"
- * message for the whole tab.
- */
-function HeatmapTab({
-  fixtureId,
-  homeTeamName,
-  awayTeamName,
-}: {
-  fixtureId: string;
-  homeTeamName: string;
-  awayTeamName: string;
-}) {
-  const homeObservations: PositionalObservation[] = [];
-  const awayObservations: PositionalObservation[] = [];
+type StatRow = { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string };
 
-  // KN-34. This used to call heatmapEngine.build() on both arrays on every
-  // render purely to ask `hasData`, and build() constructs a full density grid
-  // before it can answer. Both arrays are hardcoded empty (no
-  // PositionalDataProvider exists — see this component's doc comment above,
-  // which is correct and documented, not an oversight), so those two grids
-  // could only ever come back `hasData: false`. Two grid builds per render, on
-  // the most-tapped screen in the product, to compute a constant.
-  //
-  // Asking the arrays directly is the same question with none of the work, and
-  // it stays correct the day a provider does land: `hasData` in the engine is
-  // itself derived from whether any observation survived normalisation, so an
-  // empty input can never produce a truthy answer. Nothing about the empty
-  // state's honesty changes — only what it costs to reach it.
-  const anyData = homeObservations.length > 0 || awayObservations.length > 0;
-
-  if (!anyData) {
-    return <HeatmapView observations={[]} matchId={fixtureId} subjectLabel="this match" />;
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <HeatmapView observations={homeObservations} matchId={fixtureId} subjectLabel={homeTeamName} />
-      <HeatmapView observations={awayObservations} matchId={fixtureId} subjectLabel={awayTeamName} />
-    </div>
-  );
-}
-
-const STAT_ROWS: { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string }[] = [
+/** The eleven a fan scans first. Deliberately short: a long undifferentiated
+ * list is how a match report stops being read. */
+const STAT_ROWS: StatRow[] = [
   { key: "possessionPct", label: "Possession", suffix: "%" },
   { key: "shotsTotal", label: "Shots" },
   { key: "shotsOnTarget", label: "Shots on target" },
@@ -532,14 +829,109 @@ const STAT_ROWS: { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?:
   { key: "expectedGoals", label: "xG" },
 ];
 
+/**
+ * Six columns KIVO has been syncing into `fixture_statistics` and storing on
+ * every fixture without ever putting one of them on screen. The whole shot
+ * breakdown — where the shots came from and what stopped them — and the raw
+ * pass counts underneath the accuracy percentage were all sitting in the
+ * database, already paid for in API quota, and unreadable.
+ *
+ * They go behind a disclosure rather than into the list above, which is the
+ * directive's "progressive disclosure for advanced analytics" rather than a
+ * compromise: a fan checking possession and shots should not have to scroll
+ * past a pass-completion count to do it, and a fan who wants to know that
+ * fourteen of the eighteen shots came from outside the box should not have to
+ * leave for another app.
+ */
+const ADVANCED_STAT_ROWS: StatRow[] = [
+  { key: "shotsInsideBox", label: "Shots inside box" },
+  { key: "shotsOutsideBox", label: "Shots outside box" },
+  { key: "shotsOffTarget", label: "Shots off target" },
+  { key: "shotsBlocked", label: "Shots blocked" },
+  { key: "passesTotal", label: "Passes" },
+  { key: "passesAccurate", label: "Accurate passes" },
+];
+
+function StatComparisonRow({
+  row,
+  homeVal,
+  awayVal,
+  homeTeamName,
+  awayTeamName,
+}: {
+  row: StatRow;
+  homeVal: number | null;
+  awayVal: number | null;
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
+  // KIVO_NEXT_GEN KN-7: a missing statistic used to be coerced to 0
+  // (`homeVal ?? 0`) purely so the comparison bar had a number to divide
+  // by. The numeric label correctly rendered "-", so the row said "not
+  // reported" in text and drew a confident 100%/0% split right underneath
+  // it. That is routine, not exotic: `fixture_statistics.expected_goals`
+  // is nullable by design because API-Football's free tier often reports
+  // xG for one side and not the other. A fabricated visual claim in the
+  // most screenshot-prone section of the app is the same class of error
+  // as a fabricated number — the bar simply has nothing to compare, so it
+  // renders as one flat neutral rail rather than a split.
+  const total = homeVal !== null && awayVal !== null ? homeVal + awayVal : null;
+  const homePct = total !== null && total > 0 ? ((homeVal ?? 0) / total) * 100 : 50;
+  const suffix = row.suffix ?? "";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {/* Read linearly, the visual row is "12 Shots 8" — three numbers and a
+          word, with nothing saying which club owns which end. The directive
+          asks for accessible charts with textual alternatives; this is that
+          alternative, and it names the clubs. The visible row is then hidden
+          from assistive tech so the same fact isn't announced twice. */}
+      <span className="sr-only">
+        {row.label}: {homeTeamName} {homeVal === null ? "not reported" : `${homeVal}${suffix}`}, {awayTeamName}{" "}
+        {awayVal === null ? "not reported" : `${awayVal}${suffix}`}
+        {total === null ? ". Only reported for one side, so there is nothing to compare." : ""}
+      </span>
+
+      <div aria-hidden className="flex items-center justify-between text-xs">
+        <span className="w-12 text-left font-semibold text-foreground">
+          {homeVal ?? "-"}
+          {homeVal !== null ? suffix : ""}
+        </span>
+        <span className="text-foreground-subtle">{row.label}</span>
+        <span className="w-12 text-right font-semibold text-foreground">
+          {awayVal ?? "-"}
+          {awayVal !== null ? suffix : ""}
+        </span>
+      </div>
+
+      {total !== null ? (
+        <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
+          <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
+          <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
+        </div>
+      ) : (
+        <div
+          aria-hidden
+          className="h-1.5 rounded-full bg-surface-inset"
+          title={`${row.label} was only reported for one side, so there is nothing to compare.`}
+        />
+      )}
+    </div>
+  );
+}
+
 function StatsTab({
   stats,
   homeTeamId,
   awayTeamId,
+  homeTeamName,
+  awayTeamName,
 }: {
   stats: TeamStats[];
   homeTeamId: string;
   awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
 }) {
   const home = stats.find((s) => s.teamId === homeTeamId);
   const away = stats.find((s) => s.teamId === awayTeamId);
@@ -548,52 +940,45 @@ function StatsTab({
     return <EmptyState message="Stats haven't been synced yet for this fixture." />;
   }
 
-  const rows = STAT_ROWS.filter((row) => home?.[row.key] != null || away?.[row.key] != null);
+  const hasValue = (row: StatRow) => home?.[row.key] != null || away?.[row.key] != null;
+  const rows = STAT_ROWS.filter(hasValue);
+  const advancedRows = ADVANCED_STAT_ROWS.filter(hasValue);
+
+  function renderRow(row: StatRow) {
+    return (
+      <StatComparisonRow
+        key={row.key}
+        row={row}
+        homeVal={home?.[row.key] ?? null}
+        awayVal={away?.[row.key] ?? null}
+        homeTeamName={homeTeamName}
+        awayTeamName={awayTeamName}
+      />
+    );
+  }
 
   return (
-    <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-4">
-      {rows.map((row) => {
-        const homeVal = home?.[row.key] ?? null;
-        const awayVal = away?.[row.key] ?? null;
-        // KIVO_NEXT_GEN KN-7: a missing statistic used to be coerced to 0
-        // (`homeVal ?? 0`) purely so the comparison bar had a number to divide
-        // by. The numeric label correctly rendered "-", so the row said "not
-        // reported" in text and drew a confident 100%/0% split right underneath
-        // it. That is routine, not exotic: `fixture_statistics.expected_goals`
-        // is nullable by design because API-Football's free tier often reports
-        // xG for one side and not the other. A fabricated visual claim in the
-        // most screenshot-prone section of the app is the same class of error
-        // as a fabricated number — the bar simply has nothing to compare, so it
-        // renders as one flat neutral rail rather than a split.
-        const total = homeVal !== null && awayVal !== null ? homeVal + awayVal : null;
-        const homePct = total !== null && total > 0 ? ((homeVal ?? 0) / total) * 100 : 50;
-        return (
-          <div key={row.key} className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="w-12 text-left font-semibold text-foreground">
-                {homeVal ?? "-"}
-                {homeVal !== null ? row.suffix ?? "" : ""}
-              </span>
-              <span className="text-foreground-subtle">{row.label}</span>
-              <span className="w-12 text-right font-semibold text-foreground">
-                {awayVal ?? "-"}
-                {awayVal !== null ? row.suffix ?? "" : ""}
-              </span>
-            </div>
-            {total !== null ? (
-              <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-inset">
-                <div className="kivo-gradient-prime h-full" style={{ width: `${homePct}%` }} />
-                <div className="h-full bg-surface-track" style={{ width: `${100 - homePct}%` }} />
-              </div>
-            ) : (
-              <div
-                className="h-1.5 rounded-full bg-surface-inset"
-                title={`${row.label} was only reported for one side, so there is nothing to compare.`}
-              />
-            )}
-          </div>
-        );
-      })}
+    <div className="flex flex-col gap-3">
+      <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-4">{rows.map(renderRow)}</div>
+
+      {/* Only offered when the provider actually reported at least one of
+          them for this fixture — an empty disclosure that opens onto nothing
+          is worse than no disclosure. A native <details> rather than a
+          hand-rolled toggle: keyboard operation, the open/closed state and
+          the expanded announcement all come for free and correctly. */}
+      {advancedRows.length > 0 && (
+        <details className="kivo-glass group rounded-2xl p-4 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+            Advanced
+            <ChevronDown
+              aria-hidden
+              className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+              strokeWidth={1.75}
+            />
+          </summary>
+          <div className="flex flex-col gap-4 pt-4">{advancedRows.map(renderRow)}</div>
+        </details>
+      )}
     </div>
   );
 }
@@ -707,25 +1092,53 @@ function MatchCentreTabsInner({
   syncDetailsAction,
   detailsLastSyncedAt,
   preMatch,
+  headToHead,
+  competitionCoverage,
 }: MatchCentreTabsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // KN-53: a data tab earns its place by holding data. The Heatmap has no
-  // positional source wired up at all yet (see HeatmapTab), so today it is
-  // always in the collapsed group — which is more honest than a permanently
-  // empty tab that implies the feature is a sync away.
+  // The hero above these tabs has been Realtime-driven since migration 0038,
+  // so the score already ticked over on a goal while the timeline underneath
+  // still claimed nothing had happened. Same publication, nothing was
+  // subscribed to it. Only live while the match can still produce events —
+  // see the hook's own `enabled` note.
+  const { events: liveEvents, liveIds } = useRealtimeFixtureEvents(
+    fixtureId,
+    events,
+    preMatch.status === "scheduled" || isLiveStatus(preMatch.status),
+  );
+
+  // Built once, here, and used for two things: whether the Heatmap tab is
+  // offered at all, and what that tab then renders. That is the whole point —
+  // the tab was hardcoded unavailable precisely because availability and
+  // content were separate questions that could disagree, and the obvious fix
+  // (offer it whenever a lineup exists) would have reintroduced the same bug
+  // in reverse, since a published lineup does not mean a single player could
+  // actually be anchored on the pitch. `hasFixtureHeatmapContent` asks about
+  // the very object the view is about to draw, so the tab strip cannot promise
+  // something the panel then fails to show.
+  const heatmaps = buildFixtureHeatmaps({ fixtureId, homeTeamId, awayTeamId, lineups, events });
+
+  // KN-53: a data tab earns its place by holding data.
   const dataTabAvailability: Record<(typeof DATA_TABS)[number], boolean> = {
-    Details: events.length > 0,
+    Timeline: liveEvents.length > 0,
     Stats: stats.length > 0,
     Lineups: lineups.length > 0,
-    Heatmap: false,
+    Heatmap: hasFixtureHeatmapContent(heatmaps),
   };
   const availableDataTabs = DATA_TABS.filter((tab) => dataTabAvailability[tab]);
   const collapsed = availableDataTabs.length === 0;
 
+  // H2H is not a "data tab" in the collapsing sense — it is computed from
+  // finished fixtures KIVO already has, not from this fixture's own sync — so
+  // it can be present on a scheduled match where every other data tab is
+  // empty, and it is offered only when these two clubs have actually met.
+  const hasHeadToHead = (headToHead?.record.meetings.length ?? 0) > 0;
+
   const visibleTabs: Tab[] = [
     ...(collapsed ? (["Overview"] as const) : availableDataTabs),
+    ...(hasHeadToHead ? (["H2H"] as const) : []),
     "Standings",
     "Room",
   ];
@@ -806,7 +1219,7 @@ function MatchCentreTabsInner({
           pull fresher stats), not just an entirely-unsynced one. Standings and
           Room aren't backed by this action, so the bar only shows for the
           other three. */}
-      {(active === "Overview" || active === "Details" || active === "Stats" || active === "Lineups") && (
+      {(active === "Overview" || active === "Timeline" || active === "Stats" || active === "Lineups") && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1">
           <LastSyncedNote timestamp={detailsLastSyncedAt} label="Match details synced" />
           {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
@@ -838,9 +1251,26 @@ function MatchCentreTabsInner({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       >
-        {active === "Overview" && <OverviewTab preMatch={preMatch} />}
-        {active === "Details" && <DetailsTab events={events} />}
-        {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
+        {active === "Overview" && <OverviewTab preMatch={preMatch} competitionCoverage={competitionCoverage} />}
+        {active === "Timeline" && (
+          <TimelineTab
+            events={liveEvents}
+            liveIds={liveIds}
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+          />
+        )}
+        {active === "Stats" && (
+          <StatsTab
+            stats={stats}
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+          />
+        )}
         {active === "Lineups" && (
           <LineupsTab
             homeTeamId={homeTeamId}
@@ -851,7 +1281,10 @@ function MatchCentreTabsInner({
             viewerFantasyRoster={viewerFantasyRoster}
           />
         )}
-        {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
+        {active === "Heatmap" && (
+          <HeatmapView heatmaps={heatmaps} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />
+        )}
+        {active === "H2H" && headToHead && <HeadToHeadTab headToHead={headToHead} />}
         {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
         {active === "Room" && (
           <MatchRoomTab

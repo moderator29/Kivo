@@ -3,6 +3,7 @@ import "server-only";
 import type { FootballDataProvider } from "./types";
 import { ApiFootballProvider } from "./providers/api-football";
 import { TheSportsDbProvider } from "./providers/thesportsdb";
+import { EXTRA_IMAGE_HOSTS_ENV, missingImageHostWarning } from "./image-hosts";
 
 /**
  * Feature flag — live polling must stay off until a paid provider tier with
@@ -91,12 +92,20 @@ export async function getFootballDataProvider(): Promise<FootballDataProvider> {
   const theSportsDbKey = process.env.THE_SPORTS_DB_API_KEY;
 
   if (providerChoice === "thesportsdb" && theSportsDbKey) {
+    // Says once, in the server log, what the build log said at deploy time: a
+    // TheSportsDB deployment with no image host configured renders every crest
+    // as a broken image and reports nothing. See missingImageHostWarning.
+    const imageHostWarning = missingImageHostWarning({
+      provider: providerChoice,
+      extraHostsRaw: process.env[EXTRA_IMAGE_HOSTS_ENV],
+    });
+    if (imageHostWarning) logError("football.provider.imageHostsUnset", imageHostWarning);
     cachedProvider = new TheSportsDbProvider(theSportsDbKey);
   } else if (apiFootballKey) {
     if (providerChoice === "thesportsdb") {
       // Requested but not configured — fail loud in the server log rather than
       // silently serving API-Football data under a "TheSportsDB" expectation.
-      logError("football.dataProviderThesportsdbBut", "FOOTBALL_DATA_PROVIDER=thesportsdb but THE_SPORTS_DB_API_KEY is unset — falling back to API-Football.");
+      logError("football.provider.thesportsdbKeyUnset", "FOOTBALL_DATA_PROVIDER=thesportsdb but THE_SPORTS_DB_API_KEY is unset — falling back to API-Football.");
     }
     cachedProvider = new ApiFootballProvider(apiFootballKey);
   } else if (process.env.NODE_ENV !== "production") {

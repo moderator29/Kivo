@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
-import { EXTRA_IMAGE_HOSTS_ENV, imgSrcOrigins, remoteImagePatterns } from "./src/lib/football/image-hosts";
+import {
+  EXTRA_IMAGE_HOSTS_ENV,
+  imgSrcOrigins,
+  missingImageHostWarning,
+  remoteImagePatterns,
+} from "./src/lib/football/image-hosts";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -22,6 +27,15 @@ function warnInvalidImageHost(value: string) {
       `Expected a comma-separated list of bare hostnames (e.g. "r2.example.com") — no scheme, port, path or wildcard.`,
   );
 }
+
+// The one provider/host combination that breaks every image in the product
+// without producing a single error. This is the earliest place it can be said —
+// the build log of the deploy that introduces it.
+const imageHostWarning = missingImageHostWarning({
+  provider: process.env.FOOTBALL_DATA_PROVIDER,
+  extraHostsRaw: extraImageHostsRaw,
+});
+if (imageHostWarning) console.warn(`[next.config] ${imageHostWarning}`);
 
 // Both image allowlists below come from src/lib/football/image-hosts.ts, on
 // purpose. They govern different halves of the same problem and were kept in

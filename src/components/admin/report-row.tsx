@@ -93,6 +93,26 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
   );
 }
 
+/**
+ * What each decision actually does, said before it is issued.
+ *
+ * "Mark actioned" reads like the moderator is doing something to the content.
+ * It is not: resolving a report closes the report and writes two audit rows.
+ * The post stays up, the comment stays up, the author keeps their account. A
+ * moderator who believes otherwise leaves reported content live while the
+ * queue tells them it was handled — and the queue is the only place they
+ * would look.
+ *
+ * Removing content and restricting an account are separate, deliberate acts
+ * on /admin/users. Naming that here is the difference between a tool that is
+ * honest about its scope and one that quietly overstates it.
+ */
+const DECISION_CONSEQUENCE: Record<"actioned" | "dismissed", string> = {
+  actioned:
+    "Closes this report as upheld and records your decision in the audit trail. It does not remove the content or restrict the author — do that from Users.",
+  dismissed: "Closes this report as no action needed. Nothing changes for the content or its author.",
+};
+
 function urgency(createdAt: string): { label: string; className: string } {
   const ageHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
   if (ageHours >= 24) return { label: "Overdue", className: "border-critical/30 bg-critical/10 text-critical" };
@@ -138,7 +158,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
             ) : (
               <X className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
             )}
-            Marked {resolved}
+            {resolved === "actioned" ? "Report upheld and logged" : "Report dismissed"}
           </div>
         </motion.div>
       ) : (
@@ -165,6 +185,10 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
           </div>
 
           <ContentPreview preview={preview} />
+
+          {showNote && (
+            <p className="text-[11px] leading-relaxed text-foreground-muted">{DECISION_CONSEQUENCE[showNote]}</p>
+          )}
 
           {showNote && (
             <div className="flex items-center gap-2">
@@ -204,7 +228,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
               className="flex items-center gap-1 rounded-lg bg-live/15 px-3 py-1.5 text-xs font-semibold text-live transition hover:bg-live/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={2} />
-              {showNote === "actioned" ? "Confirm actioned" : "Mark actioned"}
+              {showNote === "actioned" ? "Confirm uphold" : "Uphold report"}
             </button>
             <button
               type="button"

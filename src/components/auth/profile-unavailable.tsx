@@ -40,7 +40,7 @@ export function ProfileUnavailable({ retryHref = "/home" }: { retryHref?: string
           <div className="flex flex-col gap-3">
             <Link
               href={retryHref}
-              className="kivo-gradient-prime flex w-full items-center justify-center rounded-full px-6 py-3.5 text-base font-semibold text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] transition-opacity hover:opacity-90"
+              className="kivo-gradient-prime flex w-full items-center justify-center rounded-xl px-6 py-3.5 text-base font-semibold text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] transition-opacity hover:opacity-90"
             >
               Try again
             </Link>
@@ -51,7 +51,7 @@ export function ProfileUnavailable({ retryHref = "/home" }: { retryHref?: string
             <form action={signOut}>
               <button
                 type="submit"
-                className="w-full rounded-full border border-hairline bg-surface-inset px-6 py-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground"
+                className="w-full rounded-xl border border-hairline bg-surface-inset px-6 py-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground"
               >
                 Sign out and start over
               </button>

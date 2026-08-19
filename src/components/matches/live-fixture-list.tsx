@@ -23,7 +23,7 @@ export type LiveListFixture = {
   minute_elapsed: number | null;
   home_team: { name: string; crest_url: string | null } | null;
   away_team: { name: string; crest_url: string | null } | null;
-  competition: { id: string | null; name: string; short_name: string | null } | null;
+  competition: { id: string | null; name: string; short_name: string | null; logo_url?: string | null } | null;
 };
 
 /**

@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { MatchesDateStrip, dateKey, todayIn } from "@/components/matches/date-strip";
+import { MatchesCompetitionFilter } from "@/components/matches/matches-competition-filter";
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { getOrCreateProfile } from "@/lib/profile";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
@@ -48,7 +51,7 @@ function resolveSelectedDate(dateParam: string | undefined, timeZone: string): D
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; competition?: string }>;
 }) {
   // Founder instruction (2026-08-18): football data arrives without anybody
   // pressing anything. This asks for a sync only if what this page is about
@@ -59,7 +62,7 @@ export default async function MatchesPage({
   // scores, and that file says so in as many words.
   scheduleAutoSyncIfStale("matches");
 
-  const { date: dateParam } = await searchParams;
+  const { date: dateParam, competition: competitionParam } = await searchParams;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
@@ -70,14 +73,14 @@ export default async function MatchesPage({
   const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
   const isToday = dateKey(startOfDay, viewerTimeZone) === dateKey(todayIn(viewerTimeZone), viewerTimeZone);
 
-  const [{ data: fixtures }, fixturesLastSyncedAt] = await Promise.all([
+  const [fixturesResult, fixturesLastSyncedAt] = await Promise.all([
     supabase
       .from("fixtures")
       .select(
         `id, kickoff_at, status, home_score, away_score,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
-       competition:competitions(id, name, short_name)`,
+       competition:competitions(id, name, short_name, logo_url)`,
       )
       .gte("kickoff_at", startOfDay.toISOString())
       .lt("kickoff_at", endOfDay.toISOString())
@@ -87,6 +90,15 @@ export default async function MatchesPage({
     // 'fixture'), so one timestamp covers all of them. See getLastSyncedAt().
     getLastSyncedAt(["fixture"]),
   ]);
+
+  // "Nothing is scheduled on this date" is a completely ordinary answer here —
+  // most dates in a synced season have no fixtures at all for a competition
+  // KIVO covers — which is exactly what made the collapse dangerous on this
+  // page: the empty state is so plausible that a failed read hides inside it
+  // perfectly. The date strip and the header stay on screen either way, so a
+  // reader can still move to another day; only the list slot changes.
+  const fixturesOutcome = readList(fixturesResult, "matches.byDate");
+  const fixtures = fixturesOutcome.rows;
 
   const dateLabel = startOfDay.toLocaleDateString(DISPLAY_LOCALE, {
     weekday: "long",
@@ -100,12 +112,35 @@ export default async function MatchesPage({
   // fixture nobody has posted in gets no entry and renders exactly as before.
   const roomActivity = await getMatchRoomActivity(
     supabase,
-    (fixtures ?? []).map((fixture) => fixture.id),
+    fixtures.map((fixture) => fixture.id),
   );
 
   // Real match counts per competition, grouping fixtures already fetched
   // above — no new provider/DB call. See groupFixturesByCompetition.
-  const competitionGroups = groupFixturesByCompetition(fixtures ?? []);
+  const dayGroups = groupFixturesByCompetition(fixtures);
+
+  // The filter's options are the day's own groups, so a competition is only
+  // offered when narrowing to it would leave something on screen. `?competition=`
+  // is validated against that list rather than trusted: an id for a competition
+  // with nothing on this date resolves to no filter at all, which is the same
+  // page a hand-edited URL would otherwise turn into a permanently empty one.
+  const filterOptions = dayGroups
+    .filter((group): group is typeof group & { competitionId: string } => group.competitionId !== null)
+    .map((group) => ({
+      id: group.competitionId,
+      name: group.competitionName,
+      shortName: group.fixtures[0]?.competition?.short_name ?? null,
+      logoUrl: group.fixtures[0]?.competition?.logo_url ?? null,
+      count: group.fixtures.length,
+    }));
+  const selectedCompetitionId =
+    competitionParam && filterOptions.some((option) => option.id === competitionParam) ? competitionParam : null;
+  const competitionGroups = selectedCompetitionId
+    ? dayGroups.filter((group) => group.competitionId === selectedCompetitionId)
+    : dayGroups;
+  const selectedCompetitionName = selectedCompetitionId
+    ? (filterOptions.find((option) => option.id === selectedCompetitionId)?.name ?? null)
+    : null;
   let cardIndex = 0;
 
   return (
@@ -118,11 +153,32 @@ export default async function MatchesPage({
         <LastSyncedNote timestamp={fixturesLastSyncedAt} className="shrink-0 pt-1" />
       </FadeIn>
 
-      <FadeIn delay={0.04}>
+      <FadeIn delay={0.04} className="flex flex-col gap-3">
         <MatchesDateStrip selected={startOfDay} timeZone={viewerTimeZone} />
+        {filterOptions.length > 1 && (
+          <div className="flex items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-xs text-foreground-subtle">
+              {selectedCompetitionName
+                ? `Showing ${selectedCompetitionName} only.`
+                : `${filterOptions.length} competitions on this date.`}
+            </p>
+            <MatchesCompetitionFilter
+              options={filterOptions}
+              selectedId={selectedCompetitionId}
+              totalCount={fixtures.length}
+              dateParam={dateParam && DATE_PARAM_RE.test(dateParam) ? dateParam : null}
+            />
+          </div>
+        )}
       </FadeIn>
 
-      {!fixtures || fixtures.length === 0 ? (
+      {fixturesOutcome.failed ? (
+        <LoadFailed
+          tone="section"
+          title="Fixtures"
+          description={`KIVO couldn't read ${isToday ? "today's" : "this date's"} fixtures just now. This is not the same as there being none — try again.`}
+        />
+      ) : fixtures.length === 0 ? (
         <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-16 text-center">
           <p className="text-sm text-foreground-muted">
             No fixtures synced for {isToday ? "today" : dateLabel}.

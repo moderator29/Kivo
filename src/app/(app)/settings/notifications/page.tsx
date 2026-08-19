@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
 import { signInHref } from "@/lib/auth";
-import { getNotificationPreferences } from "@/app/(app)/settings/actions";
+import { getNotificationPreferences, getQuietHours } from "@/app/(app)/settings/actions";
+import { QuietHoursSection } from "@/components/settings/quiet-hours-section";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
+import { NotificationMutesPanel } from "@/components/settings/notification-mutes-panel";
+import { getNotifiableEntities } from "@/app/(app)/settings/notification-mute-actions";
 import { SettingsCard, SettingsLinkRow, SettingsPageShell } from "@/components/settings/settings-shell";
 import { getSettingsSection } from "@/lib/settings-sections";
 
@@ -13,7 +16,11 @@ export default async function NotificationSettingsPage() {
   const profile = await getOrCreateProfile();
   if (!profile) redirect(await signInHref());
 
-  const preferences = await getNotificationPreferences(profile.id);
+  const [preferences, quietHours, notifiableEntities] = await Promise.all([
+    getNotificationPreferences(),
+    getQuietHours(),
+    getNotifiableEntities(),
+  ]);
 
   return (
     <SettingsPageShell sectionId="notifications">
@@ -21,14 +28,26 @@ export default async function NotificationSettingsPage() {
         <NotificationPreferencesPanel initial={preferences} />
       </SettingsCard>
 
-      {/* These preferences decide notification *types*; muting decides which
-          clubs and players they are about. Two halves of one question that
-          lived on two pages with no link between them. */}
-      <SettingsCard title="Muted clubs and players" delay={0.04}>
+      {/* Migration 0088. Sits directly under the type toggles because it is
+          the same question one level down: not "do I want to hear about this"
+          but "do I want to hear about it right now". */}
+      <SettingsCard title="Quiet hours" delay={0.04}>
+        <QuietHoursSection initial={quietHours} timeZone={profile.timezone ?? null} />
+      </SettingsCard>
+
+      {/* Migration 0104. The preferences above decide notification *types*;
+          this decides which clubs, players and competitions they are about —
+          the "this club, not that one" half. It used to be a link to
+          /profile/following, which could only reach entities the user follows:
+          a favourite club has no follow row and a competition had no control at
+          all, so the two things people most want to silence were the two this
+          page could not offer. */}
+      <SettingsCard title="What you hear about" delay={0.08}>
+        <NotificationMutesPanel entities={notifiableEntities} />
         <SettingsLinkRow
           href="/profile/following"
-          label="Mute a club or player"
-          description="Silence alerts for one team without unfollowing it."
+          label="Manage who you follow"
+          description="Unfollow a club or player instead of muting it."
         />
       </SettingsCard>
     </SettingsPageShell>

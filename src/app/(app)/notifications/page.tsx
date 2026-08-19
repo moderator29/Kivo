@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NotificationsList } from "@/components/notifications/notifications-list";
 import { NOTIFICATION_GROUPS, notificationGroup } from "@/lib/notification-registry";
 import { getNotificationFantasyContext } from "@/lib/football/notification-fantasy-context";
+import { blockedActorUsernames, notificationIsFromBlockedActor } from "@/lib/blocks";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Notifications" };
@@ -60,7 +63,7 @@ export default async function NotificationsPage({
   // One real head-count per group, in parallel. Chips carry the true number
   // and a group with nothing in it is not rendered at all — so the filter row
   // only ever offers filters that lead somewhere.
-  const [{ data: notifications, count }, groupCounts] = await Promise.all([
+  const [notificationsResult, groupCounts, blockedUsernames] = await Promise.all([
     query.order("created_at", { ascending: false }).range(from, to),
     Promise.all(
       NOTIFICATION_GROUPS.map(async (group) => {
@@ -72,14 +75,32 @@ export default async function NotificationsPage({
         return { group, count: groupCount ?? 0 };
       }),
     ),
+    blockedActorUsernames(),
   ]);
+
+  // Migration 0086. Rows produced before a block was made are dropped from the
+  // blocker's own list here — new ones are never written at all (see
+  // blockExistsBetween). Filtered after the page query rather than inside it
+  // because the join key is a username inside a jsonb payload, and the counts
+  // above stay honest about what is really stored: a page that shows 28 of its
+  // 30 rows is telling the truth, whereas a count corrected to hide the
+  // difference would be inventing one.
+  // "You have no notifications" is a claim about this person, not about the
+  // database, and it is the kind of sentence a reader acts on by leaving. A
+  // failed read must never be allowed to make it.
+  const notificationsOutcome = readList(notificationsResult, "notifications.page");
+  const count = notificationsResult.count;
+
+  const notifications = notificationsOutcome.rows.filter(
+    (notification) => !notificationIsFromBlockedActor(notification.payload, blockedUsernames),
+  );
 
   // KN-45: a goal by the viewer's own captain should not read identically to
   // a goal by somebody they have never heard of. Computed at read time from
   // the current squad (see getNotificationFantasyContext for why not at write
   // time), bounded to the page on screen, and empty for anyone without a
   // fantasy team — in which case every row renders exactly as before.
-  const fantasyContext = await getNotificationFantasyContext(supabase, profile.id, notifications ?? []);
+  const fantasyContext = await getNotificationFantasyContext(supabase, profile.id, notifications);
 
   const visibleGroups = groupCounts.filter((entry) => entry.count > 0);
   const totalAcrossGroups = groupCounts.reduce((sum, entry) => sum + entry.count, 0);
@@ -117,7 +138,13 @@ export default async function NotificationsPage({
         </FadeIn>
       )}
 
-      {!notifications || notifications.length === 0 ? (
+      {notificationsOutcome.failed ? (
+        <LoadFailed
+          tone="section"
+          title="Your notifications"
+          description="KIVO couldn't read your notifications just now. They haven't gone anywhere — try again."
+        />
+      ) : notifications.length === 0 ? (
         <FadeIn delay={0.06} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Bell className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">

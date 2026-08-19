@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { PublicLeaguesList } from "./public-leagues-list";
@@ -31,12 +32,15 @@ export default async function BrowsePublicFantasyLeaguesPage() {
 
   // Fetches one extra row beyond the page size so "hasMore" can be read
   // directly off the response, matching /leagues' loadMoreLeagues pattern.
-  const { data, error } = await supabase.rpc("list_public_fantasy_leagues", {
-    p_limit: PUBLIC_FANTASY_LEAGUES_PAGE_SIZE + 1,
-    p_offset: 0,
-  });
+  const outcome = readList(
+    await supabase.rpc("list_public_fantasy_leagues", {
+      p_limit: PUBLIC_FANTASY_LEAGUES_PAGE_SIZE + 1,
+      p_offset: 0,
+    }),
+    "fantasy.publicLeagues",
+  );
 
-  const rows = data ?? [];
+  const rows = outcome.rows;
   const leagues: PublicFantasyLeagueListItem[] = rows.slice(0, PUBLIC_FANTASY_LEAGUES_PAGE_SIZE).map((row) => ({
     id: row.id,
     name: row.name,
@@ -51,22 +55,27 @@ export default async function BrowsePublicFantasyLeaguesPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex flex-col gap-2">
-        <Link
-          href="/fantasy"
-          className="flex w-fit items-center gap-1.5 text-xs font-medium text-foreground-subtle transition hover:text-foreground-muted"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} />
-          Back to fantasy
-        </Link>
         <h1 className="text-xl font-semibold text-foreground">Browse public leagues</h1>
         <p className="text-sm text-foreground-muted">
           Join any public league below with one tap. Private leagues still need an invite code from the owner.
         </p>
       </FadeIn>
 
-      {error && <p className="text-xs text-critical">Couldn&apos;t load public leagues. Try again.</p>}
 
-      <PublicLeaguesList initialLeagues={leagues} initialHasMore={hasMore} />
+      {/* The list's own empty state reads "no public leagues yet", which is a
+          perfectly ordinary answer here and therefore a perfect hiding place
+          for a failed RPC. The previous inline error line sat *above* that
+          empty state and left it on screen, so the page said both things at
+          once. */}
+      {outcome.failed ? (
+        <LoadFailed
+          tone="section"
+          title="Public leagues"
+          description="KIVO couldn't read the public leagues just now. That's different from there being none — try again."
+        />
+      ) : (
+        <PublicLeaguesList initialLeagues={leagues} initialHasMore={hasMore} />
+      )}
     </div>
   );
 }

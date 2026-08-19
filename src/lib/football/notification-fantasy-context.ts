@@ -23,7 +23,8 @@ export type NotificationFantasyMap = Map<string, NotificationFantasyContext>;
  *
  * The two halves of this already existed and had never been introduced:
  * `notifications.payload` carries `player_id` for `match_goal`,
- * `match_red_card` and `player_event` (see notification-payloads.ts), and
+ * `match_penalty`, `match_red_card` and `player_event` (see
+ * notification-payloads.ts), and
  * `getViewerFantasyRosterBySeasons` already answers "is this player in the
  * viewer's XI" for Match Centre and /live. This joins them.
  *
@@ -51,11 +52,15 @@ export async function getNotificationFantasyContext(
 ): Promise<NotificationFantasyMap> {
   const result: NotificationFantasyMap = new Map();
 
-  // Only the three types whose payload names a player at all.
+  // Only the types whose payload names a player at all. `match_penalty`
+  // joined them with migration 0087 — a penalty taken by the reader's own
+  // captain is exactly the case this decoration exists for, and leaving it out
+  // would have made spot kicks the one goal type that reads as anonymous.
   const candidates: { notificationId: string; fixtureId: string; playerId: string }[] = [];
   for (const notification of notifications) {
     if (
       notification.type !== "match_goal" &&
+      notification.type !== "match_penalty" &&
       notification.type !== "match_red_card" &&
       notification.type !== "player_event"
     ) {

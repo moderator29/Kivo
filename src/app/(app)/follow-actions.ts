@@ -1,13 +1,14 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { awardBadge } from "@/lib/rewards";
-import { shouldNotify } from "@/lib/notification-preferences";
+import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
+import { blockExistsBetween } from "@/lib/blocks";
 import { buildNotification } from "@/lib/notification-payloads";
+import { logError } from "@/lib/log";
 
 // RECOMMENDATIONS item 175: "user" was already in the follow_target_type
 // enum (0001) and follows_no_self_follow already guards it — nothing
@@ -40,20 +41,77 @@ const TARGET_DETAIL_PATH: Partial<Record<FollowTargetType, string>> = {
  * follows_no_self_follow (migration 0001) already makes self-follow
  * impossible at the DB layer.
  */
-async function notifyNewFollower(followedProfileId: string, follower: { username: string; display_name: string | null }) {
-  const serviceClient = createServiceRoleSupabaseClient();
+async function notifyNewFollower(
+  followedProfileId: string,
+  follower: { id: string; username: string; display_name: string | null },
+) {
+  // Best-effort, and the client construction has to be inside the guard.
+  // `createServiceRoleSupabaseClient()` throws synchronously ("supabaseKey is
+  // required.") when SUPABASE_SERVICE_ROLE_KEY is absent — and this runs
+  // *after* the real write has already committed, so an unguarded throw turned
+  // a successful follow into a Server Action error. The user was told it
+  // failed, and it had not: they retry, and undo the thing that worked. A
+  // missing notification is the honest cost of a missing key; a lie about
+  // whether the follow landed is not.
+  let serviceClient: ReturnType<typeof createServiceRoleSupabaseClient>;
+  try {
+    serviceClient = createServiceRoleSupabaseClient();
+  } catch {
+    return;
+  }
 
   // RECOMMENDATIONS.md item 285: gate before writing, not after.
   if (!(await shouldNotify(serviceClient, followedProfileId, "social_alerts_enabled"))) return;
 
+  // Migration 0086. `follows_insert_own`'s WITH CHECK already refuses a follow
+  // across a block, so reaching here with one in place should be impossible —
+  // which is exactly why the check is cheap to keep. A silenced bell is the
+  // one failure mode of this feature that a user would never report and never
+  // forgive.
+  if (await blockExistsBetween(serviceClient, followedProfileId, follower.id)) return;
+
   // KN-90: built through the typed constructor rather than an object literal,
   // so a missing or renamed payload field is a type error here instead of a
   // notification that renders fine and links nowhere.
+  // Follow / unfollow / follow again is one tap each way, and until now every
+  // cycle wrote another row — the same unbounded shape `notifyPostLiked`
+  // already closed for reactions, on a button that is just as cheap to press.
+  //
+  // Same rule as there, deliberately, rather than migration 0104's
+  // `dedupe_key`: don't stack UNREAD duplicates, rather than "notify once,
+  // ever". Someone who followed in January, drifted away, and followed again in
+  // June is real news the second time; someone toggling the button twice in a
+  // minute is not. A permanent unique key cannot tell those apart, and would
+  // permanently silence the first one to protect against the second.
+  //
+  // Fails OPEN, matching notifyPostLiked: if KIVO cannot tell whether a
+  // duplicate exists, one extra notification is a far smaller harm than
+  // dropping the only one somebody was going to get.
+  const { data: existing, error: existingError } = await serviceClient
+    .from("notifications")
+    .select("id")
+    .eq("profile_id", followedProfileId)
+    .eq("type", "new_follower")
+    .is("read_at", null)
+    .eq("payload->>follower_username", follower.username)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    logError("follow-actions.checkDuplicateFollowerNotification", existingError);
+  } else if (existing) {
+    return;
+  }
+
   const { error } = await serviceClient.from("notifications").insert(
-    buildNotification(followedProfileId, "new_follower", {
-      follower_username: follower.username,
-      follower_display_name: follower.display_name,
-    }),
+    await withQuietHours(
+      serviceClient,
+      buildNotification(followedProfileId, "new_follower", {
+        follower_username: follower.username,
+        follower_display_name: follower.display_name,
+      }),
+      "social_alerts_enabled",
+    ),
   );
   if (error) logError("follow-actions.createNewFollowerNotification", error);
 }
@@ -82,6 +140,11 @@ export async function toggleFollow(targetType: FollowTargetType, targetId: strin
 
   if (error) {
     logError("follow-actions.toggleFollow", error);
+    // Deliberately the same generic message a real failure gets. A follow
+    // refused by `follows_insert_own`'s block clause (migration 0086) must be
+    // indistinguishable from any other failure — "you can't follow this person
+    // because they blocked you" is precisely the sentence a block must never
+    // produce.
     return { error: "Couldn't update. Try again.", following: currentlyFollowing };
   }
 

@@ -50,7 +50,20 @@ export type NotificationPayloadByType = {
   match_result: { fixture_id: string; summary: string };
   match_goal: { fixture_id: string; summary: string; player_id: string | null };
   match_red_card: { fixture_id: string; summary: string; player_id: string | null };
+  /** Half time. Same shape as the other status-change notifications — the
+   * summary carries the score, which the renderer cannot reconstruct. */
+  match_halftime: { fixture_id: string; summary: string };
+  /** A penalty, scored or missed. `player_id` is null when the provider sent
+   * the event without a taker, which happens and is not worth discarding the
+   * whole notification over. */
+  match_penalty: { fixture_id: string; summary: string; player_id: string | null };
+  /** Team sheets are in. No player id: this is about eleven of them. */
+  match_lineups: { fixture_id: string; summary: string };
   player_event: { fixture_id: string; summary: string; player_id: string | null };
+  /** A completed, recorded move involving a club or player the recipient
+   * follows. `summary` is pre-built for the same reason the match ones are:
+   * the renderer has no access to club names. */
+  transfer_recorded: { transfer_id: string; player_id: string; summary: string };
   /** KN-61. Both fantasy payloads carry a pre-built summary for the same
    * reason the match ones do: the renderer has no access to a gameweek number
    * or a points total, and reconstructing either at read time would mean a
@@ -82,8 +95,42 @@ export function buildNotification<T extends ProducedNotificationType>(
   profileId: string,
   type: T,
   payload: NotificationPayloadByType[T],
+  /** Migration 0104. Omit it when two occurrences genuinely are two
+   * notifications — two replies to one post are not a duplicate of each other,
+   * and a null key never deduplicates. */
+  dedupeKey?: string,
 ): NotificationInsert {
-  return { profile_id: profileId, type, payload: payload as unknown as Json };
+  return {
+    profile_id: profileId,
+    type,
+    payload: payload as unknown as Json,
+    dedupe_key: dedupeKey ?? null,
+  };
+}
+
+/**
+ * The stable identity of the real-world event a notification is about
+ * (migration 0104), used as the conflict target of the unique index on
+ * `(profile_id, dedupe_key)`.
+ *
+ * Two rules, and they are what make this worth having rather than decorative.
+ *
+ * **Built from the event's own identity, never from a timestamp.** A key with
+ * `now()` in it is unique every time and deduplicates nothing.
+ *
+ * **The same identity the data layer uses.** For a match event that is the
+ * natural key `fixture_events` itself is keyed on (migration 0056): fixture,
+ * type, minute, player. Choosing a looser identity here — "one goal per player
+ * per match", say — would make the notification layer disagree with the table
+ * it is reporting on, and would silently swallow a real second goal from the
+ * same striker. The honest consequence, worth stating rather than hiding: if a
+ * provider *corrects* a goal's minute from 45 to 45+2, `fixture_events` treats
+ * that as a different event and so does this, so it can still notify twice.
+ * Fixing that means changing what KIVO considers one event, which is a data
+ * layer decision and not a notification one.
+ */
+export function buildDedupeKey(parts: (string | number | null | undefined)[]): string {
+  return parts.map((part) => (part === null || part === undefined ? "-" : String(part))).join(":");
 }
 
 /**
@@ -95,7 +142,17 @@ export function buildNotification<T extends ProducedNotificationType>(
  * incompatible row shapes that supabase-js's insert overloads reject — a
  * type error about nothing, in exchange for no additional safety.
  */
-export type NotificationInsert = { profile_id: string; type: string; payload: Json };
+export type NotificationInsert = {
+  profile_id: string;
+  type: string;
+  payload: Json;
+  dedupe_key: string | null;
+  /** Set by `withQuietHours` / the producer's own quiet-hours resolution
+   * (migration 0088). Declared here so it survives the trip through
+   * `writeNotifications`, which has to hand it to the superseding RPC
+   * explicitly rather than letting supabase-js infer the column set. */
+  quiet_until?: string | null;
+};
 
 // Compile-time assertion, not a runtime one: every key of the payload map must
 // be a real NotificationType. If a producer type is renamed in the registry and

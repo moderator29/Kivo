@@ -316,6 +316,10 @@ async function upsertFixture(
   refs: ResolvedFixtureRefs,
   previousStatus: DbFixtureStatus | null,
   previousScores: { homeScore: number | null; awayScore: number | null } | null,
+  /** The name of a DIFFERENT provider that also maps this fixture, or null
+   * when this fixture has only ever been written by the provider syncing now.
+   * What separates "a source revised itself" from "two sources disagree". */
+  previousWrittenBy: string | null,
   syncRunId: string,
 ): Promise<FixtureStatusChangeInput | null> {
   // RECOMMENDATIONS.md item 303 ("conflict detection"): a same-provider
@@ -374,6 +378,60 @@ async function upsertFixture(
       previous: { status: previousStatus },
       next: { status: toDbFixtureStatus(fixture.status) },
     });
+  }
+
+  // Two sources disagreeing about the same fact. Only reachable when another
+  // provider has really written this fixture before — otherwise a changed
+  // value is one provider revising itself, which the regression checks above
+  // already cover and which is not a disagreement.
+  //
+  // Every field compared here is one both providers claim to know. A value
+  // KIVO holds but the incoming provider did not send (null) is silence, not
+  // a contradiction, so it is skipped rather than reported as a conflict.
+  if (previousWrittenBy && previousScores) {
+    const incomingStatus = toDbFixtureStatus(fixture.status);
+    const disagreements: { field: string; previous: Json; next: Json }[] = [];
+
+    if (
+      fixture.homeScore !== null &&
+      previousScores.homeScore !== null &&
+      fixture.homeScore !== previousScores.homeScore
+    ) {
+      disagreements.push({
+        field: "home_score",
+        previous: { home_score: previousScores.homeScore },
+        next: { home_score: fixture.homeScore },
+      });
+    }
+    if (
+      fixture.awayScore !== null &&
+      previousScores.awayScore !== null &&
+      fixture.awayScore !== previousScores.awayScore
+    ) {
+      disagreements.push({
+        field: "away_score",
+        previous: { away_score: previousScores.awayScore },
+        next: { away_score: fixture.awayScore },
+      });
+    }
+    if (previousStatus !== null && previousStatus !== incomingStatus) {
+      disagreements.push({
+        field: "status",
+        previous: { status: previousStatus },
+        next: { status: incomingStatus },
+      });
+    }
+
+    for (const disagreement of disagreements) {
+      anomalies.push({
+        type: "provider_disagreement",
+        detail:
+          `${provider} and ${previousWrittenBy} disagree on ${disagreement.field} ` +
+          `for ${fixtureLabel}: ${JSON.stringify(disagreement.previous)} vs ${JSON.stringify(disagreement.next)}`,
+        previous: disagreement.previous,
+        next: disagreement.next,
+      });
+    }
   }
   for (const anomaly of anomalies) {
     console.warn(`Football sync anomaly: ${provider}:${fixture.providerId} ${anomaly.detail}`);
@@ -587,8 +645,28 @@ async function dispatchStatusNotifications(
  */
 export async function syncTodayFixtures(
   triggerSource: SyncTriggerSource = "manual",
-  options?: { targetDate?: string },
+  options?: {
+    targetDate?: string;
+    /**
+     * Which endpoint supplies this run's fixtures.
+     *
+     *   "date" (default) — `/fixtures?date=`, a whole day's fixtures.
+     *   "live"           — `/fixtures?live=all`, only what is in play.
+     *
+     * Both cost one request and land in the identical write path, which is the
+     * point: the live worker is a new CALLER, not a new sync. Everything below
+     * — the lease, the batched mappings, the score-regression check, the
+     * notification fan-out, Realtime distribution — is already proven and is
+     * shared unchanged.
+     *
+     * Two things differ, and both are handled explicitly rather than left to
+     * behave-as-if: `targetDate` is meaningless for a live run, and the
+     * absence check must not run (see where it is skipped below).
+     */
+    source?: "date" | "live";
+  },
 ): Promise<SyncResult> {
+  const source = options?.source ?? "date";
   const targetDate = options?.targetDate ?? todayIsoDate();
   if (!isValidSyncDate(targetDate)) {
     return { status: "failed", recordsProcessed: 0, error: `Invalid sync date "${targetDate}". Expected YYYY-MM-DD.` };
@@ -698,9 +776,9 @@ export async function syncTodayFixtures(
   try {
     let fixtures: NormalizedFixture[];
     try {
-      fixtures = await provider.getFixturesByDate(targetDate);
+      fixtures = source === "live" ? await provider.getLiveFixtures() : await provider.getFixturesByDate(targetDate);
     } catch (err) {
-      logError("football.sync.getfixturesbydate", err);
+      logError(source === "live" ? "football.sync.getlivefixtures" : "football.sync.getfixturesbydate", err);
       throw err;
     }
 
@@ -771,6 +849,41 @@ export async function syncTodayFixtures(
       }
     }
 
+    // KIVO_NEXT_GEN: the producer `provider_disagreement` never had.
+    // `data_anomaly_type` has carried that value since migration 0056 and the
+    // admin panel has a label for it, and nothing in the codebase ever wrote
+    // one — so the one anomaly the founding brief names most explicitly was
+    // the one KIVO could not report.
+    //
+    // The distinction that makes it meaningful: a value changing under the
+    // SAME provider is that provider revising itself (already covered by the
+    // score/status regression checks). A value differing from what a
+    // DIFFERENT provider wrote is two sources disagreeing about a fact, which
+    // is a different problem with a different fix.
+    //
+    // One batched query for the whole run, same shape as the prior-state
+    // lookup above. Today this map is almost always empty, because KIVO runs
+    // one provider at a time (see DECISIONS.md's provider-failover entry) —
+    // and it stops being empty the moment a second provider is switched on,
+    // which is exactly when somebody needs it and is too late to build it.
+    const otherProviderByKivoFixtureId = new Map<string, string>();
+    if (knownKivoFixtureIds.length > 0) {
+      const { data: otherMappings, error: otherMappingError } = await supabase
+        .from("provider_mappings")
+        .select("kivo_entity_id, provider")
+        .eq("entity_type", "fixture")
+        .neq("provider", provider.name)
+        .in("kivo_entity_id", knownKivoFixtureIds);
+      // Best-effort, exactly like recordAnomaly itself: failing to detect a
+      // disagreement must never fail the sync that would have reported it.
+      if (otherMappingError) {
+        logError("football.sync.loadOtherProviderMappings", otherMappingError);
+      }
+      for (const row of otherMappings ?? []) {
+        otherProviderByKivoFixtureId.set(row.kivo_entity_id, row.provider);
+      }
+    }
+
     const errors: string[] = [];
     /**
      * KIVO_NEXT_GEN KN-81. `errors` above still builds the truncated,
@@ -816,6 +929,7 @@ export async function syncTodayFixtures(
         const knownKivoId = fixtureMappings.get(fixture.providerId) ?? null;
         const previousStatus = knownKivoId ? (priorStatusByKivoId.get(knownKivoId) ?? null) : null;
         const previousScores = knownKivoId ? (priorScoresByKivoId.get(knownKivoId) ?? null) : null;
+        const previousWrittenBy = knownKivoId ? (otherProviderByKivoFixtureId.get(knownKivoId) ?? null) : null;
 
         const notification = await upsertFixture(
           supabase,
@@ -830,6 +944,7 @@ export async function syncTodayFixtures(
           },
           previousStatus,
           previousScores,
+          previousWrittenBy,
           syncRun.id,
         );
         if (notification) {
@@ -902,7 +1017,21 @@ export async function syncTodayFixtures(
      * That is arguably correct — KIVO really has stopped receiving updates for
      * them — and it is a flag for a human, not an automatic change.
      */
-    if (processed > 0 && !lostLease) {
+    /**
+     * A live run NEVER flags absences, and this is not a tuning decision.
+     *
+     * `/fixtures?live=all` returns only what is in play. Absence from it means
+     * "not currently in play" — which is true of almost every fixture on any
+     * given day, including every one that has not kicked off and every one that
+     * finished an hour ago. Running the absence check against that response
+     * would flag the entire day's football as missing from the provider, on
+     * every single live poll. The check is sound; the premise it depends on
+     * (the run asked about all of these fixtures) is only true of a dated run.
+     */
+    if (source === "live") {
+      // Nothing to do. Stated as a branch rather than folded into the condition
+      // below so the reason is readable at the point of the decision.
+    } else if (processed > 0 && !lostLease) {
       // Scoped to the day this run actually asked for, not to "today" — a
       // backfill of last Saturday must not flag today's fixtures as absent
       // just because the provider never mentioned them in a query about

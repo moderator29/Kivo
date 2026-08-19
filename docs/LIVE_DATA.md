@@ -18,7 +18,47 @@ All connected users
 
 This document describes what's **real today** versus what's still deliberately unbuilt, or genuinely can't be verified from this sandbox. Do not read the diagram above as a description of shipped infrastructure — see the status table below.
 
+## 2026-08-19: the worker now bounds what it spends
+
+The honest summary before this pass: the distribution half was real (Supabase Realtime genuinely fans out every write the instant it happens) and the upstream half was not (nothing wrote during a match). Turning the flag on would have made it worse rather than better, and this is why:
+
+**The old worker had six guards and not one of them bounded total spend.** The quota floor refuses only once the provider's own remaining count is at or below 10 — and that count is `null` until some request has recorded one. So on a fresh day, with the flag on and one match live, the worker called the fixtures sync every minute until the floor tripped: roughly ninety requests in ninety minutes, after which the entire product had no data for the rest of the day, including the daily fixture sync. A stale score is bad. No data is worse.
+
+What is new:
+
+| Piece | What it does |
+|---|---|
+| `provider_request_spend` + `consume_provider_requests()` (migration 0091) | An **atomic** reservation. Asking and spending are one statement behind an advisory lock, so two callers cannot both be told yes. The ceiling lives in `provider_request_limit()`, not in the caller. |
+| Three separate allowances (`live` 55, `auto` 20, `daily` 8 per rolling 24h) | The daily baseline's slice is unreachable by the live worker **by construction**. ~17 requests are unbudgeted and reserved for admin "Sync now" — automation cannot reach them. |
+| `live-sync-planner.ts` | Derives a pace instead of using a fixed interval: remaining allowance divided by the minutes of live football still to cover. Tightens around the minutes a scoreline moves, widens when nothing has changed, clamped to 1–15 minutes. |
+| `/fixtures?live=all` | One request refreshes every in-play match at once — the shape that makes this affordable at all. |
+| `reconcileDisappearedFixtures` | The live feed returns ONLY in-play matches, so a fixture that goes final between two polls vanishes from it and its last written state would be an in-play scoreline that stays on the product forever. One bounded dated fetch settles it. |
+| `LiveWorkerPanel` (Data Health) | Spend per bucket, the provider's own remaining count, last decision, and why it is idle right now. |
+| `LiveFreshnessNote` (`/live`) | Says when scores may be behind, rather than presenting a frozen number as live. |
+
+### The reconciliation bound, and why it needed one
+
+"Dropped out of the live set" is ambiguous. A fixture also disappears when the provider hiccups, during a brief outage, or when a match is temporarily misreported. If every disappearance meant "fetch until it is final", a flapping provider costs one request per minute per fixture — the exact runaway this pass exists to remove.
+
+So: exactly one dated fetch per disappearance, tracked by `fixtures.live_reconciled_at` against `provider_last_seen_at` (a second attempt happens only if the fixture came back and vanished again, which is a genuinely new disappearance); the attempt is marked as made **even when the fetch fails**, because a failed request has already been spent; it comes out of the `live` allowance with no exemption, because an allowance with a carve-out is not a ceiling; and at most one per invocation.
+
+If the dated fetch does not show the fixture as finished, nothing more happens. The daily baseline settles it, and KN-86's absence flagging raises it for a human if it never resolves.
+
+### A live run never flags absences
+
+`/fixtures?live=all` returns only what is in play, so absence from it means "not currently in play" — true of almost every fixture on any given day. Running KN-86's absence check against that response would flag the entire day's football as missing from the provider, on every poll. The check is sound; the premise it depends on (the run asked about all of these fixtures) is only true of a dated run. `syncTodayFixtures` skips it explicitly for `source: "live"`.
+
+### What could not be tested, and it is the important half
+
+This sandbox has no route to api-football.com. So:
+
+- **Tested**: the budget arithmetic, the derived pace, the relevance window, the refusal semantics of the atomic consume (exercised directly against the live database, including the ceiling, a refusal at the boundary, and an unknown bucket failing closed), and the guard ladder in `auto-sync.ts`. 15 planner cases plus 11 auto-sync cases.
+- **NOT tested, and stated here rather than left to be discovered**: whether `/fixtures?live=all` returns the shape the adapter models; whether a real Vercel or pg_cron firing carries the auth header the handler requires; and the end-to-end behaviour of a real match. Nobody here has watched a live score change. Every number is arithmetic over a modelled payload.
+
+The failure mode is bounded by design — every new response field is optional and read defensively, so a wrong shape produces nulls rather than wrong values — but "bounded" is not "verified", and the first real matchday is the real test.
+
 ## Status
+
 
 | Piece | Status | Notes |
 |---|---|---|
@@ -58,13 +98,26 @@ Four guards, each preventing a failure that is real on a 100-request-a-day free 
 
 Standings are a separate provider call per competition-season. With `FOOTBALL_SYNC_COMPETITION_IDS` unset, a day's fixtures can span fifty competitions, and one call each would spend half the daily budget before lunch. Five a day, least-recently-refreshed first, fills every table in within days and then keeps them all rolling — the right trade for data that changes at most once a matchday.
 
+### What the schedule settles, beyond fetching (2026-08-19)
+
+Two things now ride on the scheduled routes that spend **no provider request at all**, and they are deliberately placed above every football gate — `FOOTBALL_LIVE_POLLING_ENABLED`, "is a provider configured", the budget reservation and the sync lease all sit below them.
+
+- **Prediction settlement** (`src/lib/prediction-settlement.ts`). Six prediction types, XP, badges, streaks and a leaderboard used to be reachable only by a football-data admin opening Data Health and pressing a button. On a deployed product that means a fan makes a correct call and it is never scored. The daily route now runs the same engine unconditionally; the live route runs it again on its success path, so a prediction settles within a minute of full time rather than within a day of it.
+- **Fantasy gameweek scoring.** `rescoreLiveGameweeks` was only ever called from the live worker's success path, which requires the polling flag, a live match and spare budget — so on any deployment where that flag is off, a finished gameweek was never scored automatically either. The daily route now calls it too.
+
+Both read only rows KIVO already holds, which is the whole reason they can sit above the gates. Gating them behind quota would mean the one thing that has to happen every day only happens on days KIVO also had requests to spend.
+
+Both are best-effort: a failure in either is logged and cannot fail the sync or change any decision below it. Both are bounded per invocation (`SETTLEMENT_BATCH_SIZE`, `MAX_GAMEWEEKS_PER_RUN`) so a backlog drains across runs instead of turning one firing into a long job. And settlement reconciles XP through `reconcileXp` rather than `awardXp`, so running it every day writes nothing when nothing changed, and takes XP back when a verdict moves — a daily job that awarded twice would be worse than one that never ran.
+
+The response body of both routes carries `predictionsSettled`, `predictionsUnresolved` and `predictionsAdjusted` on **every** exit a daily run can take, including the skips — "the sync skipped so nothing ran" and "settled 0, unresolved 40" are different facts. Admin → Data Health shows the same three numbers read straight from the table, plus when settlement last actually ran, because a timestamp is the only thing that answers "is this happening" rather than "is this configured".
+
 ### Two rules that were not bent
 
 - **`FOOTBALL_LIVE_POLLING_ENABLED` is only ever read, never written from code.** It is the founder's protection against a once-a-minute worker draining a free tier. The daily route skips consulting it because one request a day cannot drain anything — a different question from the one the flag asks — and the on-demand path never touches it either.
 - **`vercel.json` was deliberately not edited by this session.** Deployment configuration is the founder's, and a `vercel.json` that fails validation blocks every deploy — which cost hours earlier the same day. The exact block to paste is in `ENVIRONMENT.md`: `0 5 * * *` (daily, which Hobby accepts) against the bare path `/api/cron/sync-daily` (no query string, because Vercel's cron documentation only ever shows a bare path — which is why the daily behaviour has its own route rather than a `?mode=` parameter).
 
 `sync_runs.trigger_source` now records `manual` / `cron` / `auto` / `daily` (migration `0070`), so Data Health can tell four very different quota profiles apart.
-| Supabase Realtime distribution | REAL, shipped 2026-08-15 | Migration `0038_realtime_fixture_distribution` adds `fixtures` and `fixture_events` to the `supabase_realtime` publication. `src/hooks/use-realtime-fixtures.ts` subscribes to `postgres_changes` UPDATE events on `fixtures`, filtered client-side to the ids currently on screen. Wired into `/live` (`LiveFixtureList`) and Match Centre's score header (`MatchScoreDisplay`). |
+| Supabase Realtime distribution | REAL, shipped 2026-08-15 | Migration `0038_realtime_fixture_distribution` adds `fixtures` and `fixture_events` to the `supabase_realtime` publication. `src/hooks/use-realtime-fixtures.ts` subscribes to `postgres_changes` UPDATE events on `fixtures`, filtered client-side to the ids currently on screen. Wired into `/live` (`LiveFixtureList`) and Match Centre's score header (`MatchScoreDisplay`). `fixture_events` had been in that publication since the same migration with nothing subscribed to it — so a goal moved the score in the header while the timeline underneath still showed the match as it stood at page load. `src/hooks/use-realtime-fixture-events.ts` (shipped 2026-08-19) closes that: INSERT, UPDATE and DELETE, filtered server-side by `fixture_id` except for DELETE (a delete payload carries only the primary key, so there is no `fixture_id` to filter on). UPDATE and DELETE are not optional here — a goal reassigned to a different scorer, or taken away by VAR, has to leave the timeline or the screen keeps crediting a goal the score no longer shows. Subscribed only while the fixture is scheduled or live. |
 | Match Room live chat | REAL, shipped 2026-08-18 | A second, differently-behaved Realtime consumer of the same `posts` publication `0042_realtime_posts` already added for `/social`'s "new posts" pill. `src/hooks/use-realtime-room-posts.ts` subscribes to `postgres_changes` INSERT on `posts`, server-side filtered to one fixture (`fixture_id=eq.<id>`), and auto-prepends every arrival — a real user's post or a system goal/red-card announcement (RECOMMENDATIONS item 254, `src/lib/football/match-room-system-posts.ts`) — with no click required, unlike `/social`'s deliberate click-to-reveal pill. See the hook's own doc comment, and the 2026-08-18 DECISIONS.md entry, for why that divergence from the feed's pattern was checked against Room specifically rather than assumed. |
 | Quota protection / retry-backoff | REAL, predates this doc | `src/lib/football/providers/api-football-request.ts` — parses `x-ratelimit-requests-remaining`, one jittered retry on 5xx only, never retries 4xx. See `docs/API_QUOTA.md`. |
 | Quota-aware throttling (refuse to spend quota below a safety floor) | **REAL, built 2026-08-18** | The cron worker reads the most recent known `provider_quota_remaining` (same `sync_runs` query Data Health's own "requests left today" pill uses) before running, and skips — logging why — when it's at or below a floor of 10 remaining requests. See the worker's own doc comment for the full reasoning on that number. This is genuinely new: `docs/API_QUOTA.md`'s "What doesn't exist" section previously and correctly said "no proactive quota-based throttling... nothing pre-emptively blocks a sync from being attempted when quota is low" — that gap is what this closes. |

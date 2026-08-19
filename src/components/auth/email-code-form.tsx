@@ -21,7 +21,20 @@ import { RESEND_COOLDOWN_SECONDS, type AuthMode } from "@/lib/auth-shared";
  * session cookie, so the user lands inside the product rather than back on a
  * public page.
  */
-export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo?: string }) {
+export function EmailCodeForm({
+  mode,
+  redirectTo,
+  addAccount = false,
+}: {
+  mode: AuthMode;
+  redirectTo?: string;
+  /** Set only by the "Add account" entry point in the account switcher. It
+   *  travels all the way to `verifyEmailCode`, which uses it to decide whether
+   *  the session this one replaces is kept for switching back to — see
+   *  src/lib/auth-actions.ts. Nothing here changes until a code is actually
+   *  verified, which is what makes abandoning this form harmless. */
+  addAccount?: boolean;
+}) {
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -76,7 +89,7 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
     setNotice(null);
     startTransition(async () => {
       // Only returns on failure — success redirects out of this page entirely.
-      const result = await verifyEmailCode(email, code, redirectTo);
+      const result = await verifyEmailCode(email, code, redirectTo, addAccount);
       if (result) setError(result.error);
     });
   }
@@ -95,12 +108,20 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
           >
             <header className="flex flex-col gap-1.5 text-center">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                {mode === "sign-up" ? "Create your KIVO account" : "Welcome back"}
+                {addAccount
+                  ? mode === "sign-up"
+                    ? "Create another account"
+                    : "Add another account"
+                  : mode === "sign-up"
+                    ? "Create your KIVO account"
+                    : "Welcome back"}
               </h1>
               <p className="text-sm text-foreground-muted">
-                {mode === "sign-up"
-                  ? "Enter your email and we'll send you a 6-digit code to get started. No password to remember."
-                  : "Enter your email and we'll send you a 6-digit code."}
+                {addAccount
+                  ? "Enter the email for the account you want to add. You'll stay signed in to the one you're using until this one is verified."
+                  : mode === "sign-up"
+                    ? "Enter your email and we'll send you a 6-digit code to get started. No password to remember."
+                    : "Enter your email and we'll send you a 6-digit code."}
               </p>
             </header>
 
@@ -125,7 +146,7 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
                   aria-invalid={error ? true : undefined}
-                  className="kivo-focusable w-full rounded-2xl border border-hairline bg-surface-inset py-3.5 pl-11 pr-4 text-base text-foreground transition-colors placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
+                  className="kivo-focusable w-full rounded-xl border border-hairline bg-surface-inset py-3.5 pl-11 pr-4 text-base text-foreground transition-colors placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -172,7 +193,7 @@ export function EmailCodeForm({ mode, redirectTo }: { mode: AuthMode; redirectTo
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="000000"
                 aria-invalid={error ? true : undefined}
-                className="kivo-focusable w-full rounded-2xl border border-hairline bg-surface-inset px-4 py-3.5 text-center font-mono text-2xl tracking-[0.5em] text-foreground transition-colors placeholder:text-foreground-subtle/50 focus:border-accent focus:outline-none"
+                className="kivo-focusable w-full rounded-xl border border-hairline bg-surface-inset px-4 py-3.5 text-center font-mono text-2xl tracking-[0.5em] text-foreground transition-colors placeholder:text-foreground-subtle/50 focus:border-accent focus:outline-none"
               />
 
               <FormMessage error={error} notice={notice} />
@@ -287,6 +308,23 @@ function FormMessage({ error, notice }: { error: string | null; notice: string |
   );
 }
 
+/**
+ * Two things were wrong with this button, on the first screen anyone ever
+ * sees.
+ *
+ * It was a pill. The design system's control spec (src/lib/design-system.ts)
+ * is `rounded-xl` for anything pressable — button, chip, field, tab — and the
+ * founding directive asks for sharp rectangular controls rather than toy-like
+ * rounding. The two fields above it have been brought to the same radius, so
+ * the form is one family instead of a stack of three different shapes.
+ *
+ * And its disabled state was the same electric gradient at 50% opacity with
+ * white text on top, which does not read as "waiting for your email" — it
+ * reads as a broken button, and white on a half-transparent blue is unreadable
+ * besides. Disabled is now a genuinely inactive treatment: a flat surface with
+ * muted text and no glow, so the moment it lights up is the moment it will
+ * actually do something.
+ */
 function SubmitButton({
   children,
   pending,
@@ -296,6 +334,8 @@ function SubmitButton({
   pending: boolean;
   disabled?: boolean;
 }) {
+  const inactive = Boolean(disabled) && !pending;
+
   return (
     <motion.button
       type="submit"
@@ -303,7 +343,11 @@ function SubmitButton({
       aria-busy={pending}
       whileHover={pending || disabled ? undefined : { scale: 1.02 }}
       whileTap={pending || disabled ? undefined : { scale: 0.97 }}
-      className="kivo-gradient-prime flex w-full items-center justify-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60"
+      className={`flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 ${
+        inactive
+          ? "cursor-not-allowed border border-hairline bg-surface-2 text-foreground-subtle"
+          : "kivo-gradient-prime text-kivo-white shadow-[0_8px_30px_-8px_rgba(37,99,255,0.55)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+      }`}
     >
       {pending ? <Loader2 strokeWidth={1.75} className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
       {children}

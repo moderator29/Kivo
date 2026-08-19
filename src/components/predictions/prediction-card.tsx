@@ -12,6 +12,7 @@ import { formatDeadlineCountdown } from "@/app/(app)/fantasy/fantasy-rules";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { RetryableError } from "@/components/ui/retryable-error";
+import { PredictionTypesPanel } from "@/components/predictions/prediction-types-panel";
 import { cn } from "@/lib/utils";
 
 const NEAR_LOCK_MS = 60 * 60_000;
@@ -161,7 +162,7 @@ export function PredictionCard({
     const previous = prediction;
     setPrediction(outcome);
     startTransition(async () => {
-      const result = await submitPrediction(fixtureId, outcome);
+      const result = await submitPrediction(fixtureId, { type: "winner", outcome });
       if (result.error) {
         setPrediction(previous);
         setError(result.error);
@@ -306,6 +307,16 @@ export function PredictionCard({
       </AnimatePresence>
 
       {consensus && <ConsensusBar consensus={consensus} />}
+
+      {/* The other five types the founding brief names. Collapsed, and loaded
+          only when opened, so the one-tap winner pick above stays one tap. */}
+      <PredictionTypesPanel
+        fixtureId={fixtureId}
+        homeTeamName={homeTeam.name}
+        awayTeamName={awayTeam.name}
+        signedIn={signedIn}
+        locked={locked}
+      />
 
       {/* KN-42: the return trip. Item 293 put "You predicted: Home win" on
           Match Centre, but /predictions linked nowhere — a user who had just

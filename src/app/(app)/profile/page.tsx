@@ -4,17 +4,28 @@ import Image from "next/image";
 import { CircleUserRound, Pencil, MessageSquare, Target, Award, ArrowRight } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
 import { ProfileStatRail } from "@/components/profile/profile-stat-rail";
+import { XpMomentum } from "@/components/profile/xp-momentum";
 import { ProfileTabs, isProfileTab, type ProfileTab } from "@/components/profile/profile-tabs";
 import { PostCard } from "@/components/social/post-card";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FadeIn } from "@/components/ui/fade-in";
+import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
-import { PREDICTION_OUTCOME_LABEL, predictionResultInfo } from "@/lib/predictions";
+import {
+  PREDICTION_PICK_COLUMNS,
+  PREDICTION_TYPE_LABEL,
+  describePredictionPick,
+  pickFromRow,
+  predictionResultInfo,
+} from "@/lib/predictions";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
+import { summariseXpWindows, xpWindowFloorIso } from "@/lib/xp-windows";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -23,6 +34,12 @@ export const metadata: Metadata = { title: "Profile" };
  * person, not a second copy of `/social`, `/predictions/mine` or `/rewards`. */
 const PROFILE_POST_LIMIT = 10;
 const PROFILE_PREDICTION_LIMIT = 6;
+
+/** A ceiling on the XP rows read for the momentum block. Two months of awards
+ * for one person is a handful of rows; this exists so the query can never grow
+ * unbounded, and the block is *dropped entirely* if it is ever hit, because a
+ * truncated read would produce a sum that looks like a fact and is not. */
+const XP_WINDOW_ROW_LIMIT = 1000;
 
 export default async function ProfilePage({
   searchParams,
@@ -55,13 +72,14 @@ export default async function ProfilePage({
   // these are the numbers that stay on screen while the tabs change under
   // them, so they are never re-fetched per tab.
   const [
-    { data: follows },
-    { data: followerRows },
+    followsResult,
+    followerRowsResult,
     { data: xpTotal },
     { count: totalBadgeCount },
     { count: earnedBadgeCount },
     { count: savedCount },
     { data: club },
+    xpEntriesResult,
   ] = await Promise.all([
     supabase.from("follows").select("followed_type").eq("follower_profile_id", profile.id),
     // `follows` has no cross-user SELECT policy — the reverse direction goes
@@ -85,10 +103,47 @@ export default async function ProfilePage({
           .eq("id", profile.favourite_team_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // The awards behind the lifetime total above, for the last two 30-day
+    // windows. `xp_ledger_select_own` is the scope — a profile can only ever
+    // read its own ledger, which is why this block exists on `/profile` and
+    // could not exist on `/u/[username]`.
+    supabase
+      .from("xp_ledger")
+      .select("amount, created_at")
+      .eq("profile_id", profile.id)
+      .gte("created_at", xpWindowFloorIso())
+      .limit(XP_WINDOW_ROW_LIMIT + 1),
   ]);
 
-  const followingCount = (follows ?? []).length;
-  const followerCount = (followerRows ?? []).length;
+  // The header's follower and following counts, and the XP windows beside
+  // them, are all statements about this person. A failed read renders "0
+  // followers" — which is not a missing number, it is a wrong one, and it is
+  // the kind of wrong that makes someone think they lost something.
+  const followsOutcome = readList(followsResult, "profile.follows");
+  const followersOutcome = readList(followerRowsResult, "profile.followers");
+  const xpOutcome = readList(xpEntriesResult, "profile.xpWindows");
+
+  const xpRows = xpOutcome.rows;
+  const xpWindows =
+    xpOutcome.failed || xpRows.length > XP_WINDOW_ROW_LIMIT
+      ? []
+      : summariseXpWindows(
+          xpRows.map((row) => ({ amount: row.amount, createdAt: row.created_at })),
+          profile.created_at,
+        );
+
+  // The whole connections row is dropped when either count failed, rather
+  // than either being shown as 0. "0 followers" is not a missing number, it
+  // is a wrong one, and it is wrong in the direction that makes someone think
+  // they lost something. An absent row is visibly absent; a zero is not.
+  const connections =
+    followsOutcome.failed || followersOutcome.failed
+      ? null
+      : {
+          following: followsOutcome.rows.length,
+          followers: followersOutcome.rows.length,
+          followingHref: "/profile/following",
+        };
   const headerClub: ProfileHeaderClub | null = club
     ? { id: club.id, name: club.name, shortName: club.short_name, crestUrl: club.crest_url }
     : null;
@@ -106,15 +161,11 @@ export default async function ProfilePage({
           country={profile.country}
           joinedAt={profile.created_at}
           club={headerClub}
-          connections={{
-            following: followingCount,
-            followers: followerCount,
-            followingHref: "/profile/following",
-          }}
+          connections={connections}
           action={
             <Link
               href="/profile/edit"
-              className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-foreground"
+              className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-foreground"
             >
               <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
               Edit profile
@@ -122,6 +173,16 @@ export default async function ProfilePage({
           }
         />
       </FadeIn>
+
+      {/* Only for someone who has actually earned something. A momentum card
+          reading "+0 XP" above a lifetime total of 0 is a scoreboard for a
+          game the reader has not started — the tabs below already say what to
+          do about that, in words. */}
+      {(xpTotal ?? 0) > 0 && xpWindows.length > 0 && (
+        <FadeIn delay={0.03}>
+          <XpMomentum windows={xpWindows} total={xpTotal ?? 0} />
+        </FadeIn>
+      )}
 
       <FadeIn delay={0.04}>
         <ProfileStatRail
@@ -156,6 +217,17 @@ export default async function ProfilePage({
         {tab === "posts" && <PostsPanel profileId={profile.id} />}
         {tab === "predictions" && <PredictionsPanel profileId={profile.id} />}
         {tab === "badges" && <BadgesPanel profileId={profile.id} />}
+      </FadeIn>
+
+      <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+        <ShareCardPanel
+          kind="profile-achievement"
+          id={profile.id}
+          shareUrl={`/u/${profile.username}`}
+          shareText={`${profile.display_name ?? profile.username} on KIVO.`}
+          heading="Share your profile"
+          description="Only what KIVO can actually count goes on the card. Pick a background."
+        />
       </FadeIn>
     </div>
   );
@@ -200,14 +272,27 @@ async function PostsPanel({ profileId }: { profileId: string }) {
   // authorization result, and hydrating it through the shared loader is what
   // keeps reactions, comment counts, polls and save state identical to how the
   // same post renders in /social.
-  const { data: rows } = await supabase
-    .from("posts")
-    .select("id")
-    .eq("author_profile_id", profileId)
-    .order("created_at", { ascending: false })
-    .limit(PROFILE_POST_LIMIT);
+  const postIdsOutcome = readList(
+    await supabase
+      .from("posts")
+      .select("id")
+      .eq("author_profile_id", profileId)
+      .order("created_at", { ascending: false })
+      .limit(PROFILE_POST_LIMIT),
+    "profile.postIds",
+  );
 
-  const postIds = (rows ?? []).map((row) => row.id);
+  if (postIdsOutcome.failed) {
+    return (
+      <LoadFailed
+        tone="section"
+        title="Your posts"
+        description="KIVO couldn't read your posts just now. Nothing has been deleted — try again."
+      />
+    );
+  }
+
+  const postIds = postIdsOutcome.rows.map((row) => row.id);
   const { posts } = await fetchPostsPage(0, profileId, { postIds });
 
   if (posts.length === 0) {
@@ -245,10 +330,11 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
   // plain query is enough. The full record, streaks and per-competition
   // accuracy live on /predictions/mine — this is the recent slice plus a way
   // through to it, not a second copy of that page.
-  const { data: rows, count } = await supabase
+  const predictionsResult = await supabase
     .from("predictions")
     .select(
-      `id, predicted_outcome, points_awarded, created_at,
+      `id, points_awarded, created_at, ${PREDICTION_PICK_COLUMNS},
+       player:players!predictions_predicted_player_id_fkey(id, full_name, known_as),
        fixture:fixtures(
          id, kickoff_at, status, home_score, away_score,
          home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
@@ -260,9 +346,23 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
     .order("created_at", { ascending: false })
     .limit(PROFILE_PREDICTION_LIMIT);
 
+  const predictionsOutcome = readList(predictionsResult, "profile.predictions");
+
+  if (predictionsOutcome.failed) {
+    return (
+      <LoadFailed
+        tone="section"
+        title="Your predictions"
+        description="KIVO couldn't read your recent calls. Your record hasn't changed — try again."
+      />
+    );
+  }
+
+  const count = predictionsResult.count;
+
   // fixture_id cascades on fixture delete, so this should not happen —
   // filtered defensively rather than rendering half a row.
-  const predictions = (rows ?? []).filter((row) => row.fixture !== null);
+  const predictions = predictionsOutcome.rows.filter((row) => row.fixture !== null);
 
   if (predictions.length === 0) {
     return (
@@ -279,7 +379,12 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
     <div className="flex flex-col gap-2.5">
       {predictions.map((prediction, index) => {
         const fixture = prediction.fixture!;
-        const result = predictionResultInfo(fixture.status, prediction.points_awarded);
+        const result = predictionResultInfo(
+          fixture.status,
+          prediction.points_awarded,
+          prediction.resolution,
+          prediction.unresolvable_reason,
+        );
         const ResultIcon = result.icon;
         return (
           <FadeIn
@@ -300,8 +405,12 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
                 </span>
               </div>
               <span className="text-[11px] text-foreground-subtle">
-                Called {PREDICTION_OUTCOME_LABEL[prediction.predicted_outcome]} ·{" "}
-                {formatDateTime(fixture.kickoff_at, "dayTime", "UTC")}
+                {PREDICTION_TYPE_LABEL[prediction.prediction_type]}:{" "}
+                {describePredictionPick(
+                  pickFromRow(prediction),
+                  prediction.player?.known_as ?? prediction.player?.full_name ?? null,
+                )}{" "}
+                · {formatDateTime(fixture.kickoff_at, "dayTime", "UTC")}
               </span>
             </div>
             <span
@@ -328,19 +437,41 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
 
 async function BadgesPanel({ profileId }: { profileId: string }) {
   const supabase = createServerSupabaseClient();
-  const { data: earned } = await supabase
-    .from("user_badges")
-    .select("badge_id, awarded_at")
-    .eq("profile_id", profileId)
-    .order("awarded_at", { ascending: false });
+  const earnedOutcome = readList(
+    await supabase
+      .from("user_badges")
+      .select("badge_id, awarded_at")
+      .eq("profile_id", profileId)
+      .order("awarded_at", { ascending: false }),
+    "profile.earnedBadges",
+  );
 
-  const badgeIds = (earned ?? []).map((row) => row.badge_id);
+  if (earnedOutcome.failed) {
+    return (
+      <LoadFailed
+        tone="section"
+        title="Your badges"
+        description="KIVO couldn't read the badges you've earned. They haven't been taken away — try again."
+      />
+    );
+  }
+
+  const earned = earnedOutcome.rows;
+  const badgeIds = earned.map((row) => row.badge_id);
   // Same two-step lookup as exportUserData: resolve the small reference table
   // in a second query rather than relying on PostgREST's FK-embed syntax.
-  const { data: badges } = badgeIds.length
-    ? await supabase.from("badges").select("id, name, description, icon_url").in("id", badgeIds)
-    : { data: [] as { id: string; name: string; description: string | null; icon_url: string | null }[] };
-  const badgeById = new Map((badges ?? []).map((badge) => [badge.id, badge]));
+  //
+  // Tolerant, unlike the read above: a badge whose name fails to resolve is
+  // skipped by the `if (!badge) return null` below, so the count stays honest
+  // even if one tile is missing. "You have earned nothing" is the claim worth
+  // guarding, and that one comes from `earned`.
+  const badgesOutcome = readList(
+    badgeIds.length
+      ? await supabase.from("badges").select("id, name, description, icon_url").in("id", badgeIds)
+      : { data: [] as { id: string; name: string; description: string | null; icon_url: string | null }[], error: null },
+    "profile.badgeCatalogue",
+  );
+  const badgeById = new Map(badgesOutcome.rows.map((badge) => [badge.id, badge]));
 
   if (badgeIds.length === 0) {
     return (
@@ -356,7 +487,7 @@ async function BadgesPanel({ profileId }: { profileId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {(earned ?? []).map((row, index) => {
+        {earned.map((row, index) => {
           const badge = badgeById.get(row.badge_id);
           if (!badge) return null;
           return (

@@ -1,8 +1,8 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { isGoalEventType, isRedCardEventType, type FixtureEventType } from "./event-labels";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 

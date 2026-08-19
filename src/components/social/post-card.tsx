@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { reportContent } from "@/app/(app)/social/report-actions";
 import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
+import { PostEntityCard } from "@/components/social/post-entity-card";
+import { SharePostButton } from "@/components/social/share-post-button";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
@@ -17,7 +19,8 @@ import { useIsClamped } from "@/hooks/use-clamped";
 import { GUEST_ACTION_TITLE, GuestLockHint } from "@/components/ui/guest-lock-hint";
 import { RetryableError } from "@/components/ui/retryable-error";
 import type { ReactionType } from "@/lib/reactions";
-import type { PollSummary } from "@/app/(app)/social/posts";
+import type { PollOption, PollSummary, PostFixture } from "@/app/(app)/social/posts";
+import { POLL_KIND_LABEL } from "@/lib/match-room-polls";
 import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/components/ui/relative-time";
 
@@ -103,6 +106,28 @@ function PostBody({ body }: { body: string }) {
  * voteOnPoll, which is delete-then-insert server-side. Optimistic update
  * with rollback on error, same shape as PredictionCard's handlePick.
  */
+/** How many options a poll shows before it asks to be expanded. Six fits a
+ * 390px Room post without dominating it, and is comfortably more than the
+ * 2-4 a freeform poll can ever have — so this only ever affects a templated
+ * ballot. */
+const VISIBLE_POLL_OPTIONS = 6;
+
+/**
+ * The top options by real vote count, plus the viewer's own pick if it did not
+ * make that cut.
+ *
+ * The second half matters more than the first. A voter whose choice is
+ * twelfth on a twenty-two-name ballot would otherwise open the poll and see
+ * no trace of the vote they cast, which reads as the vote having been lost.
+ */
+function collapsePollOptions(poll: PollSummary): PollOption[] {
+  const byVotes = [...poll.options].sort((a, b) => b.voteCount - a.voteCount);
+  const top = byVotes.slice(0, VISIBLE_POLL_OPTIONS);
+  if (!poll.viewerOptionId || top.some((option) => option.id === poll.viewerOptionId)) return top;
+  const own = poll.options.find((option) => option.id === poll.viewerOptionId);
+  return own ? [...top.slice(0, VISIBLE_POLL_OPTIONS - 1), own] : top;
+}
+
 function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSummary; signedIn: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -114,6 +139,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
   // at all — the rollback puts the poll back the way it was, so without this
   // there is nothing left on screen saying what the user had picked.
   const [failedOptionId, setFailedOptionId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   function handleVote(optionId: string) {
     if (!signedIn) {
@@ -126,6 +152,7 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
     const previous = localPoll;
     const previousOptionId = localPoll.viewerOptionId;
     setLocalPoll((current) => ({
+      ...current,
       resultsUnavailable: current.resultsUnavailable,
       totalVotes: previousOptionId ? current.totalVotes : current.totalVotes + 1,
       viewerOptionId: optionId,
@@ -147,9 +174,23 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
 
   const total = localPoll.totalVotes;
 
+  // A man-of-the-match ballot seeded from two real starting XIs is twenty-two
+  // options. Showing all of them by default turns a Room post into a page, so
+  // the list opens at the top few and expands — sorted by real votes so the
+  // collapsed view is the room's actual answer rather than shirt-number order.
+  // Nothing is hidden permanently, and the count below always reflects every
+  // option, not the visible slice.
+  const longList = localPoll.options.length > VISIBLE_POLL_OPTIONS;
+  const ordered = longList && !expanded ? collapsePollOptions(localPoll) : localPoll.options;
+
   return (
     <div className="flex flex-col gap-2">
-      {localPoll.options.map((option) => {
+      {localPoll.kind && (
+        <span className="flex w-fit items-center gap-1 rounded-lg border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
+          {POLL_KIND_LABEL[localPoll.kind]}
+        </span>
+      )}
+      {ordered.map((option) => {
         // A failed get_poll_results leaves every count at 0. Rendering "0%"
         // from that would be inventing a number, so the bar stays empty and
         // the percentage is simply not shown (see PollSummary.resultsUnavailable).
@@ -184,6 +225,17 @@ function PollBlock({ postId, poll, signedIn }: { postId: string; poll: PollSumma
           </button>
         );
       })}
+      {longList && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="kivo-focus w-fit rounded-lg px-1 py-0.5 text-[11px] font-medium text-accent transition-colors hover:text-foreground"
+        >
+          {expanded
+            ? "Show fewer"
+            : `Show all ${localPoll.options.length} option${localPoll.options.length === 1 ? "" : "s"}`}
+        </button>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-foreground-subtle">
           {localPoll.resultsUnavailable ? "Couldn't load results" : `${total} vote${total === 1 ? "" : "s"}`}
@@ -244,6 +296,19 @@ interface PostCardProps {
    * insert/update — see the migration). Defaults false for every ordinary
    * post, general-feed or Room alike. */
   isSystem?: boolean;
+  /** The match this post is attached to (`posts.fixture_id`, hydrated by
+   * fetchPostsPage). Optional so Match Room's own call site — which is already
+   * inside the fixture this would name — keeps type-checking without passing
+   * it, and so it renders nothing at all when the post is not about a match. */
+  fixture?: PostFixture | null;
+  /** True for the second and later posts in a run by the same author.
+   *
+   * A run of updates from one person is one thought, and repeating their
+   * avatar and name above every line of it is what makes a feed read as
+   * shouting. A continuation keeps the timestamp — the thing that actually
+   * differs between them — and drops the identity, which `PostThread` re-draws
+   * once, above the run, as a connector line. */
+  continuation?: boolean;
 }
 
 export function PostCard({
@@ -262,6 +327,8 @@ export function PostCard({
   viewerSaved = false,
   highlighted = false,
   isSystem = false,
+  fixture = null,
+  continuation = false,
 }: PostCardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -354,6 +421,9 @@ export function PostCard({
         highlighted && "kivo-row-flash",
       )}
     >
+      {continuation ? (
+        <RelativeTime iso={createdAt} className="text-xs text-foreground-subtle" />
+      ) : (
       <div className="flex items-center gap-2">
         {isSystem ? (
           <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-hairline">
@@ -395,13 +465,20 @@ export function PostCard({
           <RelativeTime iso={createdAt} className="text-xs text-foreground-subtle" />
         </div>
       </div>
+      )}
       <PostBody body={body} />
+      {fixture && <PostEntityCard fixture={fixture} />}
       {poll && <PollBlock postId={id} poll={poll} signedIn={signedIn} />}
       <div className="flex items-center justify-between gap-2">
         <ReactionPicker targetType="post" targetId={id} count={reactionCount} viewerReaction={viewerReaction} signedIn={signedIn} />
 
         <div className="flex items-center gap-1">
           <SaveButton targetType="post" targetId={id} initialSaved={viewerSaved} signedIn={signedIn} />
+
+          {/* Not gated on sign-in: copying a public post's link is not an
+              action on anyone's account, and a guest reading the feed is
+              exactly the person most likely to want to send one on. */}
+          <SharePostButton postId={id} />
 
           <div ref={reportMenuRef} className="relative">
           <motion.button

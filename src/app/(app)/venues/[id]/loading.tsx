@@ -1,8 +1,9 @@
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function VenueDetailLoading() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading this venue">
       <div className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-6">
         <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
         <div className="flex flex-1 flex-col gap-2">
@@ -17,6 +18,6 @@ export default function VenueDetailLoading() {
           <Skeleton key={i} className="h-20 w-full rounded-2xl" />
         ))}
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

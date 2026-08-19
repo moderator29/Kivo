@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { MapPin, Search } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { staggerDelay } from "@/lib/stagger";
+import { CappedListFooter } from "@/components/ui/capped-list-footer";
+import { CAPPED_LIST_STEP, nextVisibleCount } from "@/lib/capped-list";
 
 export type VenueListItem = {
   id: string;
@@ -25,6 +27,17 @@ export type VenueListItem = {
  */
 export function VenuesList({ venues }: { venues: VenueListItem[] }) {
   const [query, setQuery] = useState("");
+  // Everything stays in memory so the filter still searches the whole set —
+  // it is the DOM that is expensive, not the array. See src/lib/capped-list.ts
+  // for the measurements that decided this.
+  const [visible, setVisible] = useState(CAPPED_LIST_STEP);
+
+  const onQueryChange = useCallback((value: string) => {
+    setQuery(value);
+    // A new search starts from the top of its own results, never mid-way
+    // through the previous one's window.
+    setVisible(CAPPED_LIST_STEP);
+  }, []);
 
   const filtered = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -32,13 +45,16 @@ export function VenuesList({ venues }: { venues: VenueListItem[] }) {
     return venues.filter((venue) => [venue.name, venue.city, venue.country].some((field) => field?.toLowerCase().includes(trimmed)));
   }, [venues, query]);
 
+  const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+  const showMore = useCallback(() => setVisible((n) => nextVisibleCount(n, filtered.length)), [filtered.length]);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-subtle" strokeWidth={2} />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search venues…"
           aria-label="Search venues"
           className="w-full rounded-xl border border-hairline bg-surface-inset py-2.5 pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-foreground-subtle focus:border-accent/50"
@@ -49,7 +65,7 @@ export function VenuesList({ venues }: { venues: VenueListItem[] }) {
         <p className="py-10 text-center text-sm text-foreground-muted">No venues match &quot;{query}&quot;.</p>
       ) : (
         <StaggeredList
-          items={filtered}
+          items={shown}
           keyExtractor={(venue) => venue.id}
           delay={(index) => staggerDelay(index % 60, 0.02)}
           className="flex flex-col gap-2"
@@ -76,6 +92,8 @@ export function VenuesList({ venues }: { venues: VenueListItem[] }) {
           )}
         />
       )}
+
+      <CappedListFooter visible={shown.length} total={filtered.length} onShowMore={showMore} label="venues" />
     </div>
   );
 }

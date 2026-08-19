@@ -30,16 +30,19 @@ import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { FormBadges } from "@/components/teams/form-badges";
+import { PositionHistoryCard, type PositionSnapshot } from "@/components/teams/position-history-card";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { summarizeGoalTiming } from "@/lib/football/goal-timing";
 import { resultFor, type FormResult } from "@/lib/football/results";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { parseUuidParam } from "@/lib/params";
+import { readRow } from "@/lib/query-result";
 import { calculateAge, formatDate, formatNumber } from "@/lib/format";
 import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fantasy-rules";
 import type { Database } from "@/lib/supabase/types";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { ClubCommunity } from "@/components/teams/club-community";
+import { TeamAbsencesPanel } from "@/components/football/absences-panel";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
@@ -145,6 +148,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
+/** How many recorded table changes the position chart reaches back over. A
+ * season of snapshots is one row per genuine change, so 60 comfortably covers
+ * a whole season for one team while bounding a query that a busy sync could
+ * otherwise make unbounded. */
+const POSITION_HISTORY_LIMIT = 60;
+
 export default async function TeamProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;
   const id = parseUuidParam(rawId);
@@ -152,7 +161,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const profile = await getOrCreateProfile();
 
   const [
-    { data: team },
+    teamResult,
     { data: standingsRows },
     { data: squad },
     { data: managers },
@@ -284,6 +293,9 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     getLastSyncedAt(["transfer"]),
   ]);
 
+  // Same rule as every other detail page: a read that failed throws to the
+  // error boundary rather than claiming the club does not exist.
+  const team = readRow(teamResult, "teams.detail");
   if (!team) notFound();
 
   const isFollowing = followRow !== null;
@@ -297,7 +309,52 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   // real to report.
   const viewerConnection = profile ? await getViewerTeamConnection(supabase, profile.id, team.id) : null;
 
-  const currentStanding = (standingsRows ?? []).find((s) => s.season?.is_current) ?? null;
+  // A club is usually in more than one competition at once, and each one has
+  // its own standings row. The page used to `.find()` a single current row and
+  // discard the rest — so a team in a league and a cup group showed one table
+  // position and dropped the other, with nothing saying a second existed, and
+  // *which* one survived was whatever order the join happened to return.
+  //
+  // Sorted by matches played, descending: the competition a club has played
+  // most in this season is its league, which is the position a fan means when
+  // they ask where a team is. The rest follow, each under its own name.
+  // Nothing is combined — a league record and a cup record are answers to
+  // different questions, and a "total" spanning both would describe no
+  // competition that exists.
+  const currentStandings = (standingsRows ?? [])
+    .filter((s) => s.season?.is_current)
+    .sort((left, right) => right.played - left.played);
+
+  const currentStanding = currentStandings[0] ?? null;
+  const otherStandings = currentStandings.slice(1);
+
+  // The league-position chart. `standings_snapshots` (migration 0072) has been
+  // filling up since the sync started recording it and nothing had ever read
+  // it — `get_team_position_history` is the RPC that migration shipped for
+  // exactly this. Fetched only when there is a current season to fetch for,
+  // and rendered only when two or more snapshots carry a real position, so a
+  // team KIVO has watched once shows the standing it already showed and no
+  // chart, rather than a line drawn between a point and nothing.
+  const seasonId = currentStanding?.season?.id ?? null;
+  const { data: positionHistoryRows } = seasonId
+    ? await supabase.rpc("get_team_position_history", {
+        p_season_id: seasonId,
+        p_team_id: team.id,
+        p_limit: POSITION_HISTORY_LIMIT,
+      })
+    : { data: null };
+  // The RPC returns newest first (it is a `limit` on a descending order, so
+  // that is the only way to get the *latest* N); a chart reads left to right
+  // in time.
+  const positionHistory: PositionSnapshot[] = [...(positionHistoryRows ?? [])]
+    .filter((row): row is typeof row & { position: number } => row.position !== null)
+    .map((row) => ({
+      capturedAt: row.captured_at,
+      position: row.position,
+      points: row.points,
+      played: row.played,
+    }))
+    .reverse();
   const manager = managers?.[0] ?? null;
 
   const squadByGroup = new Map<PositionGroup, NonNullable<typeof squad>>();
@@ -447,7 +504,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
           <Trophy className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          League position
+          {otherStandings.length > 0 ? "Table positions" : "League position"}
         </h2>
         {currentStanding ? (
           <div className="flex flex-col gap-3">
@@ -460,6 +517,18 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                 {currentStanding.season?.name}
               </span>
             </div>
+            {positionHistory.length >= 2 && (
+              <PositionHistoryCard
+                snapshots={positionHistory}
+                teamName={team.name}
+                competitionLabel={[
+                  currentStanding.season?.competition?.short_name ?? currentStanding.season?.competition?.name,
+                  currentStanding.season?.name,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              />
+            )}
             <div className="grid grid-cols-4 gap-2 text-center sm:grid-cols-7">
               {[
                 ["P", currentStanding.played],
@@ -476,6 +545,34 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
                 </div>
               ))}
             </div>
+
+            {/* The competitions the headline position is not about. Each keeps
+                its own name and its own figures; nothing is added to anything
+                above it. Compact because these are secondary — a cup group
+                table is context for the league position, not a rival to it. */}
+            {otherStandings.length > 0 && (
+              <div className="flex flex-col gap-1.5 border-t border-hairline-soft pt-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                  Also this season
+                </span>
+                {otherStandings.map((standing) => (
+                  <div
+                    key={standing.season?.id ?? standing.season?.name}
+                    className="flex items-center justify-between gap-3 text-xs"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-foreground-muted">
+                      {standing.season?.competition?.short_name ?? standing.season?.competition?.name ?? "Competition"}
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                      {standing.position !== null ? `#${standing.position}` : "-"}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-foreground-subtle">
+                      {standing.played} played · {standing.points} pts
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-foreground-muted">Standings not yet synced for this team.</p>
@@ -510,6 +607,10 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </div>
         )}
       </FadeIn>
+
+      {/* Directly above the squad, because "who is available" is the question
+          a reader is already asking by the time they reach the squad list. */}
+      <TeamAbsencesPanel teamId={team.id} teamName={team.name} />
 
       <FadeIn delay={0.3} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">

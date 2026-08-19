@@ -884,7 +884,233 @@ Three real gaps created by removing Clerk (see `DECISIONS.md`, "Auth re-platform
 
 ---
 
-## If you only do 10 things
+## 22. 2026-08-19 Share cards, Transfer Centre, navigation completeness: what shipped and what it left open
+
+Three queued builds, one rule between them: build everything the real data supports, and where the directive asks for something the data cannot support, say so in the product rather than inventing it. The refusals below are as much a part of the delivery as the features.
+
+325. **Transfer follow alerts have no dedicated notification preference, and gate on the master in-app switch instead.** `notifyTransferRecorded` (`src/lib/football/transfer-notifications.ts`) is a real producer wired into the transfer sync's insert branch, but `notification_preferences` has four topic columns — match, social, prediction, fantasy — and no transfer one. Adding it is a migration, and schema was another agent's lane on the night this shipped, so the producer gates on `in_app_enabled`. **The live consequence:** someone who wants match alerts but not transfer alerts cannot say so, and switching transfers off means switching every in-app notification off. Borrowing `match_alerts_enabled` was considered and rejected — a toggle labelled "Kickoff, goals and full-time" silently controlling transfers is worse than an honest gap. **Recommendation:** add `transfer_alerts_enabled boolean not null default true` to `notification_preferences`, add it to `NOTIFICATION_PREFERENCE_COLUMNS`/`NOTIFICATION_PREFERENCE_DEFAULTS`, surface it in the settings panel next to the other four, and change the one `filterNotifiable` call. **Small**, and it is a one-line change at the producer.
+
+326. **`TRANSFER_WINDOWS` is deliberately empty, so the window countdown has nothing to count to.** The directive asks the Transfer Centre for a window countdown. The mechanism is built and complete (`src/lib/football/transfer-window.ts`, rendered by `TransferWindowPanel`): give it a dated window and it counts down using the same clock the fantasy deadline uses. The registry has no entries because registration periods are set per national association, change every year, and appear in **no endpoint API-Football offers on any plan** — so filling it in from memory would put a countdown to a fabricated deadline on the one page whose premise is that its numbers are real, and a wrong window date is indistinguishable from a right one to anyone reading it. The panel says exactly that and shows recorded activity (real counts of real rows, last 7 and 30 days) in the meantime. **Recommendation:** this is data entry with a citation requirement, not engineering. `TransferWindow.sourceUrl` is required rather than optional precisely so an uncited entry cannot be added; a test asserts every entry carries one. Add the NFF, FA, Serie A and La Liga windows from each association's own published dates. **Small**, and it turns the countdown on the moment it lands.
+
+327. **The four-tier transfer confidence taxonomy stays retired, and is now refused visibly rather than silently.** Item 178 retired Confirmed/Reported/Rumour/Unverified as fabrication, because API-Football's `/transfers` returns completed moves only. That reasoning is unchanged and was re-confirmed against the code on this pass. What changed is that the product now *accounts for* the missing three tiers instead of just not having them: `TRANSFER_STATUS_EXPLAINER` (`src/lib/football/transfer-status.ts`) renders on `/transfers` and on every transfer's own page, and every synced move carries a single honest "Confirmed" chip. **No action** — this is the resolution, recorded so the next pass does not re-propose the tiers a third time. The condition that would change it is named in that file: a licensed news feed carrying its own reliability signal.
+
+328. **RESOLVED, and the item was wrong (2026-08-19).** It claimed KIVO had no assist data anywhere, reasoning from `fixture_event_type` having no `assist` member. That reasoning was sound and the conclusion was false: API-Football does not model an assist as an event, it attaches the assister to the goal (`response[].assist`), `normalizers.ts` has always mapped it, and `sync-match-details.ts` has always resolved it into `fixture_events.related_player_id`. **`src/lib/fantasy-scoring.ts` was awarding `ASSIST_POINTS` from that column the whole time** — the data was not merely present, it was in production use while this item said it did not exist. The lesson worth keeping: an absence in KIVO's own vocabulary is not evidence of an absence in the provider's, and the way to check is to read the normalizer, not the enum. **Now wired through** to the player page, the player comparison page, the transfer page's player record, and the player and comparison share cards, via a third argument to `computePlayerMatchStats` that is explicitly nullable — a caller that has not queried assists reports "unknown", never zero. Two traps are handled and tested: `assist` is also populated on substitution events (the player coming on), so an unfiltered count reads every substitute appearance as an assist; and `fixture_player_statistics.assists` is a real but *different* number that is deliberately not used for career totals, because it exists only for competitions with per-player coverage while goals span everything synced — pairing them would put two true numbers on a card that together say something false. Full write-up in `docs/API_FOOTBALL.md`.
+
+332. **The Match Centre timeline shows the assister with no indication that it is an assist.** A goal renders as `Scorer · Assister`, and a substitution renders as `Off · On`, using the same separator and the same two plain player links — so the row cannot be read without already knowing which event type it belongs to, and the assist, which is the second thing a fan asks about a goal, is invisible as such. The data is entirely real and already on screen; only the labelling is missing. **Not actioned here because `src/components/matches/match-centre-tabs.tsx` belongs to another agent this session** — raised with them directly rather than edited. **Small:** an "assist" affordance on goal-type events and an arrow or "on/off" affordance on substitutions, keyed off `event.eventType`, which the row already has.
+
+329. **A user's own uploaded share-card background must be PNG or JPEG; a WEBP upload silently falls back to KIVO's gradient on the card.** `next/og`'s rasteriser cannot decode WEBP — verified for real on the match card, where a WEBP data URI throws "u2 is not iterable" inside resvg. The ten KIVO backgrounds are handled by committed JPEG derivatives (`scripts/generate-share-card-backgrounds.mjs`), but a user upload has no derivative and is fetched live through `fetchImageDataUri`, which only ever returns PNG/JPEG bytes. The `backgrounds` bucket accepts WEBP because it is a perfectly good profile *cover* format. The share sheet states this limitation in its own copy rather than letting the card quietly ignore the chosen background. **Recommendation:** transcode on upload — the same `sharp` that generates the committed derivatives could write a PNG sibling into the bucket at upload time, which also caps the fetch cost of every card render. **Small.** Do not solve it by rejecting WEBP uploads; that would degrade the profile cover to fix the card.
+
+330. **RESOLVED (2026-08-19): `/saved` and `/transparency` were built, working, and in no navigation.** Same class of finding as KN-30's `/managers` and `/venues`. `/saved` was reachable only by noticing a stat tile on your own profile; `/transparency` — the page that explains what KIVO does and does not know — was reachable from the signed-out marketing page and a few empty states, and from nowhere inside the product it explains. Both are now nav items in the Shortcuts group. **What makes this the last time:** `src/lib/nav-groups.test.ts` now asserts that every `NAV_ITEMS` entry appears in exactly one group or is deliberately standalone, that no group references an unknown id, and — reading the filesystem — that every nav `href` resolves to a real `page.tsx`. A built-but-unreachable page and a nav entry pointing at a 404 both fail the suite now instead of waiting to be noticed.
+
+331. **Every Coming Soon in navigation now names what it will do and what is blocking it — enforced, not by convention.** News (blocked on a licensed editorial feed) and Highlights (blocked on per-competition, per-territory video rights) are both real nav entries with real pages. `ComingSoon` gained `whatItWillDo` and `whyNotYet`, the copy lives on the nav entry so the whole set of honest gaps reads in one file, and `nav-groups.test.ts` fails any `status: "coming-soon"` item that lacks either. **The thing to hold onto:** the test is what stops "Coming soon." on its own from creeping back in — a nav entry that cannot state a blocker probably is not blocked, it is just unbuilt, and that is a different sentence. **No action.**
+
+---
+
+## The five to act on now (2026-08-19)
+
+The founding directive asks that the strongest recommendations be surfaced at
+every milestone rather than left in a numbered list nobody reads to the end. This
+is that list, rewritten for the milestone actually in front of us — the founder
+is about to deploy — and weighted toward **what changes the next decision**, not
+toward what was hardest to build.
+
+Everything here was verified by reading the code, a migration, or a live
+`get_advisors` response today. Where an item contradicts something written
+earlier in this document, the contradiction is named rather than quietly
+resolved.
+
+---
+
+### 1. Arm the data pipeline. One variable, then two secrets and a flag.
+
+**Impact: total. Effort: minutes. Risk: none.** Every football feature in KIVO is
+built, deployed and correct, and none of it has data because the schedulers that
+would fetch it are inert.
+
+`vercel.json` already carries the daily `crons` block (committed and verified) —
+**there is nothing left to paste.** What it needs is `CRON_SECRET` set in Vercel.
+Without it KIVO rejects its own scheduled call with
+`500 {"error":"CRON_SECRET is not configured"}`, writes no `sync_runs` row, and
+Admin → Data Health reports "Never run".
+
+The thing worth knowing, because it has cost this project time twice: **a
+half-armed pipeline is indistinguishable from an unarmed one from the inside.**
+"Never run" is the honest report for a missing secret, a missing key, and a cron
+that was never deployed — three different problems with one symptom.
+`docs/DEPLOYING.md` step 7 has the single `curl` that tells them apart. Run it
+rather than inferring from the panel.
+
+Live scores are a second, separate action: two Supabase Vault secrets plus
+`FOOTBALL_LIVE_POLLING_ENABLED=true`, exact SQL at the top of `ENVIRONMENT.md`.
+The Vercel cron cannot do this — the Hobby plan permits once a day, which is why
+minute-resolution polling lives in Postgres (`docs/CONSTRAINTS.md` §4).
+
+### 2. Predictions cannot settle themselves, and there are six of them now. — **SHIPPED 2026-08-19**
+
+**Impact: high. Effort: small. Risk: low.** As of today a fan can call six things
+about a match — winner, correct score, first scorer, total goals, cards and
+corners, man of the match. `scorePredictions()` reads real finished fixtures,
+real match events, real team statistics and the Room's own MOTM vote, awards XP,
+badges and streaks, and **is reachable from exactly one place: an admin opening
+`/admin/data-health` and clicking a button.**
+
+Until someone clicks, every prediction on the platform sits unresolved, the
+leaderboard stays empty, and the feature reads as broken rather than as pending.
+That is the single largest gap between "built" and "works" left in the product.
+
+The fix does **not** need a new cron and must not touch `vercel.json`: fold the
+scoring pass into the existing `/api/cron/sync-daily` route, after the sync that
+produces the very results it scores. One function call, in the one place that
+already runs daily with the right authority.
+
+> **Done, 2026-08-19, and `vercel.json` was not touched.** The engine moved out
+> of the Server Action into `src/lib/prediction-settlement.ts` — a `"use server"`
+> file carries a session and a scheduler has none. The daily route runs it
+> **above** every football gate, next to the rate-limit prune, because
+> settlement spends no provider request and must not be gated on quota; the live
+> route runs it again on its success path, so a prediction settles within a
+> minute of the whistle when the worker is armed. XP goes through `reconcileXp`,
+> so a repeating job writes nothing when nothing changed and takes XP back when
+> a verdict moves.
+>
+> **The same defect was found in fantasy and fixed in the same change**, which is
+> the half worth recording: `rescoreLiveGameweeks` was only ever called from the
+> live worker's success path, so on any deployment where
+> `FOOTBALL_LIVE_POLLING_ENABLED` is off — which is every deployment until the
+> founder arms it — a finished gameweek was never scored automatically either.
+> The daily route now calls it too.
+>
+> One more thing this exposed: Data Health's "N predictions awaiting scoring"
+> counted `points_awarded is null`, which is true both for a row nothing has
+> examined *and* for a row KIVO examined and honestly declined to settle. A
+> permanently-unresolvable fixture therefore showed as pending work forever and
+> the button changed it by nothing. It is now three real numbers plus the
+> timestamp of the last actual run.
+
+### 3. Configure custom SMTP before you tell anyone the product exists.
+
+**Impact: high. Effort: small. Risk: none.** KIVO signs people in by emailing a
+one-time code. There is no password fallback — **if the mail does not arrive,
+there is no way in at all.** Supabase's built-in sender delivers, and is rate
+limited to a handful of messages per hour per project.
+
+That is fine for the two accounts on the project today and becomes the launch's
+first outage the moment more than a few people try at once. It is a dashboard
+task with no code change, and it is the only item on this list that gets
+strictly worse the later it is done, because the failure lands on first
+impressions.
+
+### 4. The coverage registry is built, and nothing at the tab layer reads it.
+
+**Impact: medium. Effort: small. Risk: low.** This document's own item 299 states
+that a coverage registry "does not exist anywhere in the codebase". **That is no
+longer true** — `src/lib/football/coverage-registry.ts` exists, migration `0082`
+stores API-Football's own per-competition `coverage` object, and
+`shouldAttemptCapability()` already gates real sync spending on it.
+
+What has not happened is the half the founding brief actually named: *don't show
+a tab a provider doesn't support for that competition.*
+`match-centre-tabs.tsx` still renders a static six-tab array unconditionally for
+every fixture. Today each tab renders an honest empty state, which is defensible
+— but "the provider will never have this for this league" and "nobody has synced
+it yet" are different sentences, and KIVO now holds the data to say which.
+
+The expensive half is done. Wiring it is a filter over one array.
+
+### 5. Both backlog files were wrong about their own status, and one called a shipped feature impossible.
+
+**Impact: high, indirectly. Effort: this pass. Risk: none.** An item list that
+lies about its own status is worse than no list, because it sends the next person
+down a road already walked.
+
+Two findings worth the founder's attention rather than just an engineer's:
+
+- **`KIVO_NEXT_GEN.md` KN-142 recorded trending as NOT BUILDABLE.** Trending
+  shipped on 2026-08-19. The recorded facts were true (no view tracking, no
+  analytics log) and the conclusion did not follow: what shipped counts
+  **participation** — real posts and comments in a real, named time window —
+  rather than attention. An absent measurement did not make the question
+  unanswerable; it made a slightly different and more honest question the right
+  one to ask.
+- **`docs/API_FOOTBALL.md` recorded per-match player statistics as
+  free-tier-unavailable, and that was never verified against a live response.**
+  No build environment on this project can reach api-football.com. It is now
+  neither asserted nor denied: both those endpoints are implemented and ask the
+  coverage registry — the provider's own statement about exactly this — before
+  spending a request. It resolves itself on the first sync against a live key.
+
+Everything established as genuinely immovable is now in one place,
+**`docs/CONSTRAINTS.md`**, with the artefact that establishes each one and,
+deliberately, the two corrections above kept in the file rather than dropped.
+Trust that file and this section over item text elsewhere in this document.
+
+---
+
+## Reconciliation pass, 2026-08-19 — status verified against code, not commit messages
+
+The previous "If you only do 10 things" list is preserved below for the record
+and is **complete**. Every one of its ten entries was checked against the current
+code today, individually, by opening the file or running the grep rather than
+trusting an item's own description:
+
+| Old #1–10 | Verified today |
+|---|---|
+| 1. `seasons.is_current` in sync + generate `fantasy_gameweeks` | Shipped — `sync.ts` sets it (see its own comment at line 111); `admin/data-health/fantasy-actions.ts` generates gameweeks |
+| 2. Guest author-name bug + public profiles view | Shipped — `get_public_profiles` (migration `get_public_profiles`) |
+| 3. Prediction scoring + leaderboard RPC | Shipped — `rpc("get_predictions_leaderboard")` at `predictions/page.tsx:124`; scoring now covers six types |
+| 4. Report flow | Shipped — `social/report-actions.ts`, wired into `post-card.tsx:397` |
+| 5. Match Rooms on `posts.fixture_id` | Shipped — `components/matches/match-room.tsx`, plus templated MOTM/referee polls |
+| 6. Redirect through sign-up gates | Shipped — 28 files carry `redirect_url` |
+| 7. `error.tsx`, per-route `loading.tsx`, `generateMetadata` | Shipped — 3 error boundaries, 57 loading files, 8 `generateMetadata` |
+| 8. Cache `getOrCreateProfile` per request | Shipped — `resolveViewerProfile` is `cache()`-wrapped, `lib/profile.ts:58` |
+| 9. Three bugs (AI history order, fantasy filter, like revert) | Shipped |
+| 10. Extract duplicated primitives | Shipped — exactly one `TeamCrest`, at `components/ui/team-crest.tsx` |
+
+Items elsewhere in this document corrected in the same pass, each verified the
+same way:
+
+- **285** (`notification_preferences` gates nothing) — **RESOLVED.** Every
+  producer funnels through `filterNotifiable`/`shouldNotify`.
+- **286** (no privacy control) — **RESOLVED.** `settings/privacy` exists.
+- **287** (no per-team notification tuning) — **RESOLVED.** `follows.muted`
+  (`0049`) plus per-entity mutes (`0104`).
+- **291** (nowhere lists followers/following) — **RESOLVED.**
+  `/profile/following`, backed by `get_my_followers`.
+- **292** (no per-competition prediction breakdown) — **RESOLVED.**
+  `predictions/mine/page.tsx` computes it, suppressed below a real sample.
+- **293** (own prediction absent from Match Centre) — **RESOLVED**, and now
+  lists all six types rather than one.
+- **294** (Lineups never cross-references fantasy squad) — **RESOLVED.**
+  `lib/football/fantasy-lineup-crossref.ts`.
+- **299** (no coverage registry) — **PARTLY WRONG.** The registry exists; the
+  tab filter does not. See item 4 above.
+- **302** (quiet hours, timezone, dedupe) — **RESOLVED** by migrations `0088`,
+  `0104`, `0105`, within the limit that KIVO has no push channel to defer
+  (`docs/CONSTRAINTS.md` §7).
+- **303** (no conflict detection) — **RESOLVED.** `data_conflicts` has a real
+  producer in the sync path.
+- **306** (polls not where the brief named them) — **RESOLVED.** MOTM and
+  referee-decision are first-class templated kinds inside Match Rooms, and an
+  MOTM poll's options carry real `players.id` values.
+- **307** (no user block/mute) — **RESOLVED.** `blocks` (`0086`),
+  `block-actions.ts`, `lib/blocks.ts`.
+- **308** (fantasy scoring not config-driven) — **STILL OPEN, correctly.**
+  `SCORING_MODEL_VERSION = "1.0"` is a versioned TypeScript constant. Honest and
+  documented, and still not what the brief asked for.
+- **326** (`TRANSFER_WINDOWS` empty) — **STILL OPEN, correctly.** The array is
+  genuinely `[]`, so the countdown has nothing to count to.
+
+Sections 5–8 (items 89 onward) still carry whatever accuracy they had before
+2026-08-18 and were **not** re-audited here.
+
+---
+
+## If you only do 10 things — ARCHIVED 2026-08-19, all ten shipped
+
+**Kept for the record, not for action.** Every entry below was verified complete
+against the current code on 2026-08-19 — see the reconciliation table above for
+the file or grep that establishes each one. The live list is
+"The five to act on now".
 
 Ordered by leverage, weighing "unblocks a whole feature" over "polishes a working one".
 
