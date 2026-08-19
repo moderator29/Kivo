@@ -47,8 +47,16 @@ export function buildPitchRows(starters: PitchStarter[]): PitchRow[] | null {
  * Visual language matches the fantasy squad builder's pitch (src/app/(app)/
  * fantasy/pitch.tsx, fantasy-builder.tsx): a `kivo-glass` card with the same
  * `PitchLines` markings, rows ordered attack-to-goalkeeper (top to bottom),
- * flex-wrap-centered player tokens. Reuses `PitchLines` directly rather than
- * redrawing it, per this task's "match that visual language" instruction.
+ * player tokens spread across each line. Reuses `PitchLines` directly rather
+ * than redrawing it, per this task's "match that visual language" instruction.
+ *
+ * Each row is a grid of exactly as many equal columns as it has players, not a
+ * centred flex-wrap. The wrap was actively lying about the shape: tokens are a
+ * fixed width, and a back four needs about 276px, which is more than the card
+ * gets when two lineups sit side by side — so a flat back four wrapped to three
+ * and one and drew a formation the team never played. Equal columns cannot
+ * wrap, and they also spread the line across the pitch the way a real one is,
+ * instead of clustering it in the middle.
  */
 export function LineupPitch({
   formation,
@@ -74,7 +82,14 @@ export function LineupPitch({
       )}
       <div className="relative flex flex-col gap-4 py-1">
         {rows.map((row, rowIndex) => (
-          <div key={row.key} className="flex flex-wrap items-start justify-center gap-3">
+          <div
+            key={row.key}
+            className="grid items-start gap-1.5"
+            // Inline because the column count is data — a back three, four or
+            // five all reach here, and Tailwind cannot generate a class for a
+            // number it never sees at build time.
+            style={{ gridTemplateColumns: `repeat(${row.players.length}, minmax(0, 1fr))` }}
+          >
             {row.players.map((p, i) => {
               // RECOMMENDATIONS.md item 294: a real "In your XI" indicator —
               // a cyan ring around the shirt token plus a captain "C" badge
@@ -112,16 +127,20 @@ export function LineupPitch({
               return (
                 <motion.div
                   key={p.playerId || p.playerName}
+                  className="min-w-0"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, delay: staggerDelay(rowIndex * 4 + i, 0.03), ease: [0.22, 1, 0.36, 1] }}
                 >
                   {p.playerId ? (
-                    <Link href={`/players/${p.playerId}`} className="group flex w-[60px] flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+                    <Link
+                      href={`/players/${p.playerId}`}
+                      className="group mx-auto flex w-full min-w-0 max-w-[72px] flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    >
                       {token}
                     </Link>
                   ) : (
-                    <div className="group flex w-[60px] flex-col items-center gap-1">{token}</div>
+                    <div className="group mx-auto flex w-full min-w-0 max-w-[72px] flex-col items-center gap-1">{token}</div>
                   )}
                 </motion.div>
               );

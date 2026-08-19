@@ -21,9 +21,9 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
 import { HeatmapView } from "@/components/matches/heatmap-view";
+import { buildFixtureHeatmaps, hasFixtureHeatmapContent } from "@/lib/football/heatmap/fixture-heatmap";
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
-import type { PositionalObservation } from "@/lib/football/positional-types";
 import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { useRealtimeFixtureEvents } from "@/hooks/use-realtime-fixture-events";
@@ -737,61 +737,6 @@ function LineupsTab({
   );
 }
 
-/**
- * RECOMMENDATIONS.md item 228: `HeatmapView`/`HeatmapEngine` were already
- * built and tested; this tab is the "add it as a tab" half of that item now
- * that the product decision has been made. No `PositionalDataProvider` is
- * connected anywhere in KIVO (`positional-types.ts`) — both observations
- * arrays below are always empty, so today this always hits the single
- * unified empty state further down. That is the correct, expected
- * behaviour for every real fixture today, not a bug to paper over with
- * sample/fake data.
- *
- * The per-side split only appears once at least one side has real data to
- * show — until then, rendering two near-identical "positional data
- * unavailable" panels side by side (differing only by team name) reads as
- * a doubled-up placeholder rather than one polished "not available yet"
- * message for the whole tab.
- */
-function HeatmapTab({
-  fixtureId,
-  homeTeamName,
-  awayTeamName,
-}: {
-  fixtureId: string;
-  homeTeamName: string;
-  awayTeamName: string;
-}) {
-  const homeObservations: PositionalObservation[] = [];
-  const awayObservations: PositionalObservation[] = [];
-
-  // KN-34. This used to call heatmapEngine.build() on both arrays on every
-  // render purely to ask `hasData`, and build() constructs a full density grid
-  // before it can answer. Both arrays are hardcoded empty (no
-  // PositionalDataProvider exists — see this component's doc comment above,
-  // which is correct and documented, not an oversight), so those two grids
-  // could only ever come back `hasData: false`. Two grid builds per render, on
-  // the most-tapped screen in the product, to compute a constant.
-  //
-  // Asking the arrays directly is the same question with none of the work, and
-  // it stays correct the day a provider does land: `hasData` in the engine is
-  // itself derived from whether any observation survived normalisation, so an
-  // empty input can never produce a truthy answer. Nothing about the empty
-  // state's honesty changes — only what it costs to reach it.
-  const anyData = homeObservations.length > 0 || awayObservations.length > 0;
-
-  if (!anyData) {
-    return <HeatmapView observations={[]} matchId={fixtureId} subjectLabel="this match" />;
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <HeatmapView observations={homeObservations} matchId={fixtureId} subjectLabel={homeTeamName} />
-      <HeatmapView observations={awayObservations} matchId={fixtureId} subjectLabel={awayTeamName} />
-    </div>
-  );
-}
-
 type StatRow = { key: keyof Omit<TeamStats, "teamId">; label: string; suffix?: string };
 
 /** The eleven a fan scans first. Deliberately short: a long undifferentiated
@@ -1089,23 +1034,23 @@ function MatchCentreTabsInner({
     preMatch.status === "scheduled" || isLiveStatus(preMatch.status),
   );
 
-  // KN-53: a data tab earns its place by holding data. The Heatmap has no
-  // positional source wired up at all yet (see HeatmapTab), so today it is
-  // always in the collapsed group — which is more honest than a permanently
-  // empty tab that implies the feature is a sync away.
-  //
-  // When a positional source does land, this must become a question about the
-  // observations themselves, not a proxy for them: a lineup count says a
-  // formation was published, not that any position could be derived from it,
-  // and wiring it to `lineups.length > 0` would make the tab reachable while
-  // HeatmapTab still hands HeatmapView an empty array. Compute the
-  // observations once here, pass them into HeatmapTab, and key availability
-  // off their length so the strip and the panel cannot disagree.
+  // Built once, here, and used for two things: whether the Heatmap tab is
+  // offered at all, and what that tab then renders. That is the whole point —
+  // the tab was hardcoded unavailable precisely because availability and
+  // content were separate questions that could disagree, and the obvious fix
+  // (offer it whenever a lineup exists) would have reintroduced the same bug
+  // in reverse, since a published lineup does not mean a single player could
+  // actually be anchored on the pitch. `hasFixtureHeatmapContent` asks about
+  // the very object the view is about to draw, so the tab strip cannot promise
+  // something the panel then fails to show.
+  const heatmaps = buildFixtureHeatmaps({ fixtureId, homeTeamId, awayTeamId, lineups, events });
+
+  // KN-53: a data tab earns its place by holding data.
   const dataTabAvailability: Record<(typeof DATA_TABS)[number], boolean> = {
     Timeline: liveEvents.length > 0,
     Stats: stats.length > 0,
     Lineups: lineups.length > 0,
-    Heatmap: false,
+    Heatmap: hasFixtureHeatmapContent(heatmaps),
   };
   const availableDataTabs = DATA_TABS.filter((tab) => dataTabAvailability[tab]);
   const collapsed = availableDataTabs.length === 0;
@@ -1261,7 +1206,9 @@ function MatchCentreTabsInner({
             viewerFantasyRoster={viewerFantasyRoster}
           />
         )}
-        {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
+        {active === "Heatmap" && (
+          <HeatmapView heatmaps={heatmaps} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />
+        )}
         {active === "H2H" && headToHead && <HeadToHeadTab headToHead={headToHead} />}
         {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
         {active === "Room" && (
