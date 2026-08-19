@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, BadgeCheck, Bell, Clock } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { parseUuidParam } from "@/lib/params";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
@@ -52,15 +53,32 @@ type TransferDetailRow = {
   to_team: { id: string; name: string; short_name: string | null; crest_url: string | null } | null;
 };
 
-async function loadTransfer(id: string): Promise<TransferDetailRow | null> {
+/**
+ * Returns the raw PostgREST result rather than a row, so each caller states
+ * out loud what a failed read should do to it.
+ *
+ * This used to discard the error and return null, which meant a dropped
+ * connection or an expired token rendered `notFound()` — the page telling a
+ * reader that a transfer they had just clicked does not exist, about a row
+ * sitting perfectly well in the database. A 404 is a claim about the world; a
+ * failed read is a fact about the request, and they must not share a branch,
+ * because a reader acts on them differently: one means stop looking, the
+ * other means try again shortly.
+ */
+async function loadTransfer(id: string) {
   const supabase = createServerSupabaseClient();
-  const { data } = await supabase.from("transfers").select(TRANSFER_SELECT).eq("id", id).maybeSingle();
-  return (data as unknown as TransferDetailRow) ?? null;
+  return supabase.from("transfers").select(TRANSFER_SELECT).eq("id", id).maybeSingle();
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const transfer = await loadTransfer(parseUuidParam(id));
+  // readOptionalRow, not readRow: a page title is never worth taking the page
+  // down for. The failure is logged and the title falls back; the page's own
+  // read below still gets its proper chance to succeed or fail honestly.
+  const transfer = readOptionalRow(
+    await loadTransfer(parseUuidParam(id)),
+    "transfers.detail.metadata",
+  ) as TransferDetailRow | null;
   if (!transfer?.player) return { title: "Transfer" };
   const name = transfer.player.known_as ?? transfer.player.full_name;
   const destination = transfer.to_team?.name;
@@ -98,7 +116,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const { id: rawId } = await params;
   const id = parseUuidParam(rawId);
 
-  const transfer = await loadTransfer(id);
+  const transfer = readRow(await loadTransfer(id), "transfers.detail") as TransferDetailRow | null;
   if (!transfer?.player) notFound();
 
   const supabase = createServerSupabaseClient();
