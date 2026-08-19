@@ -188,7 +188,11 @@ export async function buildWatchlistDigest(supabase: Client, profileId: string):
   }
 
   const watchedTeams = new Set(teamIds);
-  for (const row of teamFixtures) {
+  // `.rows` rather than the outcome: this digest is a best-effort summary, so
+  // a chunk that failed costs it a few results rather than the whole digest.
+  // Deliberate, and different from /home's choice — see the outcome type's own
+  // doc comment for why the distinction has to be made per caller.
+  for (const row of teamFixtures.rows) {
     const home = row.home_team?.name ?? "Unknown";
     const away = row.away_team?.name ?? "Unknown";
     // Scores are nullable even on a finished fixture (a provider that reported

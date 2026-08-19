@@ -6,6 +6,8 @@ import { getActiveProviderStatus } from "@/lib/football";
 import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { readList } from "@/lib/query-result";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LiveCentreSections } from "@/components/matches/live-centre-sections";
 import { LiveFreshnessNote } from "@/components/football/live-freshness-note";
@@ -76,7 +78,7 @@ export default async function LivePage() {
   // handed down as a single set. The client partitions it by current status, so
   // a kickoff or a full-time whistle actually moves a row between sections
   // instead of restyling it in place under the wrong heading.
-  const [{ data: liveFixtures }, { data: todayFixtures }] = await Promise.all([
+  const [liveResult, todayResult] = await Promise.all([
     supabase
       .from("fixtures")
       .select(fixtureSelect)
@@ -92,8 +94,27 @@ export default async function LivePage() {
       .limit(TODAY_FIXTURES_LIMIT),
   ]);
 
+  const liveOutcome = readList(liveResult, "live.inPlay");
+  const todayOutcome = readList(todayResult, "live.today");
+
+  // Either failing sinks the page rather than half of it. These two lists are
+  // merged into one set the client then partitions by status, so a surviving
+  // half does not render as "the live matches, minus a few" — it renders as a
+  // complete and confident list that happens to be missing rows nobody can
+  // see are missing. On a page whose entire promise is "this is what is
+  // happening right now", that is the worst available outcome.
+  if (liveOutcome.failed || todayOutcome.failed) {
+    return (
+      <LoadFailed
+        title={item.label}
+        icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />}
+        description="KIVO couldn't read what's in play just now. That's different from nothing being on — try again."
+      />
+    );
+  }
+
   const byId = new Map<string, LivePageFixture>();
-  for (const fixture of [...(liveFixtures ?? []), ...(todayFixtures ?? [])]) {
+  for (const fixture of [...liveOutcome.rows, ...todayOutcome.rows]) {
     // A live fixture that kicked off today appears in both result sets; the
     // first write wins and they carry identical rows either way.
     if (!byId.has(fixture.id)) byId.set(fixture.id, fixture);

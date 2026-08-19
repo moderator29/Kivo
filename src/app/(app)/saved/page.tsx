@@ -10,6 +10,8 @@ import { SaveButton } from "@/components/ui/save-button";
 import { PostCard } from "@/components/social/post-card";
 import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { WatchlistDigestPanel } from "@/components/football/watchlist-digest-panel";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 
 export const metadata: Metadata = { title: "Saved" };
 
@@ -35,31 +37,46 @@ export default async function SavedPage() {
   if (!profile) redirect(`/sign-up?redirect_url=${encodeURIComponent("/saved")}`);
 
   const supabase = createServerSupabaseClient();
-  const { data: saves } = await supabase
-    .from("saves")
-    .select("target_type, target_id, created_at")
-    .eq("profile_id", profile.id)
-    .order("created_at", { ascending: false });
+  // The page *is* this read. "You haven't saved anything yet" is a statement
+  // about the person reading it, and if it is wrong they will conclude their
+  // saves were lost rather than that a query failed.
+  const savesOutcome = readList(
+    await supabase
+      .from("saves")
+      .select("target_type, target_id, created_at")
+      .eq("profile_id", profile.id)
+      .order("created_at", { ascending: false }),
+    "saved.saves",
+  );
 
-  const postIds = (saves ?? []).filter((s) => s.target_type === "post").map((s) => s.target_id);
-  const teamIds = (saves ?? []).filter((s) => s.target_type === "team").map((s) => s.target_id);
-  const playerIds = (saves ?? []).filter((s) => s.target_type === "player").map((s) => s.target_id);
+  const saves = savesOutcome.rows;
+  const postIds = saves.filter((s) => s.target_type === "post").map((s) => s.target_id);
+  const teamIds = saves.filter((s) => s.target_type === "team").map((s) => s.target_id);
+  const playerIds = saves.filter((s) => s.target_type === "player").map((s) => s.target_id);
 
-  const [{ posts, error: postsError }, { data: teams }, { data: players }] = await Promise.all([
+  const [{ posts, error: postsError }, teamsResult, playersResult] = await Promise.all([
     fetchPostsPage(0, profile.id, { postIds }),
     teamIds.length
       ? supabase.from("teams").select("id, name, short_name, crest_url").in("id", teamIds)
-      : Promise.resolve({ data: [] as TeamRow[] }),
+      : Promise.resolve({ data: [] as TeamRow[], error: null }),
     playerIds.length
       ? supabase
           .from("players")
           .select("id, full_name, known_as, position, current_team:teams(name, crest_url)")
           .in("id", playerIds)
-      : Promise.resolve({ data: [] as PlayerRow[] }),
+      : Promise.resolve({ data: [] as PlayerRow[], error: null }),
   ]);
 
-  const teamMap = new Map((teams ?? []).map((t) => [t.id, t]));
-  const playerMap = new Map((players ?? []).map((p) => [p.id, p]));
+  // These two hydrate ids the page already knows it has. A failure here is
+  // not "one fewer panel" — the id survives and the row it names does not, so
+  // the item simply vanishes from the list, which is indistinguishable from
+  // the reader having unsaved it themselves. That is why they join the gate
+  // below rather than being tolerated the way a side panel would be.
+  const teamsOutcome = readList(teamsResult, "saved.teams");
+  const playersOutcome = readList(playersResult, "saved.players");
+
+  const teamMap = new Map(teamsOutcome.rows.map((t) => [t.id, t]));
+  const playerMap = new Map(playersOutcome.rows.map((p) => [p.id, p]));
 
   // target_id has no DB-level FK (it's polymorphic across three tables, same
   // caveat as follows) — a saved row whose target was since deleted resolves
@@ -67,6 +84,7 @@ export default async function SavedPage() {
   const savedTeams = teamIds.map((id) => teamMap.get(id)).filter((t): t is TeamRow => !!t);
   const savedPlayers = playerIds.map((id) => playerMap.get(id)).filter((p): p is PlayerRow => !!p);
 
+  const loadFailed = savesOutcome.failed || teamsOutcome.failed || playersOutcome.failed;
   const isEmpty = posts.length === 0 && savedTeams.length === 0 && savedPlayers.length === 0;
 
   return (
@@ -82,7 +100,13 @@ export default async function SavedPage() {
           without ever saving anything, and their digest is still real. */}
       <WatchlistDigestPanel profileId={profile.id} />
 
-      {isEmpty ? (
+      {loadFailed ? (
+        <LoadFailed
+          tone="section"
+          title="Your saved items"
+          description="KIVO couldn't read what you've saved just now. Nothing has been removed — try again."
+        />
+      ) : isEmpty ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
           <Bookmark className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">

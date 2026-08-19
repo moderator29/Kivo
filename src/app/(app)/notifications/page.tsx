@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NotificationsList } from "@/components/notifications/notifications-list";
@@ -61,7 +63,7 @@ export default async function NotificationsPage({
   // One real head-count per group, in parallel. Chips carry the true number
   // and a group with nothing in it is not rendered at all — so the filter row
   // only ever offers filters that lead somewhere.
-  const [{ data: notificationRows, count }, groupCounts, blockedUsernames] = await Promise.all([
+  const [notificationsResult, groupCounts, blockedUsernames] = await Promise.all([
     query.order("created_at", { ascending: false }).range(from, to),
     Promise.all(
       NOTIFICATION_GROUPS.map(async (group) => {
@@ -83,7 +85,13 @@ export default async function NotificationsPage({
   // above stay honest about what is really stored: a page that shows 28 of its
   // 30 rows is telling the truth, whereas a count corrected to hide the
   // difference would be inventing one.
-  const notifications = (notificationRows ?? []).filter(
+  // "You have no notifications" is a claim about this person, not about the
+  // database, and it is the kind of sentence a reader acts on by leaving. A
+  // failed read must never be allowed to make it.
+  const notificationsOutcome = readList(notificationsResult, "notifications.page");
+  const count = notificationsResult.count;
+
+  const notifications = notificationsOutcome.rows.filter(
     (notification) => !notificationIsFromBlockedActor(notification.payload, blockedUsernames),
   );
 
@@ -130,7 +138,13 @@ export default async function NotificationsPage({
         </FadeIn>
       )}
 
-      {!notifications || notifications.length === 0 ? (
+      {notificationsOutcome.failed ? (
+        <LoadFailed
+          tone="section"
+          title="Your notifications"
+          description="KIVO couldn't read your notifications just now. They haven't gone anywhere — try again."
+        />
+      ) : notifications.length === 0 ? (
         <FadeIn delay={0.06} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
           <Bell className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">

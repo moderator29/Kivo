@@ -24,6 +24,8 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getRecentNotifications } from "@/lib/notifications";
 import { selectHomeLead, type LeadFixture } from "@/lib/home-lead";
@@ -211,14 +213,24 @@ export default async function HomePage() {
   // personal at all (RECOMMENDATIONS item 13). Two-step because `followed_id`
   // has no DB-level FK (it's polymorphic across team/player/competition), so
   // the ids have to be resolved before anything can be filtered on them.
-  const { data: followRows } = await supabase
-    .from("follows")
-    .select("followed_id, followed_type")
-    .eq("follower_profile_id", profile.id)
-    .in("followed_type", ["team", "player"]);
+  // This one read decides who the viewer *is* on this page. Every section
+  // below is scoped by it, so `data ?? []` here does not produce an empty
+  // home — it produces a confident, fully-rendered home belonging to somebody
+  // who follows nothing. That is not a missing section, it is the wrong
+  // person, and it is the reason this read is treated as load-bearing while
+  // most of the others on this page are not.
+  const followsOutcome = readList(
+    await supabase
+      .from("follows")
+      .select("followed_id, followed_type")
+      .eq("follower_profile_id", profile.id)
+      .in("followed_type", ["team", "player"]),
+    "home.follows",
+  );
 
-  const followedTeamIds = (followRows ?? []).filter((f) => f.followed_type === "team").map((f) => f.followed_id);
-  const followedPlayerIds = (followRows ?? []).filter((f) => f.followed_type === "player").map((f) => f.followed_id);
+  const followRows = followsOutcome.rows;
+  const followedTeamIds = followRows.filter((f) => f.followed_type === "team").map((f) => f.followed_id);
+  const followedPlayerIds = followRows.filter((f) => f.followed_type === "player").map((f) => f.followed_id);
 
   // A favourite club picked at onboarding counts as "yours" for the purposes
   // of this page even if the user never pressed Follow on it — it is the one
@@ -228,7 +240,7 @@ export default async function HomePage() {
   ];
 
   const [
-    { data: todayFixtures },
+    todayFixturesResult,
     { data: xpTotal },
     { data: fantasyTeams },
     { data: myTeamRows },
@@ -263,6 +275,11 @@ export default async function HomePage() {
     getRecentNotifications(),
   ]);
 
+  // "No football today" is a real and common answer; "KIVO could not read the
+  // fixture list" is not the same sentence and must not borrow its words.
+  const todayFixturesOutcome = readList(todayFixturesResult, "home.todayFixtures");
+  const todayFixtures = todayFixturesOutcome.rows;
+
   const totalXp = xpTotal ?? 0;
   const teamNames = new Map<string, string>(
     (myTeamRows ?? []).map((t) => [t.id, t.short_name || t.name] as const),
@@ -275,7 +292,7 @@ export default async function HomePage() {
   // exactly what would vanish. fetchFixturesForTeams chunks the ids and asks
   // for each side with a plain `.in()` instead; see its module doc for why
   // merging sorted prefixes is exact rather than a heuristic.
-  const [matchdayFixtures, upcomingFixtures] = await Promise.all([
+  const [matchdayOutcome, upcomingOutcome] = await Promise.all([
     fetchFixturesForTeams(matchdayTeamIds, MATCHDAY_FIXTURES_LIMIT, (column, ids) =>
       supabase
         .from("fixtures")
@@ -298,11 +315,40 @@ export default async function HomePage() {
     ),
   ]);
 
+  const matchdayFixtures = matchdayOutcome.rows;
+  const upcomingFixtures = upcomingOutcome.rows;
+
+  // The gate. Four reads, and each of them is one the page cannot be honest
+  // without: who the viewer follows, what is on today, and their own clubs'
+  // fixtures in both directions. If any failed, /home would still render — a
+  // greeting, a lead slot, section headings — and every one of those would be
+  // making a claim about this person's football that KIVO cannot currently
+  // support. `<LoadFailed>` says the true thing and offers the only useful
+  // action, which is to try again.
+  //
+  // Everything *not* in this list is deliberately left tolerant: XP, fantasy,
+  // transfers, notifications and the prediction summary each own one panel,
+  // and one absent panel should not take down a home page that otherwise
+  // works. That asymmetry is the judgement, not an oversight.
+  if (
+    followsOutcome.failed ||
+    todayFixturesOutcome.failed ||
+    matchdayOutcome.failed ||
+    upcomingOutcome.failed
+  ) {
+    return (
+      <LoadFailed
+        title="Your home"
+        description="KIVO couldn't read your clubs and today's fixtures just now, so this page would be guessing about your football rather than reporting it. Nothing has been lost — try again."
+      />
+    );
+  }
+
   // ── The lead slot (KN-37) ────────────────────────────────────────────────
   // Everything below is *facts*; the ranking itself lives in
   // src/lib/home-lead.ts and is unit-tested there.
-  const liveRow = (matchdayFixtures ?? []).find((f) => isLiveStatus(f.status)) ?? null;
-  const nextRow = (upcomingFixtures ?? [])[0] ?? null;
+  const liveRow = matchdayFixtures.find((f) => isLiveStatus(f.status)) ?? null;
+  const nextRow = upcomingFixtures[0] ?? null;
 
   // The viewer's own call on the fixture that is about to lead the page — one
   // targeted lookup rather than fetching every prediction they have ever made.
@@ -361,8 +407,8 @@ export default async function HomePage() {
   // a page whose headline and its own supporting list repeat the same fixture
   // reads as a bug, not as emphasis.
   const leadFixtureId = "fixture" in lead ? lead.fixture.id : null;
-  const matchdayRest = (matchdayFixtures ?? []).filter((f) => f.id !== leadFixtureId);
-  const upcomingRest = (upcomingFixtures ?? []).filter((f) => f.id !== leadFixtureId).slice(0, 5);
+  const matchdayRest = matchdayFixtures.filter((f) => f.id !== leadFixtureId);
+  const upcomingRest = upcomingFixtures.filter((f) => f.id !== leadFixtureId).slice(0, 5);
 
   // Today's card across KIVO, minus the fixtures the viewer's own sections are
   // already showing — "the rest of today's football" has to actually be the
@@ -371,7 +417,7 @@ export default async function HomePage() {
     ...(leadFixtureId ? [leadFixtureId] : []),
     ...matchdayRest.map((f) => f.id),
   ]);
-  const allTodayFixtures = (todayFixtures ?? []) as unknown as FixtureRowShape[];
+  const allTodayFixtures = todayFixtures as unknown as FixtureRowShape[];
   const topMatches = allTodayFixtures.filter((f) => !ownFixtureIds.has(f.id)).slice(0, TODAY_FIXTURES_SHOWN);
 
   const followedTeamIdSet = new Set(matchdayTeamIds);
@@ -426,9 +472,9 @@ export default async function HomePage() {
     now,
     clubsToday: {
       count: matchdayFixtures?.length ?? 0,
-      liveCount: (matchdayFixtures ?? []).filter((f) => isLiveStatus(f.status)).length,
-      nextKickoffAt: (matchdayFixtures ?? []).find((f) => new Date(f.kickoff_at).getTime() > now)?.kickoff_at ?? null,
-      firstFixtureId: (matchdayFixtures ?? [])[0]?.id ?? null,
+      liveCount: matchdayFixtures.filter((f) => isLiveStatus(f.status)).length,
+      nextKickoffAt: matchdayFixtures.find((f) => new Date(f.kickoff_at).getTime() > now)?.kickoff_at ?? null,
+      firstFixtureId: matchdayFixtures[0]?.id ?? null,
     },
     fantasy:
       fantasySummary && nextGameweek
