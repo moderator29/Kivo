@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { roundText } from "@/components/matches/match-centre-tabs";
+import { roundText } from "@/components/matches/match-overview";
 
 /**
  * How the Match Centre names a fixture's round.

@@ -92,6 +92,18 @@ export type PlayerMatchRatingInput = {
   position: string | null;
   /** From this player's `lineups` row for this fixture. */
   isStarting: boolean;
+  /** True when KIVO holds a real substitution event bringing this player on
+   * (see `buildTeamSheet` in team-sheet.ts). Optional and defaulting to false
+   * so every existing caller is unaffected.
+   *
+   * This exists because `hasEvidenceOfInvolvement` below used to have no way
+   * to tell a substitute who played half an hour from one who never left the
+   * bench, and said so in its own comment. A substitution event settles it:
+   * the player was on the pitch. Without this flag a substitute who came on
+   * and did nothing countable was refused a rating for the opposite reason to
+   * the intended one — not "we don't know they played" but "we do know, and
+   * had no field to say it in". */
+  cameOnFromBench?: boolean;
   /** Real counts from `fixture_events`, already scoped to this player and
    * this fixture by the caller (same pattern as `computePlayerMatchStats`
    * in `player-stats.ts`). */
@@ -127,13 +139,26 @@ export type PlayerMatchRating = {
  * True when there is at least one real signal this player was actually
  * involved in this match. API-Football's lineups response includes every
  * named substitute whether or not they came on (see
- * `providers/api-football.ts`'s `getLineups`), and the schema has no
- * minutes-played column — so `isStarting` false with zero recorded events is
- * indistinguishable from "an unused substitute who never played a minute".
- * Rather than guess, that case returns null from `computePlayerMatchRating`.
+ * `providers/api-football.ts`'s `getLineups`), so `isStarting` false with no
+ * recorded event and no substitution bringing them on is indistinguishable
+ * from "an unused substitute who never played a minute". Rather than guess,
+ * that case returns null from `computePlayerMatchRating`.
+ *
+ * `cameOnFromBench` is the fourth kind of evidence and the only one that is
+ * not a countable action: a substitution event is KIVO's record that this
+ * player was on the pitch, which is exactly what `isStarting` is for a
+ * starter.
  */
 function hasEvidenceOfInvolvement(input: PlayerMatchRatingInput): boolean {
-  return input.isStarting || input.goals > 0 || input.assists > 0 || input.ownGoals > 0 || input.yellowCards > 0 || input.redCards > 0;
+  return (
+    input.isStarting ||
+    input.cameOnFromBench === true ||
+    input.goals > 0 ||
+    input.assists > 0 ||
+    input.ownGoals > 0 ||
+    input.yellowCards > 0 ||
+    input.redCards > 0
+  );
 }
 
 function clamp(value: number): number {
