@@ -6,6 +6,9 @@ import { TransfersFilters } from "@/components/transfers/transfers-filters";
 import { TransfersList } from "@/components/transfers/transfers-list";
 import { getNavItem } from "@/lib/navigation";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
+import { TRANSFER_STATUS_EXPLAINER } from "@/lib/football/transfer-status";
+import { nextTransferWindow, summariseRecordedActivity } from "@/lib/football/transfer-window";
+import { TransferWindowPanel } from "@/components/transfers/transfer-window-panel";
 import { TRANSFERS_PAGE_SIZE } from "./constants";
 import { TRANSFER_SELECT, TRANSFER_TYPES, parseTransferFilters, type TransferListItem } from "./shared";
 
@@ -44,10 +47,36 @@ export default async function TransfersPage({
   // Requests `PAGE_SIZE + 1` rows so `hasMore` can be read directly off the
   // response, same pattern as `/teams` and `/leagues` (audit item 2: this
   // used to hard-cap at 50 rows with no "Load more" and no truncation note).
-  const [{ data: transferRows }, { data: clubRows }] = await Promise.all([
+  // The window panel's numbers are counts of real rows, never a projection:
+  // every transfer dated within the last 30 days, unfiltered by whatever the
+  // user is currently filtering the list to — "how busy has it been" is a
+  // question about the whole feed, not about their current view.
+  // `new Date()` rather than `Date.now()`: the lint rule that governs purity
+  // in a render treats the latter as an impure call, and every other server
+  // page in the app reads the clock the same way (see /predictions, /leagues).
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
+
+  const [{ data: transferRows }, { data: clubRows }, { data: recentRows }, { data: latestRow }] = await Promise.all([
     request.range(0, TRANSFERS_PAGE_SIZE),
     supabase.from("teams").select("id, name, short_name").order("name", { ascending: true }),
+    supabase
+      .from("transfers")
+      .select("transfer_date, from_team_id, to_team_id")
+      .gte("transfer_date", thirtyDaysAgo),
+    supabase
+      .from("transfers")
+      .select("transfer_date, from_team_id, to_team_id")
+      .order("transfer_date", { ascending: false })
+      .limit(1),
   ]);
+
+  // `summariseRecordedActivity` derives "most recent" from whatever it is
+  // given, so the newest row overall is included alongside the 30-day window —
+  // otherwise a feed whose last move is six weeks old would report no most
+  // recent move at all, which is a different (and false) statement.
+  const activity = summariseRecordedActivity([...(recentRows ?? []), ...(latestRow ?? [])], now);
+  const upcomingWindow = nextTransferWindow(now);
 
   const allTransfers = (transferRows ?? []) as unknown as TransferListItem[];
   const transfers = allTransfers.slice(0, TRANSFERS_PAGE_SIZE);
@@ -82,11 +111,24 @@ export default async function TransfersPage({
         }
       `}</style>
 
-      <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Recorded transfers</h1>
+      <FadeIn className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold text-foreground">Transfer Centre</h1>
         <p className="text-sm text-foreground-muted">
-          Real, already-completed moves for KIVO&apos;s synced players, newest first. No rumours or reports.
+          Completed moves for KIVO&apos;s synced players, newest first, each with its source and the date KIVO
+          retrieved it.
         </p>
+        {/* The directive asked for Confirmed / Reported / Rumour / Unverified.
+            Three of those describe a signal KIVO's data does not carry, so the
+            product says so here instead of inventing them — the full reasoning
+            lives in src/lib/football/transfer-status.ts and
+            RECOMMENDATIONS.md item 178. */}
+        <p className="rounded-2xl border border-hairline-soft bg-surface-1 p-3 text-xs leading-relaxed text-foreground-subtle">
+          {TRANSFER_STATUS_EXPLAINER}
+        </p>
+      </FadeIn>
+
+      <FadeIn delay={0.02}>
+        <TransferWindowPanel window={upcomingWindow} activity={activity} now={now} />
       </FadeIn>
 
       <FadeIn delay={0.03}>

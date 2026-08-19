@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   Award,
   Bell,
   Goal,
@@ -40,6 +41,7 @@ export type NotificationType =
   | "match_red_card"
   | "match_result"
   | "player_event"
+  | "transfer_recorded"
   | "prediction_result"
   | "prediction_reminder"
   | "fantasy_deadline"
@@ -145,6 +147,17 @@ export const NOTIFICATION_REGISTRY: Record<NotificationType, RegistryEntry> = {
     icon: Target,
     href: fixtureHref,
   },
+  // Transfer follow alerts (src/lib/football/transfer-notifications.ts), fired
+  // from the transfer sync's insert branch. Links to the move itself rather
+  // than the list, because "who is this about" is the whole question.
+  transfer_recorded: {
+    title: (p) => str(p, "summary") ?? "A transfer was recorded for someone you follow",
+    icon: ArrowLeftRight,
+    href: (p) => {
+      const transferId = str(p, "transfer_id");
+      return transferId ? `/transfers/${transferId}` : "/transfers";
+    },
+  },
   prediction_result: {
     title: (p) => str(p, "summary") ?? "One of your predictions was settled",
     icon: Target,
@@ -239,6 +252,11 @@ export const NOTIFICATION_GROUPS = [
     id: "matches",
     label: "Matches",
     types: ["match_kickoff", "match_goal", "match_red_card", "match_result", "player_event"],
+  },
+  {
+    id: "transfers",
+    label: "Transfers",
+    types: ["transfer_recorded"],
   },
   {
     id: "social",

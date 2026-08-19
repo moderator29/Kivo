@@ -51,6 +51,10 @@ export type NotificationPayloadByType = {
   match_goal: { fixture_id: string; summary: string; player_id: string | null };
   match_red_card: { fixture_id: string; summary: string; player_id: string | null };
   player_event: { fixture_id: string; summary: string; player_id: string | null };
+  /** A completed, recorded move involving a club or player the recipient
+   * follows. `summary` is pre-built for the same reason the match ones are:
+   * the renderer has no access to club names. */
+  transfer_recorded: { transfer_id: string; player_id: string; summary: string };
   /** KN-61. Both fantasy payloads carry a pre-built summary for the same
    * reason the match ones do: the renderer has no access to a gameweek number
    * or a points total, and reconstructing either at read time would mean a
