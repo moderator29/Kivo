@@ -15,6 +15,8 @@ import {
   readBudgetUsage,
   reserveProviderRequests,
 } from "@/lib/football/request-budget";
+import { pruneProviderCache } from "@/lib/football/cache";
+import { pruneProviderRequestLog } from "@/lib/football/provider-telemetry";
 import { logError } from "@/lib/log";
 import { pruneRateLimitEvents } from "@/lib/rate-limit";
 import { rescoreLiveGameweeks } from "@/lib/fantasy-live-scoring";
@@ -511,6 +513,19 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
   // decision below it.
   const prunedSpend = await pruneProviderRequestSpend(supabase);
   if (prunedSpend > 0) console.info(`Cron: pruned ${prunedSpend} expired provider_request_spend rows`);
+
+  // The two tables migration 0118 added, swept on the same contract as the two
+  // above: bounded per call by their own SQL functions, best-effort, and unable
+  // to fail this request or change any decision below it. Without this they are
+  // the only append-only tables in the football path with no janitor at all —
+  // the response cache keeps bodies a day past their stale window so an outage
+  // can still be survived, and the request log keeps a fortnight so the Admin
+  // provider page has something to draw a trend from.
+  const prunedCache = await pruneProviderCache(supabase);
+  if (prunedCache > 0) console.info(`Cron: pruned ${prunedCache} expired provider_response_cache rows`);
+
+  const prunedLog = await pruneProviderRequestLog(supabase);
+  if (prunedLog > 0) console.info(`Cron: pruned ${prunedLog} expired provider_request_log rows`);
 
   /**
    * Settle predictions, and score fantasy gameweeks that are already over.

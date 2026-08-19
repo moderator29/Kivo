@@ -53,8 +53,15 @@ describe("classifyHttpError", () => {
     expect(classifyHttpError(503, "/fixtures?id=1", null).kind).toBe("server_error");
   });
 
-  it("classifies an unrecognised 4xx as client_error, distinct from rate_limited/auth", () => {
-    const err = classifyHttpError(404, "/fixtures?id=1", null);
+  it("classifies a 404 as not_found, which is more than the client_error it used to be", () => {
+    // Widened when the taxonomy moved to provider-request.ts: "this fixture does
+    // not exist" and "this request was malformed" lead to different product
+    // behaviour, and flattening them lost that.
+    expect(classifyHttpError(404, "/fixtures?id=1", null).kind).toBe("not_found");
+  });
+
+  it("classifies a genuinely unrecognised 4xx as client_error, distinct from rate_limited/auth", () => {
+    const err = classifyHttpError(422, "/fixtures?id=1", null);
     expect(err.kind).toBe("client_error");
   });
 
@@ -230,7 +237,7 @@ describe("requestWithRetry", () => {
     expect(sleepImpl).not.toHaveBeenCalled();
   });
 
-  it("never retries an unrecognised 4xx (e.g. 404) — single attempt, immediate throw", async () => {
+  it("never retries a 404 — single attempt, immediate throw", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse(404));
     const sleepImpl = vi.fn(noSleep);
 
@@ -243,7 +250,7 @@ describe("requestWithRetry", () => {
         fetchImpl,
         sleepImpl,
       }),
-    ).rejects.toMatchObject({ kind: "client_error", status: 404 });
+    ).rejects.toMatchObject({ kind: "not_found", status: 404 });
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });

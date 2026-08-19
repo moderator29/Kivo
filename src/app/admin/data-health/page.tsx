@@ -7,6 +7,7 @@ import { getActiveProviderStatus } from "@/lib/football";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
 import { PlanCapabilityPanel } from "@/components/admin/plan-capability-panel";
+import { ProviderPlatformPanel } from "@/components/admin/provider-platform-panel";
 import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 
@@ -213,6 +214,14 @@ export default async function ProviderHealthPage() {
           refusals as empty tables. "Connected" and "able to serve this season"
           are different facts and this is the panel that separates them. */}
       <PlanCapabilityPanel />
+
+      {/* Which providers are configured, whether they are answering, how fast,
+          what is on file and what has failed — all of it measured, all of it
+          nullable. The capability is passed explicitly rather than assumed from
+          having reached this line, because every table behind it is RLS-on with
+          no policies: read by a role that cannot see them, they return zero
+          rows, and zero failures reads as good news. */}
+      <ProviderPlatformPanel canManageFootballData={canManageFootballData(profile?.role)} />
 
       <AdminSection
         icon={ListChecks}
