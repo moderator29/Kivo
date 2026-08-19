@@ -4,7 +4,7 @@ What's real today for how long football data is cached and how "freshness" is di
 
 ## What actually exists: per-endpoint `fetch` cache windows
 
-Every provider request goes through Next.js's `fetch` with an explicit `next: { revalidate: N }` window — there is no other caching layer (no Redis, no in-memory LRU, no CDN-level football-data cache) anywhere in the football data path. The windows are set per API-Football endpoint in `src/lib/football/providers/api-football.ts`, chosen specifically to make on-demand, per-team/per-fixture syncing survive the free tier's 100-requests/day, 10-requests/minute budget — not chosen for "freshness" as an end in itself:
+Every provider request goes through Next.js's `fetch` with an explicit `next: { revalidate: N }` window. **This is no longer the only caching layer** — since 2026-08-19 there is a database-backed response cache above it (see "The formal system" below) — but it remains real and unchanged, and the two do different jobs: this one is free and deduplicates within one serverless instance, the other costs a Postgres round trip and deduplicates across all of them. The windows are set per API-Football endpoint in `src/lib/football/providers/api-football.ts`, chosen specifically to make on-demand, per-team/per-fixture syncing survive the free tier's 100-requests/day, 10-requests/minute budget — not chosen for "freshness" as an end in itself:
 
 | Data | Window | Constant |
 |---|---|---|
@@ -31,17 +31,65 @@ Separately from the `fetch` cache above, public pages show "Last synced X ago" v
 
 This is what powers the "Last synced" note on team, player, and match pages — real, working, sourced from `sync_runs`, not a cache-header inference.
 
-## What doesn't exist: a formal TTL-by-volatility-tier system
+## The formal system, as of 2026-08-19: resource classes
 
-There is no single named policy, config object, or enforced rule that says "volatility tier X gets TTL Y, and every new data type must declare its tier before shipping." What exists instead is a set of per-endpoint constants (the table above) that a developer chose per data type, following an implicit "how often does this actually change, and what does the quota afford" reasoning captured only in code comments next to each constant — not codified as a reusable, generically-applicable framework.
+**The section that used to be here said this did not exist.** It said there was no named policy, no config object, no enforced rule, and no single source of truth to consult other than reading a provider file's constants — and that building one was "real, scoped future work, not attempted this pass". This is that work, landed.
 
-Concretely, this means:
+### One place a kind of football fact declares how long it stays true
 
-- There's no single source of truth to consult ("what's the TTL for X") other than reading the relevant provider file's constants directly.
-- There's no enforcement that a newly-added endpoint must pick a tier from a defined set — a future addition could pick an arbitrary number with no guardrail.
-- The two providers' cache windows aren't shared/unified — API-Football's and TheSportsDB's constants are defined independently, even for conceptually the same data type (fixtures, squads, standings), because each was tuned against that provider's own quota limit rather than a shared abstraction.
+`src/lib/football/cache/resource-classes.ts` holds `RESOURCE_POLICIES`, keyed by a `ResourceClass` union. Adding a resource means adding a case to that union, and the type makes it impossible to cache something that has not declared a policy — the guardrail whose absence the old section flagged.
 
-Building a formal system (a `VOLATILITY_TIER` enum, a lookup table, enforced at the type level) is real, scoped future work — not attempted this pass, and not currently blocking anything, since the ad hoc constants do correctly protect quota today. Flagging honestly rather than describing the current constants as more systematic than they are.
+The classes are keyed on **the kind of fact, not the endpoint**, and that is the substantive change rather than a tidying-up. The same `/fixtures` call returns a match kicking off in an hour, a match in its 70th minute, and a match that finished in April. Cached per endpoint, all three get whichever window the developer had in mind — in practice the shortest, so KIVO re-fetched April every time it wanted the 70th minute. Three classes, three policies:
+
+| Class | Fresh | Stale window | Why |
+|---|---|---|---|
+| `live_match` | 30s | 60s | The one class where old data is worse than none. A score four minutes behind is not degraded, it is wrong. |
+| `upcoming_match` | 10m | 1h | Fixtures move hours in advance, not minutes. |
+| `completed_match` | 6h | 2d | A result is history. Most of what anybody browses, and the largest single saving here. |
+| `match_lineups` / `match_events` / `match_statistics` | 2m | 15m | Identical on purpose, so a match room can never show three views of one match that disagree. |
+| `standings` | 6h | 2d | Expired by a finished match rather than by the clock — see below. |
+| `squad` | 1d | 7d | Two windows a year, but a mid-season signing must not stay invisible for a week. |
+| `team` / `player` / `competition` / `competition_coverage` | 7d | 30d | Change between seasons, not within one. |
+| `player_season_stats` / `top_scorers` | 6h | 3d | Advance once a matchday at most. |
+| `transfers` | 2d | 7d | Append-only and already historical fact. |
+| `injuries` | 6h | 1d | The one slow class that genuinely moves within a day. |
+| `provider_status` | 5m | 5m (none) | Carries today's spend. A stale quota number gets believed and acted on. |
+
+Every entry carries a `rationale` sentence, and the Admin provider page prints it beside the number, so a window can be judged without opening the file.
+
+### Two deadlines, not one — and why that is the point
+
+Each policy declares `freshSeconds` **and** `staleSeconds`. Before `freshSeconds`, the answer is served with no question asked. Between the two, exactly one caller refreshes while everybody else is handed the old body immediately. That gap is the stale-while-revalidate behaviour, and it is where the product survives a provider outage rather than emptying out.
+
+The stale window is deliberately **wider for slow-moving facts than for fast ones**, which is the opposite of the instinct. A four-hour-old league table is still a league table; a four-hour-old live score is a lie.
+
+### The cache is in the database, because an in-process one is a lie at scale
+
+`provider_response_cache` (migration 0118). The obvious implementation of "only one caller should fetch" is a module-level map of in-flight promises — three lines, and false on this platform. A serverless function shares no memory between invocations: the map is empty on every cold start, and two invocations on two instances each have their own. The deduplication it appears to provide is exactly the deduplication that does not happen during a burst, which is the only time it mattered.
+
+So the dedupe is a **lease** in the database, taken in the same statement that reads the entry (`claim_provider_cache_entry`). Asking "is this fresh" and "may I be the one to refresh it" separately is check-then-act and lets both callers through. Leases **expire** rather than being released, so a holder killed by a serverless duration limit cannot wedge a resource class forever — the same reasoning `sync_locks` and `reap_abandoned_sync_runs` already use.
+
+This sits **above** the per-endpoint `revalidate` windows described earlier, which stay exactly where they are. They are free and deduplicate within one instance; this one costs a Postgres round trip and deduplicates across all of them.
+
+### Standings are refreshed by an event, not a clock
+
+A league table is stable for days and then changes in ninety minutes. An hourly TTL spends roughly twenty-four requests a day to catch the two or three occasions a week that mattered; a daily TTL is cheap and wrong for most of Saturday evening. Neither is a good trade.
+
+So the clock is set long and a finished match expires the entry outright (`invalidate_provider_cache`, called through `invalidateOnMatchCompletion`). Which classes are enrolled is declared by the classes themselves (`invalidatedByFinishedMatch: true`), not listed at the call site. It **expires rather than deletes**: until the new table arrives the old one is still the best answer, and deleting it would turn an 89th-minute goal into an empty screen.
+
+`player_season_stats` is deliberately *not* enrolled, though it also changes when a match ends. A table is one small object shared by twenty clubs; season stats are one object per player, and expiring every player in a league because one match finished would turn a saving into a stampede.
+
+### A cache miss is not permission to spend
+
+The resource class also names its budget bucket, and `withProviderCache` reserves from the ledger **after** winning the lease and **before** running the fetcher — the only ordering that cannot spend a request the ledger does not know about. A refused reservation falls back to stale data when there is any, because a slightly old league table is a much better answer than an exhausted quota.
+
+### Why the TTLs are in TypeScript when the budget ceilings are in SQL
+
+A deliberate asymmetry. A budget ceiling bounds spending somebody else's money, so a caller that can choose its own has no ceiling — it belongs where only a migration can change it (migration 0094 argues this at length and it stands). A TTL is a claim about how fast football changes: application code has to branch on it, it should be unit-testable without a database, and a caller cannot abuse it — the worst a wrong TTL does is waste a request or show something slightly old.
+
+### What is still not proven
+
+**None of this has been exercised against a real provider.** Both new provider domains are blocked by the egress proxy this was built behind and no provider key exists in this environment, so every claim above about *request savings* is a claim about the mechanism, not a measurement of it. What has been verified: the state machine itself, exercised against the live database — a miss grants exactly one lease, a second concurrent caller is refused it, a written entry reads back as `fresh`, an invalidation moves it to `stale`, and a released lease removes the empty row. What has not: a single real provider response has ever passed through it.
 
 ## `revalidatePath` under `force-dynamic` — measured, because it was about to be deleted
 

@@ -1,20 +1,54 @@
 /**
  * Fetch orchestration for the API-Football adapter (providers/api-football.ts):
- * response classification (RECOMMENDATIONS.md item 54 — 429 vs 403 vs other
- * 4xx/5xx), one jittered retry for transient failures only (item 55), and the
- * quota-remaining header parse (item 53). Split into its own module —
- * deliberately without a "server-only" import — so this stays importable from
- * unit tests without dragging in api-football.ts's server-only fetch/env
+ * the provider-specific half of it. The transport half — retry, exponential
+ * backoff, timeout, quota-header reading, secret redaction and the error
+ * taxonomy — moved to `provider-request.ts` when the second and third providers
+ * arrived, and this file now delegates to it rather than carrying its own copy.
+ *
+ * What stays here is everything only API-Football does: answering account and
+ * plan problems with HTTP 200 and a populated `errors` field, naming the season
+ * range a refused plan can actually serve, and the wording an operator reads
+ * when either happens. None of that generalises, because no other provider does
+ * it.
+ *
+ * Deliberately without a "server-only" import, unchanged: this stays importable
+ * from unit tests without dragging in api-football.ts's env and fetch
  * dependencies, same rationale as normalizers.ts.
  */
 
-export type ApiFootballErrorKind =
-  | "rate_limited"
-  | "auth"
-  | "plan"
-  | "server_error"
-  | "client_error"
-  | "network_error";
+import {
+  KivoProviderError,
+  backoffDelayMs,
+  classifyStatusKind,
+  isRetryableKind,
+  requestProvider,
+  type ProviderErrorKind,
+  type ProviderRequestOutcome,
+} from "./provider-request";
+
+export const API_FOOTBALL_PROVIDER_ID = "api-football";
+
+/**
+ * The header API-Football sends its remaining-quota count on. Known because
+ * this adapter has been reading it in production, which is exactly why it can
+ * be a single name here while `provider-request.ts` takes a list — the other
+ * providers' header names are not known from this environment.
+ */
+export const API_FOOTBALL_QUOTA_HEADERS = ["x-ratelimit-requests-remaining"] as const;
+
+/**
+ * Now an alias of KIVO's taxonomy rather than a parallel one.
+ *
+ * It was `"rate_limited" | "auth" | "plan" | "server_error" | "client_error" |
+ * "network_error"` — every one of which survives, in the same spelling, because
+ * `ProviderErrorKind` was defined as an extension of this list rather than a
+ * replacement for it. Widening it here means a 404 now classifies as
+ * `not_found` instead of being flattened into `client_error`, and an abandoned
+ * request as `timeout` instead of `network_error`. Both are strictly more
+ * information at every call site, and no call site branches on a kind it did
+ * not have before.
+ */
+export type ApiFootballErrorKind = ProviderErrorKind;
 
 /**
  * API-Football reports account-level and parameter-level problems with HTTP
@@ -138,32 +172,34 @@ export function describePlanRefusal(providerMessage: string, requestedPath: stri
  * this is only quoting its name in a sentence. */
 const TARGET_SEASON_ENV_NAME = "FOOTBALL_TARGET_SEASON";
 
-export class ApiFootballError extends Error {
-  readonly status: number | null;
-  readonly kind: ApiFootballErrorKind;
-  /** The provider's own remaining-quota count, if a response was received at
-   * all (a network error never carries one). */
-  readonly quotaRemaining: number | null;
-
+/**
+ * API-Football's failures, in KIVO's shape.
+ *
+ * A subclass rather than a replacement, for two reasons that both matter.
+ * `api-football.ts` catches `err instanceof ApiFootballError` in its request
+ * wrapper, and that is load-bearing — it is how a provider refusal keeps its
+ * quota reading and its raw-response sample. And every consumer of the generic
+ * layer (telemetry, the Admin page, the user-facing copy) can now handle this
+ * error without knowing which provider produced it, because it IS a
+ * KivoProviderError.
+ *
+ * The constructor keeps its original positional signature so no existing call
+ * site changes.
+ */
+export class ApiFootballError extends KivoProviderError {
   constructor(message: string, kind: ApiFootballErrorKind, status: number | null, quotaRemaining: number | null) {
-    super(message);
+    super(message, { provider: API_FOOTBALL_PROVIDER_ID, kind, status, quotaRemaining });
     this.name = "ApiFootballError";
-    this.kind = kind;
-    this.status = status;
-    this.quotaRemaining = quotaRemaining;
   }
 }
 
-/** Single source of truth for turning an HTTP status into an error kind —
- * shared by classifyHttpError (the thrown error's message/kind) and
- * requestWithRetry (the retry decision), so the two can never disagree about
- * what a given status means. */
-function classifyStatusKind(status: number): ApiFootballErrorKind {
-  if (status === 429) return "rate_limited";
-  if (status === 403) return "auth";
-  if (status >= 500) return "server_error";
-  return "client_error";
-}
+/**
+ * Turning an HTTP status into an error kind is now `provider-request.ts`'s job,
+ * and this file imports it rather than keeping a second opinion. The invariant
+ * the local copy existed to protect — that the retry decision and the thrown
+ * error can never disagree about what a status means — is now protected across
+ * every provider rather than within this one.
+ */
 
 /**
  * Classifies a non-OK HTTP response so an admin sees an accurate reason
@@ -192,19 +228,22 @@ export function classifyHttpError(status: number, path: string, quotaRemaining: 
 }
 
 /**
- * Only 5xx and network failures are worth a retry (RECOMMENDATIONS item 55).
- * A 429 must never be retried — that just burns more quota against an
- * already-exhausted daily limit. Other 4xx (bad key, bad params) won't
- * succeed on a second try either, so they're not retried.
+ * Unchanged in meaning, delegated in implementation: 5xx and network failures
+ * are worth a retry, a 429 never is (it spends another request against a limit
+ * already reached), and other 4xx will not succeed on a second try either. The
+ * generic version adds `timeout` to the retryable set, which this adapter did
+ * not previously have a kind for at all.
  */
 export function isRetryable(kind: ApiFootballErrorKind): boolean {
-  return kind === "server_error" || kind === "network_error";
+  return isRetryableKind(kind);
 }
 
 const MAX_ATTEMPTS = 2; // one real attempt + exactly one retry, never more
 
 /** Small jittered backoff so a retried request doesn't land in the exact same
- * instant as the one that just failed. */
+ * instant as the one that just failed. Kept for the one caller that still names
+ * it; new code should use `backoffDelayMs`, which grows the window on repeated
+ * failure instead of holding it flat. */
 export function retryDelayMs(baseMs = 250, jitterMs = 250): number {
   return baseMs + Math.floor(Math.random() * jitterMs);
 }
@@ -227,10 +266,15 @@ export interface RequestWithRetryOptions {
   url: string;
   headers: Record<string, string>;
   revalidateSeconds: number;
+  /** The cache policy class this request belongs to, passed straight through to
+   * telemetry so `provider_request_log` can say what a request was for. */
+  resourceClass?: string | null;
   /** Injectable for tests — defaults to the global fetch. */
   fetchImpl?: typeof fetch;
   /** Injectable for tests — defaults to a real setTimeout-based sleep. */
   sleepImpl?: (ms: number) => Promise<void>;
+  /** Called once with what actually happened, for `provider_request_log`. */
+  onOutcome?: (outcome: ProviderRequestOutcome) => void | Promise<void>;
 }
 
 export interface RequestWithRetryResult {
@@ -239,53 +283,57 @@ export interface RequestWithRetryResult {
 }
 
 /**
- * Performs the provider fetch with at most one retry, only for a network
- * error or a 5xx response (RECOMMENDATIONS item 55) — a 429 or any other 4xx
- * returns/throws on the first attempt. Throws ApiFootballError for a final
- * non-OK response so callers can distinguish rate-limited/auth/other (item 54).
+ * Performs the provider fetch, delegating everything transport-shaped to
+ * `requestProvider` and re-labelling its failure as an `ApiFootballError` so
+ * `api-football.ts`'s existing `instanceof` catch keeps working.
+ *
+ * The re-labelling is a deliberate seam rather than a leftover. The generic
+ * layer produces a `KivoProviderError`, which is what the rest of the platform
+ * wants; this adapter's own error carries API-Football's wording and is what
+ * `sync_runs.error_message` has been showing operators for weeks. Converting at
+ * the boundary keeps both, and costs one catch block.
+ *
+ * `MAX_ATTEMPTS` is still 2 — one real attempt plus exactly one retry, never
+ * more, because every attempt is somebody's quota.
  */
 export async function requestWithRetry(options: RequestWithRetryOptions): Promise<RequestWithRetryResult> {
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const sleepImpl = options.sleepImpl ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-
-  let response: Response | null = null;
-  let lastNetworkError: unknown = null;
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) await sleepImpl(retryDelayMs());
-
-    try {
-      response = await fetchImpl(options.url, {
-        headers: options.headers,
-        next: { revalidate: options.revalidateSeconds },
-      });
-      lastNetworkError = null;
-    } catch (err) {
-      lastNetworkError = err;
-      response = null;
-      continue; // network error is always retryable — loop condition caps it at one retry
+  try {
+    const result = await requestProvider({
+      provider: API_FOOTBALL_PROVIDER_ID,
+      path: options.path,
+      url: options.url,
+      headers: options.headers,
+      resourceClass: options.resourceClass ?? null,
+      revalidateSeconds: options.revalidateSeconds,
+      maxAttempts: MAX_ATTEMPTS,
+      quotaHeaders: API_FOOTBALL_QUOTA_HEADERS,
+      secrets: [options.headers["x-apisports-key"]],
+      fetchImpl: options.fetchImpl,
+      sleepImpl: options.sleepImpl,
+      onOutcome: options.onOutcome,
+    });
+    return { response: result.response, quotaRemaining: result.quotaRemaining };
+  } catch (err) {
+    if (err instanceof KivoProviderError) {
+      // The one place API-Football's own wording is reapplied on top of the
+      // generic sentence: an operator reading a sync run expects to see the
+      // provider named the way the rest of this adapter names it.
+      throw new ApiFootballError(
+        err.kind === "rate_limited"
+          ? `API-Football daily quota exhausted (429) while requesting ${options.path}. Wait for the provider's quota reset before syncing again.`
+          : err.kind === "auth"
+            ? `API-Football rejected the request (${err.status ?? "no status"}) while requesting ${options.path}. Check that API_FOOTBALL_KEY is set and valid.`
+            : err.message,
+        err.kind,
+        err.status,
+        err.quotaRemaining,
+      );
     }
-
-    if (response.ok) break;
-    if (!isRetryable(classifyStatusKind(response.status))) break; // 429/403/other 4xx: no retry
-    // else a 5xx: fall through and retry, capped by the loop condition
+    throw err;
   }
-
-  if (!response) {
-    const message = lastNetworkError instanceof Error ? lastNetworkError.message : String(lastNetworkError);
-    throw new ApiFootballError(
-      `API-Football request failed: network error while requesting ${options.path} (${message})`,
-      "network_error",
-      null,
-      null,
-    );
-  }
-
-  const quotaRemaining = parseQuotaRemaining(response.headers.get("x-ratelimit-requests-remaining"));
-
-  if (!response.ok) {
-    throw classifyHttpError(response.status, options.path, quotaRemaining);
-  }
-
-  return { response, quotaRemaining };
 }
+
+/** Retained so `backoffDelayMs` has a named import in this module and the
+ * relationship between the two backoff shapes stays visible to a reader who
+ * lands here first. */
+export { backoffDelayMs };

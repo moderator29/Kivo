@@ -55,6 +55,26 @@ export const REQUEST_BUDGET_WINDOW_SECONDS = 86_400;
 export type RequestBucket = "live" | "auto" | "daily" | "catalogue";
 
 /**
+ * The provider ids the database has budget rows for.
+ *
+ * Since migration 0118 an unrecognised provider id is refused every request
+ * with `refusalReason: "unknown_provider"` — fail-closed, so a typo cannot buy
+ * itself an allowance. That strictness has a cost worth naming here rather than
+ * discovering in production: **an adapter that names itself something not in
+ * this list, and not in `normalize_provider_id()`'s alias table, cannot make a
+ * single request.** The alias table accepts the plausible spellings of each
+ * (`bbs`, `bigballsdata`, `football-data-org`, …), and this constant is the
+ * canonical set.
+ *
+ * Exported so a new adapter has one place to check itself against, and so the
+ * Admin provider page can say "this provider has no budget row" instead of
+ * drawing an exhausted allowance.
+ */
+export const BUDGETED_PROVIDER_IDS = ["api-football", "thesportsdb", "bigballs", "football-data"] as const;
+
+export type BudgetedProviderId = (typeof BUDGETED_PROVIDER_IDS)[number];
+
+/**
  * The allowances, against API-Football's free tier of ~100 requests/day
  * (`docs/API_FOOTBALL.md`).
  *
@@ -94,6 +114,19 @@ export type RequestBucket = "live" | "auto" | "daily" | "catalogue";
  * database and reports it back, so a drift between these numbers and the real
  * ones can make a Data Health figure look wrong — it can never let a request
  * through that the database would have refused.
+ *
+ * ## Since migration 0118 the real ceilings are keyed on (provider, bucket)
+ *
+ * This mirror is not, and cannot honestly be, because it is a single record.
+ * Today every budgeted provider carries the same four numbers, so the mirror is
+ * still accurate for all of them — see `provider_request_limit(text, text)`,
+ * where the rows are written out per provider precisely so they can diverge
+ * later without this file being the thing that has to notice.
+ *
+ * When they do diverge, this constant becomes the API-Football row and every
+ * display that reads it needs the provider passed in. The decision to leave it
+ * as a flat record until that day is deliberate: a per-provider mirror that is
+ * identical four times over is four times the drift surface for no information.
  */
 export const PROVIDER_REQUEST_BUDGETS: Record<RequestBucket, number> = {
   live: 55,
@@ -114,7 +147,40 @@ export type BudgetDecision = {
   /** When the oldest spend still inside the window falls out of it — the exact
    * moment an exhausted allowance frees up. */
   oldestSpendAt: string | null;
+  /**
+   * Requests spent by THIS provider across ALL buckets in the last 60 seconds,
+   * and the ceiling on that (migration 0118).
+   *
+   * A second dimension, because the rolling-24h ledger is structurally blind to
+   * a burst: twelve requests spread across a day and twelve fired in ninety
+   * seconds are identical to it, and only one of them gets a 429. Counted across
+   * every bucket because a provider's per-minute limit is not divided into
+   * KIVO's consumers.
+   *
+   * `burstLimit === 0` means no per-minute rule is known for this provider and
+   * none is enforced — the honest rendering of an unknown limit rather than an
+   * invented one.
+   */
+  burstSpent: number;
+  burstLimit: number;
+  /**
+   * Why a refusal happened, named rather than inferred: `window_exhausted`
+   * (nothing until tomorrow), `burst_exhausted` (something in a moment),
+   * `unknown_bucket` or `unknown_provider` (a typo, or an adapter whose id has
+   * no budget row — a code problem wearing an exhausted-quota costume, which is
+   * exactly the confusion this field exists to end). Null when allowed.
+   */
+  refusalReason: BudgetRefusalReason | null;
 };
+
+/** The refusals `consume_provider_requests` can return. Kept as a union so a
+ * surface that renders one has to handle all of them. */
+export type BudgetRefusalReason =
+  | "window_exhausted"
+  | "burst_exhausted"
+  | "unknown_bucket"
+  | "unknown_provider"
+  | "ledger_unreachable";
 
 /**
  * Reserves `count` provider requests for one bucket, atomically.
@@ -156,6 +222,9 @@ export async function reserveProviderRequests(
       limit,
       windowSeconds: REQUEST_BUDGET_WINDOW_SECONDS,
       oldestSpendAt: null,
+      burstSpent: 0,
+      burstLimit: 0,
+      refusalReason: "ledger_unreachable",
     };
   }
 
@@ -169,6 +238,9 @@ export async function reserveProviderRequests(
       limit,
       windowSeconds: REQUEST_BUDGET_WINDOW_SECONDS,
       oldestSpendAt: null,
+      burstSpent: 0,
+      burstLimit: 0,
+      refusalReason: "ledger_unreachable",
     };
   }
 
@@ -181,6 +253,9 @@ export async function reserveProviderRequests(
     limit: row.request_limit,
     windowSeconds: REQUEST_BUDGET_WINDOW_SECONDS,
     oldestSpendAt: row.oldest_spend_at,
+    burstSpent: row.burst_spent,
+    burstLimit: row.burst_limit,
+    refusalReason: (row.refusal_reason as BudgetRefusalReason | null) ?? null,
   };
 }
 
@@ -304,4 +379,34 @@ export async function pruneProviderRequestSpend(supabase: ServiceClient): Promis
     return 0;
   }
   return typeof data === "number" ? data : 0;
+}
+
+
+/**
+ * The refusal, in a sentence an operator can act on.
+ *
+ * Each of these leads somewhere different, and before migration 0118 they were
+ * all the same "budget refused" — which sent people to look at quota when the
+ * real problem was a provider id with no budget row. The distinction between
+ * "tomorrow", "in a moment" and "this is a code problem" is the entire value of
+ * the field.
+ *
+ * Operator-facing only. A fan never sees any of this; `userFacingProviderMessage`
+ * is what they get.
+ */
+export function describeBudgetRefusal(reason: BudgetRefusalReason | null, provider: string, bucket: RequestBucket): string {
+  switch (reason) {
+    case "window_exhausted":
+      return `The ${bucket} allowance for ${provider} is spent for this rolling 24 hours. It frees up as the oldest spends fall out of the window — no action needed, and no key or plan problem.`;
+    case "burst_exhausted":
+      return `${provider} has taken too many requests in the last minute across all buckets. This clears on its own within the minute; it is a pacing refusal, not an exhausted day.`;
+    case "unknown_bucket":
+      return `"${bucket}" has no ceiling in provider_request_limit(), so it is refused everything. This is a code problem, not a quota problem — the bucket name is wrong or its row has not been added.`;
+    case "unknown_provider":
+      return `"${provider}" has no budget row, so every request from it is refused. Add it to provider_request_limit() and normalize_provider_id() in a migration — this is a code problem wearing an exhausted-quota costume.`;
+    case "ledger_unreachable":
+      return `The request ledger could not be read, so the spend was refused. Not knowing whether it is safe to spend and knowing it is not have to lead to the same decision.`;
+    case null:
+      return "Allowed.";
+  }
 }

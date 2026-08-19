@@ -2745,6 +2745,51 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_request_log: {
+        Row: {
+          attempts: number | null
+          cache_state: string | null
+          error_kind: string | null
+          http_status: number | null
+          id: number
+          latency_ms: number | null
+          message: string | null
+          occurred_at: string
+          outcome: string
+          provider: string
+          quota_remaining: number | null
+          resource_class: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          cache_state?: string | null
+          error_kind?: string | null
+          http_status?: number | null
+          id?: number
+          latency_ms?: number | null
+          message?: string | null
+          occurred_at?: string
+          outcome: string
+          provider: string
+          quota_remaining?: number | null
+          resource_class?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          cache_state?: string | null
+          error_kind?: string | null
+          http_status?: number | null
+          id?: number
+          latency_ms?: number | null
+          message?: string | null
+          occurred_at?: string
+          outcome?: string
+          provider?: string
+          quota_remaining?: number | null
+          resource_class?: string | null
+        }
+        Relationships: []
+      }
       provider_request_spend: {
         Row: {
           bucket: string
@@ -2766,6 +2811,48 @@ export type Database = {
           provider?: string
           requests?: number
           spent_at?: string
+        }
+        Relationships: []
+      }
+      provider_response_cache: {
+        Row: {
+          cache_key: string
+          fetched_at: string | null
+          fresh_until: string | null
+          payload: Json | null
+          provider: string
+          refresh_lease_owner: string | null
+          refresh_lease_until: string | null
+          resource_class: string
+          served_count: number
+          stale_until: string | null
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          fetched_at?: string | null
+          fresh_until?: string | null
+          payload?: Json | null
+          provider: string
+          refresh_lease_owner?: string | null
+          refresh_lease_until?: string | null
+          resource_class: string
+          served_count?: number
+          stale_until?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          fetched_at?: string | null
+          fresh_until?: string | null
+          payload?: Json | null
+          provider?: string
+          refresh_lease_owner?: string | null
+          refresh_lease_until?: string | null
+          resource_class?: string
+          served_count?: number
+          stale_until?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2994,56 +3081,56 @@ export type Database = {
         Row: {
           created_at: string
           drawn: number
+          form: string | null
           goals_against: number
           goals_for: number
+          group_label: string | null
           id: string
           lost: number
           played: number
           points: number
-          zone_description: string | null
-          group_label: string | null
-          form: string | null
           position: number | null
           season_id: string
           team_id: string
           updated_at: string
           won: number
+          zone_description: string | null
         }
         Insert: {
           created_at?: string
           drawn?: number
+          form?: string | null
           goals_against?: number
           goals_for?: number
+          group_label?: string | null
           id?: string
           lost?: number
           played?: number
           points?: number
-          zone_description?: string | null
-          group_label?: string | null
-          form?: string | null
           position?: number | null
           season_id: string
           team_id: string
           updated_at?: string
           won?: number
+          zone_description?: string | null
         }
         Update: {
           created_at?: string
           drawn?: number
+          form?: string | null
           goals_against?: number
           goals_for?: number
+          group_label?: string | null
           id?: string
           lost?: number
           played?: number
           points?: number
-          zone_description?: string | null
-          group_label?: string | null
-          form?: string | null
           position?: number | null
           season_id?: string
           team_id?: string
           updated_at?: string
           won?: number
+          zone_description?: string | null
         }
         Relationships: [
           {
@@ -3644,13 +3731,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      club_picker_facets: {
-        Args: Record<PropertyKey, never>
+      claim_provider_cache_entry: {
+        Args: {
+          p_cache_key: string
+          p_force?: boolean
+          p_lease_seconds?: number
+          p_owner?: string
+          p_provider: string
+          p_resource_class: string
+        }
         Returns: {
-          club_count: number
-          facet: string
-          key: string
-          label: string
+          fetched_at: string
+          fresh_until: string
+          lease_held_by_other: boolean
+          lease_until: string
+          may_fetch: boolean
+          payload: Json
+          stale_until: string
+          state: string
         }[]
       }
       claim_sync_lock: {
@@ -3663,6 +3761,15 @@ export type Database = {
         }
         Returns: string
       }
+      club_picker_facets: {
+        Args: never
+        Returns: {
+          club_count: number
+          facet: string
+          key: string
+          label: string
+        }[]
+      }
       consume_provider_requests: {
         Args: {
           p_bucket: string
@@ -3672,7 +3779,10 @@ export type Database = {
         }
         Returns: {
           allowed: boolean
+          burst_limit: number
+          burst_spent: number
           oldest_spend_at: string
+          refusal_reason: string
           request_limit: number
           spent_in_window: number
         }[]
@@ -3995,6 +4105,14 @@ export type Database = {
         }[]
       }
       get_xp_total: { Args: { p_profile_id: string }; Returns: number }
+      invalidate_provider_cache: {
+        Args: {
+          p_key_prefix?: string
+          p_provider: string
+          p_resource_class: string
+        }
+        Returns: number
+      }
       is_username_available: {
         Args: { p_exclude_profile_id?: string; p_username: string }
         Returns: boolean
@@ -4034,12 +4152,28 @@ export type Database = {
         }
         Returns: Json
       }
+      normalize_provider_id: { Args: { p_provider: string }; Returns: string }
       notification_payload_is_valid: {
         Args: { p_payload: Json; p_type: string }
         Returns: boolean
       }
-      provider_request_limit: { Args: { p_bucket: string }; Returns: number }
+      provider_request_burst_limit: {
+        Args: { p_provider: string }
+        Returns: number
+      }
+      provider_request_limit: {
+        Args: { p_bucket: string; p_provider: string }
+        Returns: number
+      }
+      prune_provider_request_log: {
+        Args: { p_max_rows?: number }
+        Returns: number
+      }
       prune_provider_request_spend: {
+        Args: { p_max_rows?: number }
+        Returns: number
+      }
+      prune_provider_response_cache: {
         Args: { p_max_rows?: number }
         Returns: number
       }
@@ -4110,6 +4244,15 @@ export type Database = {
           name: string
         }[]
       }
+      release_provider_cache_lease: {
+        Args: {
+          p_cache_key: string
+          p_owner?: string
+          p_provider: string
+          p_resource_class: string
+        }
+        Returns: boolean
+      }
       release_sync_lock: {
         Args: {
           p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
@@ -4151,18 +4294,18 @@ export type Database = {
       }
       search_clubs_ranked: {
         Args: {
-          p_competition_id?: string | null
-          p_country?: string | null
+          p_competition_id?: string
+          p_country?: string
           p_limit?: number
-          p_query?: string | null
+          p_query?: string
         }
         Returns: {
-          country: string | null
-          crest_url: string | null
+          country: string
+          crest_url: string
           follower_count: number
           id: string
           name: string
-          short_name: string | null
+          short_name: string
         }[]
       }
       set_reaction: {
@@ -4192,11 +4335,11 @@ export type Database = {
           p_home_team_id: string
           p_kickoff_at: string
           p_matchday?: number
-          p_referee?: string
-          p_round_label?: string
           p_minute_elapsed?: number
           p_provider: string
           p_provider_entity_id: string
+          p_referee?: string
+          p_round_label?: string
           p_season_id: string
           p_status: Database["public"]["Enums"]["fixture_status"]
           p_venue_id?: string
@@ -4229,6 +4372,18 @@ export type Database = {
       vote_on_poll: {
         Args: { p_option_id: string; p_post_id: string }
         Returns: undefined
+      }
+      write_provider_cache: {
+        Args: {
+          p_cache_key: string
+          p_fresh_seconds: number
+          p_owner?: string
+          p_payload: Json
+          p_provider: string
+          p_resource_class: string
+          p_stale_seconds: number
+        }
+        Returns: string
       }
     }
     Enums: {
