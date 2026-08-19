@@ -1285,6 +1285,7 @@ export type Database = {
           created_at: string
           id: string
           label: string
+          player_id: string | null
           position: number
           post_id: string
         }
@@ -1292,6 +1293,7 @@ export type Database = {
           created_at?: string
           id?: string
           label: string
+          player_id?: string | null
           position: number
           post_id: string
         }
@@ -1299,10 +1301,18 @@ export type Database = {
           created_at?: string
           id?: string
           label?: string
+          player_id?: string | null
           position?: number
           post_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "poll_options_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "poll_options_post_id_fkey"
             columns: ["post_id"]
@@ -1367,6 +1377,7 @@ export type Database = {
           id: string
           is_edited: boolean
           is_system: boolean
+          poll_kind: Database["public"]["Enums"]["poll_kind"] | null
           updated_at: string
         }
         Insert: {
@@ -1377,6 +1388,7 @@ export type Database = {
           id?: string
           is_edited?: boolean
           is_system?: boolean
+          poll_kind?: Database["public"]["Enums"]["poll_kind"] | null
           updated_at?: string
         }
         Update: {
@@ -1387,6 +1399,7 @@ export type Database = {
           id?: string
           is_edited?: boolean
           is_system?: boolean
+          poll_kind?: Database["public"]["Enums"]["poll_kind"] | null
           updated_at?: string
         }
         Relationships: [
@@ -1487,8 +1500,22 @@ export type Database = {
           id: string
           locked_at: string | null
           points_awarded: number | null
-          predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
+          predicted_away_score: number | null
+          predicted_cards: Database["public"]["Enums"]["cards_band"] | null
+          predicted_corners: Database["public"]["Enums"]["corners_band"] | null
+          predicted_home_score: number | null
+          predicted_outcome:
+            | Database["public"]["Enums"]["prediction_outcome"]
+            | null
+          predicted_player_id: string | null
+          predicted_total_goals:
+            | Database["public"]["Enums"]["total_goals_band"]
+            | null
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
           profile_id: string
+          resolution: Database["public"]["Enums"]["prediction_resolution"] | null
+          resolved_at: string | null
+          unresolvable_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -1497,8 +1524,24 @@ export type Database = {
           id?: string
           locked_at?: string | null
           points_awarded?: number | null
-          predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
+          predicted_away_score?: number | null
+          predicted_cards?: Database["public"]["Enums"]["cards_band"] | null
+          predicted_corners?: Database["public"]["Enums"]["corners_band"] | null
+          predicted_home_score?: number | null
+          predicted_outcome?:
+            | Database["public"]["Enums"]["prediction_outcome"]
+            | null
+          predicted_player_id?: string | null
+          predicted_total_goals?:
+            | Database["public"]["Enums"]["total_goals_band"]
+            | null
+          prediction_type?: Database["public"]["Enums"]["prediction_type"]
           profile_id: string
+          resolution?:
+            | Database["public"]["Enums"]["prediction_resolution"]
+            | null
+          resolved_at?: string | null
+          unresolvable_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -1507,8 +1550,24 @@ export type Database = {
           id?: string
           locked_at?: string | null
           points_awarded?: number | null
-          predicted_outcome?: Database["public"]["Enums"]["prediction_outcome"]
+          predicted_away_score?: number | null
+          predicted_cards?: Database["public"]["Enums"]["cards_band"] | null
+          predicted_corners?: Database["public"]["Enums"]["corners_band"] | null
+          predicted_home_score?: number | null
+          predicted_outcome?:
+            | Database["public"]["Enums"]["prediction_outcome"]
+            | null
+          predicted_player_id?: string | null
+          predicted_total_goals?:
+            | Database["public"]["Enums"]["total_goals_band"]
+            | null
+          prediction_type?: Database["public"]["Enums"]["prediction_type"]
           profile_id?: string
+          resolution?:
+            | Database["public"]["Enums"]["prediction_resolution"]
+            | null
+          resolved_at?: string | null
+          unresolvable_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1517,6 +1576,13 @@ export type Database = {
             columns: ["fixture_id"]
             isOneToOne: false
             referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predictions_predicted_player_id_fkey"
+            columns: ["predicted_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
           {
@@ -2501,6 +2567,16 @@ export type Database = {
           vote_count: number
         }[]
       }
+      get_motm_poll_result: {
+        Args: { p_fixture_id: string }
+        Returns: {
+          label: string
+          option_id: string
+          player_id: string
+          post_id: string
+          vote_count: number
+        }[]
+      }
       get_poll_results_for_posts: {
         Args: { p_post_ids: string[] }
         Returns: {
@@ -2517,12 +2593,32 @@ export type Database = {
           reaction_count: number
         }[]
       }
+      create_templated_poll: {
+        Args: {
+          p_fixture_id: string
+          p_labels: string[]
+          p_player_ids: string[]
+          p_poll_kind: Database["public"]["Enums"]["poll_kind"]
+          p_question: string
+        }
+        Returns: string
+      }
       get_prediction_consensus: {
         Args: { p_fixture_ids: string[] }
         Returns: {
           fixture_id: string
           pick_count: number
           predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
+        }[]
+      }
+      get_prediction_type_breakdown: {
+        Args: { p_profile_id: string }
+        Returns: {
+          correct_count: number
+          points: number
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
+          settled_count: number
+          unresolvable_count: number
         }[]
       }
       get_prediction_league_leaderboard: {
@@ -2838,6 +2934,8 @@ export type Database = {
     Enums: {
       ai_message_role: "system" | "user" | "assistant" | "tool"
       avatar_type: "kivo" | "uploaded"
+      cards_band: "cards_0_2" | "cards_3_4" | "cards_5_plus"
+      corners_band: "corners_0_8" | "corners_9_12" | "corners_13_plus"
       data_anomaly_type:
         | "score_regression"
         | "status_regression"
@@ -2868,7 +2966,16 @@ export type Database = {
       follow_target_type: "team" | "player" | "competition" | "user"
       moderation_status: "active" | "shadow_muted" | "suspended" | "banned"
       moderation_target_type: "post" | "comment" | "profile"
+      poll_kind: "motm" | "referee_decision"
       prediction_outcome: "home_win" | "draw" | "away_win"
+      prediction_resolution: "correct" | "incorrect" | "unresolvable"
+      prediction_type:
+        | "winner"
+        | "correct_score"
+        | "first_scorer"
+        | "total_goals"
+        | "cards_corners"
+        | "motm"
       provider_entity_type:
         | "competition"
         | "season"
@@ -2886,6 +2993,7 @@ export type Database = {
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
       save_target_type: "post" | "team" | "player"
       support_request_status: "open" | "in_progress" | "closed"
+      total_goals_band: "goals_0_1" | "goals_2_3" | "goals_4_plus"
       support_request_topic:
         | "sign_in"
         | "account"

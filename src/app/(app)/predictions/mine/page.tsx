@@ -8,7 +8,14 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
 import { staggerDelay } from "@/lib/stagger";
-import { PREDICTION_OUTCOME_LABEL, computeStreaks, predictionResultInfo } from "@/lib/predictions";
+import {
+  PREDICTION_PICK_COLUMNS,
+  PREDICTION_TYPE_LABEL,
+  computeStreaks,
+  describePredictionPick,
+  pickFromRow,
+  predictionResultInfo,
+} from "@/lib/predictions";
 
 export const metadata: Metadata = { title: "My Predictions" };
 
@@ -55,7 +62,8 @@ export default async function MyPredictionsPage() {
   } = await supabase
     .from("predictions")
     .select(
-      `id, predicted_outcome, points_awarded, created_at,
+      `id, points_awarded, created_at, ${PREDICTION_PICK_COLUMNS},
+       player:players!predictions_predicted_player_id_fkey(id, full_name, known_as),
        fixture:fixtures(
          id, kickoff_at, status, home_score, away_score,
          home_team:teams!fixtures_home_team_id_fkey(id, name, crest_url),
@@ -217,7 +225,12 @@ export default async function MyPredictionsPage() {
               const fixture = row.fixture!;
               const competitionName = fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition";
               const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-              const result = predictionResultInfo(fixture.status, row.points_awarded);
+              const result = predictionResultInfo(
+                fixture.status,
+                row.points_awarded,
+                row.resolution,
+                row.unresolvable_reason,
+              );
               const ResultIcon = result.icon;
 
               return (
@@ -265,10 +278,16 @@ export default async function MyPredictionsPage() {
                     </div>
 
                     <div className="flex items-center justify-between gap-2 border-t border-hairline-soft pt-3">
-                      <span className="text-xs text-foreground-muted">
-                        You picked{" "}
+                      <span className="min-w-0 flex-1 text-xs text-foreground-muted">
+                        {/* Six types share this row now, so the type is named
+                            rather than implied — "2-1" and "3-4 cards" are not
+                            self-describing the way "Home" was. */}
+                        {PREDICTION_TYPE_LABEL[row.prediction_type]}:{" "}
                         <span className="font-semibold text-foreground">
-                          {PREDICTION_OUTCOME_LABEL[row.predicted_outcome]}
+                          {describePredictionPick(
+                            pickFromRow(row),
+                            row.player?.known_as ?? row.player?.full_name ?? null,
+                          )}
                         </span>
                       </span>
                       <ResultBadgeReveal isCorrect={(row.points_awarded ?? 0) > 0} className={result.className}>

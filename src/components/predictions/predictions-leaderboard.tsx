@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { motion } from "motion/react";
-import { CORRECT_PREDICTION_POINTS } from "@/lib/predictions";
+import { PREDICTION_TYPE_POINTS } from "@/lib/predictions";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -28,7 +28,12 @@ export function PredictionsLeaderboard({
           <Trophy className="h-4 w-4 text-accent" strokeWidth={1.75} />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">Leaderboard</h2>
         </div>
-        <span className="text-xs text-foreground-subtle">{CORRECT_PREDICTION_POINTS} pts per correct pick</span>
+        {/* Six types now, priced by difficulty — so the header states the
+            real range rather than one number that is only true for winners. */}
+        <span className="text-xs text-foreground-subtle">
+          {Math.min(...Object.values(PREDICTION_TYPE_POINTS))}-{Math.max(...Object.values(PREDICTION_TYPE_POINTS))} pts
+          per correct pick
+        </span>
       </div>
 
       {entries.length === 0 ? (

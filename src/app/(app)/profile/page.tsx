@@ -13,7 +13,13 @@ import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FadeIn } from "@/components/ui/fade-in";
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
-import { PREDICTION_OUTCOME_LABEL, predictionResultInfo } from "@/lib/predictions";
+import {
+  PREDICTION_PICK_COLUMNS,
+  PREDICTION_TYPE_LABEL,
+  describePredictionPick,
+  pickFromRow,
+  predictionResultInfo,
+} from "@/lib/predictions";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 import { summariseXpWindows, xpWindowFloorIso } from "@/lib/xp-windows";
@@ -286,7 +292,8 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
   const { data: rows, count } = await supabase
     .from("predictions")
     .select(
-      `id, predicted_outcome, points_awarded, created_at,
+      `id, points_awarded, created_at, ${PREDICTION_PICK_COLUMNS},
+       player:players!predictions_predicted_player_id_fkey(id, full_name, known_as),
        fixture:fixtures(
          id, kickoff_at, status, home_score, away_score,
          home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
@@ -317,7 +324,12 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
     <div className="flex flex-col gap-2.5">
       {predictions.map((prediction, index) => {
         const fixture = prediction.fixture!;
-        const result = predictionResultInfo(fixture.status, prediction.points_awarded);
+        const result = predictionResultInfo(
+          fixture.status,
+          prediction.points_awarded,
+          prediction.resolution,
+          prediction.unresolvable_reason,
+        );
         const ResultIcon = result.icon;
         return (
           <FadeIn
@@ -338,8 +350,12 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
                 </span>
               </div>
               <span className="text-[11px] text-foreground-subtle">
-                Called {PREDICTION_OUTCOME_LABEL[prediction.predicted_outcome]} ·{" "}
-                {formatDateTime(fixture.kickoff_at, "dayTime", "UTC")}
+                {PREDICTION_TYPE_LABEL[prediction.prediction_type]}:{" "}
+                {describePredictionPick(
+                  pickFromRow(prediction),
+                  prediction.player?.known_as ?? prediction.player?.full_name ?? null,
+                )}{" "}
+                · {formatDateTime(fixture.kickoff_at, "dayTime", "UTC")}
               </span>
             </div>
             <span

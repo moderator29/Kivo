@@ -41,7 +41,7 @@ function past() {
 
 async function submit(fixtureId = "fixture-1") {
   const { submitPrediction } = await import("./actions");
-  return submitPrediction(fixtureId, "home_win");
+  return submitPrediction(fixtureId, { type: "winner", outcome: "home_win" });
 }
 
 beforeEach(() => {

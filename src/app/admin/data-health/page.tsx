@@ -359,7 +359,10 @@ export default async function DataHealthPage() {
                 : "All predictions are scored"}
             </p>
             <p className="text-xs text-foreground-subtle">
-              Scores every prediction against real, finished-fixture results. Correct picks earn {CORRECT_PREDICTION_POINTS} points and {CORRECT_PREDICTION_XP} XP.
+              Scores all six prediction types against real, already-synced data — final scores, match events, team
+              statistics and the Room&apos;s own man-of-the-match vote. A winner pick earns {CORRECT_PREDICTION_POINTS}{" "}
+              points and {CORRECT_PREDICTION_XP} XP; harder types earn more. Anything whose underlying data was never
+              synced is left explicitly unresolved rather than marked wrong.
             </p>
           </div>
         </div>

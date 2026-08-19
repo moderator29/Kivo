@@ -17,6 +17,7 @@ import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { MatchShareCard } from "@/components/matches/match-share-card";
 import { YourPredictionCard } from "@/components/matches/your-prediction-card";
+import { PREDICTION_PICK_COLUMNS, pickFromRow } from "@/lib/predictions";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
@@ -102,7 +103,7 @@ export default async function MatchCentrePage({
     ownFanRating,
     fanRatingSummary,
     { data: managers },
-    { data: ownPrediction },
+    { data: ownPredictions },
     viewerFantasyRosterBySeason,
   ] = await Promise.all([
     supabase
@@ -165,14 +166,20 @@ export default async function MatchCentrePage({
           .order("updated_at", { ascending: false })
       : Promise.resolve({ data: null }),
     // RECOMMENDATIONS.md item 293: predictions_select_own already scopes this
-    // to the caller's own row — no RLS change, no RPC needed.
+    // to the caller's own rows — no RLS change, no RPC needed.
+    //
+    // No longer maybeSingle(): a fixture now carries up to six predictions
+    // from one person (one per type, per predictions_unique_per_fixture_type),
+    // so this reads all of them and YourPredictionCard lists what it finds.
     profile
       ? supabase
           .from("predictions")
-          .select("predicted_outcome, points_awarded")
+          .select(
+            `id, points_awarded, ${PREDICTION_PICK_COLUMNS},
+             player:players!predictions_predicted_player_id_fkey(id, full_name, known_as)`,
+          )
           .eq("fixture_id", id)
           .eq("profile_id", profile.id)
-          .maybeSingle()
       : Promise.resolve({ data: null }),
     // RECOMMENDATIONS.md item 294: real fantasy_rosters -> lineups player-id
     // cross-reference for LineupsTab's "In your XI" pill — see
@@ -387,13 +394,19 @@ export default async function MatchCentrePage({
 
       {/* RECOMMENDATIONS.md item 293: the caller's own real prediction for
           this exact fixture — renders nothing when they haven't made one
-          (ownPrediction is null in that case, predictions_select_own already
+          (the list is empty in that case, predictions_select_own already
           scoped this to their own row). */}
-      {ownPrediction && (
+      {ownPredictions && ownPredictions.length > 0 && (
         <FadeIn delay={0.09}>
           <YourPredictionCard
-            predictedOutcome={ownPrediction.predicted_outcome}
-            pointsAwarded={ownPrediction.points_awarded}
+            predictions={ownPredictions.map((row) => ({
+              id: row.id,
+              pick: pickFromRow(row),
+              playerName: row.player?.known_as ?? row.player?.full_name ?? null,
+              pointsAwarded: row.points_awarded,
+              resolution: row.resolution,
+              unresolvableReason: row.unresolvable_reason,
+            }))}
             status={fixture.status}
           />
         </FadeIn>
