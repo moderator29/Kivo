@@ -56,5 +56,20 @@ next-env.d.ts
 /*.jpg
 /*.jpeg
 
+# Verification screenshots, by the same reasoning as KN-138 above. Agents
+# working on this branch photograph what they changed — back navigation, the
+# loading and empty states, the capped lists — at a phone width and a desktop
+# width, which is the practice that caught a back four drawn as three-and-one,
+# a label reading "Shots on target attempted", and a skeleton 8.5px taller than
+# the page replacing it. That practice is worth keeping and the output is not:
+# 31 files, 6.7MB, referenced by nothing in src/, and regenerable by re-running
+# the harness that produced them.
+#
+# They stay on disk for whoever is mid-review, exactly like the founder
+# screenshots above, and stop every future checkout paying for them. A picture
+# that genuinely documents a decision belongs in docs/ next to the words that
+# explain it, under a real name.
+/design/screenshots/
+
 # Claude Code session state and background-agent worktrees — never repo content.
 /.claude/
