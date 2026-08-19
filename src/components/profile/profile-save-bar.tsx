@@ -63,7 +63,7 @@ export function ProfileSaveBar({
         type="submit"
         disabled={disabled || pending}
         aria-busy={pending}
-        className="kivo-gradient-prime kivo-focus kivo-raise w-full rounded-full px-5 py-3 text-sm font-semibold text-on-accent disabled:cursor-not-allowed disabled:opacity-40"
+        className="kivo-gradient-prime kivo-focus kivo-raise w-full rounded-xl px-5 py-3 text-sm font-semibold text-on-accent disabled:cursor-not-allowed disabled:opacity-40"
       >
         {pending ? "Saving…" : label}
       </button>

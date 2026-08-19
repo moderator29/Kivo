@@ -127,7 +127,7 @@ export function PlayerPicker({
                   type="button"
                   onClick={() => onFilterChange(group)}
                   aria-pressed={filter === group}
-                  className={`inline-flex h-10 items-center justify-center rounded-full px-3.5 text-[11px] font-semibold transition ${
+                  className={`inline-flex h-10 items-center justify-center rounded-xl px-3.5 text-[11px] font-semibold transition ${
                     filter === group ? "kivo-gradient-victory text-on-accent" : "border border-hairline text-foreground-muted hover:bg-surface-2"
                   }`}
                 >

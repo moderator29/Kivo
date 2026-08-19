@@ -149,7 +149,7 @@ export default async function ProfilePage({
           action={
             <Link
               href="/profile/edit"
-              className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-foreground"
+              className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-foreground"
             >
               <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
               Edit profile

@@ -51,7 +51,7 @@ export function ProfileUnavailable({ retryHref = "/home" }: { retryHref?: string
             <form action={signOut}>
               <button
                 type="submit"
-                className="w-full rounded-full border border-hairline bg-surface-inset px-6 py-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground"
+                className="w-full rounded-xl border border-hairline bg-surface-inset px-6 py-3 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground"
               >
                 Sign out and start over
               </button>

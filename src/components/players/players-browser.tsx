@@ -81,7 +81,7 @@ export function PlayersBrowser({
               key={chip}
               type="button"
               onClick={() => setPosition(chip)}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+              className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${
                 position === chip
                   ? "kivo-gradient-victory text-on-accent"
                   : "border border-hairline text-foreground-muted hover:bg-surface-2"
@@ -95,7 +95,7 @@ export function PlayersBrowser({
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
             aria-label="Filter by club"
-            className="ml-auto rounded-full border border-hairline bg-surface-inset px-3 py-2 text-[11px] font-semibold text-foreground-muted outline-none transition hover:bg-surface-2 focus:border-accent/50"
+            className="ml-auto rounded-xl border border-hairline bg-surface-inset px-3 py-2 text-[11px] font-semibold text-foreground-muted outline-none transition hover:bg-surface-2 focus:border-accent/50"
           >
             <option value="All">All clubs</option>
             {clubs.map((club) => (

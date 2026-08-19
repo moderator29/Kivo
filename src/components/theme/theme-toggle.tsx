@@ -69,7 +69,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             onClick={() => setPreference(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              "kivo-focus relative flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+              "kivo-focus relative flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
               selected ? "text-foreground" : "text-foreground-subtle hover:text-foreground",
             )}
           >
@@ -77,7 +77,7 @@ export function ThemeToggle({ className }: { className?: string }) {
               <motion.span
                 layoutId="kivo-theme-toggle-pill"
                 aria-hidden="true"
-                className="absolute inset-0 rounded-full bg-surface-raised shadow-soft"
+                className="absolute inset-0 rounded-xl bg-surface-raised shadow-soft"
                 transition={{ type: "spring", stiffness: 420, damping: 34 }}
               />
             )}

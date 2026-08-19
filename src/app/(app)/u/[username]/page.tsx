@@ -194,7 +194,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
             isViewerOwnProfile ? (
               <Link
                 href="/profile/edit"
-                className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-foreground"
+                className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-foreground"
               >
                 Edit profile
               </Link>

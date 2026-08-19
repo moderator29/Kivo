@@ -189,7 +189,7 @@ export function SocialFeed({
         type="button"
         onClick={handleShowNewPosts}
         disabled={refreshing}
-        className="kivo-gradient-prime flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-on-accent shadow-pop kivo-raise disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="kivo-gradient-prime flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-on-accent shadow-pop kivo-raise disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <ArrowUp className="h-3.5 w-3.5" strokeWidth={2} />
         {refreshing ? "Loading…" : "New posts"}

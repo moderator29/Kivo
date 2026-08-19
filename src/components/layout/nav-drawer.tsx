@@ -298,7 +298,7 @@ function IdentityBlock({
 
         <Link
           href="/settings"
-          className="kivo-glass-sharp kivo-focus shrink-0 rounded-full px-4 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
+          className="kivo-glass-sharp kivo-focus shrink-0 rounded-xl px-4 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
         >
           Manage
         </Link>

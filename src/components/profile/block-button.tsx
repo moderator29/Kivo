@@ -63,7 +63,7 @@ export function BlockButton({
           disabled={pending}
           aria-busy={pending}
           onClick={() => run(false)}
-          className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold text-foreground-muted transition-transform active:scale-95 disabled:opacity-60"
+          className="kivo-glass-sharp kivo-focus flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-foreground-muted transition-transform active:scale-95 disabled:opacity-60"
         >
           {pending ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
@@ -117,7 +117,7 @@ export function BlockButton({
     <button
       type="button"
       onClick={() => setConfirming(true)}
-      className="kivo-focus flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-foreground-subtle transition-colors hover:text-critical"
+      className="kivo-focus flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-foreground-subtle transition-colors hover:text-critical"
     >
       <Ban className="h-3.5 w-3.5" strokeWidth={2} />
       Block

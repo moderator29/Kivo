@@ -121,7 +121,7 @@ export function MatchesDateStrip({ selected, timeZone }: { selected: Date; timeZ
       {selectedKey !== todayKey && (
         <Link
           href="/matches"
-          className="kivo-glass-sharp shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground kivo-focusable"
+          className="kivo-glass-sharp shrink-0 rounded-xl px-3 py-1.5 text-xs font-medium text-foreground-muted transition hover:text-foreground kivo-focusable"
         >
           Today
         </Link>

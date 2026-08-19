@@ -192,7 +192,7 @@ export function SearchSurface({
                       setQuery(term);
                       inputRef.current?.focus();
                     }}
-                    className="kivo-focus rounded-full border border-hairline px-3.5 py-1.5 text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                    className="kivo-focus rounded-xl border border-hairline px-3.5 py-1.5 text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-2 hover:text-foreground"
                   >
                     {term}
                   </button>

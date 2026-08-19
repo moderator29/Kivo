@@ -74,7 +74,7 @@ export function SupportForm({ defaultTopic }: { defaultTopic?: SupportTopic }) {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setTopic(entry.value)}
-                className={`kivo-focusable rounded-full border px-3.5 py-2 text-xs font-medium transition-colors ${
+                className={`kivo-focusable rounded-xl border px-3.5 py-2 text-xs font-medium transition-colors ${
                   active
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-hairline bg-surface-inset text-foreground-muted hover:text-foreground"

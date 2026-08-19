@@ -336,7 +336,7 @@ export function FantasyBuilder({
                 key={t.id}
                 href={`/fantasy?team=${t.id}`}
                 aria-current={t.id === activeTeamId ? "page" : undefined}
-                className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-medium transition ${
+                className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-xs font-medium transition ${
                   t.id === activeTeamId ? "kivo-gradient-victory text-on-accent" : "border border-hairline text-foreground-muted hover:bg-surface-2"
                 }`}
               >
