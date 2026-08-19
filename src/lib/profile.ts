@@ -3,6 +3,8 @@ import { cache } from "react";
 import { createServerSupabaseClient } from "./supabase/server";
 import { getAuthUser } from "./auth";
 import { randomKivoAvatarId } from "./kivo-assets";
+import { COUNTRY_CODES } from "./countries";
+import { FULL_NAME_MAX, USERNAME_PATTERN, normalizeUsername } from "./auth-shared";
 import type { Database } from "./supabase/types";
 import { logError } from "@/lib/log";
 
@@ -64,27 +66,35 @@ export const resolveViewerProfile = cache(async (): Promise<ProfileResolution> =
 
   if (existing) return { status: "ready", profile: existing };
 
-  const { data: created, error } = await supabase
-    .from("profiles")
-    .insert({
-      auth_user_id: user.id,
-      // Placeholder handle, same shape as before: unique-by-construction and
-      // inside the 3-24 char / [a-z0-9_] constraints on the column. Onboarding's
-      // first step immediately invites the user to replace it.
-      username: `user_${user.id.replace(/[^a-zA-Z0-9]/g, "").slice(-10)}`,
-      // Email-only sign-up gives us no name and no picture. Deliberately not
-      // derived from the email local-part — display_name is publicly visible
-      // (get_public_profiles), and the email address is not.
-      display_name: null,
-      avatar_url: null,
-      // Same one-time random KIVO avatar assignment the Clerk webhook's
-      // user.created handler used to do — a profile must never be left with no
-      // avatar assigned at all.
-      avatar_type: "kivo",
-      avatar_kivo_id: randomKivoAvatarId(),
-    })
-    .select("*")
-    .single();
+  // What the person typed on /sign-up, carried across the verification round
+  // trip as Supabase user metadata. Read here because THIS is the only place a
+  // profile row is ever created, and both halves of verification land here —
+  // the typed code and the emailed link.
+  const requested = await requestedIdentity();
+  const placeholderUsername = `user_${user.id.replace(/[^a-zA-Z0-9]/g, "").slice(-10)}`;
+
+  const insert = async (username: string, withRequestedIdentity: boolean) =>
+    supabase
+      .from("profiles")
+      .insert({
+        auth_user_id: user.id,
+        username,
+        // display_name is publicly visible (get_public_profiles) and the email
+        // address is not, so this is never derived from the email local-part.
+        // It is either the name the user gave us at sign-up or nothing.
+        display_name: withRequestedIdentity ? requested.fullName : null,
+        country: withRequestedIdentity ? requested.country : null,
+        avatar_url: null,
+        // Same one-time random KIVO avatar assignment the Clerk webhook's
+        // user.created handler used to do — a profile must never be left with no
+        // avatar assigned at all.
+        avatar_type: "kivo",
+        avatar_kivo_id: randomKivoAvatarId(),
+      })
+      .select("*")
+      .single();
+
+  const { data: created, error } = await insert(requested.username ?? placeholderUsername, true);
 
   if (error) {
     // Concurrent requests (two tabs, two route segments) can both miss the
@@ -92,7 +102,24 @@ export const resolveViewerProfile = cache(async (): Promise<ProfileResolution> =
     // Re-fetch instead of treating a signed-in user as profile-less.
     if (error.code === "23505") {
       const { data: retried } = await supabase.from("profiles").select("*").eq("auth_user_id", user.id).maybeSingle();
-      return retried ? { status: "ready", profile: retried } : { status: "unavailable" };
+      if (retried) return { status: "ready", profile: retried };
+
+      // Not this user's own row, then: the UNIQUE constraint on
+      // profiles.username fired because somebody else claimed the handle in the
+      // window between /sign-up checking it and this verification landing.
+      // Nothing was reserved at sign-up time (that would need a table of held
+      // names and an expiry sweep for a race that needs two people picking the
+      // same handle within minutes), so this is the recovery: provision them on
+      // the placeholder handle and let onboarding ask for a new one — which is
+      // exactly the case onboarding's username step still exists for. Losing
+      // the handle is a disappointment; refusing to create the account for
+      // somebody who has just verified their email is a lockout.
+      if (requested.username) {
+        const { data: fallback, error: fallbackError } = await insert(placeholderUsername, true);
+        if (fallback) return { status: "ready", profile: fallback };
+        logError("profile.createAfterUsernameTaken", fallbackError);
+      }
+      return { status: "unavailable" };
     }
     logError("profile.create", error);
     return { status: "unavailable" };
@@ -100,6 +127,45 @@ export const resolveViewerProfile = cache(async (): Promise<ProfileResolution> =
 
   return { status: "ready", profile: created };
 });
+
+/**
+ * The identity the user gave us on /sign-up, pulled back off the Supabase user
+ * and re-validated from scratch.
+ *
+ * `raw_user_meta_data` is NOT a trusted store: any signed-in user can write
+ * anything into it with `updateUser({ data })`. So every field is checked here
+ * against the same rules signUpWithPassword checked, and anything that does not
+ * pass is dropped rather than repaired. The fields that would actually matter
+ * if this were trusted — `role`, `moderation_status` — are not read at all, and
+ * the `profiles_insert_own` RLS policy independently pins them
+ * (`role = 'user' and moderation_status = 'active'`, migration 0053), so a
+ * doctored metadata blob cannot self-provision an admin even if this function
+ * were wrong.
+ *
+ * Uniqueness is deliberately NOT checked here. The UNIQUE constraint on
+ * profiles.username is the boundary, it is one round trip away, and asking a
+ * second question first would only widen the window it exists to close.
+ */
+async function requestedIdentity(): Promise<{ username: string | null; fullName: string | null; country: string | null }> {
+  const empty = { username: null, fullName: null, country: null };
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return empty;
+
+  const metadata = data.user.user_metadata ?? {};
+
+  const rawUsername = typeof metadata.username === "string" ? normalizeUsername(metadata.username) : "";
+  const username = USERNAME_PATTERN.test(rawUsername) ? rawUsername : null;
+
+  const rawName = typeof metadata.full_name === "string" ? metadata.full_name.trim().replace(/\s+/g, " ") : "";
+  const fullName = rawName.length >= 1 && rawName.length <= FULL_NAME_MAX ? rawName : null;
+
+  const rawCountry = typeof metadata.country === "string" ? metadata.country.trim().toUpperCase() : "";
+  const country = (COUNTRY_CODES as readonly string[]).includes(rawCountry) ? rawCountry : null;
+
+  return { username, fullName, country };
+}
 
 /**
  * The signed-in viewer's profile, or null.

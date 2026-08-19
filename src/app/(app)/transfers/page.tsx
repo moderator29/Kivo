@@ -107,7 +107,7 @@ export default async function TransfersPage({
   // filters themselves stay on screen to adjust.
   if (!hasActiveFilters && transfers.length === 0) {
     return (
-      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing synced yet."} />
     );
   }
 

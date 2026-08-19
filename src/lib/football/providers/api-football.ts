@@ -15,6 +15,7 @@ import type {
   NormalizedTeamProfile,
   NormalizedTopScorer,
   NormalizedTransfer,
+  NormalizedTeamTransfer,
 } from "../types";
 import {
   mapEventType,
@@ -883,6 +884,68 @@ export class ApiFootballProvider implements FootballDataProvider {
         transferType: mapTransferType(feeText),
       };
     });
+  }
+
+  /**
+   * `/transfers?team={id}` — every recorded transfer involving this club, for
+   * every player, in one request.
+   *
+   * Same response envelope as `?player=`: an array of per-player entries, each
+   * carrying that player's nested `transfers` list. The difference is the
+   * filter, and the difference is the whole point — one request instead of one
+   * per squad member. See ProviderAdapter.getTeamTransfers for why that matters
+   * at all on this tier.
+   *
+   * The provider returns a player's transfers *involving this club*, which
+   * includes both the arrival and the eventual departure. Both are real moves
+   * and both are returned; deduplication is the sync's job, and it already has
+   * one, keyed on the same synthetic composite id `getPlayerTransfers` builds.
+   *
+   * An entry whose player has no usable name is dropped rather than stored
+   * under a placeholder: a transfer row KIVO cannot attribute to a named player
+   * is not information, it is a blank line on somebody's profile.
+   */
+  async getTeamTransfers(teamProviderId: string): Promise<NormalizedTeamTransfer[]> {
+    const data = await this.request<ApiFootballTransfersResponse>(
+      `/transfers?team=${teamProviderId}`,
+      TRANSFERS_CACHE_SECONDS,
+    );
+
+    const out: NormalizedTeamTransfer[] = [];
+    for (const entry of data.response) {
+      const playerName = entry.player?.name?.trim();
+      if (!playerName || entry.player.id == null) continue;
+      const playerProviderId = String(entry.player.id);
+
+      for (const t of entry.transfers) {
+        const feeText = t.type && t.type.trim().length > 0 ? t.type : null;
+        // Identical composite key to getPlayerTransfers', deliberately: the
+        // same move fetched by team and by player must resolve to the same
+        // provider_mappings row, or a club sync and a player sync would each
+        // insert their own copy of one transfer.
+        const providerId = [
+          playerProviderId,
+          t.date,
+          t.teams.out?.id ?? "x",
+          t.teams.in?.id ?? "x",
+          feeText ?? "x",
+        ].join(":");
+
+        out.push({
+          providerId,
+          playerProviderId,
+          playerName,
+          fromTeamProviderId: t.teams.out?.id != null ? String(t.teams.out.id) : null,
+          fromTeamName: t.teams.out?.name ?? null,
+          toTeamProviderId: t.teams.in?.id != null ? String(t.teams.in.id) : null,
+          toTeamName: t.teams.in?.name ?? null,
+          transferDate: t.date,
+          feeText,
+          transferType: mapTransferType(feeText),
+        });
+      }
+    }
+    return out;
   }
 
   /**

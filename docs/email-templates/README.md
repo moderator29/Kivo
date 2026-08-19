@@ -10,7 +10,7 @@ Six templates, each with a plain-text counterpart:
 | --- | --- | --- |
 | `confirm-signup.html` / `.txt` | Confirm signup | **Code**, link secondary |
 | `magic-link.html` / `.txt` | Magic Link | **Code**, link secondary |
-| `reset-password.html` / `.txt` | Reset Password | **Link**, code secondary |
+| `reset-password.html` / `.txt` | Reset Password | Link and code — see the note below |
 | `change-email.html` / `.txt` | Change Email Address | **Link**, code secondary |
 | `invite.html` / `.txt` | Invite user | **Link** only |
 | `reauthentication.html` / `.txt` | Reauthentication | **Code** only |
@@ -35,13 +35,30 @@ deliverability guidance:
 | --- | --- |
 | Confirm signup | `{{ .Token }} is your KIVO confirmation code` |
 | Magic Link | `{{ .Token }} is your KIVO sign-in code` |
-| Reset Password | `Reset your KIVO password` |
+| Reset Password | `{{ .Token }} is your KIVO password reset code` |
 | Change Email Address | `Confirm your new KIVO email address` |
 | Invite user | `You've been invited to KIVO` |
 | Reauthentication | `{{ .Token }} is your KIVO verification code` |
 
 Putting the code in the subject is deliberate: iOS and Android surface it in the
 notification and offer keyboard autofill, so most users never open the message.
+
+### A note on Reset Password, added 2026-08-19
+
+KIVO's forgotten-password flow is **code-first**: `/forgot-password` asks for the
+address, then takes the six digits and the new password on one screen
+(`src/components/auth/forgot-password-form.tsx`). The reason is not preference —
+the link half is PKCE, so its code verifier is a cookie on the browser that
+*asked* for the reset, and a link opened on a different device cannot complete.
+On a phone-first product that is a real dead end, not a rare one. A typed code
+has no such constraint.
+
+The template's own body still leads with the button and offers the code
+underneath. **Both work** — the link lands on `/auth/callback`, which recognises
+a recovery and sends the user to `/reset-password` — so this is a copy-order
+mismatch, not a broken path, and it is recorded here rather than silently
+half-edited. The subject line above has been changed to carry `{{ .Token }}`, so
+the code is the first thing a phone shows regardless of what the body says.
 
 ### Local development / self-hosted
 

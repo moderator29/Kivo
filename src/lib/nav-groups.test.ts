@@ -121,6 +121,25 @@ describe("NAV_ITEMS", () => {
     }
   });
 
+  it("keeps 'not built yet' and 'nothing synced yet' in separate fields", () => {
+    // The founder's report about /live was that it showed placeholder stubs.
+    // Every built page used to read its empty-state copy out of a field named
+    // `comingSoonDescription`, which is the model saying those two facts are
+    // one fact. They are not: NoDataYet and ComingSoon are two different
+    // screens precisely because a working feature with an empty table must
+    // never be described as unreleased.
+    for (const item of NAV_ITEMS) {
+      if (item.status === "live") {
+        expect(item.comingSoonDescription, `${item.id} is built but carries coming-soon copy`).toBeUndefined();
+        expect(item.comingSoonDetails, `${item.id} is built but carries coming-soon detail`).toBeUndefined();
+        expect(item.comingSoonBlocker, `${item.id} is built but names a blocker`).toBeUndefined();
+        expect(item.comingSoonImage, `${item.id} is built but carries coming-soon art`).toBeUndefined();
+      } else {
+        expect(item.emptyDescription, `${item.id} is not built but carries empty-state copy`).toBeUndefined();
+      }
+    }
+  });
+
   it("uses each id exactly once", () => {
     const ids = NAV_ITEMS.map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);

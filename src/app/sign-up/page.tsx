@@ -1,13 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
-import { BackLink } from "@/components/ui/back-link";
 import { redirect } from "next/navigation";
-import { FadeIn } from "@/components/ui/fade-in";
-import { EmailCodeForm } from "@/components/auth/email-code-form";
+import { SignUpForm } from "@/components/auth/sign-up-form";
+import { AuthScreen, AuthUnconfigured } from "@/components/auth/auth-screen";
 import { isAuthConfigured, sanitizeRedirectPath } from "@/lib/auth";
 import { resolveViewerProfile } from "@/lib/profile";
 import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
-import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
+import { getSortedCountries } from "@/lib/countries";
 
 export const metadata = { title: "Create your account" };
 
@@ -30,7 +28,7 @@ export default async function SignUpPage({
   // Mirrors /sign-in: a signed-in visitor is normally sent away from here, but
   // the account switcher's "Add account" can legitimately land someone who is
   // already signed in on a form for a brand-new account. Their current session
-  // is untouched until a new code is verified.
+  // is untouched until the new one is verified.
   const addAccount = (Array.isArray(params.add) ? params.add[0] : params.add) === "1";
 
   // Same reasoning as /sign-in: resolved through the profile, not the bare
@@ -45,57 +43,36 @@ export default async function SignUpPage({
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-background px-4 py-12">
-      {/* Sign-in and sign-up are reached from the landing page, from the
-          marketing footer, and from every gated action in the product. Without
-          this the only way back out is the browser's own control, which a
-          phone in standalone/PWA mode does not show. Falls back to the landing
-          page for anybody who arrived here from outside KIVO. */}
-      <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+12px)] z-20">
-        <BackLink href="/" label="KIVO" />
-      </div>
+    <AuthScreen>
+      {isAuthConfigured() ? (
+        <>
+          {/* The Privacy Policy and Terms are agreed to INSIDE the form now, on
+              a real checkbox that is unchecked by default and is re-checked
+              server-side. The old copy here — a sentence saying that creating an
+              account implied agreement — was not a control the user could
+              decline, and could not be enforced anywhere. */}
+          {/* Built here, on the server, and handed down as data. Building it in
+              the client component instead made the server and the browser
+              disagree — `Intl.DisplayNames` and `localeCompare` resolve against
+              each runtime's own ICU data — which React reports as a hydration
+              failure and recovers from by throwing the tree away. A form that
+              re-renders from scratch on every load is a form whose buttons can
+              look dead, which is the exact symptom this release exists to fix. */}
+          <SignUpForm countries={getSortedCountries()} redirectTo={redirectTo} addAccount={addAccount} />
 
-      <div className="kivo-aurora" aria-hidden="true">
-        <span className="kivo-aurora-blob kivo-aurora-blob--cyan" />
-        <span className="kivo-aurora-blob kivo-aurora-blob--violet" />
-        <span className="kivo-aurora-blob kivo-aurora-blob--magenta" />
-      </div>
-
-      <div className="relative z-10 flex w-full flex-col items-center gap-8">
-        <FadeIn>
-          <Image src={kivoLogo} alt="KIVO" width={144} height={144} className="kivo-ink h-28 w-28" priority />
-        </FadeIn>
-
-        {isAuthConfigured() ? (
-          <FadeIn delay={0.12} className="flex w-full flex-col items-center gap-4">
-            <EmailCodeForm mode="sign-up" redirectTo={redirectTo} addAccount={addAccount} />
-            <p className="max-w-xs text-center text-xs text-foreground-subtle">
-              By creating an account, you agree to KIVO&apos;s{" "}
-              <Link href="/terms" className="text-accent transition-colors hover:text-foreground">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="text-accent transition-colors hover:text-foreground">
-                Privacy Policy
-              </Link>
-              .
-            </p>
-            <p className="text-xs text-foreground-subtle">
-              Already have an account?{" "}
-              <Link
-                href={redirectTo ? `/sign-in?redirect_url=${encodeURIComponent(redirectTo)}` : "/sign-in"}
-                className="font-medium text-accent transition-colors hover:text-foreground"
-              >
-                Sign in
-              </Link>
-            </p>
-          </FadeIn>
-        ) : (
-          <FadeIn delay={0.12} className="kivo-glass-brand max-w-sm rounded-3xl p-6 text-center text-sm text-foreground-muted">
-            Sign-up isn&apos;t configured in this environment yet. See ENVIRONMENT.md for the required Supabase keys.
-          </FadeIn>
-        )}
-      </div>
-    </div>
+          <p className="text-xs text-foreground-subtle">
+            Already have an account?{" "}
+            <Link
+              href={redirectTo ? `/sign-in?redirect_url=${encodeURIComponent(redirectTo)}` : "/sign-in"}
+              className="font-medium text-accent transition-colors hover:text-foreground"
+            >
+              Sign in
+            </Link>
+          </p>
+        </>
+      ) : (
+        <AuthUnconfigured what="Sign-up" />
+      )}
+    </AuthScreen>
   );
 }

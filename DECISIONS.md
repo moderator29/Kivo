@@ -4,6 +4,42 @@ Log of decisions with real consequences (irreversible, costly, or scope-defining
 
 ---
 
+### 2026-08-19 — KIVO has passwords again: sign-up collects identity before verification, and sign-in takes email + password
+
+**Decision**: KIVO now has passwords. `/sign-up` is one pre-verification form — email, full name, username, password, confirm password, country, and a real agreement to the Privacy Policy and Terms — followed by Supabase's six-digit confirmation code. `/sign-in` takes an email and a password. `/forgot-password` mails a recovery code and sets a new password in the same step. The emailed six-digit code survives as an explicitly **secondary** way in on /sign-in.
+
+**This reverses the entry of 2026-08-18, "Auth re-platformed: Clerk removed entirely, Supabase Auth with email one-time codes only."** That entry said, in as many words, "No password. No password-reset flow to get wrong," and called that a real security simplification. It is worth being blunt that this is a deliberate reversal on the founder's explicit, repeated instruction, not a refinement — and that the simplification it gives up was genuine. What replaces it is written below rather than waved at.
+
+**Why the founder asked for it, and why that is a reasonable call.** A password is the only credential a returning user can present without waiting on the mail system. On the passwordless design, every single sign-in — not just the first — depended on an email arriving, from a project whose built-in sender is throttled to a handful of messages an hour and whose custom SMTP is still not configured (`docs/EMAIL_DELIVERABILITY.md`). That made deliverability a launch blocker for *every session*, forever, rather than for onboarding. Passwords take the mail system off the critical path for the returning-user case, which is the case that happens thousands of times more often.
+
+**What passwords cost, stated plainly:**
+
+- There is now a credential to store, phish and leak. Supabase holds the hash; KIVO never sees the plaintext beyond the request that sets or checks it. But the attack surface is real and it did not exist yesterday.
+- **Credential stuffing is now a threat KIVO has.** Answered with per-address and per-IP limits on every password endpoint (`auth_password_sign_in`, 10 per address and 40 per IP per fifteen minutes) through the existing `consume_rate_limit` RPC, and with Supabase's leaked-password check — which is **currently off** and is a founder action, recorded in `docs/DEPLOYING.md` step 9 because it cannot be switched on from code.
+- **A reset endpoint is a way to send mail to somebody else's inbox.** Tighter than the rest: three per address and ten per IP per *hour*.
+- The password rules are real, stated on the form before submission, and enforced in the Server Action: ten characters minimum, a letter, a number, 72 bytes maximum (bcrypt truncates past that, and a limit the user is told about beats a limit that silently ignores their last characters). Symbols and mixed case are deliberately not required — they push people towards one memorable pattern with a `!` on the end and do not stop the attack that matters.
+
+**Identity moved BEFORE verification, which is the larger change.** The handle, name and country are collected on the sign-up form and travel to Supabase as user metadata; `resolveViewerProfile()` (src/lib/profile.ts) re-validates them from scratch and writes them when it provisions the row. Consequences worth knowing:
+
+- **Onboarding no longer asks for a username** in the normal case. The step is not deleted, it is conditional on the profile still carrying a generated `user_xxxxxxxxxx` handle — which is a real state for accounts created before the sign-up form collected one. `onboardingSteps()` is exported and unit-tested precisely so that condition cannot rot.
+- **`raw_user_meta_data` is an input, not a fact.** Any signed-in user can write anything into it with `updateUser({ data })`, so profile provisioning re-checks the handle's shape, the name's length and the country against `COUNTRY_CODES`, and never reads `role` or `moderation_status` at all. The `profiles_insert_own` policy from migration 0053 pins those independently.
+- **There is a race, and it is not closed.** A handle checked as free at sign-up can be taken by somebody else before the email is verified. Nothing reserves it — that would need a table of held names and an expiry sweep for a collision that needs two people picking the same handle minutes apart. Instead the UNIQUE constraint on `profiles.username` catches it and the account is provisioned on the placeholder handle, which is exactly what the conditional onboarding step then asks them to replace. Losing the handle is a disappointment; refusing to create an account for somebody who has just verified their email would be a lockout.
+
+**The email-code path is KEPT, and here is why that is not fence-sitting.** Every account that existed before tonight has no password, including the only real account on the platform. Removing the code path on the same night passwords ship would make that person's ability to sign in depend entirely on a reset email arriving — from the sender documented above as the launch blocker. Two doors is strictly safer than one when the cost of being wrong is the founder locked out of their own product. It is also the path by which a pre-password account sets its first password: sign in with a code, or use Forgot password, which works for an account that has never had one. The failure the instruction warns about is two *half-maintained* paths, so both run through the same Server Actions in `src/lib/auth-actions.ts`, the same rate limiter, the same error translation and the same form primitives in `src/components/auth/auth-form-parts.tsx`. What the code path can no longer do is **create** an account: `sendEmailCode` now always passes `shouldCreateUser: false`, because a KIVO account needs a username, a country and an agreement it does not collect.
+
+**Non-enumeration is preserved everywhere, including the new endpoints.** `signInWithPassword` returns one sentence for a wrong password and for an address with no account. `requestPasswordReset` returns the same answer either way and the form advances to the code screen regardless — a reset form is the single most inviting place to ask "is this person on KIVO?", because it is the one screen where typing somebody else's address is normal. Sign-up inherits Supabase's own obfuscation of an already-registered address and does not undo it; the cost is paid by an unconditional line on the code screen telling everybody what to do about it. This extends the 2026-08-18 entry "Sign-in no longer confirms whether an email address has a KIVO account" rather than reversing it.
+
+**The reported "sign in button it's not clicking" was real, and it was two bugs.** Both are fixed and both are the same class of failure — a form that depends on hydration to become usable:
+
+1. Every auth submit button carried `disabled={email.trim().length === 0}`. That expression is evaluated on the server too, where the field is always empty, so the button shipped `disabled` in the HTML and only became clickable once React had hydrated and re-run it against typed state. Reproduced with JavaScript disabled: the control ships disabled and nothing typed can change it. Auth buttons are now disabled **only while a request is in flight**; an incomplete form is answered with a sentence naming the field, in a live region, because a disabled button gives no reason.
+2. The sign-up form built its country list in the browser with `Intl.DisplayNames` and `localeCompare`, which resolve against each runtime's own ICU data. Node's and the browser's disagreed, React reported a hydration failure and threw the tree away. The list is now built once on the server and passed down as data. Caught in a browser, not by reading the code.
+
+**Documents this invalidated, and what was done with them**: `docs/EMAIL_DELIVERABILITY.md` was written entirely around "one way in, no password, no recovery factor" — rewritten. `docs/DEPLOYING.md` steps 4 and 9 described a code-only sign-in and did not mention leaked-password protection — updated. `docs/CONSTRAINTS.md` §8 gave the passwordless design as the reason XP farming cannot be bound to one human — the conclusion still holds but the reason was wrong even before tonight, and is corrected in place.
+
+**What was deliberately NOT done**: no migration. Every database object this needed already existed — `profiles.country` with its `^[A-Z]{2}$` CHECK, the UNIQUE constraint on `username`, `is_username_available`, `consume_rate_limit`. Nothing about RLS or any policy changed, so nothing was applied to the live database. `is_username_available` is called through the **service-role** client rather than being granted to `anon`, because granting it would publish `/rest/v1/rpc/is_username_available` as an unauthenticated endpoint anyone could enumerate the whole user list through, at Supabase's rate limits instead of KIVO's.
+
+---
+
 ### 2026-08-19 — A post gets a link, not a share card
 
 **Decision**: KIVO's share cards render verified football data — a scoreline, a table, a transfer, a player's real totals — into a picture. A social post gets a **permalink and nothing else** (`SharePostButton`, `/social?post=<id>`), and this is deliberate rather than an unfinished half of the share system.
@@ -193,6 +229,8 @@ Two rules held throughout: `FOOTBALL_LIVE_POLLING_ENABLED` is only ever *read*, 
 
 ### 2026-08-18 (later same day) — Auth re-platformed: Clerk removed entirely, Supabase Auth with email one-time codes only
 
+> **Superseded in part on 2026-08-19** — see "KIVO has passwords again" at the top of this file. Supabase Auth is still the identity authority and there is still no social provider, but the "no password" half of this decision was reversed on the founder's explicit instruction. Everything below about the Clerk removal, its costs and its consequences still stands.
+
 **Decision**: Clerk is gone from KIVO — dependency, components, webhook, middleware, CSP allowlist and all. Supabase Auth is the identity authority, and the only sign-in method is an emailed one-time code. No password. No social provider enabled.
 
 This reverses the 2026-08-14 entry two above ("Clerk is the identity authority; Supabase is application-data-only") and, with it, that entry's own override of the original Master Directive PDF. The PDF's instruction — "use Supabase Auth as the source of truth" — is what KIVO actually does again. It is worth being blunt that this is the second reversal on the same question, not a refinement of the first.
@@ -201,7 +239,7 @@ This reverses the 2026-08-14 entry two above ("Clerk is the identity authority; 
 
 Collapsing to one vendor removes the seam rather than patching it. Concretely: the founder-only manual dashboard step is gone, the build-time-CSP-versus-runtime-key trap is gone (`next.config.ts` no longer derives anything from an auth key), the profile-sync webhook is gone, and three env vars (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`) are gone. Two npm dependencies went with it: `@clerk/nextjs`, and `svix`, which existed solely to verify that webhook's signatures.
 
-Email-OTP-only is not just what shipped — it is a real security simplification. There is no KIVO password to store, hash, reset, phish or leak, and no password-reset flow to get wrong.
+Email-OTP-only is not just what shipped — it is a real security simplification. There is no KIVO password to store, hash, reset, phish or leak, and no password-reset flow to get wrong. *(No longer true as of 2026-08-19: there is a password, a reset flow, and the threat model that comes with both. The 2026-08-19 entry states what was put in place of this simplification rather than pretending it was free.)*
 
 **What this cost, stated plainly** — these are real regressions, not rounding errors:
 

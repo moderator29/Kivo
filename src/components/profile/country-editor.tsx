@@ -5,6 +5,7 @@ import { Check, Search } from "lucide-react";
 import { updateCountry } from "@/app/(app)/profile/actions";
 import { getSortedCountries } from "@/lib/countries";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
+import { useSaveReturn } from "@/hooks/use-save-return";
 
 /**
  * A filterable list rather than a `<select>`: the list is long enough that a
@@ -23,6 +24,9 @@ export function CountryEditor({ country }: { country: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  // The founder's ask: a save ends the errand. See useSaveReturn — the
+  // destination is the one the back control names, and the control stays.
+  const returnToCaller = useSaveReturn();
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -38,7 +42,10 @@ export function CountryEditor({ country }: { country: string | null }) {
         startTransition(async () => {
           const result = await updateCountry(selected);
           if (result.error) setError(result.error);
-          else setSaved(true);
+          else {
+            setSaved(true);
+            returnToCaller();
+          }
         });
       }}
     >

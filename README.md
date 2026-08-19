@@ -7,7 +7,7 @@ See `BUILD_PLAN.md` for what is built, what is next and what is deliberately not
 ## Stack
 
 - **Framework**: Next.js (App Router, TypeScript, Tailwind v4)
-- **Identity**: Supabase Auth — email one-time code, no password, no social provider (Clerk was removed 2026-08-18, see `DECISIONS.md`)
+- **Identity**: Supabase Auth — email + password, with an emailed six-digit code as a secondary sign-in and `/forgot-password` for recovery. No social provider. (Clerk was removed 2026-08-18; passwords added 2026-08-19 — both in `DECISIONS.md`)
 - **Application data**: Supabase (Postgres, RLS keyed on `auth.uid()`) — one vendor issues the session JWT and verifies it, so there is no cross-vendor trust to configure
 - **Football data**: provider-agnostic abstraction (`src/lib/football`), currently backed by API-Football's free tier, with a development-only mock adapter so UI work never has to spend API quota; sync is admin-triggered on demand, not continuously polled
 - **AI**: Anthropic Claude, live and grounded in real KIVO data when `ANTHROPIC_API_KEY` is set (`/ai`, `src/app/api/ai/chat/route.ts`)

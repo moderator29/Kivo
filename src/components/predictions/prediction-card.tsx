@@ -108,7 +108,10 @@ type Team = { id: string | null; name: string; crest_url: string | null };
 type PredictionCardProps = {
   fixtureId: string;
   kickoffAt: string;
-  competitionName: string;
+  /** Null when KIVO has no name for the fixture's competition — the label is
+   * then omitted rather than filled with a placeholder. See
+   * src/lib/football/competition-label.ts. */
+  competitionName: string | null;
   homeTeam: Team;
   awayTeam: Team;
   initialPrediction: Outcome | null;
@@ -186,27 +189,27 @@ export function PredictionCard({
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <TeamCrest crestUrl={homeTeam.crest_url} name={homeTeam.name} />
           {homeTeam.id ? (
-            <Link href={`/teams/${homeTeam.id}`} className="truncate text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+            <Link href={`/teams/${homeTeam.id}`} className="line-clamp-2 break-words text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
               {homeTeam.name}
             </Link>
           ) : (
-            <span className="truncate text-sm text-foreground">{homeTeam.name}</span>
+            <span className="line-clamp-2 break-words text-sm text-foreground">{homeTeam.name}</span>
           )}
         </div>
         <span className="shrink-0 text-xs text-foreground-subtle">vs</span>
-        <div className="flex flex-1 items-center justify-end gap-2">
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           {awayTeam.id ? (
             <Link
               href={`/teams/${awayTeam.id}`}
-              className="truncate text-right text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="line-clamp-2 break-words text-right text-sm text-foreground hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               {awayTeam.name}
             </Link>
           ) : (
-            <span className="truncate text-right text-sm text-foreground">{awayTeam.name}</span>
+            <span className="line-clamp-2 break-words text-right text-sm text-foreground">{awayTeam.name}</span>
           )}
           <TeamCrest crestUrl={awayTeam.crest_url} name={awayTeam.name} />
         </div>

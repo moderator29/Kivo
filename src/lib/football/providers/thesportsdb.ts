@@ -15,6 +15,7 @@ import type {
   NormalizedTeamProfile,
   NormalizedTopScorer,
   NormalizedTransfer,
+  NormalizedTeamTransfer,
 } from "../types";
 import { TheSportsDbError, requestWithRetry } from "./thesportsdb-request";
 import { mapEvent, toIntOrZero, toTheSportsDbSeasonString, type TheSportsDbEvent } from "./thesportsdb-normalizers";
@@ -335,6 +336,19 @@ export class TheSportsDbProvider implements FootballDataProvider {
   async getPlayerTransfers(): Promise<NormalizedTransfer[]> {
     throw new Error(
       "TheSportsDbProvider.getPlayerTransfers: not supported by this provider — TheSportsDB's public API has no transfer-history endpoint. Use ApiFootballProvider for transfer history.",
+    );
+  }
+
+  /**
+   * NOT SUPPORTED, for the same reason as getPlayerTransfers above: there is no
+   * transfer endpoint on this provider at all, per-player or per-club. Throws
+   * rather than returning an empty array, because an empty array would read as
+   * "this club has had no transfers" — a claim about football, not about the
+   * adapter.
+   */
+  async getTeamTransfers(): Promise<NormalizedTeamTransfer[]> {
+    throw new Error(
+      "TheSportsDbProvider.getTeamTransfers: not supported by this provider — TheSportsDB's public API has no transfer endpoint. Use ApiFootballProvider for transfer history.",
     );
   }
 

@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { CompetitionLogo } from "@/components/ui/competition-logo";
 import { StaggeredList } from "@/components/ui/staggered-list";
 import { staggerDelay } from "@/lib/stagger";
+import { competitionMetaLine } from "@/lib/football/competition-label";
 import type { LeagueListItem } from "@/app/(app)/leagues/constants";
 
 /**
@@ -76,7 +77,12 @@ export function LeaguesList({
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-foreground">{league.name}</span>
                     <span className="text-xs text-foreground-subtle">
-                      {league.country ?? "International"} · No season synced yet
+                      {/* `country` was null on every competition the live
+                          provider had synced, and this printed "International"
+                          for all of them — a claim about the competition, not
+                          a note that KIVO does not know. See
+                          competitionMetaLine. */}
+                      {competitionMetaLine([league.country, "No season synced yet"])}
                     </span>
                   </div>
                 </div>
@@ -91,10 +97,13 @@ export function LeaguesList({
                 {crest}
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-foreground">{league.name}</span>
-                  <span className="text-xs text-foreground-subtle">
-                    {league.country ?? "International"}
-                    {league.currentSeasonName ? ` · ${league.currentSeasonName}` : ""}
-                  </span>
+                  {/* Both halves optional; an absent half prints nothing and
+                      two absent halves print no line at all. */}
+                  {competitionMetaLine([league.country, league.currentSeasonName]) && (
+                    <span className="text-xs text-foreground-subtle">
+                      {competitionMetaLine([league.country, league.currentSeasonName])}
+                    </span>
+                  )}
                 </div>
               </Link>
             );

@@ -8,6 +8,7 @@ import { selectBackground, clearBackground, uploadBackground } from "@/app/(app)
 import { KIVO_BACKGROUND_IDS, kivoBackgroundPath } from "@/lib/kivo-assets";
 import { ProfileCover } from "@/components/profile/profile-cover";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
+import { useSaveReturn } from "@/hooks/use-save-return";
 
 type CoverChoice =
   | { kind: "none" }
@@ -47,6 +48,9 @@ export function BackgroundChoice({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  // The founder's ask: a save ends the errand. See useSaveReturn — the
+  // destination is the one the back control names, and the control stays.
+  const returnToCaller = useSaveReturn();
 
   const cameraInput = useRef<HTMLInputElement>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
@@ -111,6 +115,7 @@ export function BackgroundChoice({
           }
           setSaved(true);
           router.refresh();
+          returnToCaller();
         });
       }}
     >

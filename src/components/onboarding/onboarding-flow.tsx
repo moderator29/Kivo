@@ -5,11 +5,17 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { StaticImageData } from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Search, Sparkles, X } from "lucide-react";
 import kivoIntroArtwork from "../../../public/brand/kivo-artwork-hero.webp";
 import kivoUsernameArtwork from "../../../public/brand/kivo-artwork-social.webp";
 import kivoTeamArtwork from "../../../public/brand/kivo-artwork-action.webp";
-import { saveUsernameStep, finishOnboarding, skipOnboarding, checkUsername } from "@/app/onboarding/actions";
+import {
+  saveUsernameStep,
+  finishOnboarding,
+  skipOnboarding,
+  checkUsername,
+  searchOnboardingClubs,
+} from "@/app/onboarding/actions";
 import type { AlertPreset, OnboardingCompletion } from "@/app/onboarding/actions";
 import type { AwardedBadge } from "@/lib/rewards";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -17,26 +23,57 @@ import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { KivoMarkGlyph } from "@/components/ui/kivo-mark-glyph";
 import { CountUp } from "@/components/ui/count-up";
 import { useDeviceTimeZone } from "@/lib/use-device-timezone";
+import { USERNAME_PATTERN, normalizeUsername } from "@/lib/auth-shared";
+import type { PickerTeam } from "@/lib/profile-picker";
 
-const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 const AVAILABILITY_DEBOUNCE_MS = 450;
+const CLUB_SEARCH_DEBOUNCE_MS = 300;
 
-type Team = {
-  id: string;
-  name: string;
-  short_name: string | null;
-  crest_url: string | null;
-};
+/** The same club shape the profile picker and /settings/clubs use, so the
+ * three surfaces cannot drift apart on what a club is. */
+type Team = PickerTeam;
 
-// The four pageable slides of the carousel, in order. "success" isn't part
-// of this list on purpose — it's a one-way completion screen reached only
-// after a real server round trip, not something a dot represents or you can
-// page back into (there's nothing to "go back" to once the badge/XP are
-// actually on the ledger).
+// The pageable slides of the carousel, in order. "success" isn't part of this
+// list on purpose — it's a one-way completion screen reached only after a real
+// server round trip, not something a dot represents or you can page back into
+// (there's nothing to "go back" to once the badge/XP are actually on the
+// ledger).
+//
+// "username" is now CONDITIONAL — see `needsUsername` below.
 type Step = "intro" | "username" | "team" | "clubs" | "alerts";
 type FlowStep = Step | "success";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+/**
+ * Which slides this particular person sees, in order.
+ *
+ * Pulled out of the component and exported so it can be tested directly,
+ * because the two conditions are easy to get subtly wrong and the cost of
+ * getting them wrong is invisible: a flow that asks a brand-new user for a
+ * handle they already chose on /sign-up, or a "back" button pointing at a slide
+ * that is not in the flow.
+ *
+ * - `needsUsername` — sign-up collects the handle before verification now, so
+ *   this is normally false. See the prop's own note on OnboardingFlow for the
+ *   two real cases where it is true.
+ * - `hasTeams` — the club steps only exist when there is real synced football
+ *   to pick from. An empty picker is a dead end, not a personalisation step.
+ */
+export function onboardingSteps({
+  needsUsername,
+  hasTeams,
+}: {
+  needsUsername: boolean;
+  hasTeams: boolean;
+}): Step[] {
+  return [
+    "intro",
+    ...(needsUsername ? (["username"] as const) : []),
+    ...(hasTeams ? (["team", "clubs"] as const) : []),
+    "alerts",
+  ];
+}
 
 /**
  * Editorial, image-led onboarding carousel: one large hero visual, one bold
@@ -49,10 +86,27 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  */
 export function OnboardingFlow({
   defaultUsername,
+  needsUsername,
   availableTeams,
   avatarSrc,
 }: {
   defaultUsername: string;
+  /**
+   * Whether this profile still carries the machine-generated `user_xxxxxxxxxx`
+   * handle it was provisioned with, rather than one its owner chose.
+   *
+   * Sign-up now collects the handle BEFORE verification, so for anybody who
+   * arrives through /sign-up this is false and the username step never renders
+   * — asking again for something already given is the dead step the rework
+   * exists to remove. It is not deleted outright because there are two real
+   * ways to hold an account with a generated handle: an account created before
+   * the sign-up form collected one (the platform has such accounts today), and
+   * a sign-up whose chosen handle was claimed by somebody else in the window
+   * between the form checking it and the email being verified — in which case
+   * resolveViewerProfile() falls back to the placeholder and this is where the
+   * user is asked to pick again. Deleting the step would strand both.
+   */
+  needsUsername: boolean;
   availableTeams: Team[];
   avatarSrc: string | null;
 }) {
@@ -64,9 +118,10 @@ export function OnboardingFlow({
   // undiscovered in Settings. The club-picking steps only exist when there are
   // real clubs to pick — an unsynced database gets the short flow, not an empty
   // grid.
-  const steps: Step[] = hasTeams
-    ? ["intro", "username", "team", "clubs", "alerts"]
-    : ["intro", "username", "alerts"];
+  const steps = onboardingSteps({ needsUsername, hasTeams });
+  /** Where "Get started" goes: whatever is actually next, rather than a
+   *  hard-coded "username" that may not be in this flow at all. */
+  const firstStepAfterIntro: Step = steps[1];
 
   const [step, setStep] = useState<FlowStep>("intro");
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -109,7 +164,7 @@ export function OnboardingFlow({
     // useless "Match the requested format". Showing the user the exact
     // string that will be saved removes the contradiction entirely: there is
     // no invalid state to report, because uppercase is folded on the way in.
-    const value = rawValue.toLowerCase();
+    const value = normalizeUsername(rawValue);
     setUsernameValue(value);
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
@@ -146,11 +201,13 @@ export function OnboardingFlow({
     setStep(next);
   }
 
+  /** One source of truth for "the step before this one": derived from `steps`
+   *  rather than hand-written, so the conditional username and club steps can
+   *  never leave a back button pointing at a slide that isn't in the flow. */
   function handleBack() {
-    if (step === "username") goTo("intro", -1);
-    else if (step === "team") goTo("username", -1);
-    else if (step === "clubs") goTo("team", -1);
-    else if (step === "alerts") goTo(hasTeams ? "clubs" : "username", -1);
+    if (step === "success") return;
+    const index = steps.indexOf(step);
+    if (index > 0) goTo(steps[index - 1], -1);
   }
 
   function handleUsernameSubmit(formData: FormData) {
@@ -230,7 +287,7 @@ export function OnboardingFlow({
           exit={{ opacity: 0, x: direction * -24 }}
           transition={{ duration: 0.32, ease: EASE }}
         >
-          {step === "intro" && <IntroPanel onNext={() => goTo("username", 1)} />}
+          {step === "intro" && <IntroPanel onNext={() => goTo(firstStepAfterIntro, 1)} />}
 
           {step === "username" && (
             <UsernamePanel
@@ -419,9 +476,14 @@ export function IntroPanel({ onNext }: { onNext: () => void }) {
         <h1 className="max-w-xs text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           Football, one real home.
         </h1>
+        {/* Deliberately does not promise a step count: the flow is now
+            different lengths for different people (the handle step only appears
+            for an account that hasn't got one, the club steps only when there
+            are real clubs to pick), and a promise of "two quick steps" that the
+            dots then contradict is a small lie the very first screen tells. */}
         <p className="max-w-xs text-sm text-foreground-muted">
-          Scores, Match Rooms, fantasy and an AI Copilot — grounded in KIVO&apos;s own verified data. Two
-          quick steps and you&apos;re in.
+          Scores, Match Rooms, fantasy and an AI Copilot — grounded in KIVO&apos;s own verified data. A
+          couple of questions and you&apos;re in.
         </p>
       </div>
       <PillButton onClick={onNext}>
@@ -470,7 +532,9 @@ export function UsernamePanel({
             required
             minLength={3}
             maxLength={24}
-            pattern="[a-z0-9_]+"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoFocus
             value={usernameValue}
             onChange={(e) => onUsernameChange(e.target.value)}
@@ -531,6 +595,99 @@ export function UsernamePanel({
   );
 }
 
+/**
+ * The club search shared by both club steps.
+ *
+ * Onboarding's grid used to be the first sixty clubs alphabetically and
+ * nothing else — no search box, so a user whose club was not in that sixty had
+ * no way to say so and the step read as "KIVO does not have your club". The
+ * seed list is now ordered (see src/app/onboarding/page.tsx) and this is the
+ * way past it: the same server-side search the rest of the product uses,
+ * debounced, with out-of-order responses dropped.
+ */
+function useClubSearch(seed: Team[]) {
+  const [query, setQuery] = useState("");
+  const [teams, setTeams] = useState(seed);
+  const [searching, setSearching] = useState(false);
+  const requestId = useRef(0);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, []);
+
+  function onQueryChange(next: string) {
+    setQuery(next);
+    if (debounce.current) clearTimeout(debounce.current);
+    setSearching(true);
+    const id = ++requestId.current;
+    debounce.current = setTimeout(() => {
+      searchOnboardingClubs(next)
+        .then((result) => {
+          if (requestId.current !== id) return;
+          setTeams(result.teams);
+          setSearching(false);
+        })
+        .catch(() => {
+          if (requestId.current !== id) return;
+          setSearching(false);
+        });
+    }, CLUB_SEARCH_DEBOUNCE_MS);
+  }
+
+  return { query, teams, searching, onQueryChange };
+}
+
+/** The search field above either club grid. Its own component so the two
+ * steps cannot drift into looking like two different controls. */
+function ClubSearchField({
+  query,
+  searching,
+  onChange,
+  disabled,
+}: {
+  query: string;
+  searching: boolean;
+  onChange: (next: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="kivo-field flex w-full items-center gap-2 px-3.5 py-2.5">
+      <Search className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
+      <input
+        value={query}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder="Search clubs"
+        aria-label="Search clubs"
+        className="w-full bg-transparent text-left text-sm text-foreground outline-none placeholder:text-foreground-subtle disabled:opacity-50"
+      />
+      {searching && (
+        <span className="block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-foreground-subtle/30 border-t-foreground-subtle" />
+      )}
+    </div>
+  );
+}
+
+/** Said once, under both grids: what the order is and that KIVO is not
+ * ranking clubs by an opinion it does not hold. */
+function ClubOrderNote({ query, empty }: { query: string; empty: boolean }) {
+  if (empty) {
+    return (
+      <p className="w-full text-left text-[11px] leading-relaxed text-foreground-subtle">
+        {query.trim() ? `No club matches “${query.trim()}”.` : "No clubs to show."}
+      </p>
+    );
+  }
+  return (
+    <p className="w-full text-left text-[11px] leading-relaxed text-foreground-subtle">
+      Clubs other KIVO fans follow come first, then A–Z. Can&apos;t see yours? Search for it.
+    </p>
+  );
+}
+
 export function TeamPanel({
   teams,
   selectedTeamId,
@@ -546,6 +703,8 @@ export function TeamPanel({
   onContinue: () => void;
   onSkip: () => void;
 }) {
+  const { query, teams: visibleTeams, searching, onQueryChange } = useClubSearch(teams);
+
   return (
     <div className="flex flex-col items-center gap-6 text-center">
       <HeroArt src={kivoTeamArtwork} />
@@ -559,8 +718,11 @@ export function TeamPanel({
         </p>
       </div>
 
+      <ClubSearchField query={query} searching={searching} onChange={onQueryChange} disabled={pending} />
+      <ClubOrderNote query={query} empty={visibleTeams.length === 0} />
+
       <div className="grid max-h-56 w-full grid-cols-2 gap-2 overflow-y-auto pr-1">
-        {teams.map((team) => {
+        {visibleTeams.map((team) => {
           const isSelected = selectedTeamId === team.id;
           return (
             <button
@@ -627,6 +789,7 @@ export function ClubsPanel({
   onSkip: () => void;
 }) {
   const followCount = selectedIds.length + (favouriteTeamId ? 1 : 0);
+  const { query, teams: visibleTeams, searching, onQueryChange } = useClubSearch(teams);
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
@@ -642,8 +805,11 @@ export function ClubsPanel({
         </p>
       </div>
 
+      <ClubSearchField query={query} searching={searching} onChange={onQueryChange} disabled={pending} />
+      <ClubOrderNote query={query} empty={visibleTeams.length === 0} />
+
       <div className="grid max-h-56 w-full grid-cols-2 gap-2 overflow-y-auto pr-1">
-        {teams.map((team) => {
+        {visibleTeams.map((team) => {
           const isFavourite = team.id === favouriteTeamId;
           const isSelected = isFavourite || selectedIds.includes(team.id);
           return (

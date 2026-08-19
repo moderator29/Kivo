@@ -12,7 +12,10 @@ Supabase issues the session JWT and Supabase verifies it, so there is no cross-v
 
 ## 2. Authentication
 
-- **Email one-time code. No password**, so there is no password to leak, reuse or stuff. No social providers.
+- **Email and password** since 2026-08-19, with an emailed six-digit code kept as a secondary way in and `/forgot-password` for recovery. No social providers. (This section previously read "No password, so there is no password to leak, reuse or stuff" — that stopped being true; see `DECISIONS.md`, "KIVO has passwords again", for what replaced the simplification.)
+- **Password rules are enforced in the Server Action, not the form**: ten characters, a letter, a number, 72 bytes maximum. `src/lib/auth-shared.ts` holds the single definition that both the form and the action import, so what a user is shown before submitting is what judges them after.
+- **Every password endpoint is rate-limited** through `consume_rate_limit`, on the address AND the IP: sign-in 10/40 per fifteen minutes, sign-up 3/10 per fifteen minutes, reset 3/10 per *hour*. The per-IP budget is the one that bites credential stuffing, which sprays one guess across many addresses rather than hammering one.
+- **Leaked-password protection is a founder action and is currently OFF** — see §9 and `docs/DEPLOYING.md` step 9.
 - Sign-in does **not** disclose whether an account exists — the same response either way. That was a real fix, not a default (see the "stop sign-in answering who has an account" commit).
 - The sign-in email does not trust a caller-supplied host header for its redirect. Same commit.
 - **Multi-account** (up to four on one device): each inactive session lives in its own `httpOnly` cookie, isolated by `@supabase/ssr`'s `storageKey` mechanism rather than by our own discipline. Identity is always re-verified with `auth.getUser()` against that slot's own session — a hand-edited cookie makes a slot fail verification and be cleared, never makes the switcher display a stranger. "Sign out" genuinely revokes; signing out of the device revokes every stored slot. Full reasoning, including the deliberate posture change, in `DECISIONS.md`.
@@ -110,7 +113,7 @@ Stated rather than buried.
 
 | Item | Status |
 |---|---|
-| Leaked-password protection | Not applicable — KIVO has no passwords. The Supabase advisor flags it regardless. |
+| Leaked-password protection | **Disabled, and now it matters.** This row used to read "Not applicable — KIVO has no passwords". KIVO has passwords as of 2026-08-19, so the advisor's warning is a real finding. It is a dashboard toggle that cannot be set from code: Supabase → Authentication → Sign In / Providers → Email → "Prevent use of leaked passwords". Founder action, written up in `docs/DEPLOYING.md` step 9. |
 | `pg_net` in the `public` schema | Advisor warning. Supabase installs it there; moving it is a Supabase-side operation. |
 | `auth_rls_initplan` on three `profiles` policies | Performance advisory, not a security hole: `auth.<fn>()` re-evaluates per row. Fix is `(select auth.fn())`. Untouched because rewriting those three policies is a change to the identity path and wants its own careful pass. |
 | `rate_limit_events`, `provider_request_spend` | RLS enabled, no policies — deliberate. Nothing may read them through PostgREST; they are written by `SECURITY DEFINER` functions only. The advisor reports the shape, not a leak. |

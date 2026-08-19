@@ -11,6 +11,7 @@ import { PredictionCard, type PredictionConsensus } from "@/components/predictio
 import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/predictions/predictions-leaderboard";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
+import { competitionName } from "@/lib/football/competition-label";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { PredictionLeaguesPanel } from "@/components/predictions/prediction-leagues-panel";
 import {
@@ -66,7 +67,7 @@ export default async function PredictionsPage() {
 
   if (fixtures.length === 0) {
     return (
-      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
+      <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing synced yet."} />
     );
   }
 
@@ -152,7 +153,7 @@ export default async function PredictionsPage() {
             <PredictionCard
               fixtureId={fixture.id}
               kickoffAt={fixture.kickoff_at}
-              competitionName={fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+              competitionName={competitionName(fixture.competition, "short")}
               homeTeam={{
                 id: fixture.home_team?.id ?? null,
                 name: fixture.home_team?.name ?? "Home team",

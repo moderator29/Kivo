@@ -5,7 +5,7 @@ import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
-import type { NormalizedTransfer } from "./types";
+import type { NormalizedTeamTransfer, NormalizedTransfer } from "./types";
 import { notifyTransferRecorded } from "./transfer-notifications";
 import { logError } from "@/lib/log";
 
@@ -296,4 +296,218 @@ export async function reconcileUnresolvedTransferTeams(): Promise<{ error: strin
   }
 
   return { error: null, recordsProcessed: resolvedCount };
+}
+
+/**
+ * One club's whole recorded transfer history, in ONE provider request.
+ *
+ * WHY THIS EXISTS
+ * ---------------------------------------------------------------------------
+ * The founder's report was "no transfer too ... it's not calling it or
+ * anything". Checked against the live database: the `transfers` table has zero
+ * rows, and `sync_runs` has never recorded a single run with
+ * `entity_type = 'transfer'`. The code above is correct and always has been —
+ * it simply could not be afforded.
+ *
+ * `syncPlayerTransfers` is per player, and it says so in its own doc comment:
+ * "Never bulk — always called for one player at a time, to respect the free
+ * tier's daily quota." That constraint was real, and its consequence was that
+ * filling one 25-man squad's transfer history cost a quarter of the entire
+ * day's allowance. Nobody was ever going to press that button 25 times, so the
+ * table stayed empty, and /transfers has been an empty page since it was built.
+ *
+ * `/transfers?team={id}` returns the same data for a whole club in one request.
+ * That is the difference between a feature nobody can afford and a feature that
+ * costs one request per club.
+ *
+ * PLAYERS KIVO HAS NEVER SEEN
+ * ---------------------------------------------------------------------------
+ * A club's transfer history names players who left years ago and players who
+ * have not yet appeared in a synced squad. `upsertTransfer` needs a KIVO player
+ * id, so this creates one where it must — from the only fact the endpoint
+ * carries, which is the player's name.
+ *
+ * A row created that way is a real player with a real name and nothing else: no
+ * date of birth, no nationality, no position, no photo. A later squad sync
+ * fills those in under the same never-clobber-with-null rule `upsertPlayer`
+ * already applies. Deliberately not treated as a reason to skip the transfer:
+ * a named player with a documented move is worth more than a blank page, and
+ * the alternative on offer was no transfer history at all.
+ *
+ * DEDUPLICATION IS NOT NEW WORK
+ * ---------------------------------------------------------------------------
+ * The provider returns a move from both clubs' perspectives, and the same move
+ * again if the player is later synced individually. All three paths build the
+ * identical synthetic provider id, so `upsertTransfer`'s existing
+ * mapping lookup collapses them into one row — and, because the update branch
+ * returns before the notify block, re-running this over a club KIVO already
+ * knows notifies nobody a second time.
+ */
+export async function syncTeamTransfers(teamId: string): Promise<SyncResult> {
+  const supabase = createServiceRoleSupabaseClient();
+  const provider = await getFootballDataProvider();
+
+  const { data: syncRun, error: startError } = await supabase
+    .from("sync_runs")
+    .insert({ provider: provider.name, entity_type: "transfer", status: "running" })
+    .select("id")
+    .single();
+
+  if (startError || !syncRun) {
+    logError("football.sync-transfers.startTeamTransferSyncRun", startError);
+    return {
+      status: "failed",
+      recordsProcessed: 0,
+      error: startError?.message ?? "Could not create sync_runs row",
+    };
+  }
+
+  const fail = async (message: string): Promise<SyncResult> => {
+    await supabase
+      .from("sync_runs")
+      .update({
+        status: "failed",
+        finished_at: new Date().toISOString(),
+        records_processed: 0,
+        error_message: message,
+        provider_quota_remaining: provider.getQuotaRemaining(),
+      })
+      .eq("id", syncRun.id);
+    return { status: "failed", recordsProcessed: 0, error: message };
+  };
+
+  const teamProviderId = await findProviderEntityId(supabase, provider.name, "team", teamId);
+  if (!teamProviderId) {
+    return fail(`Team ${teamId} has no ${provider.name} provider mapping yet. Sync its competition's clubs first.`);
+  }
+
+  let transfers: NormalizedTeamTransfer[];
+  try {
+    transfers = await provider.getTeamTransfers(teamProviderId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError("football.sync-transfers.teamTransferSyncGetteamtransfers", err);
+    return fail(message);
+  }
+
+  // One lookup for every player named in the whole history, rather than one per
+  // transfer — the same batching KN-12 applied to standings, and it matters
+  // more here: a club's history routinely names a hundred players across
+  // several hundred moves.
+  const playerProviderIds = [...new Set(transfers.map((t) => t.playerProviderId))];
+  const playerIdByProviderId = await resolveOrCreatePlayers(supabase, provider.name, playerProviderIds, transfers);
+
+  let processed = 0;
+  const errors: string[] = [];
+
+  for (const transfer of transfers) {
+    const playerId = playerIdByProviderId.get(transfer.playerProviderId);
+    if (!playerId) {
+      // The player row could not be created. Recorded rather than swallowed:
+      // the move is real and KIVO failed to store it, which is a different
+      // thing from the club having no transfers.
+      errors.push(`transfer ${provider.name}:${transfer.providerId}: could not resolve player ${transfer.playerName}`);
+      continue;
+    }
+    try {
+      await upsertTransfer(supabase, provider.name, playerId, transfer);
+      processed += 1;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError("football.sync-transfers.teamTransferSyncUpsertTransfer", err, {
+        detail: `Team transfer sync: failed to upsert transfer ${provider.name}:${transfer.providerId}`,
+      });
+      errors.push(`transfer ${provider.name}:${transfer.providerId} (${transfer.transferDate}): ${message}`);
+    }
+  }
+
+  const finishedAt = new Date().toISOString();
+  const hadTransfers = transfers.length > 0;
+  const dbStatus: Database["public"]["Enums"]["sync_status"] =
+    errors.length === 0 ? "success" : hadTransfers && processed === 0 ? "failed" : "partial";
+  const errorMessage = errors.length > 0 ? errors.slice(0, 20).join("; ") : null;
+
+  await supabase
+    .from("sync_runs")
+    .update({
+      status: dbStatus,
+      finished_at: finishedAt,
+      last_synced_at: finishedAt,
+      records_processed: processed,
+      error_message: errorMessage,
+      provider_quota_remaining: provider.getQuotaRemaining(),
+    })
+    .eq("id", syncRun.id);
+
+  return {
+    status: dbStatus === "failed" ? "failed" : "succeeded",
+    recordsProcessed: processed,
+    error: errorMessage ?? undefined,
+  };
+}
+
+/**
+ * KIVO player ids for every provider player id named in a club's transfer
+ * history, creating a minimal row for the ones KIVO has never synced.
+ *
+ * `current_team_id` is left null on a created row, deliberately. The club being
+ * synced is where the player moved *to or from*, at some point, possibly years
+ * ago — it is not evidence of where they play now, and writing it as if it were
+ * would put a wrong current club on a player profile. Null here means "KIVO
+ * does not know", which is the truth, and a squad sync answers it properly.
+ *
+ * A player whose row cannot be created is simply absent from the returned map;
+ * the caller records that as an error against the specific transfer rather than
+ * failing the whole club.
+ */
+async function resolveOrCreatePlayers(
+  supabase: ServiceClient,
+  providerName: string,
+  playerProviderIds: string[],
+  transfers: NormalizedTeamTransfer[],
+): Promise<Map<string, string>> {
+  const resolved = new Map<string, string>();
+  if (playerProviderIds.length === 0) return resolved;
+
+  const { data: mappings, error } = await supabase
+    .from("provider_mappings")
+    .select("provider_entity_id, kivo_entity_id")
+    .eq("provider", providerName)
+    .eq("entity_type", "player")
+    .in("provider_entity_id", playerProviderIds);
+
+  if (error) {
+    // Not fatal. An unreadable mapping table means every player looks new, and
+    // the insert path below then collides on its own unique mapping constraint
+    // rather than creating duplicates — a slower run, not a wrong one.
+    logError("football.sync-transfers.resolvePlayers", error);
+  }
+
+  for (const mapping of mappings ?? []) resolved.set(mapping.provider_entity_id, mapping.kivo_entity_id);
+
+  const nameByProviderId = new Map(transfers.map((t) => [t.playerProviderId, t.playerName]));
+
+  for (const providerId of playerProviderIds) {
+    if (resolved.has(providerId)) continue;
+    const fullName = nameByProviderId.get(providerId);
+    if (!fullName) continue;
+
+    try {
+      const { data, error: insertError } = await supabase
+        .from("players")
+        .insert({ full_name: fullName, current_team_id: null })
+        .select("id")
+        .single();
+      if (insertError || !data) throw insertError ?? new Error("Failed to insert player");
+
+      await createMapping(supabase, providerName, "player", providerId, data.id);
+      resolved.set(providerId, data.id);
+    } catch (err) {
+      logError("football.sync-transfers.createTransferPlayer", err, {
+        detail: `Team transfer sync: could not create player ${providerName}:${providerId}`,
+      });
+    }
+  }
+
+  return resolved;
 }

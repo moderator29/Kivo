@@ -36,6 +36,13 @@ export async function GET(request: NextRequest) {
   // is not trustworthy just because we put it there.
   const next = sanitizeRedirectPath(searchParams.get("next") ?? searchParams.get("redirect_url"));
 
+  // Is this the "forgot my password" email rather than a sign-in one? Two
+  // signals, because Supabase produces two link shapes: `type=recovery` on a
+  // `{{ .TokenHash }}` template, and — on the PKCE `{{ .ConfirmationURL }}`
+  // shape, which carries only `?code=` — the `next` this deployment attached
+  // when it asked for the reset (see requestPasswordReset).
+  const isRecovery = type === "recovery" || next === "/reset-password";
+
   const supabase = createServerSupabaseClient();
 
   let failed = true;
@@ -50,7 +57,20 @@ export async function GET(request: NextRequest) {
   if (failed) {
     // Nothing usable in the URL, or the link is expired/already used. Send them
     // back to sign-in with an honest reason rather than to a blank page.
-    return NextResponse.redirect(new URL("/sign-in?error=link_invalid", origin));
+    return NextResponse.redirect(
+      new URL(isRecovery ? "/sign-in?error=recovery_expired" : "/sign-in?error=link_invalid", origin),
+    );
+  }
+
+  // A RECOVERY link short-circuits everything below. The session now in the
+  // cookie exists so this person can choose a password, and until they have,
+  // sending them anywhere else — /home, or worse /onboarding — leaves them
+  // signed in with the credential they came here to fix still unset. This is
+  // also why `requestPasswordReset` sets `next=/reset-password`: the two agree,
+  // and this branch is what makes the agreement hold even when the link carries
+  // no `next` at all (Supabase's own default Reset Password template does not).
+  if (isRecovery) {
+    return NextResponse.redirect(new URL("/reset-password", origin));
   }
 
   // Mirrors verifyEmailCode()'s destination logic so both halves of the email

@@ -51,7 +51,7 @@ export default async function DiscoverPage() {
   const coverage = { teams, players, competitions: leagues, managers, venues };
 
   if (leagues === 0 && teams === 0 && players === 0 && transfers === 0 && managers === 0 && venues === 0) {
-    return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />;
+    return <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.emptyDescription ?? "Nothing synced yet."} />;
   }
 
   const surfaces = [

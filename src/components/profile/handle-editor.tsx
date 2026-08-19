@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AtSign, Check, X } from "lucide-react";
 import { checkUsernameAvailable, updateUsername } from "@/app/(app)/profile/actions";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
+import { useSaveReturn } from "@/hooks/use-save-return";
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 const AVAILABILITY_DEBOUNCE_MS = 450;
@@ -29,6 +30,9 @@ export function HandleEditor({ username }: { username: string }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  // The founder's ask: a save ends the errand. See useSaveReturn — the
+  // destination is the one the back control names, and the control stays.
+  const returnToCaller = useSaveReturn();
 
   const requestId = useRef(0);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,6 +86,7 @@ export function HandleEditor({ username }: { username: string }) {
           }
           setSaved(true);
           router.refresh();
+          returnToCaller();
         });
       }}
     >

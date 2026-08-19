@@ -7,6 +7,7 @@ import { selectKivoAvatar, uploadAvatar } from "@/app/(app)/settings/avatar-acti
 import { KIVO_AVATAR_IDS, kivoAvatarPath } from "@/lib/kivo-assets";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
+import { useSaveReturn } from "@/hooks/use-save-return";
 
 type AvatarChoice =
   | { kind: "kivo"; id: string }
@@ -49,6 +50,9 @@ export function AvatarChoice({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  // The founder's ask: a save ends the errand. See useSaveReturn — the
+  // destination is the one the back control names, and the control stays.
+  const returnToCaller = useSaveReturn();
 
   const cameraInput = useRef<HTMLInputElement>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
@@ -107,6 +111,7 @@ export function AvatarChoice({
           }
           setSaved(true);
           router.refresh();
+          returnToCaller();
         });
       }}
     >

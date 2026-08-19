@@ -89,7 +89,9 @@ As of 2026-08-18 these three keys are the app's entire backend and identity conf
 
 Current project: `gkyjfihxxdynfwqhhpyn` (already connected — do not create a second project).
 
-Sign-in method: **email one-time code only** (see `DECISIONS.md`, 2026-08-18). No password, no social provider. X/Google/Apple remain architected-for but are not enabled — enabling one is a dashboard provider toggle plus a sign-in button, not a re-platforming.
+Sign-in method: **email + password**, with an emailed six-digit code as a secondary route and `/forgot-password` for recovery (see `DECISIONS.md`, 2026-08-19 — this reversed the 2026-08-18 passwordless design). No social provider. X/Google/Apple remain architected-for but are not enabled — enabling one is a dashboard provider toggle plus a sign-in button, not a re-platforming.
+
+One dashboard setting now matters that did not before: **Authentication → Sign In / Providers → Email → "Prevent use of leaked passwords"**. It is off on the live project and cannot be switched on from code. `docs/DEPLOYING.md` step 9 has the reasoning.
 
 ### Sending the sign-in email in production
 

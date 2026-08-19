@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateBio } from "@/app/(app)/profile/actions";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
+import { useSaveReturn } from "@/hooks/use-save-return";
 
 /** Mirrors `profiles_bio_length` (migration 0001) and the same cap in the
  * server action and in Settings' own editor. */
@@ -13,6 +14,9 @@ export function BioEditor({ bio }: { bio: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+  // The founder's ask: a save ends the errand. See useSaveReturn — the
+  // destination is the one the back control names, and the control stays.
+  const returnToCaller = useSaveReturn();
 
   const trimmed = value.trim();
   const unchanged = trimmed === (bio ?? "").trim();
@@ -26,7 +30,10 @@ export function BioEditor({ bio }: { bio: string | null }) {
         startTransition(async () => {
           const result = await updateBio(trimmed);
           if (result.error) setError(result.error);
-          else setSaved(true);
+          else {
+            setSaved(true);
+            returnToCaller();
+          }
         });
       }}
     >
