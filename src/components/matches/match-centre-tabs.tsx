@@ -437,7 +437,14 @@ function TimelineTab({
   awayTeamName: string;
 }) {
   if (events.length === 0) {
-    return <EmptyState message="No match events synced yet. The timeline appears once this fixture's details have been synced." />;
+    // Two different facts, and KIVO cannot tell them apart from here: a match
+    // that genuinely had no goals, cards or substitutions produces exactly the
+    // same empty list as one whose details were never synced. The old copy
+    // asserted the second, so a real goalless game was reported as missing
+    // data. Say both, and say which one KIVO cannot rule out.
+    return (
+      <EmptyState message="No goals, cards or substitutions on record for this match. Either nothing happened worth recording, or this fixture's details haven't been synced yet — KIVO can't tell those apart from here." />
+    );
   }
 
   return (
