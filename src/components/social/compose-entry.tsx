@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { PenSquare, Plus, UserRound } from "lucide-react";
+import { PenSquare, Plus } from "lucide-react";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { ViewportPortal } from "@/components/ui/viewport-portal";
 
 /**
@@ -49,13 +49,7 @@ export function ComposeEntry({
         href="/social/compose"
         className="kivo-glass kivo-focus flex items-center gap-3 rounded-2xl p-3 transition-colors duration-150 hover:bg-surface-2"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-1">
-          {avatarUrl ? (
-            <Image src={avatarUrl} alt="" width={36} height={36} className="h-full w-full object-cover" unoptimized />
-          ) : (
-            <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-          )}
-        </span>
+        <KivoAvatar src={avatarUrl} alt="" size={36} />
         <span className="min-w-0 flex-1 truncate text-sm text-foreground-subtle">What&rsquo;s your take?</span>
         <span className="kivo-gradient-prime shrink-0 rounded-xl px-4 py-1.5 text-sm font-semibold text-on-accent">
           Post

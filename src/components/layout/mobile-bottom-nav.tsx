@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { UserRound } from "lucide-react";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import type { ViewerProfileSummary } from "./app-shell";
@@ -58,17 +58,9 @@ export function MobileBottomNav({ viewerProfile }: { viewerProfile: ViewerProfil
               // The real avatar, at the size the top-right corner used to show
               // it — identity stays visible, it just moved to where a thumb
               // lands. The ring keeps a dark or light avatar legible against
-              // the active gradient behind it.
-              <span className="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-hairline">
-                <Image
-                  src={viewerProfile.avatarUrl}
-                  alt=""
-                  width={20}
-                  height={20}
-                  className="h-full w-full object-cover"
-                  unoptimized
-                />
-              </span>
+              // the active gradient behind it. Drawn by KivoAvatar so this
+              // 20px tab and the 92px profile header show the same picture.
+              <KivoAvatar src={viewerProfile.avatarUrl} alt="" size={20} className="relative z-10 ring-1 ring-hairline" />
             ) : (
               <UserRound className="relative z-10 h-5 w-5 shrink-0" strokeWidth={1.75} />
             )}

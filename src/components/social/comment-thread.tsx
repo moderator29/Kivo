@@ -44,7 +44,7 @@ function CommentItem({
       <div className="flex items-start gap-2 opacity-60" aria-live="polite">
         <span
           aria-hidden="true"
-          className="mt-0.5 h-5 w-5 shrink-0 rounded-full border border-dashed border-hairline-strong"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded-[28%] border border-dashed border-hairline-strong"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-[11px] font-medium text-foreground-subtle">Posting…</span>

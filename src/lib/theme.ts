@@ -40,6 +40,25 @@ export function isThemePreference(value: unknown): value is ThemePreference {
  */
 export const DEFAULT_THEME: ResolvedTheme = "dark";
 
+/**
+ * What a visitor who has never chosen gets: KIVO's dark, regardless of what
+ * their phone is set to.
+ *
+ * This used to be "system", and the difference is the founder's report: a
+ * first-time visitor opening the link on a phone set to light mode saw KIVO in
+ * light mode. That is defensible as a general web default and wrong for this
+ * product. KIVO's dark is the brand — the crest, the gradients, the pitch
+ * greens and the live pulse were all drawn against #05060a — and the light
+ * theme exists so somebody who wants it can have it, not so the operating
+ * system can decide what a stranger's first impression of the platform is.
+ *
+ * This is a DEFAULT, not a lock. "system" is still one of the three choices in
+ * Settings → Appearance and still keeps deferring to the OS once picked; it is
+ * simply no longer what happens to people who never opened Settings. A stored
+ * preference of any kind always wins over this.
+ */
+export const DEFAULT_PREFERENCE: ThemePreference = "dark";
+
 export function resolveTheme(preference: ThemePreference, systemPrefersLight: boolean): ResolvedTheme {
   if (preference === "system") return systemPrefersLight ? "light" : "dark";
   return preference;

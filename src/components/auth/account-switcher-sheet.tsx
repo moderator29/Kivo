@@ -291,13 +291,7 @@ function ActiveAccountCard({ account }: { account: AccountSwitcherState["active"
     <div className="rounded-2xl border border-accent/60 bg-surface-inset p-3.5">
       <div className="flex items-start justify-between gap-3">
         <span className="relative shrink-0">
-          <KivoAvatar
-            src={account.avatarSrc}
-            name={name}
-            size={64}
-            radiusClassName="rounded-2xl"
-            className="border border-hairline"
-          />
+          <KivoAvatar src={account.avatarSrc} name={name} size={64} className="border border-hairline" />
           {/* The provider badge in the reference is Google. KIVO has no social
               login and no passwords — every account here signed in with an
               emailed code — so the badge says email, which is the true answer
@@ -365,15 +359,9 @@ function StoredAccountRow({
         className="kivo-focus flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-1.5 py-2.5 text-left transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span className="relative shrink-0">
-          <KivoAvatar
-            src={account.avatarSrc}
-            name={name}
-            size={44}
-            radiusClassName="rounded-xl"
-            className="border border-hairline"
-          />
+          <KivoAvatar src={account.avatarSrc} name={name} size={44} className="border border-hairline" />
           {busy && (
-            <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-overlay">
+            <span className="absolute inset-0 flex items-center justify-center rounded-[28%] bg-overlay">
               <Loader2 className="h-4 w-4 animate-spin text-foreground" strokeWidth={1.75} aria-hidden="true" />
             </span>
           )}

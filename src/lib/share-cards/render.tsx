@@ -217,9 +217,16 @@ function Crest({ team, img, size }: { team: ShareTeamRef; img: ImageResolver; si
   );
 }
 
-/** A person: player photo or profile avatar, circular, with an initial
- * fallback for the very common case of no synced photo. */
-function Portrait({ src, name, size, ring = C.borderStrong }: { src: string | null; name: string; size: number; ring?: string }) {
+/** A person: player photo or profile avatar, with an initial fallback for the
+ * very common case of no synced photo.
+ *
+ * Circular by default, which is right for a provider head-shot of a footballer.
+ * A KIVO profile avatar passes `radius="28%"` instead, so a shared card frames
+ * someone's avatar the same way every screen in the app does — see
+ * AVATAR_RADIUS_CLASS in src/components/ui/kivo-avatar.tsx. Satori takes a
+ * percentage borderRadius, so the one number can be repeated rather than
+ * recomputed per size. */
+function Portrait({ src, name, size, ring = C.borderStrong, radius = 999 }: { src: string | null; name: string; size: number; ring?: string; radius?: number | string }) {
   if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- satori requires a plain <img>.
@@ -228,7 +235,7 @@ function Portrait({ src, name, size, ring = C.borderStrong }: { src: string | nu
         width={size}
         height={size}
         alt=""
-        style={{ objectFit: "cover", borderRadius: 999, border: `3px solid ${ring}` }}
+        style={{ objectFit: "cover", borderRadius: radius, border: `3px solid ${ring}` }}
       />
     );
   }
@@ -240,7 +247,7 @@ function Portrait({ src, name, size, ring = C.borderStrong }: { src: string | nu
         justifyContent: "center",
         width: size,
         height: size,
-        borderRadius: 999,
+        borderRadius: radius,
         backgroundColor: "rgba(255,255,255,0.07)",
         border: `3px solid ${ring}`,
         fontSize: size * 0.36,
@@ -558,7 +565,7 @@ function predictionBody(data: Extract<ShareCardData, { kind: "prediction" }>, im
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, width: INNER_WIDTH }}>
       <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-        <Portrait src={img(data.avatarUrl)} name={data.displayName} size={110} />
+        <Portrait src={img(data.avatarUrl)} name={data.displayName} size={110} radius="28%" />
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 700 }}>
           <Text size={40} weight={700} maxWidth={700}>
             {data.displayName}
@@ -830,7 +837,7 @@ function profileBody(data: Extract<ShareCardData, { kind: "profile-achievement" 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32, width: INNER_WIDTH }}>
       <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-        <Portrait src={img(data.avatarUrl)} name={data.displayName} size={176} ring="rgba(0,217,255,0.45)" />
+        <Portrait src={img(data.avatarUrl)} name={data.displayName} size={176} ring="rgba(0,217,255,0.45)" radius="28%" />
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 640 }}>
           <Text size={data.displayName.length > 18 ? 50 : 60} weight={800} maxWidth={640}>
             {data.displayName}

@@ -22,7 +22,7 @@ export function ProfilePageSkeleton({
   withDescription = false,
   label = "Loading",
 }: {
-  variant?: "rows" | "grid" | "field";
+  variant?: "rows" | "grid" | "avatar-grid" | "field";
   withDescription?: boolean;
   label?: string;
 }) {
@@ -33,6 +33,18 @@ export function ProfilePageSkeleton({
         <Skeleton className="h-7 w-40" />
         {withDescription && <Skeleton className="h-5 w-64" />}
       </div>
+
+      {/* The avatar picker's own shape: 18 square tiles, three across on a
+          phone and six on a tablet, at the avatar's own corner radius — the
+          background picker's 2/3-column grid of 8 would promise the wrong
+          layout, which is the exact failure this file's header warns about. */}
+      {variant === "avatar-grid" && (
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          {Array.from({ length: 18 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-square w-full rounded-[28%]" />
+          ))}
+        </div>
+      )}
 
       {variant === "grid" && (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">

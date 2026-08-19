@@ -1,4 +1,4 @@
-import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
+import { DEFAULT_PREFERENCE, DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
 
 /**
  * Applies the stored theme to `<html>` BEFORE the browser paints anything.
@@ -20,9 +20,14 @@ import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
  * Reads `prefers-color-scheme: light` (not `dark`) so a browser that does
  * not support the query at all — `matches` is `false` — falls through to
  * dark, matching DEFAULT_THEME rather than accidentally forcing light.
+ *
+ * With NOTHING stored, the preference is `DEFAULT_PREFERENCE` ("dark"), not
+ * "system" — so the OS is never consulted for a first-time visitor and the
+ * link opens in KIVO's dark on a light-set phone. The media query below still
+ * runs, and still decides, for somebody who has actually chosen "system".
  */
 export function ThemeScript() {
-  const script = `(function(){try{var s=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var p=(s==="light"||s==="dark"||s==="system")?s:"system";var t=p==="system"?(window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;var e=document.documentElement;e.setAttribute("data-theme",t);e.style.colorScheme=t;}catch(_){document.documentElement.setAttribute("data-theme",${JSON.stringify(DEFAULT_THEME)});}})();`;
+  const script = `(function(){try{var s=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var p=(s==="light"||s==="dark"||s==="system")?s:${JSON.stringify(DEFAULT_PREFERENCE)};var t=p==="system"?(window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;var e=document.documentElement;e.setAttribute("data-theme",t);e.style.colorScheme=t;}catch(_){document.documentElement.setAttribute("data-theme",${JSON.stringify(DEFAULT_THEME)});}})();`;
 
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }

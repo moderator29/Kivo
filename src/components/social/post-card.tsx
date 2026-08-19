@@ -426,15 +426,13 @@ export function PostCard({
       ) : (
       <div className="flex items-center gap-2">
         {isSystem ? (
-          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ring-hairline">
+          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-[28%] ring-1 ring-hairline">
             <KivoMarkGlyph size={20} />
           </div>
         ) : authorAvatarSrc ? (
           <KivoAvatar src={authorAvatarSrc} name={authorName} size={32} className="ring-1 ring-hairline" />
         ) : (
-          <div className="kivo-gradient-prime flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-on-accent ring-1 ring-hairline">
-            {authorName.charAt(0).toUpperCase()}
-          </div>
+          <KivoAvatar src={null} name={authorName} size={32} className="ring-1 ring-hairline" />
         )}
         <div className="flex min-w-0 flex-1 flex-col">
           {isSystem ? (

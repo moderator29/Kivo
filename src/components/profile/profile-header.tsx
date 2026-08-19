@@ -104,7 +104,7 @@ export function ProfileHeader({
             line below and stops the block reading as a stack of rows. */}
         <div className="flex items-end justify-between gap-3">
           <div className="relative -mt-12">
-            <div className="rounded-full bg-background p-1 ring-1 ring-hairline-soft">
+            <div className="rounded-[32%] bg-background p-1 ring-1 ring-hairline-soft">
               <KivoAvatar src={avatarSrc} name={name} size={92} />
             </div>
             {owner && (

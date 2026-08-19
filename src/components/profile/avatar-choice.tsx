@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Check, ImagePlus } from "lucide-react";
+import { Camera, ImagePlus } from "lucide-react";
 import { selectKivoAvatar, uploadAvatar } from "@/app/(app)/settings/avatar-actions";
-import { KIVO_AVATAR_IDS, kivoAvatarPath } from "@/lib/kivo-assets";
+import { type KivoAvatarId, kivoAvatarPath } from "@/lib/kivo-assets";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoAvatarGrid } from "@/components/ui/kivo-avatar-grid";
 import { ProfileSaveBar } from "@/components/profile/profile-save-bar";
 import { useSaveReturn } from "@/hooks/use-save-return";
 
@@ -79,7 +80,7 @@ export function AvatarChoice({
 
   const previewSrc =
     choice.kind === "kivo"
-      ? kivoAvatarPath(choice.id as (typeof KIVO_AVATAR_IDS)[number])
+      ? kivoAvatarPath(choice.id as KivoAvatarId)
       : (choice.previewUrl ?? currentSrc);
 
   const unchanged =
@@ -116,8 +117,8 @@ export function AvatarChoice({
       }}
     >
       <div className="flex flex-col items-center gap-3">
-        <span className="rounded-full bg-background p-1 ring-1 ring-hairline-soft">
-          <KivoAvatar src={previewSrc} size={116} />
+        <span className="rounded-[32%] bg-background p-1 ring-1 ring-hairline-soft">
+          <KivoAvatar src={previewSrc} size={116} priority />
         </span>
         <p className="text-xs text-foreground-subtle">
           {choice.kind === "upload" && choice.file ? "Your new photo — not saved yet" : "Your avatar"}
@@ -158,38 +159,14 @@ export function AvatarChoice({
         <h2 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
           Or pick a KIVO avatar
         </h2>
-        <div className="grid grid-cols-3 gap-4 sm:grid-cols-5">
-          {KIVO_AVATAR_IDS.map((id) => {
-            const isActive = choice.kind === "kivo" && choice.id === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setChoice({ kind: "kivo", id });
-                  setSaved(false);
-                  setError(null);
-                }}
-                aria-label="Choose this KIVO avatar"
-                aria-pressed={isActive}
-                className="kivo-focus group relative flex items-center justify-center"
-              >
-                <span
-                  className={`rounded-full p-1 transition ${
-                    isActive ? "bg-accent" : "bg-transparent group-hover:bg-hairline-strong"
-                  }`}
-                >
-                  <KivoAvatar src={kivoAvatarPath(id)} size={80} />
-                </span>
-                {isActive && (
-                  <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent ring-2 ring-background">
-                    <Check className="h-3.5 w-3.5 text-on-accent" strokeWidth={2} />
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <KivoAvatarGrid
+          selectedId={choice.kind === "kivo" ? choice.id : null}
+          onSelect={(id) => {
+            setChoice({ kind: "kivo", id });
+            setSaved(false);
+            setError(null);
+          }}
+        />
       </div>
 
       <ProfileSaveBar pending={pending} disabled={unchanged} saved={saved} error={error} label="Save avatar" />

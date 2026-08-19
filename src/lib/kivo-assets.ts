@@ -1,24 +1,49 @@
 /**
- * Single source of truth for the KIVO-native avatar/background asset ids —
- * RECOMMENDATIONS.md items 231/232. Only these ids are "confirmed clean"
- * (no baked-in wordmark/number overlapping the art); the rest of each batch
- * needs a remastered source before it can ship. Every picker, random
- * assignment, and resolver in the app imports these two lists rather than
- * repeating them, so there is exactly one place to update if/when items
- * 231/232 land more clean assets.
+ * Single source of truth for the KIVO-native avatar/background asset ids.
  *
- * The three `profiles` check constraints added in
+ * AVATARS — all 18 of the founder's commissioned set ship. They are exported
+ * as whole 384x384 panels, one per design, sliced straight off the three
+ * source sheets in `design/raw-uploads/founder-screenshots/` (six designs per
+ * sheet, an exact 3x2 grid of 512px cells, downsampled to 384 because 116px
+ * at DPR 3 is the largest any surface renders one). No sub-crop is applied to
+ * any of them any more: an earlier pass shipped only the 5 whose corner
+ * watermark could be trimmed away and then cropped each of those to a
+ * head-and-shoulders box, which is why the picker offered five unrecognisable
+ * slivers. The founder's instruction is the opposite — every design, shown
+ * whole, exactly as the artwork was composed. `RECOMMENDATIONS.md` items
+ * 231/232/233 and `KIVO_NEXT_GEN.md` KN-156 all describe the old
+ * five-and-cropped world and are superseded by that decision for avatars.
+ *
+ * The three `profiles` check constraints from
  * supabase/migrations/0043_kivo_avatar_background_system.sql encode the same
- * two lists at the database layer as defense-in-depth — kept in sync by hand
- * with these, same "duplicated literal" precedent as MAX_BIO_LENGTH in
+ * lists at the database layer as defense-in-depth; migration 0109 widens the
+ * avatar one from 5 ids to these 18. Kept in sync by hand with this file,
+ * same "duplicated literal" precedent as MAX_BIO_LENGTH in
  * src/app/(app)/settings/actions.ts.
+ *
+ * BACKGROUNDS are unchanged — items 231/232 still hold there, because the two
+ * excluded covers have KIVO rendered as content inside the scene rather than
+ * as a corner overlay.
  */
 export const KIVO_AVATAR_IDS = [
+  "kivo-avatar-01",
+  "kivo-avatar-02",
+  "kivo-avatar-03",
+  "kivo-avatar-04",
+  "kivo-avatar-05",
   "kivo-avatar-06",
+  "kivo-avatar-07",
   "kivo-avatar-08",
+  "kivo-avatar-09",
+  "kivo-avatar-10",
   "kivo-avatar-11",
   "kivo-avatar-12",
+  "kivo-avatar-13",
+  "kivo-avatar-14",
+  "kivo-avatar-15",
+  "kivo-avatar-16",
   "kivo-avatar-17",
+  "kivo-avatar-18",
 ] as const;
 
 export type KivoAvatarId = (typeof KIVO_AVATAR_IDS)[number];
@@ -114,53 +139,50 @@ export function resolveBackgroundSrc(profile: {
 }
 
 /**
- * Where the person actually is inside each KIVO avatar, as a square crop box
- * in the source image's own pixels.
+ * A short, human description of each KIVO avatar's artwork.
  *
- * These are full-body hero renders, not head-and-shoulders portraits, and the
- * asset's own internal number is printed on the shirt — `kivo-avatar-08` wears
- * an 08. Rendered the obvious way (`object-fit: cover`, centred) the circle
- * lands squarely on that shirt, so the product showed a KIVO asset id to the
- * user at every size from the 40px nav avatar upward. That is the exact thing
- * the asset rules forbid, and it is why an earlier pass had to keep shrinking
- * an avatar rather than let it be seen properly.
+ * This exists so that an avatar is never announced, labelled or alt-texted as
+ * a number. Screen-reader users get the same information a sighted user gets
+ * from looking at the tile ("a goalkeeper in green holding the ball"), the
+ * picker's 18 options are distinguishable from one another in the
+ * accessibility tree rather than eighteen identical "Choose this KIVO
+ * avatar" buttons, and nothing in the UI ever exposes the asset id.
  *
- * The fix is a crop, which is the only asset operation permitted here — no
- * redraw, no regeneration, no recolour. Each box was measured against the real
- * file and frames the head above the shirt number; the KIVO wordmark and
- * shoulder mark are brand, not an id, and are allowed to stay. Two of the five
- * (06, 17) are rear-facing renders with no face to frame, so their boxes are
- * the best available head crop rather than a good portrait — see the profile
- * recommendations in KIVO_NEXT_GEN.md for the remaster that would fix that
- * properly.
- *
- * `width`/`height` are the file's real intrinsic dimensions, needed to scale
- * the crop without distorting it. Verified against the committed files, not
- * assumed.
+ * Written by looking at each exported file, not inferred from its filename.
  */
-type KivoAvatarFraming = { width: number; height: number; x: number; y: number; side: number };
-
-const KIVO_AVATAR_FRAMING: Record<KivoAvatarId, KivoAvatarFraming> = {
-  "kivo-avatar-06": { width: 360, height: 512, x: 169, y: 0, side: 82 },
-  "kivo-avatar-08": { width: 250, height: 512, x: 50, y: 0, side: 130 },
-  "kivo-avatar-11": { width: 250, height: 512, x: 55, y: 5, side: 135 },
-  "kivo-avatar-12": { width: 250, height: 512, x: 75, y: 10, side: 125 },
-  "kivo-avatar-17": { width: 380, height: 512, x: 205, y: 0, side: 129 },
+export const KIVO_AVATAR_DESCRIPTIONS: Record<KivoAvatarId, string> = {
+  "kivo-avatar-01": "Forward in a flowing cape, holding the ball, back to the camera",
+  "kivo-avatar-02": "Player in a visor crouching with one hand resting on the ball",
+  "kivo-avatar-03": "Player in sunglasses pointing out to the crowd, ball under one arm",
+  "kivo-avatar-04": "Player in a white kit striking the ball at full stretch",
+  "kivo-avatar-05": "Hooded player hooking a volley out of the air",
+  "kivo-avatar-06": "Player with bleached hair facing the pitch under stadium lights",
+  "kivo-avatar-07": "Player in a headband driving the ball forward at pace",
+  "kivo-avatar-08": "Player in a white kit carrying the ball, back to the camera",
+  "kivo-avatar-09": "Player striking a volley through a burst of light",
+  "kivo-avatar-10": "Player with silver hair sprinting with the ball under floodlights",
+  "kivo-avatar-11": "Player in a white kit turning to flex a celebration",
+  "kivo-avatar-12": "Player standing with folded arms in front of glowing match data",
+  "kivo-avatar-13": "Player seated on a bench with a foot on the ball",
+  "kivo-avatar-14": "Player in a white kit running the ball through streaks of colour",
+  "kivo-avatar-15": "Goalkeeper in green gloves holding the ball in front of the net",
+  "kivo-avatar-16": "Player crouched beside the ball against a glowing globe",
+  "kivo-avatar-17": "Player in a white kit glancing back in front of tactics boards",
+  "kivo-avatar-18": "Player with long braids holding the ball, silver K behind her",
 };
 
 /**
- * The framing for whatever `resolveAvatarSrc` produced, or null when the src
- * is a user's own upload / the legacy avatar_url / nothing.
+ * The description for whatever `resolveAvatarSrc` produced, or null when the
+ * src is a user's own upload / the legacy avatar_url / nothing.
  *
- * Deliberately derived from the path rather than from a second `kivoId` prop
- * threaded through every call site: `kivoAvatarPath` is the only thing that
- * ever produces these URLs, so the path IS the id, and reading it back here
- * means every avatar in the app — nav, posts, comments, follow lists — gets
- * the corrected framing without any of those files changing.
+ * Derived from the path rather than from a second `kivoId` prop threaded
+ * through every call site: `kivoAvatarPath` is the only thing that ever
+ * produces these URLs, so the path IS the id, and reading it back here means
+ * every avatar in the app can describe itself without any caller changing.
  */
-export function kivoAvatarFramingForSrc(src: string | null | undefined) {
+export function kivoAvatarDescriptionForSrc(src: string | null | undefined) {
   if (!src) return null;
   const match = /\/assets\/kivo\/avatars\/([a-z0-9-]+)\.webp$/.exec(src);
   const id = match?.[1];
-  return isKivoAvatarId(id) ? KIVO_AVATAR_FRAMING[id] : null;
+  return isKivoAvatarId(id) ? KIVO_AVATAR_DESCRIPTIONS[id] : null;
 }

@@ -47,9 +47,9 @@ export default async function EditProfilePage() {
         <Link
           href="/profile/avatar"
           aria-label="Change your avatar"
-          className="kivo-focus group relative rounded-full"
+          className="kivo-focus group relative rounded-[32%]"
         >
-          <span className="block rounded-full bg-background p-1 ring-1 ring-hairline-soft">
+          <span className="block rounded-[32%] bg-background p-1 ring-1 ring-hairline-soft">
             <KivoAvatar src={avatarSrc} name={profile.display_name ?? profile.username} size={104} />
           </span>
           <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border border-hairline bg-surface-3 text-foreground-muted shadow-soft transition group-hover:text-foreground">

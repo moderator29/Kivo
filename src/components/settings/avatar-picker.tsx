@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { Check, Upload } from "lucide-react";
 import { selectKivoAvatar, uploadAvatar } from "@/app/(app)/settings/avatar-actions";
-import { KIVO_AVATAR_IDS, kivoAvatarPath, resolveAvatarSrc } from "@/lib/kivo-assets";
+import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
+import { KivoAvatarGrid } from "@/components/ui/kivo-avatar-grid";
 
 type AvatarProfile = {
   avatar_type: "kivo" | "uploaded";
@@ -16,10 +16,11 @@ type AvatarProfile = {
 };
 
 /**
- * The five confirmed-clean KIVO avatars (RECOMMENDATIONS items 231/232) as
- * plain visual options — deliberately no id/number rendered anywhere, not
- * even as visible alt text (KivoAvatar always renders alt=""), matching this
- * feature's own "internal asset ids only" rule.
+ * Settings' copy of the avatar decision. It saves on tap where
+ * `/profile/avatar` saves on a Save button, which is the one real difference
+ * between the two screens — the options themselves come from the shared
+ * `KivoAvatarGrid`, so all 18 designs render identically on both, and neither
+ * screen can drift into its own idea of what an avatar looks like.
  */
 export function AvatarPicker({ profile }: { profile: AvatarProfile }) {
   const [current, setCurrent] = useState(profile);
@@ -99,44 +100,12 @@ export function AvatarPicker({ profile }: { profile: AvatarProfile }) {
         </AnimatePresence>
       </div>
 
-      <div className="grid grid-cols-5 gap-2.5">
-        {KIVO_AVATAR_IDS.map((id) => {
-          const isActive = current.avatar_type === "kivo" && current.avatar_kivo_id === id;
-          const isThisPending = pending && pendingKivoId === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              disabled={pending}
-              onClick={() => handleSelectKivo(id)}
-              aria-label="Choose this KIVO avatar"
-              aria-pressed={isActive}
-              className={`relative aspect-square overflow-hidden rounded-2xl ring-2 transition disabled:opacity-60 ${
-                isActive ? "ring-accent" : "ring-transparent hover:ring-hairline-strong"
-              }`}
-            >
-              <Image
-                src={kivoAvatarPath(id)}
-                alt=""
-                fill
-                loading="lazy"
-                sizes="(min-width: 640px) 80px, 20vw"
-                className="object-cover"
-              />
-              {isActive && (
-                <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent">
-                  <Check className="h-2.5 w-2.5 text-on-accent" strokeWidth={2} />
-                </span>
-              )}
-              {isThisPending && (
-                <span className="absolute inset-0 flex items-center justify-center bg-overlay">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <KivoAvatarGrid
+        selectedId={current.avatar_type === "kivo" ? current.avatar_kivo_id : null}
+        onSelect={handleSelectKivo}
+        disabled={pending}
+        pendingId={pendingKivoId}
+      />
 
       <div className="flex items-center gap-2">
         <input
