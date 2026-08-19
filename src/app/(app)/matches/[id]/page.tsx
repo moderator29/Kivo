@@ -1,25 +1,17 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
-import { MapPin, Share2 } from "lucide-react";
+import { Share2 } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
-import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { resolveBackgroundSrc } from "@/lib/kivo-assets";
-import { SHARE_BACKGROUND_LAYERS } from "@/lib/share-cards/backgrounds";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
-import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
-import { TeamCrest } from "@/components/ui/team-crest";
+import { MatchHero } from "@/components/matches/match-hero";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
-import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { MatchShareCard } from "@/components/matches/match-share-card";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { YourPredictionCard } from "@/components/matches/your-prediction-card";
@@ -35,6 +27,7 @@ import { absoluteUrl } from "@/lib/site-url";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { getRoomVerdictExtras } from "@/lib/football/room-verdict";
 import { matchRoomWindow } from "@/lib/match-room-window";
+import { roundText } from "@/lib/football/round-label";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -145,6 +138,7 @@ export default async function MatchCentrePage({
     // most-opened page in the product, and read with the ordinary client
     // because `provider_coverage_select_public` allows it.
     { data: coverageRow },
+    { data: playerStatRows },
   ] = await Promise.all([
     supabase
       .from("fixture_events")
@@ -169,7 +163,15 @@ export default async function MatchCentrePage({
       .eq("fixture_id", id),
     supabase
       .from("standings")
-      .select("team_id, played, won, drawn, lost, goals_for, goals_against, points, position, team:teams(name, crest_url)")
+      // zone_description / group_label (migration 0117) are the competition's
+      // OWN words for where a line in the table sits and which table it is —
+      // "Promotion - Champions League", "Group A". They arrive verbatim, so
+      // the table can draw its zones without KIVO asserting a rule about any
+      // league's qualification places, which is a claim with an expiry date.
+      .select(
+        `team_id, played, won, drawn, lost, goals_for, goals_against, points, position,
+         zone_description, group_label, team:teams(name, crest_url)`,
+      )
       .eq("season_id", fixture.season_id)
       .order("position", { ascending: true }),
     // Same shared query as /social and its own "Load more" — just scoped to
@@ -249,13 +251,27 @@ export default async function MatchCentrePage({
     fixture.competition?.id && activeProvider.name
       ? supabase
           .from("provider_coverage")
-          .select("fixture_events, fixture_lineups, fixture_statistics, retrieved_at")
+          .select("fixture_events, fixture_lineups, fixture_statistics, standings, retrieved_at")
           .eq("provider", activeProvider.name)
           .eq("competition_id", fixture.competition.id)
           .order("season_year", { ascending: false })
           .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // Every player's own line in this match (`fixture_player_statistics`,
+    // migration 0081). One read of a table KIVO already fills and, until now,
+    // nothing a fan could open ever showed — no provider call, no new cost.
+    // Empty for a fixture nobody has fetched them for, and the Players section
+    // is simply not offered in that case.
+    supabase
+      .from("fixture_player_statistics")
+      .select(
+        `team_id, minutes_played, position, is_substitute, goals, assists, shots_total, shots_on_target,
+         passes_total, passes_key, pass_accuracy, tackles_total, blocks, interceptions, duels_total, duels_won,
+         dribbles_attempted, dribbles_succeeded, fouls_drawn, fouls_committed, saves, goals_conceded, offsides,
+         player:players(id, full_name, known_as)`,
+      )
+      .eq("fixture_id", id),
   ]);
 
   const viewerFantasyRoster = viewerFantasyRosterBySeason.get(fixture.season_id) ?? new Map();
@@ -294,6 +310,37 @@ export default async function MatchCentrePage({
     passesAccurate: s.passes_accurate,
     passesPct: s.passes_pct,
     expectedGoals: s.expected_goals,
+  }));
+
+  // One player's own numbers for this match, per side. Nulls are carried
+  // through untouched — `null` is "not recorded", never nought, and the whole
+  // Players section is built on keeping those two apart.
+  const playerLines = (playerStatRows ?? []).map((row) => ({
+    playerId: row.player?.id ?? "",
+    playerName: row.player?.known_as ?? row.player?.full_name ?? "Unknown player",
+    teamId: row.team_id,
+    position: row.position,
+    isSubstitute: row.is_substitute,
+    minutesPlayed: row.minutes_played,
+    goals: row.goals,
+    assists: row.assists,
+    shotsTotal: row.shots_total,
+    shotsOnTarget: row.shots_on_target,
+    passesTotal: row.passes_total,
+    passesKey: row.passes_key,
+    passAccuracy: row.pass_accuracy,
+    tacklesTotal: row.tackles_total,
+    interceptions: row.interceptions,
+    blocks: row.blocks,
+    duelsTotal: row.duels_total,
+    duelsWon: row.duels_won,
+    dribblesAttempted: row.dribbles_attempted,
+    dribblesSucceeded: row.dribbles_succeeded,
+    foulsDrawn: row.fouls_drawn,
+    foulsCommitted: row.fouls_committed,
+    saves: row.saves,
+    goalsConceded: row.goals_conceded,
+    offsides: row.offsides,
   }));
 
   const roomPostsForTab = roomPosts.map((post) => ({
@@ -378,154 +425,21 @@ export default async function MatchCentrePage({
   // the banner then keeps exactly the gradient it always had.
   const matchBannerSrc = profile ? resolveBackgroundSrc(profile) : null;
 
-  return (
-    // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's
-    // resolved content cross-dissolves in over MatchDetailLoading's skeleton
-    // instead of hard-cutting — the header card below keeps its own nested
-    // FadeIn too (a slightly different entrance, harmless to layer).
-    <FadeIn className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      {/* The match banner's backdrop is the viewer's OWN chosen background —
-          the same `profiles.background_id` / upload that drives the share card
-          below it and their profile cover. It used to be `kivo-glass-brand`, a
-          fixed blue-violet gradient baked into the page, which the founder's
-          words for were "that hardcore match banner ... make it editable from
-          background ones".
-
-          One choice, three surfaces, and nothing new to configure: a fan who
-          picks a cover in the share panel on this very page sees the banner
-          above it change too. `resolveBackgroundSrc` returns null for a
-          profile that has chosen nothing and for a signed-out visitor, and the
-          banner then falls back to exactly the gradient it always had — so the
-          default look is unchanged and this is additive.
-
-          The scrim is not decoration: the KIVO covers are busy renders, and a
-          scoreline straight onto one is illegible. Same reasoning, and the
-          same layer, that SHARE_BACKGROUND_LAYERS.scrim applies to the card. */}
-      <FadeIn
-        className={`sticky top-2 z-10 flex flex-col gap-4 overflow-hidden rounded-2xl p-5 ${
-          matchBannerSrc ? "border border-hairline bg-surface-1" : "kivo-glass-brand"
-        }`}
-      >
-        {matchBannerSrc && (
-          <>
-            <Image
-              src={matchBannerSrc}
-              alt=""
-              aria-hidden="true"
-              fill
-              sizes="(max-width: 672px) 100vw, 672px"
-              className="pointer-events-none -z-10 object-cover"
-              priority={false}
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10"
-              style={{ background: SHARE_BACKGROUND_LAYERS.scrim }}
-            />
-          </>
-        )}
-        {/* Match-centre-only keyframes: a breathing live badge, an expanding
-            "on air" ring on its dot, and a brief scale-in for the score on
-            load. Scoped here (not globals.css) since this page is the only
-            place they're used; the sitewide prefers-reduced-motion block in
-            globals.css (`* { animation-duration: 0.01ms !important }`)
-            already clamps these too, same as kivo-aurora. */}
-        <style>{`
-          @keyframes kivo-live-breathe {
-            0%, 100% { opacity: 0.88; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.04); }
-          }
-          @keyframes kivo-live-ring {
-            0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kivo-live) 45%, transparent); }
-            70% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--kivo-live) 0%, transparent); }
-            100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kivo-live) 0%, transparent); }
-          }
-          @keyframes kivo-score-reveal {
-            0% { opacity: 0; transform: scale(0.82); }
-            100% { opacity: 1; transform: scale(1); }
-          }
-          /* RECOMMENDATIONS.md item 18/316: kivo-score-reveal above fires
-             identically for a genuine goal and a routine sync correction.
-             MatchScoreDisplay only plays this one on a real, detected score
-             increase — reusing kivo-gradient-victory (already the app's
-             real achievement color) as a brief glow layered behind the
-             score, so an actual goal gets a visibly bigger moment than a
-             stat nudge, on top of the existing reveal rather than
-             replacing it. */
-          @keyframes kivo-goal-glow {
-            0% { opacity: 0; transform: scale(0.85); }
-            30% { opacity: 0.55; transform: scale(1.08); }
-            100% { opacity: 0; transform: scale(1); }
-          }
-        `}</style>
-
-        <div className="flex items-center justify-between text-xs text-foreground-subtle">
-          <span>
-            {competitionName(fixture.competition, "short")}
-            {/* KIVO_NEXT_GEN KN-84. `matchday` has existed as a column since
-                migration 0001 and, until now, nothing ever wrote to it. It is
-                rendered only when the provider actually reported a numbered
-                round: a cup quarter-final has no matchday, and parseMatchday
-                returns null rather than inventing one, so this simply does not
-                appear for those fixtures. */}
-            {fixture.matchday !== null && (
-              <span className="text-foreground-subtle"> · Matchday {fixture.matchday}</span>
-            )}
-          </span>
-          {fixture.venue?.name && (
-            <Link href={`/venues/${fixture.venue.id}`} className="flex items-center gap-1 transition hover:text-accent">
-              <MapPin className="h-3 w-3" strokeWidth={2} />
-              {fixture.venue.name}
-              {fixture.venue.city ? `, ${fixture.venue.city}` : ""}
-            </Link>
-          )}
-        </div>
-
-        <LastSyncedNote timestamp={fixturesLastSyncedAt} />
-
-        <div className="flex items-center justify-between gap-3">
-          <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
-            <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} size={40} />
-            <span className="text-center text-sm font-medium text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
-            {homeManager && (
-              <Link
-                href={`/managers/${homeManager.id}`}
-                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-accent"
-              >
-                {homeManager.full_name}
-              </Link>
-            )}
-          </FadeIn>
-
-          <MatchScoreDisplay
-            fixtureId={fixture.id}
-            status={fixture.status}
-            homeScore={fixture.home_score}
-            awayScore={fixture.away_score}
-            minuteElapsed={fixture.minute_elapsed}
-            kickoffAt={fixture.kickoff_at}
-          />
-
-          <FadeIn delay={0.08} className="flex flex-1 flex-col items-center gap-2">
-            <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} size={40} />
-            <span className="text-center text-sm font-medium text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
-            {awayManager && (
-              <Link
-                href={`/managers/${awayManager.id}`}
-                className="max-w-full truncate text-center text-[11px] text-foreground-subtle transition hover:text-accent"
-              >
-                {awayManager.full_name}
-              </Link>
-            )}
-          </FadeIn>
-        </div>
-
-        {/* RECOMMENDATIONS.md items 184/185: real, fixture-scoped AI
-            grounding entry point — deep-links into /ai with this exact
-            fixture pre-loaded as context, see ask-ai-link.tsx. */}
-        <AskAiLink ctx="fixture" id={fixture.id} label="Ask AI about this match" />
-      </FadeIn>
-
+  /**
+   * The things a fan does *about* a match rather than reads *in* it: the call
+   * they made on it, the mark they gave it, the room's verdict, and the cards
+   * they might send someone. Every one of them renders only on real data —
+   * they are unchanged from the versions that used to sit above the tab rail,
+   * and each still returns nothing at all when its own data is absent.
+   *
+   * They are handed to the Match Centre as the tail of the Overview section.
+   * That is a hierarchy decision, not a tidy-up: they were four cards deep and
+   * they stood between the scoreline and the control that reaches the
+   * line-ups, so on a phone the section rail was below the fold on a page
+   * whose entire job is those sections.
+   */
+  const overviewExtras = (
+    <div className="flex flex-col gap-3 pt-3">
       {/* RECOMMENDATIONS.md item 293: the caller's own real prediction for
           this exact fixture — renders nothing when they haven't made one
           (the list is empty in that case, predictions_select_own already
@@ -614,6 +528,67 @@ export default async function MatchCentrePage({
           />
         </FadeIn>
       )}
+    </div>
+  );
+
+  // One freshness line for the page, and it is a fact for a fan rather than a
+  // readout for an operator: how current what they are looking at is.
+  //
+  // There are two real timestamps behind it — when the score and status were
+  // last brought in, and when this fixture's line-ups, events and statistics
+  // were — and the page used to print BOTH, three hundred pixels apart, in
+  // identical words. Two "Updated 4d ago" lines on one screen read as a bug.
+  // The later of the two is the answer to the question the line actually asks.
+  const pageLastUpdatedAt = [fixturesLastSyncedAt, detailsLastSyncedAt]
+    .filter((value): value is string => value !== null)
+    .sort()
+    .at(-1) ?? null;
+
+  const round = roundText({ roundLabel: fixture.round_label, matchday: fixture.matchday });
+
+  return (
+    // Whole-page FadeIn (RECOMMENDATIONS.md item 271) so this route's resolved
+    // content cross-dissolves in over MatchDetailLoading's skeleton instead of
+    // hard-cutting.
+    //
+    // THE SHAPE OF THIS PAGE, and why it changed. It used to be: banner, then
+    // the viewer's prediction, then a rating card, then a verdict card, then a
+    // share block with three surfaces in it, and only then the tab rail that
+    // reaches the line-ups, the timeline and the table. On a phone the rail —
+    // the most-tapped control in the product — started around the fourth
+    // screenful, which is what the founder was looking at when he compared
+    // this page to the ones fans actually use.
+    //
+    // It is now the shape every match page a fan already trusts has: the
+    // score, the sections, the section. Nothing was deleted; the cards that
+    // sat in the gap moved into the front page they belong to, which is the
+    // Overview section, as `overviewExtras` below.
+    <FadeIn className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 lg:px-8">
+      <MatchHero
+        fixtureId={fixture.id}
+        home={{
+          id: fixture.home_team?.id ?? null,
+          name: fixture.home_team?.name ?? "Home team",
+          crestUrl: fixture.home_team?.crest_url ?? null,
+        }}
+        away={{
+          id: fixture.away_team?.id ?? null,
+          name: fixture.away_team?.name ?? "Away team",
+          crestUrl: fixture.away_team?.crest_url ?? null,
+        }}
+        status={fixture.status}
+        homeScore={fixture.home_score}
+        awayScore={fixture.away_score}
+        minuteElapsed={fixture.minute_elapsed}
+        kickoffAt={fixture.kickoff_at}
+        competitionLabel={competitionName(fixture.competition, "short")}
+        roundLabel={round}
+        venue={
+          fixture.venue?.name ? { id: fixture.venue.id, name: fixture.venue.name, city: fixture.venue.city } : null
+        }
+        bannerSrc={matchBannerSrc}
+        lastUpdatedAt={pageLastUpdatedAt}
+      />
 
       <FadeIn delay={0.14}>
         <WidgetErrorBoundary context="matchCentreTabs" label="Match detail">
@@ -628,9 +603,6 @@ export default async function MatchCentrePage({
             stats={statsForTab}
             signedIn={viewerIsSignedIn(profile)}
             viewer={profile ? { id: profile.id, name: profile.display_name || profile.username } : null}
-            canSyncDetails={canManageFootballData(profile?.role)}
-            syncDetailsAction={triggerFixtureDetailsSync.bind(null, fixture.id)}
-            detailsLastSyncedAt={detailsLastSyncedAt}
             // The real score, for the rating engine's clean-sheet and
             // goals-conceded terms. Null before either is reported, which is
             // exactly when the engine refuses to rate anybody.
@@ -679,9 +651,18 @@ export default async function MatchCentrePage({
                     events: coverageRow.fixture_events,
                     lineups: coverageRow.fixture_lineups,
                     statistics: coverageRow.fixture_statistics,
+                    // The one thing that can honestly remove the table from a
+                    // cup tie's Match Centre. A `false` here is the data
+                    // source's own statement that this competition has no
+                    // table at all; a null is KIVO not knowing, and the
+                    // section stays offered.
+                    standings: coverageRow.standings,
                   }
                 : null
             }
+            homePlayerLines={playerLines.filter((line) => line.teamId === fixture.home_team?.id)}
+            awayPlayerLines={playerLines.filter((line) => line.teamId === fixture.away_team?.id)}
+            overviewExtras={overviewExtras}
             headToHead={
               headToHead && fixture.home_team && fixture.away_team
                 ? {
@@ -726,6 +707,8 @@ export default async function MatchCentrePage({
               goalsAgainst: s.goals_against,
               points: s.points,
               position: s.position,
+              zoneDescription: s.zone_description,
+              groupLabel: s.group_label,
             }))}
           />
         </WidgetErrorBoundary>

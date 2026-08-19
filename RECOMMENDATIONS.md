@@ -1258,3 +1258,139 @@ Anything that changes a list's layout must change its skeleton in the same commi
   output is clean; the names are not. Renaming them would enforce F1 structurally
   rather than by grep, and is worth doing when the branch is not moving under three
   agents at once.
+
+---
+
+## Admin IA + QA pass, 2026-08-19 — what the Admin section learned
+
+Written by the agent that owns `src/app/admin/**` and `src/components/admin/**`.
+Job 2 (the full-route product sweep) had not started when this section was
+written; everything below is about Admin itself and about the operator-tooling
+that was living inside the product. **Nothing here was verified against live
+data — this environment cannot reach the Supabase host.** Every claim is read
+from the code, the schema types and the five gates.
+
+### A1. A page with seventeen panels and no thesis is not a page
+
+Data Health had grown to 752 lines holding provider status, plan coverage, a
+competition picker, a club catalogue, league tables, cron history, a quota
+ledger, prediction settlement, fantasy scoring and a club-merge tool. Four
+agents added to it in one night and every addition was individually correct.
+The result was unusable, and the reason is worth stating precisely: **the page
+was ordered by the date each panel was written.** There was no question it
+answered, so there was no place anything belonged, so everything went at the
+bottom.
+
+The fix was not tidying. It was deciding what questions the section answers and
+letting those be the pages:
+
+1. **Provider** — can KIVO reach the provider, and what will it serve?
+2. **Coverage** — what is KIVO aimed at, and how much of it is on file?
+3. **Pipeline** — is it running, and is it succeeding?
+4. **Integrity** — is what arrived correct, and what fixes it?
+
+A new panel now has an obvious home, and the test of whether it belongs is
+whether it answers that page's question. That test did not exist before.
+
+**The general rule**: when a surface grows past about five sections, the next
+person to add one is choosing between "at the bottom" and "restructure". They
+will choose the bottom every time unless the structure makes a better choice
+available.
+
+### A2. Route names are an API when other people import out of them
+
+`/admin/data-health` reads wrong for a page that is now only about the provider.
+It was kept anyway, because six other agents import server actions out of
+`src/app/admin/data-health/*-actions.ts`, and renaming the segment would have
+moved those import paths under them mid-pass. A better URL is worth less than
+not breaking five other people's working tree. Rename it when the branch is
+quiet.
+
+### A3. A check the viewer cannot read must not be run
+
+The Admin overview now reports what needs a decision. The single most important
+rule in it: **a check gated on a role the viewer does not have is not run at
+all.** `reports` and `profiles` are RLS-gated, so querying them as a role
+without visibility returns zero rows — which renders as "queue clear". A
+reassuring number produced by an access denial is the same class of bug as this
+project's recurring "failed read drawn as an empty state", and it is harder to
+spot because the number looks plausible.
+
+The corollary is on screen: the page names which areas it checked, so "nothing
+needs attention" from a role that can see one of three areas is visibly a
+smaller claim than it looks.
+
+### A4. Hand-written prose asserting system state is fabricated data
+
+The old overview ended with: *"Social, fantasy (including live scoring),
+predictions and notifications are all live. AI Copilot is still in
+development."* Typed by a person, read as a status report, updated by nobody.
+It is the same rule violation as an invented number, wearing a sentence.
+
+It is gone. If a fact about the system is worth showing an operator, it is worth
+deriving from a row.
+
+### A5. "Correctly gated" was never the same as "correctly placed"
+
+Nine controls were role-gated and rendered inside the product: on a league page,
+a club page, a player page, the live page, the fantasy page, a match page. No
+fan could reach any of them and none of that was the problem. The problems were
+that operating KIVO meant navigating KIVO as an operator, and that the founder
+reviewing his own product could not tell which half of the screen the public
+sees.
+
+Two things had to happen in order, and the order is the lesson: **build the
+Admin home first, then remove the control.** A control removed before its
+replacement exists is a capability deleted. Where Admin had no equivalent
+(per-club squad sync, live refresh, gameweek generation, per-player season
+statistics, the per-competition coverage matrix), one was built first.
+
+The subtler half: when a staff control disappears from a public panel, whatever
+it was *telling* the operator disappears with it. Each removal here dropped only
+the control — every sentence a fan could read is unchanged, including the empty
+states that say "no chart for this competition yet" rather than "nobody has
+scored".
+
+### A6. A bounded list is a tool for clubs and a gesture for players
+
+Coverage lists clubs, competitions and seasons as bounded lists sorted with
+outstanding work first — that works, because those sets are tens of items and an
+operator can reach any of them by scrolling. The same shape applied to players
+is useless: "the first twenty alphabetically" cannot reach a specific player out
+of thousands. That panel got a search box. So did Users, which capped at the
+hundred most recently joined and had no way whatsoever to reach account 101.
+
+**The rule**: if a bounded list cannot reach an arbitrary member of its set, it
+needs a query, not a higher limit.
+
+### A7. 44px is non-negotiable, and Admin had never been told
+
+`src/components/ui/back-link.tsx` calls `min-h-11` "the 44px tap target, and the
+one non-negotiable number on this project". Twenty-six interactive controls
+under `src/components/admin/**` were 28–36px tall, including all four
+account-moderation buttons — ban, suspend, shadow-mute, reinstate — which is the
+worst possible place for a mis-tap. All are now 44px. Admin is used from a phone
+by this founder; a design rule the product enforces and the operator's tool
+ignores is a rule with an exception nobody agreed to.
+
+### A8. Still open, deliberately
+
+- **`/admin/data-health` should be `/admin/football/provider`.** See A2. Costs
+  nothing to do when the branch is quiet; costs five agents a broken import now.
+- **Migration 0117's `standings.zone_description`, `group_label` and `form` are
+  not surfaced in Admin.** Deliberately not turned into a data-quality check:
+  they are optional provider fields, and flagging a null the provider never
+  publishes as a "quality issue" would be an invented signal. Worth surfacing on
+  the Coverage page's league-tables panel as *columns present* rather than as a
+  defect count.
+- **The four football pages each carry their own role gate.** Correct, and
+  duplicated four times. A route-group layout under `data-health` could hold it
+  once — worth doing, but a layout is a shared file and this branch has six
+  agents on it.
+- **Admin has no audit-log view.** `logAudit` is called by the moderation and
+  user actions and nothing reads it back. An operator cannot answer "who banned
+  this account, and when" from Admin at all.
+- **Nothing notifies anybody of anything.** The support queue is the only route
+  back in for a locked-out user and it is checked only by somebody choosing to
+  open the page. The overview now escalates an open request older than 24h to
+  critical, which is a better nothing, but it is still nothing.

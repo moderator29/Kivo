@@ -49,7 +49,7 @@ const STATUS_BADGE: Record<ModerationStatus, { label: string; className: string 
 type Panel = "suspend" | "ban" | "shadow_mute" | "reinstate" | null;
 
 const buttonBase =
-  "rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50";
+  "inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-50";
 
 /**
  * What each action actually does, stated before it is issued.
@@ -247,7 +247,7 @@ export function UserModerationControls({
             placeholder={panelConfig[panel].placeholder}
             maxLength={500}
             rows={2}
-            className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-kivo-cyan"
+            className="min-h-11 w-full resize-none rounded-lg border border-white/10 bg-white/5 px-2.5 py-2.5 text-[11px] text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-kivo-cyan"
           />
           <div className="flex gap-1.5">
             <button

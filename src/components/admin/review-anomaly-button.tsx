@@ -34,7 +34,7 @@ export function ReviewAnomalyButton({ anomalyId }: { anomalyId: string }) {
             else setReviewed(true);
           })
         }
-        className="kivo-glass-sharp flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="kivo-glass-sharp flex min-h-11 items-center gap-1 rounded-lg px-3 text-[11px] font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <Check className="h-3 w-3" strokeWidth={2} />
         {pending ? "Saving…" : "Mark reviewed"}

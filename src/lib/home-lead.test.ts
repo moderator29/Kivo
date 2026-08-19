@@ -8,6 +8,8 @@ function fixture(overrides: Partial<LeadFixture> = {}): LeadFixture {
     id: "fixture-1",
     kickoffAt: new Date(NOW + 60 * 60 * 1000).toISOString(),
     status: "scheduled",
+    competitionName: "Premier League",
+    minuteElapsed: null,
     homeName: "Arsenal",
     homeCrestUrl: null,
     awayName: "Chelsea",

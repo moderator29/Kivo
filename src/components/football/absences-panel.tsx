@@ -4,12 +4,6 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getActiveProviderStatus } from "@/lib/football";
-import { getCompetitionCapability } from "@/lib/football/coverage-registry";
-import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
-import { triggerInjuriesSync } from "@/app/admin/data-health/provider-data-actions";
 
 /**
  * Reported absences for one club.
@@ -46,29 +40,22 @@ type AbsenceStatus = keyof typeof STATUS_STYLE;
 
 export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; teamName: string }) {
   const supabase = createServerSupabaseClient();
-  const { name: providerName } = getActiveProviderStatus();
 
-  const [{ data: rows }, { data: latestFixture }] = await Promise.all([
-    supabase
-      .from("injuries")
-      .select("id, status, reason, reported_on, competition_id, player:players(id, full_name, known_as, photo_url, position)")
-      .eq("team_id", teamId)
-      // Newest first so the per-player dedupe below keeps the current report
-      // rather than whichever one the database happened to return first.
-      .order("reported_on", { ascending: false, nullsFirst: false })
-      .order("updated_at", { ascending: false })
-      .limit(60),
-    // A club has no single competition, so the coverage question is asked about
-    // the competition it most recently played in — the one a reader looking at
-    // this page is almost certainly thinking of.
-    supabase
-      .from("fixtures")
-      .select("competition_id, season:seasons(provider_year)")
-      .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
-      .order("kickoff_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  // ADMIN IA PASS 2026-08-19: this used to fetch the club's most recent fixture
+  // as well, purely to work out which competition a staff-only "Sync absences"
+  // button should target. That button now lives on
+  // /admin/data-health/coverage, per competition — which is the granularity the
+  // sync actually has — so the extra query and the coverage-registry lookup
+  // that depended on it are both gone. Nothing a fan could see changed.
+  const { data: rows } = await supabase
+    .from("injuries")
+    .select("id, status, reason, reported_on, competition_id, player:players(id, full_name, known_as, photo_url, position)")
+    .eq("team_id", teamId)
+    // Newest first so the per-player dedupe below keeps the current report
+    // rather than whichever one the database happened to return first.
+    .order("reported_on", { ascending: false, nullsFirst: false })
+    .order("updated_at", { ascending: false })
+    .limit(60);
 
   // One row per player: an injuries feed reports the same absence against every
   // upcoming fixture, so an undeduped list shows the same player five times and
@@ -79,27 +66,6 @@ export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; 
     if (!byPlayer.has(row.player.id)) byPlayer.set(row.player.id, row);
   }
   const absences = Array.from(byPlayer.values());
-
-  const verdict =
-    absences.length === 0 && providerName && latestFixture?.competition_id
-      ? await getCompetitionCapability(
-          supabase,
-          providerName,
-          latestFixture.competition_id,
-          "injuries",
-          latestFixture.season?.provider_year ?? undefined,
-        )
-      : null;
-
-  // Absences are fetched per COMPETITION, not per club, so the sync offered
-  // here is the competition this club most recently played in — stated on the
-  // button's hint rather than left to look like a club-scoped action.
-  const profile = await getOrCreateProfile();
-  const canSync =
-    profile !== null &&
-    canManageFootballData(profile.role) &&
-    latestFixture?.competition_id != null &&
-    verdict !== "unsupported";
 
   return (
     <FadeIn delay={0.22} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
@@ -155,14 +121,6 @@ export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; 
         // absences" is not "everyone is fit". The absence of a report is not
         // evidence of a clean bill of health, and KIVO must not imply it is.
         <p className="text-sm text-foreground-muted">No injury or suspension list for {teamName} right now.</p>
-      )}
-
-      {canSync && latestFixture?.competition_id && (
-        <InlineSyncButton
-          label="Sync absences"
-          action={triggerInjuriesSync.bind(null, latestFixture.competition_id, undefined)}
-          hint="Pulls the whole competition's absence list, not just this club's."
-        />
       )}
     </FadeIn>
   );

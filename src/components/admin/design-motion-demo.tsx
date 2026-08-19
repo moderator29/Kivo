@@ -28,7 +28,7 @@ export function DesignMotionDemo() {
       <button
         type="button"
         onClick={() => setRun((n) => n + 1)}
-        className="kivo-glass-sharp kivo-focus flex w-fit items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-foreground"
+        className="kivo-glass-sharp kivo-focus flex min-h-11 w-fit items-center gap-2 rounded-xl px-4 text-sm font-medium text-foreground"
       >
         <RotateCcw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
         Replay all three

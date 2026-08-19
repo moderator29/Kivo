@@ -32,26 +32,33 @@ import type { HomeLead } from "@/lib/home-lead";
  * 3. **Tiers, not a formula.** Priorities are named constants with gaps, not
  *    a weighted score. "Why is this third" always has an answer you can read.
  */
-
 export type HomeSectionId =
   | "briefing"
   | "notifications"
   | "clubs_today"
+  | "live_now"
+  | "results"
   | "fantasy"
   | "predictions"
   | "trending_rooms"
+  | "feed"
   | "transfer_pulse"
   | "your_players"
+  | "your_competitions"
   | "top_matches"
   | "no_football_yet"
   | "upcoming"
-  | "recently_viewed"
-  | "community";
+  | "recently_viewed";
 
 export type HomeSection = {
   id: HomeSectionId;
-  /** Why this section is on the page, and why it is this high. Rendered — the
-   * user is never ranked at without being told the rule. */
+  /**
+   * Why this section is here. Kept on every section because the ladder is
+   * meant to be readable, but **rendered only where it states a fact the
+   * heading does not already carry** — see `HomeSection`'s module doc. An
+   * explanation under all thirteen headings is a large part of what made this
+   * page read as generated rather than designed.
+   */
   reason: string;
   priority: number;
 };
@@ -64,7 +71,6 @@ export type HomeSection = {
  *   PERSONAL — about this reader, but nothing expires.
  *   CONTEXT  — real, relevant, not urgent.
  *   BROWSE   — somewhere to go next.
- *   STATIC   — always true, never urgent.
  *
  * Gaps of 100 leave room for a section to sit between two tiers without a
  * renumbering, and the small offsets inside a tier are the tie-break order.
@@ -75,7 +81,6 @@ export const TIER = {
   PERSONAL: 300,
   CONTEXT: 400,
   BROWSE: 500,
-  STATIC: 900,
 } as const;
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -87,6 +92,17 @@ export const FANTASY_URGENT_MS = DAY_MS;
 export const PREDICTION_URGENT_MS = 6 * HOUR_MS;
 /** How recent a transfer has to be to count as "pulse" rather than history. */
 export const TRANSFER_PULSE_MS = 3 * DAY_MS;
+/**
+ * How recently a followed club has to have finished for the result to be news.
+ *
+ * Eighteen hours, chosen against the reader rather than against the clock: it
+ * covers "I went to bed before full time" for every European evening kickoff,
+ * and it has expired by the following evening, so a Wednesday night result is
+ * not still being announced on Thursday night. This is the Tuesday-morning
+ * half of the page — the single thing the previous build had no answer for,
+ * because it showed fixtures ahead and never a result behind.
+ */
+export const RESULT_FRESH_MS = 18 * HOUR_MS;
 
 export type HomeSectionFacts = {
   /** One clock for the whole render, injected — see the module doc. */
@@ -103,6 +119,14 @@ export type HomeSectionFacts = {
   clubsTodayCount: number;
   /** Whether one of those is being played right now. */
   hasLiveFollowedFixture: boolean;
+  /** Matches in play across KIVO that are NOT one of this viewer's own — the
+   * rest of the live card. Zero on a Tuesday morning, which is exactly when
+   * this section should not exist. */
+  liveElsewhereCount: number;
+  /** Finished fixtures for followed clubs, most recent first. `latestAt` is
+   * the kickoff of the most recent one, which is what decides whether these
+   * are news or history. */
+  recentResults: { count: number; latestAt: string | null };
   /** Null unless the viewer actually has a fantasy team. `latestPoints` is
    * null until a gameweek has genuinely been scored — never 0 as a stand-in
    * for "not calculated yet". */
@@ -121,9 +145,13 @@ export type HomeSectionFacts = {
   /** The busiest Match Room KIVO can see today, or null when no Room has
    * anybody in it. A Room with one participant is not trending. */
   trendingRoom: { participantCount: number; involvesFollowedClub: boolean } | null;
+  /** Posts from the people this viewer follows. Zero means no section — KIVO
+   * does not fill a personalised feed with strangers and call it personal. */
+  feedPostCount: number;
   /** Completed moves involving a club or player this viewer follows. */
   transferPulse: { count: number; latestAt: string | null };
   followedPlayerCount: number;
+  followedCompetitionCount: number;
   /** Fixtures on today's card across KIVO, after the viewer's own are removed. */
   topMatchCount: number;
   /** Future fixtures for followed clubs, after the lead is removed. */
@@ -150,15 +178,62 @@ function elapsedWithin(now: number, iso: string | null, windowMs: number): boole
 /**
  * The ladder. Every branch below is "does this reader have a real reason to
  * see this, and how pressing is it" — nothing here invents a reason.
+ *
+ * The two questions it is built to answer correctly are the founder's own:
+ * *what does a fan want in the first screenful at 3pm on a Saturday, and what
+ * do they want on a Tuesday morning?*
+ *
+ *   3pm Saturday — a followed club in play leads, the rest of the live card
+ *   follows it, then the rest of today. Results and standings-shaped browsing
+ *   fall below the fold, because none of it is happening now.
+ *
+ *   Tuesday morning — nothing is live, so `live_now` and `clubs_today` do not
+ *   exist at all, and the top of the page becomes last night's result, then
+ *   what happened while they were away, then the next kickoff. That is a
+ *   genuinely different page from the same rules, which is the point.
  */
 export function selectHomeSections(facts: HomeSectionFacts): HomeSection[] {
   const sections: HomeSection[] = [];
   const add = (id: HomeSectionId, priority: number, reason: string) => sections.push({ id, priority, reason });
 
+  const followsSomething =
+    facts.clubsTodayCount > 0 ||
+    facts.upcomingCount > 0 ||
+    facts.recentResults.count > 0 ||
+    facts.followedPlayerCount > 0 ||
+    facts.followedCompetitionCount > 0;
+
   // The briefing is the summary of everything below it, so it sits above
   // everything below it. It only exists when it found real lines.
   if (facts.briefingLineCount > 0) {
     add("briefing", 0, "Everything KIVO knows about your day, in one place");
+  }
+
+  if (facts.clubsTodayCount > 0) {
+    add(
+      "clubs_today",
+      facts.hasLiveFollowedFixture ? TIER.NOW : TIER.SOON,
+      facts.hasLiveFollowedFixture ? "Your clubs are playing right now" : "Your clubs play today",
+    );
+  }
+
+  // The rest of the live card, directly under the viewer's own. At 3pm on a
+  // Saturday this is the second thing a fan wants and the previous build had
+  // no equivalent of it — live football reached /home only if one of *their*
+  // clubs happened to be playing.
+  if (facts.liveElsewhereCount > 0) {
+    add("live_now", TIER.NOW + 10, "Matches in play across KIVO right now");
+  }
+
+  // A result they have not seen yet. Above notifications, because a
+  // notification about a goal is a worse way to learn a score than the score.
+  if (facts.recentResults.count > 0) {
+    const isFresh = elapsedWithin(facts.now, facts.recentResults.latestAt, RESULT_FRESH_MS);
+    add(
+      "results",
+      isFresh ? (facts.hasLiveFollowedFixture ? TIER.SOON + 15 : TIER.NOW + 15) : TIER.CONTEXT + 5,
+      isFresh ? "How your clubs got on" : "Your clubs' recent results",
+    );
   }
 
   // Something already happened that concerns this reader personally. It
@@ -169,14 +244,6 @@ export function selectHomeSections(facts: HomeSectionFacts): HomeSection[] {
       "notifications",
       facts.hasLiveFollowedFixture ? TIER.SOON + 5 : TIER.NOW + 20,
       facts.unreadNotificationCount === 1 ? "One thing happened while you were away" : `${facts.unreadNotificationCount} things happened while you were away`,
-    );
-  }
-
-  if (facts.clubsTodayCount > 0) {
-    add(
-      "clubs_today",
-      facts.hasLiveFollowedFixture ? TIER.NOW : TIER.SOON,
-      facts.hasLiveFollowedFixture ? "Your clubs are playing right now" : "Your clubs play today",
     );
   }
 
@@ -238,22 +305,42 @@ export function selectHomeSections(facts: HomeSectionFacts): HomeSection[] {
     );
   }
 
+  // The personalised half of the feed: posts by people this viewer chose to
+  // follow. The previous build had a "Community" card in this slot carrying a
+  // fixed paragraph of promotional copy and no data at all — a section that
+  // was on the page whether or not anybody had posted.
+  if (facts.feedPostCount > 0) {
+    add("feed", TIER.PERSONAL + 15, "From the people you follow");
+  }
+
   if (facts.followedPlayerCount > 0) {
     add("your_players", TIER.PERSONAL + 20, "The players you follow");
   }
 
   if (facts.topMatchCount > 0) {
-    add("top_matches", TIER.CONTEXT + 30, "The rest of today's football on KIVO");
-  } else if (facts.clubsTodayCount === 0 && facts.upcomingCount === 0) {
+    // For somebody who follows nothing yet, today's card is not context — it
+    // is the entire football on the page, and it goes straight under the lead.
+    // This is the ladder doing the founder's "personalisation should visibly
+    // improve as the user follows things" from the other end: follow nothing
+    // and KIVO still opens on real football.
+    add("top_matches", followsSomething ? TIER.CONTEXT + 30 : TIER.NOW + 60, "The rest of today's football on KIVO");
+  } else if (!followsSomething) {
     // The single highest-traffic empty state in the product: a brand-new
     // account, before any football has been synced. It takes the slot
     // top_matches would have had — the two are mutually exclusive — and it
     // says what is actually true rather than pretending the page is finished.
-    add("no_football_yet", TIER.CONTEXT + 30, "KIVO only lists matches it has actually verified");
+    add("no_football_yet", TIER.NOW + 60, "Nothing is on today's card yet");
   }
 
   if (facts.upcomingCount > 0) {
-    add("upcoming", TIER.BROWSE, "Next up for your clubs");
+    // On a quiet day the next kickoff is the only football the viewer's own
+    // clubs have on this page, so it stops being a browsing surface.
+    const quiet = facts.clubsTodayCount === 0 && !facts.hasLiveFollowedFixture;
+    add("upcoming", quiet ? TIER.CONTEXT + 15 : TIER.BROWSE, "Next up for your clubs");
+  }
+
+  if (facts.followedCompetitionCount > 0) {
+    add("your_competitions", TIER.BROWSE + 5, "Competitions you follow");
   }
 
   // Recently viewed lives in localStorage, so only the browser knows whether
@@ -262,8 +349,6 @@ export function selectHomeSections(facts: HomeSectionFacts): HomeSection[] {
   // disappears on its own, which is the one honest way to place a section
   // whose contents the server genuinely cannot see.
   add("recently_viewed", TIER.BROWSE + 10, "Where you left off");
-
-  add("community", TIER.STATIC, "The KIVO feed");
 
   // Stable sort: equal priorities keep insertion order, so the tie-break is
   // the order written above rather than whatever the engine feels like.
@@ -274,9 +359,16 @@ export type QuickAction = {
   id: string;
   label: string;
   href: string;
-  /** Why this action is being offered — shown as the action's own sub-label
-   * so a shortcut is never just an unexplained button. */
-  hint: string;
+  /**
+   * A real count riding on the action, or null.
+   *
+   * This used to be a sentence of explanation under every shortcut ("KIVO
+   * builds this page around who you follow"), rendered as a four-up grid of
+   * bordered tiles — a second navigation bar wearing cards. The row is now a
+   * rail of pills, and a pill either carries a number KIVO actually counted or
+   * carries nothing. There is no third option where it carries prose.
+   */
+  hint: string | null;
 };
 
 /** How many shortcuts a phone can show without the row becoming a menu. */
@@ -300,7 +392,7 @@ export function selectQuickActions(facts: HomeSectionFacts): QuickAction[] {
       id: "live",
       label: "Watch live",
       href: "/live",
-      hint: "A club you follow is playing",
+      hint: null,
     });
   }
 
@@ -309,7 +401,7 @@ export function selectQuickActions(facts: HomeSectionFacts): QuickAction[] {
       id: "fantasy",
       label: "Confirm squad",
       href: "/fantasy",
-      hint: "Deadline is close",
+      hint: null,
     });
   }
 
@@ -318,7 +410,7 @@ export function selectQuickActions(facts: HomeSectionFacts): QuickAction[] {
       id: "predictions",
       label: "Your calls",
       href: "/predictions/mine",
-      hint: facts.predictions.openCount === 1 ? "1 still open" : `${facts.predictions.openCount} still open`,
+      hint: String(facts.predictions.openCount),
     });
   }
 
@@ -327,18 +419,26 @@ export function selectQuickActions(facts: HomeSectionFacts): QuickAction[] {
       id: "notifications",
       label: "Notifications",
       href: "/notifications",
-      hint: `${facts.unreadNotificationCount} unread`,
+      hint: String(facts.unreadNotificationCount),
     });
   }
 
   // Following nobody is the one thing that makes every section above
-  // impossible, so it is offered loudly rather than as a footnote.
-  if (facts.clubsTodayCount === 0 && facts.upcomingCount === 0 && facts.followedPlayerCount === 0) {
+  // impossible, so it is offered loudly rather than as a footnote — unless the
+  // lead is already the same invitation, in which case a pill repeating its
+  // primary button two rows below it is the page saying one thing twice.
+  if (
+    facts.lead.kind !== "follow_a_club" &&
+    facts.clubsTodayCount === 0 &&
+    facts.upcomingCount === 0 &&
+    facts.recentResults.count === 0 &&
+    facts.followedPlayerCount === 0
+  ) {
     add(TIER.SOON, {
       id: "follow",
       label: "Find your club",
       href: "/teams",
-      hint: "KIVO builds this page around who you follow",
+      hint: null,
     });
   }
 
@@ -347,11 +447,11 @@ export function selectQuickActions(facts: HomeSectionFacts): QuickAction[] {
       id: "ai",
       label: "Ask the Copilot",
       href: "/ai",
-      hint: "Grounded in KIVO's own data",
+      hint: null,
     });
   }
 
-  add(TIER.BROWSE, { id: "social", label: "Open the feed", href: "/social", hint: "What people are saying" });
+  add(TIER.BROWSE, { id: "social", label: "Open the feed", href: "/social", hint: null });
 
   return actions
     .sort((a, b) => a.priority - b.priority)

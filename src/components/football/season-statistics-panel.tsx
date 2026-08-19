@@ -3,10 +3,6 @@ import { ChartColumn } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getActiveProviderStatus } from "@/lib/football";
-import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
-import { triggerPlayerSeasonStatisticsSync } from "@/app/admin/data-health/provider-data-actions";
 import { PlayerSeasonAdvancedMetrics } from "@/components/football/season-advanced-metrics-panel";
 
 /**
@@ -70,34 +66,18 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
     .order("appearances", { ascending: false, nullsFirst: false })
     .limit(40);
 
-  if (!rows || rows.length === 0) {
-    // Rendered as nothing rather than as an empty card. The player page already
-    // carries a real, computed match log built from KIVO's own fixtures; a
-    // second empty panel next to it would say the same nothing twice.
-    //
-    // The one exception is an admin, who otherwise has no way to trigger the
-    // first sync — a section that only appears once it has data can never be
-    // made to have data.
-    const adminProfile = await getOrCreateProfile();
-    if (!adminProfile || !canManageFootballData(adminProfile.role)) return null;
-
-    return (
-      <FadeIn delay={0.24} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <ChartColumn className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          By competition
-        </h2>
-        <p className="text-sm text-foreground-muted">
-          No season-by-season breakdown for this player yet. Only you can see this section.
-        </p>
-        <InlineSyncButton
-          label="Sync season statistics"
-          action={triggerPlayerSeasonStatisticsSync.bind(null, playerId, undefined)}
-          hint="Requires this player's club squad first."
-        />
-      </FadeIn>
-    );
-  }
+  // Rendered as nothing rather than as an empty card. The player page already
+  // carries a real, computed match log built from KIVO's own fixtures; a
+  // second empty panel next to it would say the same nothing twice.
+  //
+  // ADMIN IA PASS 2026-08-19: there used to be an exception here — a whole
+  // staff-only card, visible to nobody but an admin, existing solely to host
+  // the button that fills this section. The reasoning was that a section which
+  // only appears once it has data can never be made to have data. True, and the
+  // fix was never a phantom card on a fan's page: /admin/data-health/coverage
+  // now has a searchable per-player queue, so the section that only appears
+  // once it has data has somewhere else to be filled from.
+  if (!rows || rows.length === 0) return null;
 
   // Grouped by season, newest first, preserving the per-competition rows within.
   const bySeason = new Map<number, typeof rows>();
@@ -108,9 +88,6 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
   }
 
   const anyUnlinked = rows.some((row) => row.competition_id === null);
-
-  const profile = await getOrCreateProfile();
-  const canSync = profile !== null && canManageFootballData(profile.role);
 
   return (
     <FadeIn delay={0.24} className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
@@ -243,13 +220,6 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
           the provider reported nothing beyond the columns already in the
           table. */}
       <PlayerSeasonAdvancedMetrics playerId={playerId} />
-
-      {canSync && (
-        <InlineSyncButton
-          label="Refresh season statistics"
-          action={triggerPlayerSeasonStatisticsSync.bind(null, playerId, undefined)}
-        />
-      )}
 
       {anyUnlinked && (
         <p className="text-[11px] leading-relaxed text-foreground-subtle">

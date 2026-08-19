@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import { Check, X, Clock, FileQuestion } from "lucide-react";
+import { Check, X, Clock, FileQuestion, ExternalLink } from "lucide-react";
 import { resolveReport } from "@/app/admin/moderation/actions";
 
 /**
@@ -44,6 +45,34 @@ function truncate(text: string, max: number) {
   return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
 }
 
+/**
+ * The author's name, as a route to the only screen that can act on them.
+ *
+ * The consequence copy below is careful to say that resolving a report does not
+ * remove content or restrict the author — "do that from Users." That sentence
+ * was true and unactionable: Users listed the hundred most recently joined
+ * accounts, so the author of a reported post from three months ago was not on
+ * it, and there was no search. Both halves are fixed — Users takes a query now —
+ * and this closes the loop by carrying the name into it.
+ *
+ * Rendered as plain text when the report has no author username, which happens
+ * for a snapshot captured before that column existed. A link that lands on an
+ * empty search is worse than a name.
+ */
+function AuthorLink({ username, display }: { username: string | null; display: string }) {
+  if (!username) return <span>{display}</span>;
+  return (
+    <Link
+      href={`/admin/users?q=${encodeURIComponent(username)}`}
+      className="kivo-focusable inline-flex items-center gap-1 rounded text-foreground-muted underline decoration-hairline underline-offset-2 transition-colors hover:text-foreground"
+      title={`Find @${username} in Users`}
+    >
+      {display}
+      <ExternalLink className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+    </Link>
+  );
+}
+
 function ContentPreview({ preview }: { preview: ReportPreview }) {
   if (!preview) {
     return (
@@ -65,8 +94,10 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
       <div className="flex flex-col gap-1 rounded-lg border border-hairline bg-surface-1 px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium text-foreground-muted">
-            {preview.displayName ?? preview.username ?? "unknown profile"}
-            {preview.username ? <span className="text-foreground-subtle"> @{preview.username}</span> : null}
+            <AuthorLink
+              username={preview.username}
+              display={preview.displayName ?? preview.username ?? "unknown profile"}
+            />
           </span>
           {staleBadge}
         </div>
@@ -83,8 +114,10 @@ function ContentPreview({ preview }: { preview: ReportPreview }) {
     <div className="flex flex-col gap-1 rounded-lg border border-hairline bg-surface-1 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium text-foreground-muted">
-          {preview.authorDisplayName ?? preview.authorUsername ?? "unknown author"}
-          {preview.authorUsername ? <span className="text-foreground-subtle"> @{preview.authorUsername}</span> : null}
+          <AuthorLink
+            username={preview.authorUsername}
+            display={preview.authorDisplayName ?? preview.authorUsername ?? "unknown author"}
+          />
         </span>
         {staleBadge}
       </div>
@@ -198,7 +231,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Optional note for the audit log"
                 maxLength={500}
-                className="w-full rounded-lg border border-hairline bg-surface-inset px-3 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-accent"
+                className="h-11 w-full rounded-lg border border-hairline bg-surface-inset px-3 text-xs text-foreground placeholder:text-foreground-subtle focus:outline-none focus:ring-1 focus:ring-accent"
               />
               <button
                 type="button"
@@ -206,7 +239,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
                   setShowNote(null);
                   setNote("");
                 }}
-                className="shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-xs font-medium text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 Cancel
               </button>
@@ -225,7 +258,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
               disabled={pending}
               aria-busy={pending}
               onClick={() => (showNote === "actioned" ? handleDecision("actioned") : setShowNote("actioned"))}
-              className="flex items-center gap-1 rounded-lg bg-live/15 px-3 py-1.5 text-xs font-semibold text-live transition hover:bg-live/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+              className="flex min-h-11 items-center gap-1 rounded-lg bg-live/15 px-3 text-xs font-semibold text-live transition hover:bg-live/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={2} />
               {showNote === "actioned" ? "Confirm uphold" : "Uphold report"}
@@ -235,7 +268,7 @@ export function ReportRow({ id, targetType, reason, reporterUsername, createdAt,
               disabled={pending}
               aria-busy={pending}
               onClick={() => (showNote === "dismissed" ? handleDecision("dismissed") : setShowNote("dismissed"))}
-              className="flex items-center gap-1 rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+              className="flex min-h-11 items-center gap-1 rounded-lg border border-hairline px-3 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2} />
               {showNote === "dismissed" ? "Confirm dismiss" : "Dismiss"}

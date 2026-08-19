@@ -8,7 +8,6 @@ import { TrackView } from "@/components/ui/track-view";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { readRow } from "@/lib/query-result";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
-import { CompetitionCoveragePanel } from "@/components/football/coverage-panel";
 import { TopScorersPanel } from "@/components/football/top-scorers-panel";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { MatchList, MatchListRow } from "@/components/matches/match-list";
@@ -387,11 +386,7 @@ export default async function LeagueDetailPage({
     id: "scorers",
     label: "Scorers",
     content: (
-      <TopScorersPanel
-        competitionId={competition.id}
-        seasonId={seasonId}
-        seasonLabel={activeSeason?.name ?? null}
-      />
+      <TopScorersPanel seasonId={seasonId} seasonLabel={activeSeason?.name ?? null} />
     ),
   });
 
@@ -440,8 +435,6 @@ export default async function LeagueDetailPage({
           description="Pick a background. The preview is the exact image you save."
         />
       )}
-
-      <CompetitionCoveragePanel competitionId={competition.id} currentSeasonId={currentSeason?.id ?? null} />
     </div>
   );
 }

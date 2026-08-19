@@ -5,9 +5,6 @@ import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { carryForwardFantasyRoster, ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
-import { canManageFootballData } from "@/lib/admin";
-import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
@@ -267,7 +264,13 @@ export default async function FantasyPage({
   // gives an admin no way forward — this banner is the only thing that can
   // actually fix it, shown above the builder rather than inside it so it
   // doesn't touch that component's own render logic.
-  const showGenerateGameweeks = !gameweek && canManageFootballData(profile.role);
+  // ADMIN IA PASS 2026-08-19: a staff-only "Generate gameweeks" card used to
+  // render here whenever an admin opened a season with no gameweek open. It was
+  // invisible to fans and it was still in the wrong place — the fix for "fantasy
+  // has no gameweeks in this season" was reachable only by an admin who first
+  // navigated into the broken state as a player. It now lives on
+  // /admin/data-health/integrity, listing every current season with its fixture
+  // and gameweek counts.
 
   return (
     // RECOMMENDATIONS.md item 271: this route's real Promise.all-batched
@@ -275,14 +278,6 @@ export default async function FantasyPage({
     // the squad builder (and its Leaderboard tab, FantasyLeaderboard) cross-
     // dissolves in rather than hard-cutting from shimmer to content.
     <FadeIn className="flex flex-col gap-3">
-      {showGenerateGameweeks && (
-        <div className="kivo-glass mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-2xl p-4">
-          <p className="text-xs text-foreground-subtle">
-            No gameweek is open for this season yet.
-          </p>
-          <InlineSyncButton label="Generate gameweeks" action={generateFantasyGameweeks.bind(null, league.season_id)} />
-        </div>
-      )}
       <WidgetErrorBoundary context="fantasyBuilder" label="The squad builder">
         <FantasyBuilder
           teams={teams.map((t) => ({ id: t.id, name: t.name }))}

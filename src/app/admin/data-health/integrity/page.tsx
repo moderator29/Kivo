@@ -14,6 +14,7 @@ import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers
 import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
 import { TeamMergePanel } from "@/components/admin/team-merge-panel";
+import { FantasyGameweekGenerator } from "@/components/admin/fantasy-gameweek-generator";
 import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 
@@ -230,7 +231,7 @@ export default async function IntegrityPage() {
 
           {!recentGameweeks || recentGameweeks.length === 0 ? (
             <p className="text-sm text-foreground-muted">
-              No fantasy gameweeks exist yet. Generate gameweeks from a season on the Fantasy page first.
+              No fantasy gameweeks exist yet. Derive them from a season&apos;s synced fixtures below.
             </p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -270,6 +271,8 @@ export default async function IntegrityPage() {
               })}
             </div>
           )}
+
+          <FantasyGameweekGenerator />
 
           <details className="text-xs text-foreground-subtle">
             <summary className="kivo-focusable inline-flex min-h-9 cursor-pointer items-center rounded-lg font-medium text-foreground-muted">

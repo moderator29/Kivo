@@ -5,7 +5,7 @@ import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
-import { getActiveProviderStatus } from "@/lib/football";
+import { FOOTBALL_LIVE_POLLING_ENABLED, getActiveProviderStatus } from "@/lib/football";
 import { reapAbandonedSyncRuns } from "@/lib/football/sync-instrumentation";
 import { FadeIn } from "@/components/ui/fade-in";
 import { staggerDelay } from "@/lib/stagger";
@@ -13,6 +13,7 @@ import { PruneSyncRunsButton } from "@/components/admin/prune-sync-runs-button";
 import { AutomationStatusPanel } from "@/components/admin/automation-status-panel";
 import { LiveWorkerPanel } from "@/components/admin/live-worker-panel";
 import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
+import { LiveRefreshButton } from "@/components/admin/live-refresh-button";
 import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
@@ -289,6 +290,21 @@ export default async function PipelinePage() {
           narrower question that only matters once it is: how much quota
           automation has spent, on what, and why it is idle right now. */}
       <LiveWorkerPanel />
+
+      <AdminSection
+        icon={RadioTower}
+        title="Force a live refresh"
+        note="The manual counterpart to the worker above. It used to exist only as a staff control on /live — the page a fan reads — which is exactly the wrong place for it."
+        delay={0.13}
+      >
+        <FadeIn delay={0.135} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-md text-xs leading-relaxed text-foreground-muted">
+            There is no “only the live ones” endpoint — this reuses the same fixtures-by-date call as Sync now, which
+            already rewrites status, score and minute for everything currently in play.
+          </p>
+          <LiveRefreshButton enabled={FOOTBALL_LIVE_POLLING_ENABLED} />
+        </FadeIn>
+      </AdminSection>
 
       <AdminSection
         icon={History}
