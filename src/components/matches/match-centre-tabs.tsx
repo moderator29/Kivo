@@ -4,7 +4,8 @@ import { Suspense, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { EVENT_LABEL } from "@/lib/football/event-labels";
+import { ArrowLeftRight, CircleSlash, RectangleVertical, ScanEye, Volleyball, type LucideIcon } from "lucide-react";
+import { EVENT_LABEL, isGoalEventType } from "@/lib/football/event-labels";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { staggerDelay } from "@/lib/stagger";
 import { FixtureDetailsSyncControl } from "@/components/matches/fixture-details-sync-control";
@@ -268,52 +269,235 @@ function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] 
  * cards, substitutions, VAR reviews) with no ball-by-ball narration on any
  * tier, so the footnote below says exactly that rather than leaving a fan to
  * conclude the commentary feed is broken.
+ *
+ * The rebuild here is about one column that was already in the data and never
+ * reached the screen: `team_id`. Every event carried it, and the tab rendered
+ * a flat single-column list, so "Yellow card — J. Smith" told a fan nothing
+ * about *which side* just went down to ten unless they happened to know the
+ * squad by heart. Events now sit on their own club's side of a centre spine,
+ * which is how every football timeline a fan has ever read is laid out, and
+ * the minute runs down the middle so the two columns stay comparable.
  */
-function TimelineTab({ events }: { events: MatchEvent[] }) {
+
+/** Which side of the spine an event belongs on. `null` for the case that
+ * should not happen but must not crash the tab: a `team_id` matching neither
+ * club on the fixture (a mid-season club merge, a re-keyed provider id). Those
+ * render centred and full-width rather than being silently dropped — a real
+ * event KIVO stored should still be visible even when its side is unresolved. */
+type EventSide = "home" | "away" | null;
+
+const EVENT_ICON: Record<keyof typeof EVENT_LABEL, LucideIcon> = {
+  goal: Volleyball,
+  own_goal: Volleyball,
+  penalty_goal: Volleyball,
+  penalty_missed: CircleSlash,
+  yellow_card: RectangleVertical,
+  second_yellow_card: RectangleVertical,
+  red_card: RectangleVertical,
+  substitution: ArrowLeftRight,
+  var_review: ScanEye,
+};
+
+/** Colour is never the only signal here (directive item 15): each event also
+ * carries a distinct icon and its full text label, so a red and a yellow card
+ * remain tellable apart without colour vision. */
+const EVENT_TONE: Record<keyof typeof EVENT_LABEL, string> = {
+  goal: "text-accent",
+  own_goal: "text-critical",
+  penalty_goal: "text-accent",
+  penalty_missed: "text-foreground-subtle",
+  yellow_card: "text-warning",
+  second_yellow_card: "text-critical",
+  red_card: "text-critical",
+  substitution: "text-kivo-cyan",
+  var_review: "text-foreground-subtle",
+};
+
+function MinuteLabel({ event }: { event: MatchEvent }) {
+  return (
+    <>
+      {event.minute}
+      {event.addedTime ? `+${event.addedTime}` : ""}&apos;
+    </>
+  );
+}
+
+/**
+ * One event's own card, in both layouts.
+ *
+ * Mobile and desktop are genuinely different here rather than one collapsed
+ * into the other (directive item 10). On a phone, two 1fr columns either side
+ * of a spine would leave each club about 140px of usable width, which is not
+ * enough for "Substitution / A. Player · B. Player", so the mobile layout runs
+ * a single left-aligned column and states the club in the card itself. From
+ * `sm` up there is room for the real two-sided timeline, the alignment carries
+ * the club, and the in-card club line is dropped as redundant.
+ */
+function TimelineEventCard({
+  event,
+  side,
+  teamName,
+}: {
+  event: MatchEvent;
+  side: EventSide;
+  teamName: string | null;
+}) {
+  const Icon = EVENT_ICON[event.eventType];
+  const scored = isGoalEventType(event.eventType);
+
+  return (
+    <div
+      className={[
+        "kivo-glass flex items-start gap-2.5 rounded-xl p-3 text-left",
+        scored ? "ring-1 ring-accent/25" : "",
+        side === "home" ? "sm:flex-row-reverse sm:text-right" : "",
+        side === null ? "sm:justify-center sm:text-center" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${EVENT_TONE[event.eventType]}`} strokeWidth={1.75} aria-hidden />
+      <div className="flex min-w-0 flex-col">
+        {teamName && (
+          <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle sm:hidden">
+            {teamName}
+          </span>
+        )}
+        <span className={`text-sm ${scored ? "font-semibold text-foreground" : "text-foreground"}`}>
+          {EVENT_LABEL[event.eventType]}
+        </span>
+        <span className="text-xs text-foreground-subtle">
+          <PlayerNameLink
+            playerId={event.playerId ?? ""}
+            playerName={event.playerName ?? "Unknown player"}
+            className="hover:text-accent hover:underline"
+          />
+          {event.relatedPlayerName ? (
+            <>
+              {" · "}
+              <PlayerNameLink
+                playerId={event.relatedPlayerId ?? ""}
+                playerName={event.relatedPlayerName}
+                className="hover:text-accent hover:underline"
+              />
+            </>
+          ) : null}
+          {event.detail ? ` · ${event.detail}` : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TimelineTab({
+  events,
+  homeTeamId,
+  awayTeamId,
+  homeTeamName,
+  awayTeamName,
+}: {
+  events: MatchEvent[];
+  homeTeamId: string;
+  awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
   if (events.length === 0) {
     return <EmptyState message="No match events synced yet. The timeline appears once this fixture's details have been synced." />;
   }
+
+  function sideOf(teamId: string): EventSide {
+    if (teamId && teamId === homeTeamId) return "home";
+    if (teamId && teamId === awayTeamId) return "away";
+    return null;
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      {events.map((event, index) => (
-        <motion.div
-          key={event.id}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-          className="kivo-glass flex items-center gap-3 rounded-xl p-3"
-        >
-          <span className="w-10 shrink-0 text-right text-xs font-semibold text-foreground-subtle">
-            {event.minute}
-            {event.addedTime ? `+${event.addedTime}` : ""}&apos;
-          </span>
-          <div className="flex flex-col">
-            <span className="text-sm text-foreground">{EVENT_LABEL[event.eventType]}</span>
-            <span className="text-xs text-foreground-subtle">
-              {event.playerId ? (
-                <Link href={`/players/${event.playerId}`} className="hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
-                  {event.playerName ?? "Unknown player"}
-                </Link>
-              ) : (
-                event.playerName ?? "Unknown player"
-              )}
-              {event.relatedPlayerName ? (
-                <>
-                  {" · "}
-                  {event.relatedPlayerId ? (
-                    <Link href={`/players/${event.relatedPlayerId}`} className="hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
-                      {event.relatedPlayerName}
-                    </Link>
-                  ) : (
-                    event.relatedPlayerName
-                  )}
-                </>
-              ) : null}
-              {event.detail ? ` · ${event.detail}` : ""}
-            </span>
-          </div>
-        </motion.div>
-      ))}
+    <div className="flex flex-col gap-3">
+      {/* Which column is which club, said once at the top rather than
+          repeated on every row — the alignment then carries the meaning for
+          the rest of the list. */}
+      <div className="hidden grid-cols-[1fr_3rem_1fr] items-center gap-2 px-1 sm:grid">
+        <span className="truncate text-right text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+          {homeTeamName}
+        </span>
+        <span aria-hidden className="text-center text-[10px] uppercase tracking-wide text-foreground-subtle">
+          min
+        </span>
+        <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
+          {awayTeamName}
+        </span>
+      </div>
+
+      <div className="relative flex flex-col gap-2">
+        {/* The spine. Decorative only, and behind the rows: the layout above
+            already communicates side without it. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-hairline sm:block"
+        />
+
+        {events.map((event, index) => {
+          const side = sideOf(event.teamId);
+          return (
+            <motion.div
+              key={event.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
+              className="relative grid grid-cols-[2.75rem_1fr] items-center gap-2 sm:grid-cols-[1fr_3rem_1fr]"
+            >
+              {/* A screen reader gets the side as words, since a grid column
+                  says nothing when the page is read linearly. */}
+              <span className="sr-only">
+                {side === "home" ? homeTeamName : side === "away" ? awayTeamName : "Unattributed"},{" "}
+                <MinuteLabel event={event} />
+              </span>
+
+              {/* DOM order is home / minute / away so the desktop grid places
+                  itself with no reordering. On mobile the minute is pulled to
+                  the front and the unused side's cell is removed from flow
+                  entirely, which is what turns three columns into two. */}
+              <div
+                className={
+                  side === "home"
+                    ? "order-2 sm:order-none"
+                    : side === null
+                      ? // Nothing sits opposite an unattributed event, and an
+                        // empty first column would push its card off the grid's
+                        // three tracks. It keeps the mobile shape on every size.
+                        "hidden"
+                      : "hidden sm:block sm:order-none"
+                }
+                aria-hidden={side !== "home"}
+              >
+                {side === "home" && <TimelineEventCard event={event} side="home" teamName={homeTeamName} />}
+              </div>
+
+              <span
+                aria-hidden
+                className="z-10 order-1 mx-auto rounded-full border border-hairline bg-surface-1 px-1.5 py-1 text-center text-[11px] font-semibold tabular-nums text-foreground-subtle sm:order-none"
+              >
+                <MinuteLabel event={event} />
+              </span>
+
+              <div
+                className={
+                  side === "away"
+                    ? "order-2 sm:order-none"
+                    : side === null
+                      ? "order-2 sm:order-none sm:col-span-2"
+                      : "hidden sm:block sm:order-none"
+                }
+                aria-hidden={side === "home"}
+              >
+                {side === "away" && <TimelineEventCard event={event} side="away" teamName={awayTeamName} />}
+                {side === null && <TimelineEventCard event={event} side={null} teamName={null} />}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
 
       <p className="px-1 pt-1 text-[11px] leading-relaxed text-foreground-subtle">
         Goals, penalties, cards, substitutions and VAR reviews. KIVO&apos;s provider does not
@@ -916,7 +1100,15 @@ function MatchCentreTabsInner({
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       >
         {active === "Overview" && <OverviewTab preMatch={preMatch} />}
-        {active === "Timeline" && <TimelineTab events={events} />}
+        {active === "Timeline" && (
+          <TimelineTab
+            events={events}
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+          />
+        )}
         {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
         {active === "Lineups" && (
           <LineupsTab
