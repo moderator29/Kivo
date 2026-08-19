@@ -98,6 +98,19 @@ Four guards, each preventing a failure that is real on a 100-request-a-day free 
 
 Standings are a separate provider call per competition-season. With `FOOTBALL_SYNC_COMPETITION_IDS` unset, a day's fixtures can span fifty competitions, and one call each would spend half the daily budget before lunch. Five a day, least-recently-refreshed first, fills every table in within days and then keeps them all rolling — the right trade for data that changes at most once a matchday.
 
+### What the schedule settles, beyond fetching (2026-08-19)
+
+Two things now ride on the scheduled routes that spend **no provider request at all**, and they are deliberately placed above every football gate — `FOOTBALL_LIVE_POLLING_ENABLED`, "is a provider configured", the budget reservation and the sync lease all sit below them.
+
+- **Prediction settlement** (`src/lib/prediction-settlement.ts`). Six prediction types, XP, badges, streaks and a leaderboard used to be reachable only by a football-data admin opening Data Health and pressing a button. On a deployed product that means a fan makes a correct call and it is never scored. The daily route now runs the same engine unconditionally; the live route runs it again on its success path, so a prediction settles within a minute of full time rather than within a day of it.
+- **Fantasy gameweek scoring.** `rescoreLiveGameweeks` was only ever called from the live worker's success path, which requires the polling flag, a live match and spare budget — so on any deployment where that flag is off, a finished gameweek was never scored automatically either. The daily route now calls it too.
+
+Both read only rows KIVO already holds, which is the whole reason they can sit above the gates. Gating them behind quota would mean the one thing that has to happen every day only happens on days KIVO also had requests to spend.
+
+Both are best-effort: a failure in either is logged and cannot fail the sync or change any decision below it. Both are bounded per invocation (`SETTLEMENT_BATCH_SIZE`, `MAX_GAMEWEEKS_PER_RUN`) so a backlog drains across runs instead of turning one firing into a long job. And settlement reconciles XP through `reconcileXp` rather than `awardXp`, so running it every day writes nothing when nothing changed, and takes XP back when a verdict moves — a daily job that awarded twice would be worse than one that never ran.
+
+The response body of both routes carries `predictionsSettled`, `predictionsUnresolved` and `predictionsAdjusted` on **every** exit a daily run can take, including the skips — "the sync skipped so nothing ran" and "settled 0, unresolved 40" are different facts. Admin → Data Health shows the same three numbers read straight from the table, plus when settlement last actually ran, because a timestamp is the only thing that answers "is this happening" rather than "is this configured".
+
 ### Two rules that were not bent
 
 - **`FOOTBALL_LIVE_POLLING_ENABLED` is only ever read, never written from code.** It is the founder's protection against a once-a-minute worker draining a free tier. The daily route skips consulting it because one request a day cannot drain anything — a different question from the one the flag asks — and the on-demand path never touches it either.

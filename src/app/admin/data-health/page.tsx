@@ -19,6 +19,7 @@ import { AutomationStatusPanel } from "@/components/admin/automation-status-pane
 import { LiveWorkerPanel } from "@/components/admin/live-worker-panel";
 import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
+import { LocalDateTime } from "@/components/ui/relative-time";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
 import { TeamMergePanel } from "@/components/admin/team-merge-panel";
@@ -192,23 +193,52 @@ export default async function DataHealthPage() {
   // users' rows, so this count (like the scoring pass itself) goes through
   // the service-role client — read-only here, just to show an honest number
   // rather than making the button a mystery click.
-  const { data: finishedFixtures } = await supabase
-    .from("fixtures")
-    .select("id")
-    .eq("status", "finished")
-    .not("home_score", "is", null)
-    .not("away_score", "is", null);
-  const finishedFixtureIds = (finishedFixtures ?? []).map((f) => f.id);
-  let unscoredPredictions = 0;
-  if (finishedFixtureIds.length > 0) {
-    const service = createServiceRoleSupabaseClient();
-    const { count } = await service
+  // The unbounded "fetch every finished fixture id, then filter predictions by
+  // it" read that used to live here is gone: it grew with the season whether or
+  // not anybody had predicted any of it, and PostgREST's `!inner` expresses the
+  // same question as a filter rather than a fetch. Same inversion the settlement
+  // engine itself now makes (src/lib/prediction-settlement.ts).
+
+  /**
+   * Three real numbers off the `predictions` table, not one.
+   *
+   * The single "awaiting scoring" count conflated two states that mean opposite
+   * things, because `points_awarded is null` is true both for a row nothing has
+   * looked at yet *and* for a row KIVO has examined and honestly declined to
+   * settle. So a fixture whose events were never synced showed up here as work
+   * pending forever, and pressing the button changed the number by nothing —
+   * which reads as a broken job rather than as the data gap it is.
+   *
+   * `lastSettledAt` is the one that answers the question this whole page exists
+   * for: not "is settlement configured" but "has it actually run". The daily
+   * sync now calls the same engine the button does, so a timestamp older than a
+   * day means the schedule is not reaching it, regardless of what any
+   * environment variable says.
+   */
+  const predictionService = createServiceRoleSupabaseClient();
+  const finishedPredictions = () =>
+    predictionService
       .from("predictions")
-      .select("id", { count: "exact", head: true })
-      .in("fixture_id", finishedFixtureIds)
-      .is("points_awarded", null);
-    unscoredPredictions = count ?? 0;
-  }
+      .select("id, fixture:fixtures!inner(status)", { count: "exact", head: true })
+      .eq("fixture.status", "finished");
+
+  const [awaitingResult, unresolvableResult, settledResult, lastSettledResult] = await Promise.all([
+    finishedPredictions().is("resolution", null),
+    finishedPredictions().eq("resolution", "unresolvable"),
+    finishedPredictions().not("points_awarded", "is", null),
+    predictionService
+      .from("predictions")
+      .select("resolved_at")
+      .not("resolved_at", "is", null)
+      .order("resolved_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const unscoredPredictions = awaitingResult.count ?? 0;
+  const unresolvablePredictions = unresolvableResult.count ?? 0;
+  const settledPredictions = settledResult.count ?? 0;
+  const lastSettledAt = lastSettledResult.data?.resolved_at ?? null;
 
   // RECOMMENDATIONS.md item 64: transfers is public-read, so a plain client is
   // enough here (unlike unscoredPredictions above, which needs owner-only RLS
@@ -370,10 +400,22 @@ export default async function DataHealthPage() {
                 : "All predictions are scored"}
             </p>
             <p className="text-xs text-foreground-subtle">
-              Scores all six prediction types against real, already-synced data — final scores, match events, team
-              statistics and the Room&apos;s own man-of-the-match vote. A winner pick earns {CORRECT_PREDICTION_POINTS}{" "}
-              points and {CORRECT_PREDICTION_XP} XP; harder types earn more. Anything whose underlying data was never
-              synced is left explicitly unresolved rather than marked wrong.
+              {settledPredictions} settled · {unscoredPredictions} awaiting · {unresolvablePredictions} unresolvable.{" "}
+              {lastSettledAt ? (
+                <>
+                  Last run <LocalDateTime iso={lastSettledAt} format="dayTime" />.
+                </>
+              ) : (
+                <>Never run.</>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-foreground-subtle">
+              Runs automatically in the daily sync — this button is for after a manual correction, not instead of the
+              schedule. Scores all six prediction types against real, already-synced data: final scores, match events,
+              team statistics and the Room&apos;s own man-of-the-match vote. A winner pick earns{" "}
+              {CORRECT_PREDICTION_POINTS} points and {CORRECT_PREDICTION_XP} XP; harder types earn more.{" "}
+              <span className="text-warning">Unresolvable</span> means the data a type needs was never synced — those
+              are left explicitly unsettled and cost the user nothing, rather than being marked wrong.
             </p>
           </div>
         </div>

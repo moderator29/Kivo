@@ -945,7 +945,7 @@ Live scores are a second, separate action: two Supabase Vault secrets plus
 The Vercel cron cannot do this — the Hobby plan permits once a day, which is why
 minute-resolution polling lives in Postgres (`docs/CONSTRAINTS.md` §4).
 
-### 2. Predictions cannot settle themselves, and there are six of them now.
+### 2. Predictions cannot settle themselves, and there are six of them now. — **SHIPPED 2026-08-19**
 
 **Impact: high. Effort: small. Risk: low.** As of today a fan can call six things
 about a match — winner, correct score, first scorer, total goals, cards and
@@ -962,6 +962,30 @@ The fix does **not** need a new cron and must not touch `vercel.json`: fold the
 scoring pass into the existing `/api/cron/sync-daily` route, after the sync that
 produces the very results it scores. One function call, in the one place that
 already runs daily with the right authority.
+
+> **Done, 2026-08-19, and `vercel.json` was not touched.** The engine moved out
+> of the Server Action into `src/lib/prediction-settlement.ts` — a `"use server"`
+> file carries a session and a scheduler has none. The daily route runs it
+> **above** every football gate, next to the rate-limit prune, because
+> settlement spends no provider request and must not be gated on quota; the live
+> route runs it again on its success path, so a prediction settles within a
+> minute of the whistle when the worker is armed. XP goes through `reconcileXp`,
+> so a repeating job writes nothing when nothing changed and takes XP back when
+> a verdict moves.
+>
+> **The same defect was found in fantasy and fixed in the same change**, which is
+> the half worth recording: `rescoreLiveGameweeks` was only ever called from the
+> live worker's success path, so on any deployment where
+> `FOOTBALL_LIVE_POLLING_ENABLED` is off — which is every deployment until the
+> founder arms it — a finished gameweek was never scored automatically either.
+> The daily route now calls it too.
+>
+> One more thing this exposed: Data Health's "N predictions awaiting scoring"
+> counted `points_awarded is null`, which is true both for a row nothing has
+> examined *and* for a row KIVO examined and honestly declined to settle. A
+> permanently-unresolvable fixture therefore showed as pending work forever and
+> the button changed it by nothing. It is now three real numbers plus the
+> timestamp of the last actual run.
 
 ### 3. Configure custom SMTP before you tell anyone the product exists.
 

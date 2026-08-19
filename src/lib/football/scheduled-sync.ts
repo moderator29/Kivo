@@ -18,6 +18,7 @@ import {
 import { logError } from "@/lib/log";
 import { pruneRateLimitEvents } from "@/lib/rate-limit";
 import { rescoreLiveGameweeks } from "@/lib/fantasy-live-scoring";
+import { EMPTY_SETTLEMENT, settlePredictionsBestEffort } from "@/lib/prediction-settlement";
 
 /**
  * The automated sync worker, shared by both scheduled entry points:
@@ -511,6 +512,55 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
   const prunedSpend = await pruneProviderRequestSpend(supabase);
   if (prunedSpend > 0) console.info(`Cron: pruned ${prunedSpend} expired provider_request_spend rows`);
 
+  /**
+   * Settle predictions, and score fantasy gameweeks that are already over.
+   *
+   * Deliberately here — above every football gate below it, next to the
+   * janitors, and for the same reason they are here. Neither of these spends a
+   * provider request: every input is a row KIVO already holds, so gating them
+   * behind "is a provider configured", "is anything live", "is there budget
+   * left" or the sync lease would mean the one thing that has to happen every
+   * day only happens on days KIVO also had quota to spend. That inversion is
+   * how a fan ends up making a correct call that is never scored.
+   *
+   * Daily only. The live worker fires once a minute and settles as part of its
+   * own success path further down, right after a sync that may have just
+   * written the full-time score — which is what gets a prediction settled
+   * within a minute of the whistle rather than within a day of it.
+   *
+   * Best-effort by contract, like the prunes above: neither can fail this
+   * request or change any decision made below it.
+   */
+  let settlement = EMPTY_SETTLEMENT;
+  let dailyFantasyGameweeksScored = 0;
+  if (mode === "daily") {
+    settlement = await settlePredictionsBestEffort(supabase);
+    try {
+      // The live path re-scores gameweeks that are in play; nothing was scoring
+      // the ones that had simply finished on a deployment where the live worker
+      // is not armed — which is every deployment until the founder arms it.
+      // Same function, same provisional/final semantics, once a day.
+      const dailyScoring = await rescoreLiveGameweeks(supabase);
+      dailyFantasyGameweeksScored = dailyScoring.gameweeksScored;
+    } catch (error) {
+      logError("cron.sync-daily.fantasy-scoring", error);
+    }
+  }
+
+  /**
+   * The three numbers, on every exit a daily run can take — not only the happy
+   * one. "Settled 0, unresolved 40" and "the sync skipped so nothing ran" are
+   * different facts, and a response that only reports settlement when the
+   * football sync also succeeded makes them indistinguishable. That is the same
+   * failure mode Data Health's automation panel exists to prevent.
+   */
+  const settlementReport = {
+    predictionsSettled: settlement.settled,
+    predictionsUnresolved: settlement.unresolved,
+    predictionsAdjusted: settlement.adjusted,
+    fantasyGameweeksScored: dailyFantasyGameweeksScored,
+  };
+
   // 1. The real gate. Never flip this from code — see FOOTBALL_LIVE_POLLING_ENABLED's
   // own doc comment.
   // `daily` deliberately skips this gate — see the mode note above. The flag is
@@ -536,7 +586,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       reason: "Skipped: no real football data provider is configured (API_FOOTBALL_KEY unset).",
       suppressIfRecentPrefix: "Skipped: no real football data provider",
     });
-    return NextResponse.json({ ok: true, decision: "no_provider_configured" });
+    return NextResponse.json({ ok: true, decision: "no_provider_configured", ...settlementReport });
   }
 
   // 3. Dedup. This used to be a heuristic: "is there a cron-triggered
@@ -572,7 +622,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       triggerSource,
       reason: `Skipped: dedup check failed, refusing to risk a concurrent run (${dedupError.message}).`,
     });
-    return NextResponse.json({ ok: false, decision: "dedup_check_failed" }, { status: 500 });
+    return NextResponse.json({ ok: false, decision: "dedup_check_failed", ...settlementReport }, { status: 500 });
   }
 
   if (heldLock) {
@@ -581,7 +631,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       triggerSource,
       reason: `Skipped: a ${heldLock.holder ?? "unknown"} sync run holds the fixtures lock (since ${heldLock.acquired_at}, lease until ${heldLock.expires_at}).`,
     });
-    return NextResponse.json({ ok: true, decision: "already_running" });
+    return NextResponse.json({ ok: true, decision: "already_running", ...settlementReport });
   }
 
   // 4. The provider's own remaining count, read from the durable record rather
@@ -612,7 +662,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
         quotaRemaining,
         suppressIfRecentPrefix: "Skipped: the daily baseline has spent",
       });
-      return NextResponse.json({ ok: true, decision: "budget_exhausted", mode });
+      return NextResponse.json({ ok: true, decision: "budget_exhausted", mode, ...settlementReport });
     }
 
     const dailyResult = await syncTodayFixtures("daily");
@@ -647,6 +697,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
         status: dailyResult.status,
         recordsProcessed: dailyResult.recordsProcessed,
         standingsSeasonsSynced: standings.synced,
+        ...settlementReport,
         error: dailyResult.error ?? null,
       },
       { status: dailyResult.status === "failed" ? 500 : 200 },
@@ -786,6 +837,19 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
     logError("cron.sync-live.fantasy-scoring", error);
   }
 
+  /**
+   * And settle predictions, on the same terms: the sync immediately above may
+   * have just written a full-time score, and this is what turns that into a
+   * settled prediction within a minute of the whistle rather than within a day
+   * of it. Costs nothing against the provider — the request for this minute has
+   * already been spent, and settlement reads only KIVO's own rows.
+   *
+   * Only on the success path, which is the throttle: the live worker fires
+   * every minute, but this runs at the planner's pace rather than the
+   * scheduler's, so a quiet hour does no settlement work at all.
+   */
+  const liveSettlement = await settlePredictionsBestEffort(supabase);
+
   return NextResponse.json(
     {
       ok: result.status !== "failed",
@@ -797,6 +861,9 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       budget: { spent: reservation.spentInWindow, limit: reservation.limit },
       reconciledFixtures: reconciled,
       fantasyGameweeksScored,
+      predictionsSettled: liveSettlement.settled,
+      predictionsUnresolved: liveSettlement.unresolved,
+      predictionsAdjusted: liveSettlement.adjusted,
       error: result.error ?? null,
     },
     { status: result.status === "failed" ? 500 : 200 },

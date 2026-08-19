@@ -10,6 +10,7 @@ export function ScorePredictionsButton() {
     error: string | null;
     recordsProcessed?: number;
     unresolvedCount?: number;
+    adjustedCount?: number;
   } | null>(null);
 
   function handleClick() {
@@ -50,9 +51,13 @@ export function ScorePredictionsButton() {
               {/* Two separate numbers on purpose. Folding rows KIVO declined
                   to settle into the "scored" count would make a pass that
                   resolved nothing look like a pass that worked. */}
-              Scored {result.recordsProcessed ?? 0} prediction{result.recordsProcessed === 1 ? "" : "s"}
+              Settled {result.recordsProcessed ?? 0} prediction{result.recordsProcessed === 1 ? "" : "s"}
               {(result.unresolvedCount ?? 0) > 0 &&
                 ` · ${result.unresolvedCount} left unresolved (data not synced)`}
+              {/* An adjustment means previously reported numbers moved. It is
+                  the one outcome worth noticing on a routine pass, so it is
+                  never folded into the settled count. */}
+              {(result.adjustedCount ?? 0) > 0 && ` · ${result.adjustedCount} re-scored, XP reconciled`}
             </>
           )}
         </p>
