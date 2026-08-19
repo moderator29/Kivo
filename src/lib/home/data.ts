@@ -452,3 +452,87 @@ export async function loadPredictionSummary(
     return null;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Followed competitions                                                */
+/* ------------------------------------------------------------------ */
+
+export type FollowedCompetition = {
+  id: string;
+  name: string;
+  country: string | null;
+  logoUrl: string | null;
+  /** Fixtures on this competition's card inside the viewer's own day. Zero is
+   * a genuinely counted zero here — the query asks the whole competition, not
+   * a sampled window — and renders as no line rather than "0 today". */
+  todayCount: number;
+};
+
+/**
+ * The competitions this viewer follows.
+ *
+ * Until this pass a competition follow had no consumer on /home at all — the
+ * follow query filtered `followed_type` down to team and player, so a fan who
+ * had starred the Premier League on /matches saw no trace of it on the screen
+ * the app opens on. `src/lib/follow-meaning.ts` describes a competition follow
+ * as a bookmark; this is that bookmark reaching the place bookmarks are for.
+ *
+ * The count is a real `head: true` count per competition inside the viewer's
+ * own day window, not a tally of the fixtures some other section happened to
+ * fetch — a sampled window would under-report on a busy Saturday, and a home
+ * screen that quietly under-reports a matchday is worse than one that says
+ * nothing.
+ */
+export async function loadFollowedCompetitions(
+  supabase: Client,
+  profileId: string,
+  dayStart: Date,
+  dayEnd: Date,
+  limit: number,
+): Promise<FollowedCompetition[]> {
+  try {
+    const { data: follows } = await supabase
+      .from("follows")
+      .select("followed_id")
+      .eq("follower_profile_id", profileId)
+      .eq("followed_type", "competition")
+      .limit(limit);
+
+    const ids = (follows ?? []).map((row) => row.followed_id);
+    if (ids.length === 0) return [];
+
+    const { data: competitions } = await supabase
+      .from("competitions")
+      .select("id, name, country, logo_url")
+      .in("id", ids);
+
+    if (!competitions || competitions.length === 0) return [];
+
+    const counts = await Promise.all(
+      competitions.map(async (competition) => {
+        const { count } = await supabase
+          .from("fixtures")
+          .select("id", { count: "exact", head: true })
+          .eq("competition_id", competition.id)
+          .gte("kickoff_at", dayStart.toISOString())
+          .lt("kickoff_at", dayEnd.toISOString());
+        return count ?? 0;
+      }),
+    );
+
+    return competitions
+      .map((competition, index) => ({
+        id: competition.id,
+        name: competition.name,
+        country: competition.country,
+        logoUrl: competition.logo_url,
+        todayCount: counts[index],
+      }))
+      // Whatever has football on today comes first; the rest keep their own
+      // order, so the rail leads with the one the reader can act on.
+      .sort((a, b) => b.todayCount - a.todayCount);
+  } catch (error) {
+    logError("home.data.loadFollowedCompetitions", error);
+    return [];
+  }
+}

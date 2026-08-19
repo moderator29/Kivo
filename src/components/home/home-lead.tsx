@@ -1,43 +1,60 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowRight, CalendarClock, Radio, Star, Target, Trophy } from "lucide-react";
-import type { HomeLead } from "@/lib/home-lead";
-import type { LeadFixture } from "@/lib/home-lead";
+import type { HomeLead, LeadFixture } from "@/lib/home-lead";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { LeadCountdown } from "@/components/home/lead-countdown";
 
 /**
- * /home's lead slot — the one card on the page that is allowed to shout
- * (KN-37). What it shows is decided entirely by `selectHomeLead`
+ * /home's lead slot — the one thing on the page allowed to shout.
+ *
+ * What it shows is decided entirely by `selectHomeLead`
  * (src/lib/home-lead.ts); this component only renders the decision, which is
  * why the ladder is unit-testable and this file has no branching logic of its
  * own beyond one `switch`.
  *
- * Design intent, in the founder's terms: restrained everywhere else, energy
- * here. The lead is the only `kivo-glass-brand` element above the fold, the
- * only one with a full-width primary action, and the only one carrying a live
- * pulse — so "what should I look at right now" has exactly one visual answer
- * instead of six cards of equal weight competing for it.
+ * ## Why it is the only feature container on the page
  *
- * Every lead states its own reason in the eyebrow ("Because you follow
- * Arsenal"). A personalised surface that cannot explain itself reads as
- * arbitrary, and a fan who does not know *why* a match is on their home
- * screen has no way to change it.
+ * `CONTAINER_ROLES.feature` in src/lib/design-system.ts: "Rare, and earns it:
+ * a hero, a live match header, a moment the user earned… More than one on a
+ * screen means none of them is a feature." Everything else on /home is now a
+ * heading over a hairline-divided surface, so this is the single element with
+ * a 3xl radius, the brand ring and its own gradient — and that contrast is
+ * the entire reason a reader's eye lands here first instead of scanning eight
+ * equal boxes for the point of the page.
+ *
+ * ## The scoreboard
+ *
+ * Crests over names, score between them. The previous build stacked the two
+ * clubs as rows with the score right-aligned, on the reasoning that a 390px
+ * phone truncates a side-by-side layout — true of a *single-line* one. Giving
+ * each club its own column and letting the name wrap under the crest solves
+ * the same problem without giving up the shape a scoreline actually has, and
+ * it is the shape every reference app draws its featured match in. Nothing is
+ * abbreviated and nothing is truncated: "Wolverhampton Wanderers" wraps.
+ *
+ * Every lead states its own reason ("Because you follow Arsenal"). This is now
+ * the *only* place on /home that explains itself, which is what keeps the
+ * explanation worth reading — the sections below it carry facts, not
+ * justifications.
  */
 
 const PRIMARY_ACTION =
-  "kivo-gradient-prime inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+  "kivo-gradient-prime inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
 const SECONDARY_ACTION =
-  "inline-flex items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+  "inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
 
 function LeadShell({
   chip,
+  context,
   reason,
   children,
   actions,
 }: {
   chip: ReactNode;
+  /** The competition, or whatever else names where this sits. Often null. */
+  context?: string | null;
   reason: string;
   children: ReactNode;
   actions: ReactNode;
@@ -45,14 +62,15 @@ function LeadShell({
   return (
     <section
       aria-label="Your lead story"
-      className="kivo-glass-brand relative overflow-hidden rounded-2xl p-5"
+      className="kivo-glass-brand relative flex flex-col gap-4 overflow-hidden rounded-3xl p-6 sm:p-7"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {chip}
-        <p className="text-xs text-foreground-subtle">{reason}</p>
+        {context && <span className="min-w-0 truncate text-xs font-medium text-foreground-muted">{context}</span>}
       </div>
-      <div className="mt-4">{children}</div>
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">{actions}</div>
+      {children}
+      <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>
+      <p className="text-xs text-foreground-subtle">{reason}</p>
     </section>
   );
 }
@@ -66,7 +84,7 @@ function Chip({ tone, icon, label }: { tone: "live" | "accent" | "muted"; icon: 
         : "border-hairline text-foreground-muted";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${toneClass}`}
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wider ${toneClass}`}
     >
       {icon}
       {label}
@@ -74,53 +92,84 @@ function Chip({ tone, icon, label }: { tone: "live" | "accent" | "muted"; icon: 
   );
 }
 
-/**
- * The scoreboard block, shared by every fixture-shaped lead.
- *
- * Stacked rather than side-by-side, and that is a mobile decision made first:
- * at 390px a `Home ——— score ——— Away` row leaves each club about 90px, which
- * truncated real names to "Arse…" and "Chel…" in the first build of this card.
- * Stacking gives every club the full width of the card, so the two things a
- * fan actually needs — *who* and *what score* — are both legible at a glance
- * on the device most of them will be holding. Desktop keeps the same shape at
- * a larger size; a scoreboard reads perfectly well stacked, and one layout is
- * one set of states to keep honest.
- */
-function LeadFixtureBody({ fixture }: { fixture: LeadFixture }) {
-  const hasScore = fixture.homeScore !== null && fixture.awayScore !== null;
+/** One club: crest, then its full name under it. `break-words` rather than
+ * `truncate` — a lead that cannot name both clubs has failed at the one job it
+ * has. */
+function LeadSide({ name, crestUrl }: { name: string; crestUrl: string | null }) {
   return (
-    <div className="flex flex-col gap-2">
-      {(
-        [
-          { name: fixture.homeName, crest: fixture.homeCrestUrl, score: fixture.homeScore },
-          { name: fixture.awayName, crest: fixture.awayCrestUrl, score: fixture.awayScore },
-        ] as const
-      ).map((side) => (
-        <div key={side.name} className="flex items-center gap-3">
-          <TeamCrest crestUrl={side.crest} name={side.name} size={32} />
-          <span className="min-w-0 flex-1 truncate text-base font-semibold text-foreground sm:text-lg">{side.name}</span>
-          {hasScore && (
-            <span className="shrink-0 text-xl font-bold tabular-nums text-foreground sm:text-2xl">{side.score}</span>
-          )}
-        </div>
-      ))}
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
+      <TeamCrest crestUrl={crestUrl} name={name} size={44} />
+      {/* `break-words` breaks a word only when it genuinely cannot fit, so
+          "Wolverhampton Wanderers" wraps at its space rather than mid-word. */}
+      <span className="text-sm font-semibold leading-snug text-foreground break-words">{name}</span>
     </div>
   );
 }
 
-/** One line under a fixture lead saying whether the viewer has called it.
- * Real state only — it says nothing at all when there is no prediction and no
- * way to make one (a match already under way). */
-function PredictionNote({ prediction, kickoffPassed }: { prediction: string | null; kickoffPassed: boolean }) {
-  if (prediction) {
-    return (
-      <p className="mt-3 text-xs text-foreground-muted">
-        Your call: <span className="font-semibold text-foreground">{prediction}</span>
-      </p>
-    );
-  }
-  if (kickoffPassed) return null;
-  return <p className="mt-3 text-xs text-foreground-muted">You haven&apos;t called this one yet.</p>;
+/**
+ * The scoreboard. The middle column carries whichever of the three things is
+ * true: a real score, a countdown to kickoff, or the kickoff time itself. It
+ * never carries a dash standing in for a score that does not exist.
+ */
+function LeadFixtureBody({ fixture, soon }: { fixture: LeadFixture; soon: boolean }) {
+  const hasScore = fixture.homeScore !== null && fixture.awayScore !== null;
+
+  return (
+    <div className="flex items-start justify-center gap-2">
+      <LeadSide name={fixture.homeName} crestUrl={fixture.homeCrestUrl} />
+      <div className="flex w-[4.5rem] shrink-0 flex-col items-center gap-1 pt-2 sm:w-28">
+        {hasScore ? (
+          <span className="text-3xl font-bold tabular-nums leading-none text-foreground sm:text-4xl">
+            {fixture.homeScore}
+            <span className="px-1.5 text-foreground-subtle">-</span>
+            {fixture.awayScore}
+          </span>
+        ) : soon ? (
+          <>
+            {/* A countdown is the useful number inside the kickoff window, and
+                the absolute time stays under it because "3h 11m" alone cannot
+                be checked against a calendar. */}
+            <LeadCountdown
+              iso={fixture.kickoffAt}
+              passedLabel="Under way"
+              className="text-2xl font-bold tabular-nums leading-none text-accent"
+            />
+            <span className="text-center text-xs leading-snug text-foreground-subtle">
+              <LocalDateTime iso={fixture.kickoffAt} format="deadline" />
+            </span>
+          </>
+        ) : (
+          // Further out than a day, where a countdown reads as a stopwatch on
+          // something nobody is waiting for. Day and time, nothing else.
+          <span className="text-center text-sm font-semibold leading-snug text-foreground">
+            <LocalDateTime iso={fixture.kickoffAt} format="deadline" />
+          </span>
+        )}
+      </div>
+      <LeadSide name={fixture.awayName} crestUrl={fixture.awayCrestUrl} />
+    </div>
+  );
+}
+
+/** One line saying whether the viewer has called it. Real state only — it says
+ * nothing at all when there is no prediction and no way to make one. */
+function PredictionNote({ prediction }: { prediction: string | null }) {
+  if (!prediction) return null;
+  return (
+    <p className="text-center text-xs text-foreground-muted">
+      Your call: <span className="font-semibold text-foreground">{prediction}</span>
+    </p>
+  );
+}
+
+/** The headline shape for the leads that are not a fixture. */
+function LeadStatement({ headline, detail }: { headline: string; detail: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xl font-semibold leading-tight tracking-tight text-foreground">{headline}</p>
+      <p className="text-sm leading-snug text-foreground-muted">{detail}</p>
+    </div>
+  );
 }
 
 export function HomeLeadCard({ lead }: { lead: HomeLead }) {
@@ -129,17 +178,24 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
       return (
         <LeadShell
           reason={lead.reason}
+          context={lead.fixture.competitionName}
           chip={
             <Chip
               tone="live"
-              label={lead.fixture.status === "halftime" ? "Half time" : "Live now"}
-              icon={<Radio className="h-3 w-3 animate-pulse" strokeWidth={2} />}
+              label={
+                lead.fixture.status === "halftime"
+                  ? "Half time"
+                  : lead.fixture.minuteElapsed != null
+                    ? `${lead.fixture.minuteElapsed}'`
+                    : "Live"
+              }
+              icon={<Radio className="h-3 w-3 motion-safe:animate-pulse" strokeWidth={2} />}
             />
           }
           actions={
             <>
               <Link href={`/matches/${lead.fixture.id}`} className={PRIMARY_ACTION}>
-                Open Match Centre
+                Match Centre
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
               </Link>
               <Link href={`/matches/${lead.fixture.id}?tab=room`} className={SECONDARY_ACTION}>
@@ -148,7 +204,7 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
             </>
           }
         >
-          <LeadFixtureBody fixture={lead.fixture} />
+          <LeadFixtureBody fixture={lead.fixture} soon={false} />
         </LeadShell>
       );
 
@@ -158,21 +214,18 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
       return (
         <LeadShell
           reason={lead.reason}
+          context={lead.fixture.competitionName}
           chip={
-            soon ? (
-              <Chip
-                tone="accent"
-                icon={<CalendarClock className="h-3 w-3" strokeWidth={2} />}
-                label="Kicks off soon"
-              />
-            ) : (
-              <Chip tone="muted" icon={<CalendarClock className="h-3 w-3" strokeWidth={2} />} label="Next up" />
-            )
+            <Chip
+              tone={soon ? "accent" : "muted"}
+              icon={<CalendarClock className="h-3 w-3" strokeWidth={2} />}
+              label={soon ? "Kicks off soon" : "Next up"}
+            />
           }
           actions={
             <>
               <Link href={`/matches/${lead.fixture.id}`} className={PRIMARY_ACTION}>
-                {lead.prediction ? "Open Match Centre" : "Make your call"}
+                {lead.prediction ? "Match Centre" : "Make your call"}
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
               </Link>
               <Link href={`/matches/${lead.fixture.id}?tab=room`} className={SECONDARY_ACTION}>
@@ -181,21 +234,8 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
             </>
           }
         >
-          <LeadFixtureBody fixture={lead.fixture} />
-          {/* Countdown first and in accent when kickoff is close enough to
-              plan around; the absolute time stays alongside it, because "3h
-              11m" alone can't be checked against a calendar. */}
-          <p className="mt-3 flex flex-wrap items-baseline gap-x-2 text-xs text-foreground-muted">
-            {soon && (
-              <LeadCountdown
-                iso={lead.fixture.kickoffAt}
-                passedLabel="Under way"
-                className="text-sm font-semibold tabular-nums text-accent"
-              />
-            )}
-            <LocalDateTime iso={lead.fixture.kickoffAt} format="deadline" />
-          </p>
-          <PredictionNote prediction={lead.prediction} kickoffPassed={false} />
+          <LeadFixtureBody fixture={lead.fixture} soon={soon} />
+          <PredictionNote prediction={lead.prediction} />
         </LeadShell>
       );
     }
@@ -218,13 +258,15 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
             </Link>
           }
         >
-          <p className="text-lg font-semibold text-foreground">
-            Locks in{" "}
-            <LeadCountdown iso={lead.deadlineAt} passedLabel="moments" className="tabular-nums text-accent" />
-          </p>
-          <p className="mt-1 text-xs text-foreground-muted">
-            Deadline <LocalDateTime iso={lead.deadlineAt} format="deadline" />
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xl font-semibold leading-tight tracking-tight text-foreground">
+              Locks in{" "}
+              <LeadCountdown iso={lead.deadlineAt} passedLabel="moments" className="tabular-nums text-accent" />
+            </p>
+            <p className="text-sm text-foreground-muted">
+              Deadline <LocalDateTime iso={lead.deadlineAt} format="deadline" />
+            </p>
+          </div>
         </LeadShell>
       );
 
@@ -240,16 +282,19 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
             </Link>
           }
         >
-          <p className="text-lg font-semibold text-foreground">
-            {lead.count === 1 ? "1 call still open" : `${lead.count} calls still open`}
-          </p>
-          <p className="mt-1 text-xs text-foreground-muted">
-            Each one locks at its kickoff, and scores when the result is verified.
-          </p>
+          <LeadStatement
+            headline={lead.count === 1 ? "1 call still open" : `${lead.count} calls still open`}
+            detail="Each one locks at its kickoff, and scores when the result is verified."
+          />
         </LeadShell>
       );
 
     case "follow_a_club":
+      // The most-read empty state in the product: a brand-new account, before
+      // a single follow. It is written as an invitation with a concrete next
+      // step and a description of what changes — never as an apology for a
+      // blank page, and never with a fabricated preview of what it would look
+      // like full.
       return (
         <LeadShell
           reason={lead.reason}
@@ -266,11 +311,10 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
             </>
           }
         >
-          <p className="text-lg font-semibold text-foreground">Follow a club and this page becomes yours.</p>
-          <p className="mt-1 text-xs text-foreground-muted">
-            Their fixtures lead this screen, their goals reach your notifications, and their Match Rooms show up in your
-            feed.
-          </p>
+          <LeadStatement
+            headline="Follow a club and this page becomes yours."
+            detail="Their fixtures lead this screen, their goals reach your notifications, and their Match Rooms show up in your feed."
+          />
         </LeadShell>
       );
 
@@ -291,10 +335,10 @@ export function HomeLeadCard({ lead }: { lead: HomeLead }) {
             </>
           }
         >
-          <p className="text-lg font-semibold text-foreground">No fixtures on the way for your clubs.</p>
-          <p className="mt-1 text-xs text-foreground-muted">
-            KIVO only lists matches it has actually verified, so this stays empty until their next fixtures land.
-          </p>
+          <LeadStatement
+            headline="No fixtures on the way for your clubs."
+            detail="KIVO only lists matches it has verified, so this fills in the moment their next fixtures land."
+          />
         </LeadShell>
       );
   }

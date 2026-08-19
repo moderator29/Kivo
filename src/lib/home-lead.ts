@@ -34,6 +34,15 @@ export type LeadFixture = {
   id: string;
   kickoffAt: string;
   status: FixtureStatus;
+  /** The competition this is being played in, when KIVO can name it. The lead
+   * is the one fixture on the page with room to say *where* a match sits, and
+   * "Arsenal v Chelsea" means something different in the league and in a cup.
+   * Null renders nothing — never "Unknown competition". */
+  competitionName: string | null;
+  /** Minutes played, for a live lead. Null while KIVO has no minute for a
+   * match in play: the chip then reads "Live", which is true, rather than
+   * guessing a minute from the kickoff time. */
+  minuteElapsed: number | null;
   homeName: string;
   homeCrestUrl: string | null;
   awayName: string;

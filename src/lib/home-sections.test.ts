@@ -27,11 +27,15 @@ const emptyFacts: HomeSectionFacts = {
   unreadNotificationCount: 0,
   clubsTodayCount: 0,
   hasLiveFollowedFixture: false,
+  liveElsewhereCount: 0,
+  recentResults: { count: 0, latestAt: null },
   fantasy: null,
   predictions: null,
   trendingRoom: null,
+  feedPostCount: 0,
   transferPulse: { count: 0, latestAt: null },
   followedPlayerCount: 0,
+  followedCompetitionCount: 0,
   topMatchCount: 0,
   upcomingCount: 0,
   aiConfigured: false,
@@ -43,7 +47,7 @@ describe("selectHomeSections", () => {
   it("shows a brand-new account only what is actually true for it", () => {
     // No follows, no fantasy, no predictions, nothing synced. Everything
     // personal is absent — not rendered as a zero.
-    expect(ids(emptyFacts)).toEqual(["no_football_yet", "recently_viewed", "community"]);
+    expect(ids(emptyFacts)).toEqual(["no_football_yet", "recently_viewed"]);
   });
 
   it("never emits a section for a personal surface the viewer has not used", () => {
@@ -53,6 +57,66 @@ describe("selectHomeSections", () => {
     expect(sections).not.toContain("your_players");
     expect(sections).not.toContain("transfer_pulse");
     expect(sections).not.toContain("notifications");
+    expect(sections).not.toContain("results");
+    expect(sections).not.toContain("live_now");
+    expect(sections).not.toContain("feed");
+    expect(sections).not.toContain("your_competitions");
+  });
+
+  it("opens a Saturday afternoon on live football and a Tuesday morning on the result", () => {
+    // Same reader, same follows — the only difference is what football is
+    // actually happening, which is the whole argument for a ladder.
+    const saturday = ids({
+      ...emptyFacts,
+      clubsTodayCount: 1,
+      hasLiveFollowedFixture: true,
+      liveElsewhereCount: 8,
+      recentResults: { count: 3, latestAt: hoursAgo(2) },
+      unreadNotificationCount: 4,
+      topMatchCount: 12,
+      upcomingCount: 3,
+    });
+    expect(saturday.slice(0, 2)).toEqual(["clubs_today", "live_now"]);
+
+    const tuesday = ids({
+      ...emptyFacts,
+      recentResults: { count: 2, latestAt: hoursAgo(11) },
+      unreadNotificationCount: 4,
+      topMatchCount: 12,
+      upcomingCount: 3,
+    });
+    expect(tuesday[0]).toBe("results");
+    expect(tuesday.indexOf("results")).toBeLessThan(tuesday.indexOf("notifications"));
+  });
+
+  it("treats last night's result as news and last month's as history", () => {
+    const fresh = selectHomeSections({
+      ...emptyFacts,
+      recentResults: { count: 1, latestAt: hoursAgo(10) },
+    }).find((s) => s.id === "results");
+    const old = selectHomeSections({
+      ...emptyFacts,
+      recentResults: { count: 1, latestAt: hoursAgo(24 * 9) },
+    }).find((s) => s.id === "results");
+
+    expect(fresh?.priority).toBeLessThan(TIER.SOON);
+    expect(old?.priority).toBeGreaterThanOrEqual(TIER.CONTEXT);
+    expect(fresh?.reason).not.toEqual(old?.reason);
+  });
+
+  it("gives today's card the top slot only while the reader follows nothing", () => {
+    const newcomer = ids({ ...emptyFacts, topMatchCount: 9 });
+    expect(newcomer[0]).toBe("top_matches");
+
+    // One follow is enough to demote it: the reader now has football of their
+    // own on this page, and it outranks everybody else's.
+    const follower = ids({ ...emptyFacts, topMatchCount: 9, upcomingCount: 2 });
+    expect(follower.indexOf("upcoming")).toBeLessThan(follower.indexOf("top_matches"));
+  });
+
+  it("only shows a personalised feed when people the reader follows have posted", () => {
+    expect(ids(emptyFacts)).not.toContain("feed");
+    expect(ids({ ...emptyFacts, feedPostCount: 3 })).toContain("feed");
   });
 
   it("puts a live followed club above everything else on the page", () => {
@@ -159,7 +223,7 @@ describe("selectHomeSections", () => {
     expect(mine?.priority).toBeLessThan(theirs?.priority ?? Infinity);
   });
 
-  it("gives every section a reason, because the page shows it", () => {
+  it("gives every section a reason, so the ladder stays readable", () => {
     const sections = selectHomeSections({
       ...emptyFacts,
       briefingLineCount: 3,
@@ -178,6 +242,10 @@ describe("selectHomeSections", () => {
     const sections = ids({ ...emptyFacts, topMatchCount: 3 });
     expect(sections).toContain("top_matches");
     expect(sections).not.toContain("no_football_yet");
+
+    // Nor alongside the reader's own football, even on a day KIVO's wider card
+    // is empty — a follower with a fixture on the way is not a blank slate.
+    expect(ids({ ...emptyFacts, upcomingCount: 2 })).not.toContain("no_football_yet");
   });
 });
 
@@ -204,13 +272,18 @@ describe("selectQuickActions", () => {
     expect(selectQuickActions({ ...emptyFacts, aiConfigured: true }).map((a) => a.id)).toContain("ai");
   });
 
-  it("gives every action a hint drawn from a real fact", () => {
+  it("carries a counted number or nothing, never a sentence of explanation", () => {
     const actions = selectQuickActions({
       ...emptyFacts,
       predictions: { openCount: 1, nextLockAt: inHours(5), currentStreak: 0 },
       unreadNotificationCount: 2,
     });
-    expect(actions.find((a) => a.id === "predictions")?.hint).toBe("1 still open");
-    expect(actions.find((a) => a.id === "notifications")?.hint).toBe("2 unread");
+    expect(actions.find((a) => a.id === "predictions")?.hint).toBe("1");
+    expect(actions.find((a) => a.id === "notifications")?.hint).toBe("2");
+    // Everything else offers a destination and no number — a pill reading
+    // "Open the feed · What people are saying" is prose wearing a control.
+    for (const action of actions) {
+      if (action.hint !== null) expect(action.hint).toMatch(/^\d+$/);
+    }
   });
 });
