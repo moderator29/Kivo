@@ -1,5 +1,22 @@
 -- =============================================================================
--- 0095 — Fantasy scoring that can be audited, and that refuses to guess
+-- 0099 — Fantasy scoring that can be audited, and that refuses to guess
+-- =============================================================================
+-- FILE RENUMBERED. Applied to the live project as `0095_fantasy_auditable_
+-- scoring` at version `20260819054127`, and NOT re-run — only the file moved.
+-- Renaming a migration that has already executed is how one gets applied twice,
+-- so the applied name and version are recorded here instead.
+--
+-- It moved because the security sweep applied `0095_rls_write_boundaries` at
+-- `20260819053800`, three minutes earlier, and two files sharing a `0095`
+-- prefix leaves the next reader unable to tell which ran first from the
+-- directory alone. The database was never ambiguous — the names differ — but
+-- the directory was.
+--
+-- Real execution order, for anyone reconstructing it: this ran AFTER
+-- `0095_rls_write_boundaries` and BEFORE `0096_fantasy_team_join_boundary`
+-- (`20260819054540`). No free number expresses that, so `0099` means "the next
+-- one after everything that had landed", not "the last one to run", and this
+-- note carries the precision the number cannot.
 -- =============================================================================
 -- The founding directive's sentence about fantasy is the one this migration
 -- exists for: **every awarded point must trace to verified match/player data,
