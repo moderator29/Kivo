@@ -69,11 +69,19 @@ async function upsertCompetition(
   provider: string,
   competitionProviderId: string,
   name: string,
+  country: string | null,
   knownMappings: Map<string, string>,
 ): Promise<string> {
   const existing = knownMappings.get(competitionProviderId) ?? null;
   if (existing) {
-    const { error } = await supabase.from("competitions").update({ name }).eq("id", existing);
+    const update: Database["public"]["Tables"]["competitions"]["Update"] = { name };
+    // Never clobber a country already on file with a null. The provider omits
+    // the field on some responses, and a competition whose country KIVO learned
+    // from `/leagues` (or that an admin corrected by hand) must not lose it
+    // because one fixture payload left it out — same rule sync-squads.ts
+    // applies to every optional player field.
+    if (country !== null) update.country = country;
+    const { error } = await supabase.from("competitions").update(update).eq("id", existing);
     if (error) throw error;
     return existing;
   }
@@ -84,6 +92,17 @@ async function upsertCompetition(
     p_name: name,
   });
   if (error || !data) throw error ?? new Error("upsert_competition_with_mapping returned no id");
+
+  // A second write rather than a parameter on the RPC. The RPC is shared with
+  // other callers and changing its signature means dropping and recreating a
+  // SECURITY DEFINER function that several agents' code calls; the atomicity it
+  // exists for is the competition/mapping pair, which is unaffected. If this
+  // update fails the competition simply keeps a null country and the next sync
+  // fills it — a strictly better failure than an orphaned competition row.
+  if (country !== null) {
+    const { error: countryError } = await supabase.from("competitions").update({ country }).eq("id", data);
+    if (countryError) throw countryError;
+  }
 
   knownMappings.set(competitionProviderId, data);
   return data;
@@ -782,15 +801,19 @@ export async function syncTodayFixtures(
       throw err;
     }
 
-    // RECOMMENDATIONS.md item 28: scope the whole run to configured
-    // competitions, if any are configured — see competitions-config.ts for why
-    // this filters the already-fetched response rather than issuing one
-    // provider request per league, and why "unset" means "no filter" rather
-    // than a KIVO-invented default league list. Filtering here, before any of
-    // the mapping/upsert work below, is what keeps competitions/teams/venues
-    // outside the configured set from ever being written at all — not just
-    // hidden from the UI afterwards.
-    const syncedCompetitionIds = getSyncedCompetitionProviderIds();
+    // Scope the whole run to the effective competition allowlist — see
+    // competitions-config.ts for what that list is, where its default came
+    // from, and how to override or disable it. Filtering the already-fetched
+    // response rather than issuing one provider request per league is
+    // deliberate and costs zero extra quota either way; filtering HERE, before
+    // any of the mapping/upsert work below, is what keeps competitions, teams
+    // and venues outside the scope from ever being written at all rather than
+    // merely hidden from the UI afterwards.
+    //
+    // The provider name is passed because the default list is API-Football's
+    // own numbering and means something else entirely under another provider's
+    // ids.
+    const syncedCompetitionIds = getSyncedCompetitionProviderIds(provider.name);
     const fixturesBeforeScoping = fixtures.length;
     if (syncedCompetitionIds) {
       fixtures = fixtures.filter((f) => syncedCompetitionIds.has(f.competitionProviderId));
@@ -798,7 +821,7 @@ export async function syncTodayFixtures(
     const scopedOutCount = fixturesBeforeScoping - fixtures.length;
     if (scopedOutCount > 0) {
       console.info(
-        `Football sync: scoped out ${scopedOutCount}/${fixturesBeforeScoping} fixtures outside FOOTBALL_SYNC_COMPETITION_IDS`,
+        `Football sync: scoped out ${scopedOutCount}/${fixturesBeforeScoping} fixtures outside the competition allowlist (see FOOTBALL_SYNC_COMPETITION_IDS)`,
       );
     }
 
@@ -915,6 +938,7 @@ export async function syncTodayFixtures(
           provider.name,
           fixture.competitionProviderId,
           fixture.competitionName,
+          fixture.competitionCountry,
           competitionMappings,
         );
         const seasonId = await resolveSeason(competitionId, fixture.season);
@@ -1065,7 +1089,16 @@ export async function syncTodayFixtures(
       ? "Stopped early: this run's sync lock was taken over by another run after its lease expired."
       : errors.length > 0
         ? errors.slice(0, 20).join("; ")
-        : null;
+        : // A run the allowlist emptied is NOT a quiet day with no football, and
+          // reporting it as one is the exact confusion the founder already hit
+          // once ("Stop reporting a refused provider request as a quiet day with
+          // no football"). The provider had matches; KIVO chose not to write
+          // them. That is a configuration fact and it belongs on the run, or
+          // the only visible symptom is a sync that succeeds and writes
+          // nothing, forever, with no way to tell why.
+          !hadFixtures && scopedOutCount > 0
+          ? `The competition allowlist scoped out all ${fixturesBeforeScoping} of the provider's fixtures for this day — none of them were in the configured competitions. This is a scope decision, not an absence of football. See FOOTBALL_SYNC_COMPETITION_IDS.`
+          : null;
 
     await finalizeRun({
       status: dbStatus,

@@ -82,7 +82,7 @@ Set in Vercel, then **trigger a fresh deployment**. Saving a variable is not eno
 | `THE_SPORTS_DB_API_KEY` | No | Only with `FOOTBALL_DATA_PROVIDER=thesportsdb`. |
 | `FOOTBALL_DATA_PROVIDER` | No | Defaults to API-Football. |
 | `FOOTBALL_LIVE_POLLING_ENABLED` | No | Arms the per-minute live worker. |
-| `FOOTBALL_SYNC_COMPETITION_IDS` | No | Bounds what the daily sync pulls. |
+| `FOOTBALL_SYNC_COMPETITION_IDS` | No | Bounds what the daily sync pulls. Unset uses KIVO's shipped default list; `all` disables the filter. |
 | `CRON_SECRET` | For cron | Bearer token both cron routes require. |
 | `NEXT_PUBLIC_APP_URL` | No | Absolute URLs in emails and share cards. |
 | `AI_MODEL` | No | Overrides the default model id. |

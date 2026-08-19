@@ -22,6 +22,7 @@ import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { YourPredictionCard } from "@/components/matches/your-prediction-card";
 import { PREDICTION_PICK_COLUMNS, pickFromRow } from "@/lib/predictions";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { competitionName } from "@/lib/football/competition-label";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { buildMatchShareCardData } from "@/lib/football/match-share-card";
 import { getViewerFantasyRosterBySeasons, type ViewerFantasyRosterMap } from "@/lib/football/fantasy-lineup-crossref";
@@ -29,6 +30,7 @@ import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { absoluteUrl } from "@/lib/site-url";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { getRoomVerdictExtras } from "@/lib/football/room-verdict";
+import { matchRoomWindow } from "@/lib/match-room-window";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -376,7 +378,7 @@ export default async function MatchCentrePage({
 
         <div className="flex items-center justify-between text-xs text-foreground-subtle">
           <span>
-            {fixture.competition?.short_name ?? fixture.competition?.name ?? "Unknown competition"}
+            {competitionName(fixture.competition, "short")}
             {/* KIVO_NEXT_GEN KN-84. `matchday` has existed as a column since
                 migration 0001 and, until now, nothing ever wrote to it. It is
                 rendered only when the provider actually reported a numbered
@@ -549,6 +551,11 @@ export default async function MatchCentrePage({
             // KN-53: all already fetched above for this page's own header —
             // passed down so the collapsed-tab Overview can be worth opening
             // rather than four copies of "nothing synced yet".
+            // The Room opens when the fixture is created and closes 24 hours
+            // after full time (src/lib/match-room-window.ts). Decided here, on
+            // the server, so the client's first render cannot disagree with the
+            // HTML — the client then keeps it current off its own clock.
+            roomWindow={matchRoomWindow(fixture.kickoff_at, fixture.status)}
             preMatch={{
               kickoffAt: fixture.kickoff_at,
               status: fixture.status,

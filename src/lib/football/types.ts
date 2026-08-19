@@ -20,6 +20,38 @@ export interface NormalizedTeam {
   crestUrl: string | null;
 }
 
+/**
+ * A club as the provider's own club-listing endpoint describes it, rather than
+ * as a fixture mentions it.
+ *
+ * `NormalizedTeam` above is what a fixture carries: an id, a name and a crest,
+ * because that is all `/fixtures` publishes about the two sides. This is the
+ * richer shape that `/teams?league=` returns, and it is a separate type rather
+ * than extra nullable fields on `NormalizedTeam` for a reason worth stating:
+ * every one of the dozen places that builds a `NormalizedTeam` from a fixture,
+ * a lineup or a standings row genuinely does not know a club's country or
+ * founding year, and giving them a field they can only ever fill with null
+ * invites somebody to read that null as "the provider has no country for this
+ * club" when it actually means "this endpoint was never asked".
+ */
+export interface NormalizedTeamProfile extends NormalizedTeam {
+  /** The country the provider files this club under. Null when the provider
+   * reports none — never inferred from the league it was fetched with, because
+   * a league's country and a club's country genuinely differ (Monaco in Ligue
+   * 1, Cardiff in the English pyramid, every UEFA competition). */
+  country: string | null;
+  /** Year founded, as the provider reports it. Null when absent — never
+   * estimated. */
+  founded: number | null;
+  /** The provider's own id for the club's home venue, and its name. Null when
+   * the provider reports no venue for this club. Kept so the catalogue sync can
+   * reuse the same venue mapping the fixture sync writes, instead of creating a
+   * second, unmapped venue row for the same ground. */
+  venueProviderId: string | null;
+  venueName: string | null;
+  venueCity: string | null;
+}
+
 export interface NormalizedFixture {
   provider: string;
   providerId: string;
@@ -27,6 +59,14 @@ export interface NormalizedFixture {
    * dedupe competitions via provider_mappings instead of matching on name. */
   competitionProviderId: string;
   competitionName: string;
+  /** The country the provider files this competition under, exactly as it
+   * reports it — API-Football sends `league.country` on every `/fixtures` item
+   * and KIVO used to drop it, which is why every competition row in the live
+   * database has a null country and every league renders as "International".
+   * Null is still a real answer: continental and international competitions are
+   * filed under "World", and a provider that omits the field entirely leaves
+   * this null rather than having one invented for it. */
+  competitionCountry: string | null;
   season: number;
   kickoffAt: string;
   status: FixtureStatus;
@@ -314,6 +354,18 @@ export interface NormalizedFixturePlayerStatistics {
 export interface NormalizedCompetitionCoverage {
   competitionProviderId: string;
   competitionName: string;
+  /** The provider's country for this competition. Present on `/leagues`, which
+   * makes the one-request coverage sync the cheapest place KIVO can learn the
+   * country of every competition the plan can see — including ones it has never
+   * synced a fixture for. Null when the provider omits it. */
+  competitionCountry: string | null;
+  /** The provider's own logo/badge for the competition, when it publishes one.
+   * Provider-hosted, never a KIVO-hosted placeholder. */
+  competitionLogoUrl: string | null;
+  /** What the provider calls this competition's shape — API-Football reports
+   * "League" or "Cup". Stored verbatim, never derived from the name. Null when
+   * the provider omits it. */
+  competitionType: string | null;
   /** The provider's own season identifier — API-Football uses the starting
    * year as an integer (2025 for the 2025/26 season). */
   season: number;
@@ -449,6 +501,22 @@ export interface FootballDataProvider {
   getLiveFixtures(): Promise<NormalizedFixture[]>;
   getFixtureById(providerId: string): Promise<NormalizedFixture | null>;
   getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]>;
+  /**
+   * Every club in one competition for one season, in ONE request.
+   *
+   * The endpoint that makes a club directory possible at all on a hundred-
+   * requests-a-day tier, and the answer to the pipeline's original defect: for
+   * as long as clubs only entered KIVO through `syncTodayFixtures`, a club that
+   * did not play today did not exist. `/teams?league=X&season=Y` returns the
+   * whole league — twenty clubs, with crests — for the same one request a
+   * single day's fixtures costs.
+   *
+   * Returns the provider's list verbatim. An empty array means the provider
+   * published no clubs for that league and season, which is a real answer for a
+   * season that has not been set up yet, and must never be reported as a
+   * failure or filled in from a previous season.
+   */
+  getTeamsByLeague(leagueProviderId: string, season: number): Promise<NormalizedTeamProfile[]>;
   /** Full current squad for a team. See provider doc comments for exactly which
    * fields the free tier returns — notably: no market value, ever (see AGENTS.md). */
   getSquad(teamProviderId: string): Promise<NormalizedPlayer[]>;

@@ -26,10 +26,16 @@ type ServiceClient = SupabaseClient<Database>;
  * independent allowance, so the daily baseline's slice is unreachable by the
  * live worker **by construction** rather than by politeness.
  *
- * Admin-triggered syncs consume nothing and have no bucket. The headroom left
- * outside every allowance below is what guarantees a human debugging with
+ * Most admin-triggered syncs consume nothing and have no bucket. The headroom
+ * left outside every allowance below is what guarantees a human debugging with
  * "Sync now" always has room — and the only way to guarantee that is for
  * automation to be structurally unable to reach it.
+ *
+ * The one exception is `catalogue` (migration 0107), which bounds an
+ * admin-triggered path. It is an exception because it is the only button whose
+ * cost is one request PER CLUB rather than one request, and whose whole purpose
+ * is to be pressed again tomorrow — so "a human is watching" stops being a
+ * bound. See PROVIDER_REQUEST_BUDGETS below.
  */
 
 /**
@@ -46,17 +52,28 @@ type ServiceClient = SupabaseClient<Database>;
  */
 export const REQUEST_BUDGET_WINDOW_SECONDS = 86_400;
 
-export type RequestBucket = "live" | "auto" | "daily";
+export type RequestBucket = "live" | "auto" | "daily" | "catalogue";
 
 /**
  * The allowances, against API-Football's free tier of ~100 requests/day
  * (`docs/API_FOOTBALL.md`).
  *
- *   live   55  the once-a-minute worker, paced across the day's live football
- *   auto   20  on-demand freshness on page view (`auto-sync.ts`)
- *   daily   8  the baseline: 1 fixtures call + up to 5 standings + headroom
- *              ────
- *              83 budgeted, leaving ~17 that NO automated path can reach.
+ *   live       55  the once-a-minute worker, paced across the day's live football
+ *   auto       20  on-demand freshness on page view (`auto-sync.ts`)
+ *   daily       8  the baseline: 1 fixtures call + up to 5 standings + headroom
+ *   catalogue  12  the club directory and squad backfill (migration 0107)
+ *                  ────
+ *                  95 budgeted, leaving ~5 that NO bucket can reach.
+ *
+ * `catalogue` is the odd one out and migration 0107 explains it at length. The
+ * short version: every other bucket here bounds AUTOMATION, and admin actions
+ * were deliberately left unbudgeted because a human pressing a one-request
+ * button is supervised. A squad backfill is not one request — it is one per
+ * club, pressed repeatedly on purpose — so leaving it outside every allowance
+ * would let a supervised human empty the day's quota and take tomorrow's
+ * fixture sync with it. It is also the only bucket that goes quiet: the others
+ * spend for as long as KIVO runs, while the catalogue has a finite amount of
+ * work and stops asking once the directory is built.
  *
  * `auto` deserves its own note. `auto-sync.ts` bounds itself with a three-minute
  * cooldown between attempts and nothing else, which permits up to 480 requests
@@ -82,6 +99,7 @@ export const PROVIDER_REQUEST_BUDGETS: Record<RequestBucket, number> = {
   live: 55,
   auto: 20,
   daily: 8,
+  catalogue: 12,
 };
 
 export type BudgetDecision = {
@@ -194,7 +212,7 @@ export async function readBudgetUsage(supabase: ServiceClient, provider: string)
     .gte("spent_at", since)
     .order("spent_at", { ascending: true });
 
-  const buckets: RequestBucket[] = ["live", "auto", "daily"];
+  const buckets: RequestBucket[] = ["live", "auto", "daily", "catalogue"];
 
   if (error) {
     logError("football.requestBudget.read", error, { provider });
@@ -222,9 +240,54 @@ export async function readBudgetUsage(supabase: ServiceClient, provider: string)
   });
 }
 
-/** Total automated allowance, for the one line ENVIRONMENT.md needs to give the
- * founder a real number rather than a reassurance. */
+/** Total allowance across every bucket, for the one line ENVIRONMENT.md needs
+ * to give the founder a real number rather than a reassurance.
+ *
+ * Note this is now the total of FOUR buckets, three automated and one
+ * (`catalogue`) admin-triggered. They are summed here because the number's job
+ * is "how much of the tier is spoken for", which is a single scope — not
+ * because automated and manual spending are the same thing. Anywhere the two
+ * need distinguishing, read the buckets individually. */
 export const TOTAL_AUTOMATED_REQUEST_BUDGET = Object.values(PROVIDER_REQUEST_BUDGETS).reduce((a, b) => a + b, 0);
+
+/**
+ * When this bucket last spent anything, or null if it has not inside the
+ * window.
+ *
+ * Exists for the catalogue backfill's minute-rate guard. API-Football's free
+ * tier caps requests per MINUTE (10) as well as per day, and the daily ledger
+ * cannot see that: twelve requests spread over a day and twelve fired in ninety
+ * seconds are identical to it, and only one of them gets a 429. The backfill
+ * therefore checks this before a batch and refuses if the previous batch is
+ * too recent — a refusal that costs nothing, rather than a burst that costs
+ * requests and returns errors.
+ */
+export async function readLastSpendAt(
+  supabase: ServiceClient,
+  provider: string,
+  bucket: RequestBucket,
+): Promise<string | null> {
+  const since = new Date(Date.now() - REQUEST_BUDGET_WINDOW_SECONDS * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("provider_request_spend")
+    .select("spent_at")
+    .eq("provider", provider)
+    .eq("bucket", bucket)
+    .gte("spent_at", since)
+    .order("spent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    logError("football.requestBudget.readLastSpend", error, { provider, bucket });
+    // An unreadable ledger reports "spent just now", which makes the caller
+    // wait. Same fail-closed direction as reserveProviderRequests: not knowing
+    // whether it is safe to spend and knowing it is not must lead to the same
+    // decision.
+    return new Date().toISOString();
+  }
+  return data?.spent_at ?? null;
+}
 
 /**
  * Bounded retention sweep for the ledger, run by the scheduled worker's janitor

@@ -23,6 +23,7 @@ import { LocalDateTime } from "@/components/ui/relative-time";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
 import { TeamMergePanel } from "@/components/admin/team-merge-panel";
+import { ClubCataloguePanel } from "@/components/admin/club-catalogue-panel";
 
 type SyncStatus = DatabaseType["public"]["Enums"]["sync_status"];
 
@@ -693,6 +694,14 @@ export default async function DataHealthPage() {
           </div>
         )}
       </div>
+
+      {/* Placed above the automation panels rather than below them, because it
+          answers the question that comes first: what is KIVO configured to hold
+          at all. Everything below reports how well the pipeline ran; this
+          reports what the pipeline was pointed at, and a pipeline pointed at
+          one day's fixtures runs perfectly while producing a database of
+          whoever happened to kick off. */}
+      <ClubCataloguePanel />
 
       <AutomationStatusPanel />
 

@@ -25,6 +25,7 @@ import { buildFixtureHeatmaps, hasFixtureHeatmapContent } from "@/lib/football/h
 import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
 import { isLiveStatus, type FixtureStatus } from "@/lib/football/fixture-status";
+import type { MatchRoomWindow } from "@/lib/match-room-window";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { useRealtimeFixtureEvents } from "@/hooks/use-realtime-fixture-events";
 import { resolveEventSide, resolveTabFromSlug, type EventSide } from "@/lib/football/match-timeline";
@@ -149,6 +150,10 @@ type MatchCentreTabsProps = {
   /** KN-53: everything the Overview tab needs to be worth opening on a fixture
    * that has no synced detail yet. All of it is already fetched by
    * matches/[id]/page.tsx for the header it renders above these tabs. */
+  /** When this fixture's Match Room accepts new posts, as the server decided
+   * at render time. Computed by matches/[id]/page.tsx from the same kickoff
+   * and status in `preMatch`; see src/lib/match-room-window.ts. */
+  roomWindow: MatchRoomWindow;
   preMatch: {
     kickoffAt: string;
     status: FixtureStatus;
@@ -1092,6 +1097,7 @@ function MatchCentreTabsInner({
   syncDetailsAction,
   detailsLastSyncedAt,
   preMatch,
+  roomWindow,
   headToHead,
   competitionCoverage,
 }: MatchCentreTabsProps) {
@@ -1299,6 +1305,12 @@ function MatchCentreTabsInner({
               homeTeamName={homeTeamName}
               awayTeamName={awayTeamName}
               isFinished={preMatch.status === "finished"}
+              // The Room opens the moment the fixture exists and closes a day
+              // after full time. Derived on the server so the hydration render
+              // cannot disagree with it, then kept live in the browser.
+              kickoffAt={preMatch.kickoffAt}
+              status={preMatch.status}
+              serverWindow={roomWindow}
             />
         )}
       </motion.div>
