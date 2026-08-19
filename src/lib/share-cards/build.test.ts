@@ -267,3 +267,10 @@ describe("ordinal", () => {
     ]);
   });
 });
+
+describe("stat emphasis", () => {
+  it("never accents a zero, because the accent means 'this is the number'", () => {
+    expect(stat("Goals", 0, true)?.emphasis).toBe(false);
+    expect(stat("Goals", 17, true)?.emphasis).toBe(true);
+  });
+});

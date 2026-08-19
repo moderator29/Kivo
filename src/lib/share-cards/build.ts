@@ -74,7 +74,16 @@ function team(row: { name: string; short_name: string | null; crest_url: string 
 export function stat(label: string, value: number | string | null | undefined, emphasis = false): ShareStat | null {
   if (value == null) return null;
   if (typeof value === "string" && value.trim() === "") return null;
-  return { label, value: typeof value === "number" ? value.toLocaleString(DISPLAY_LOCALE) : value, emphasis };
+  return {
+    label,
+    value: typeof value === "number" ? value.toLocaleString(DISPLAY_LOCALE) : value,
+    // A real zero still appears — that is the whole omit-versus-zero rule —
+    // but it never gets the accent colour. The accent means "this is the
+    // number the card is about", and pointing it at a nought reads as
+    // celebrating nothing. Seen for real on a seeded player card: "0" in
+    // cyan, next to a plain "0".
+    emphasis: emphasis && value !== 0,
+  };
 }
 
 export function compactStats(stats: (ShareStat | null)[]): ShareStat[] {

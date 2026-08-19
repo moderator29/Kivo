@@ -16,6 +16,7 @@ import {
   buildPredictionCard,
   buildProfileAchievementCard,
   buildTransferCard,
+  type LiveScoreEventRow,
   type LiveScoreFixtureRow,
   type PlayerRow,
   type PlayerTotals,
@@ -134,13 +135,40 @@ async function loadLiveScore(supabase: Client, fixtureId: string): Promise<Share
   const fixture = await loadFixture(supabase, fixtureId);
   if (!fixture) return null;
 
+  // `fixture_events` has no `player_name` column — the scorer is a real FK to
+  // `players`, resolved here the same way getMatchShareCardData does it. This
+  // was selecting a column that does not exist, which PostgREST answers with
+  // an error rather than a row, so every score card rendered with an empty
+  // scorers panel and no sign anything had failed. Found by rendering against
+  // a seeded database; no unit test over a pure builder could have caught it.
   const { data: events } = await supabase
     .from("fixture_events")
-    .select("event_type, minute, added_time, team_id, player_name")
+    .select(
+      `event_type, minute, added_time, team_id,
+       player:players!fixture_events_player_id_fkey(full_name, known_as)`,
+    )
     .eq("fixture_id", fixtureId)
+    .in("event_type", ["goal", "penalty_goal", "own_goal"])
     .order("minute", { ascending: true });
 
-  return buildLiveScoreCard(fixture, (events ?? []) as never);
+  const scorerRows: LiveScoreEventRow[] = (
+    (events ?? []) as unknown as {
+      event_type: string;
+      minute: number;
+      added_time: number | null;
+      team_id: string;
+      player: { full_name: string; known_as: string | null } | null;
+    }[]
+  ).map((event) => ({
+    event_type: event.event_type,
+    minute: event.minute,
+    added_time: event.added_time,
+    team_id: event.team_id,
+    // Known-as first: a card has room for "Hakim", not for a full legal name.
+    player_name: event.player?.known_as ?? event.player?.full_name ?? null,
+  }));
+
+  return buildLiveScoreCard(fixture, scorerRows);
 }
 
 async function loadPlayerPerformance(supabase: Client, playerId: string): Promise<ShareCardData | null> {
