@@ -645,8 +645,28 @@ async function dispatchStatusNotifications(
  */
 export async function syncTodayFixtures(
   triggerSource: SyncTriggerSource = "manual",
-  options?: { targetDate?: string },
+  options?: {
+    targetDate?: string;
+    /**
+     * Which endpoint supplies this run's fixtures.
+     *
+     *   "date" (default) — `/fixtures?date=`, a whole day's fixtures.
+     *   "live"           — `/fixtures?live=all`, only what is in play.
+     *
+     * Both cost one request and land in the identical write path, which is the
+     * point: the live worker is a new CALLER, not a new sync. Everything below
+     * — the lease, the batched mappings, the score-regression check, the
+     * notification fan-out, Realtime distribution — is already proven and is
+     * shared unchanged.
+     *
+     * Two things differ, and both are handled explicitly rather than left to
+     * behave-as-if: `targetDate` is meaningless for a live run, and the
+     * absence check must not run (see where it is skipped below).
+     */
+    source?: "date" | "live";
+  },
 ): Promise<SyncResult> {
+  const source = options?.source ?? "date";
   const targetDate = options?.targetDate ?? todayIsoDate();
   if (!isValidSyncDate(targetDate)) {
     return { status: "failed", recordsProcessed: 0, error: `Invalid sync date "${targetDate}". Expected YYYY-MM-DD.` };
@@ -756,9 +776,9 @@ export async function syncTodayFixtures(
   try {
     let fixtures: NormalizedFixture[];
     try {
-      fixtures = await provider.getFixturesByDate(targetDate);
+      fixtures = source === "live" ? await provider.getLiveFixtures() : await provider.getFixturesByDate(targetDate);
     } catch (err) {
-      logError("football.sync.getfixturesbydate", err);
+      logError(source === "live" ? "football.sync.getlivefixtures" : "football.sync.getfixturesbydate", err);
       throw err;
     }
 
@@ -997,7 +1017,21 @@ export async function syncTodayFixtures(
      * That is arguably correct — KIVO really has stopped receiving updates for
      * them — and it is a flag for a human, not an automatic change.
      */
-    if (processed > 0 && !lostLease) {
+    /**
+     * A live run NEVER flags absences, and this is not a tuning decision.
+     *
+     * `/fixtures?live=all` returns only what is in play. Absence from it means
+     * "not currently in play" — which is true of almost every fixture on any
+     * given day, including every one that has not kicked off and every one that
+     * finished an hour ago. Running the absence check against that response
+     * would flag the entire day's football as missing from the provider, on
+     * every single live poll. The check is sound; the premise it depends on
+     * (the run asked about all of these fixtures) is only true of a dated run.
+     */
+    if (source === "live") {
+      // Nothing to do. Stated as a branch rather than folded into the condition
+      // below so the reason is readable at the point of the decision.
+    } else if (processed > 0 && !lostLease) {
       // Scoped to the day this run actually asked for, not to "today" — a
       // backfill of last Saturday must not flag today's fixtures as absent
       // just because the provider never mentioned them in a query about

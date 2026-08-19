@@ -99,7 +99,7 @@ Supabase's built-in email sender is intended for development and is heavily rate
 | `THE_SPORTS_DB_API_KEY` | TheSportsDB v1 API key, embedded in the request path (not a header) by `src/lib/football/providers/thesportsdb.ts`. Read only when `FOOTBALL_DATA_PROVIDER=thesportsdb` | Optional | [thesportsdb.com/free_sports_api](https://www.thesportsdb.com/free_sports_api) (Patreon key at [patreon.com/thesportsdb](https://www.patreon.com/thesportsdb) for the v2/premium tier — not used here) — see `docs/API_FOOTBALL.md` and `docs/PROVIDER_ABSTRACTION.md` for real free-tier coverage/limits |
 | `FOOTBALL_DATA_PROVIDER` | Selects which provider `getFootballDataProvider()` returns: `api-football` (default) or `thesportsdb`. Read in `src/lib/football/index.ts` | Optional, default `api-football` | Any other/unrecognized value falls back to `api-football` rather than failing the build |
 | `FOOTBALL_IMAGE_HOSTS` | Extra image CDN hostnames to allow, comma-separated bare hostnames (e.g. `r2.thesportsdb.com`). Read at build time in `next.config.ts` via `src/lib/football/image-hosts.ts`, which feeds **both** `images.remotePatterns` and the CSP `img-src` directive from one list so they cannot drift apart. | Optional | **Set this whenever you set `FOOTBALL_DATA_PROVIDER=thesportsdb`.** API-Football's host (`media.api-sports.io`) is built in and verified. TheSportsDB's image host is not, deliberately: thesportsdb.com is unreachable from every sandbox this repo has been built in, so the hostname its badge URLs resolve to has never been read off a real response, and hardcoding a guess would be an unverified claim (and a wrong one degrades to a broken crest on every row). Read the host off one real `strBadge`/`strTeamBadge` URL and set it here. Scheme, port, path and wildcard entries are rejected with a build-log warning and ignored — this value lands verbatim in a security header. **`next.config.ts` is read at build time, so a change needs a fresh deployment, not just a saved env var.** |
-| `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts` — must stay `false`/unset until real API quota exists | Optional, default off | Never flip to `true` on the free tier |
+| `FOOTBALL_LIVE_POLLING_ENABLED` | Feature flag, read in `src/lib/football/index.ts`. Gates the once-a-minute worker | Optional, **default off** | **Turning it on costs at most 55 provider requests in any 24 hours, not 1,440.** See "What turning on live polling actually costs" below before deciding |
 | `FOOTBALL_SYNC_COMPETITION_IDS` | RECOMMENDATIONS.md item 28: comma-separated **provider-native** competition/league ids (API-Football's numeric league ids, or TheSportsDB's `idLeague` when that provider is selected) to scope `syncTodayFixtures` to. Read in `src/lib/football/competitions-config.ts` | Optional | Unset = no filter, every league the provider reports for the day still syncs (unchanged from before this item). Filters the already-fetched response rather than issuing one provider request per league — costs zero extra quota. |
 
 ## How football data arrives — three layers, only one of them is live scores
@@ -111,6 +111,46 @@ Founder instruction, 2026-08-18: "Make it automatic — no need for triggering n
 | **On-demand** (`src/lib/football/auto-sync.ts`) | When somebody loads `/home`, `/matches` or `/live` and the data is stale | **Nothing** — already live | Everything, eventually. The visitor who triggers it sees the old data; the next one sees the new data. A quiet site refreshes nothing |
 | **Daily baseline** (`/api/cron/sync-daily`) | Once a day, 05:00 UTC | **Paste six lines into `vercel.json`** — see immediately below. The route is built and deployed; only the schedule is missing | Today's fixtures and the clubs/competitions they create, plus five league tables a day |
 | **Once-a-minute worker** (`/api/cron/sync-live`) | Every minute | Two Vault secrets **and** `FOOTBALL_LIVE_POLLING_ENABLED=true` (below) | Live scores. Only this row is live scores |
+
+### FOUNDER: what turning on live polling actually costs
+
+Short answer: **at most 55 provider requests in any rolling 24 hours, and on most days far fewer.** Not 1,440. You can weigh that against the free tier's ~100/day with a real number rather than a shrug.
+
+The worker fires every minute, and firing is not spending. It spends only when all of these are true, and the last one is the interesting part:
+
+1. `FOOTBALL_LIVE_POLLING_ENABLED=true`, and a provider key is configured.
+2. Something is genuinely in play, or kicks off within 10 minutes. **No live football means zero requests** — which is most hours of most weeks.
+3. No other sync currently holds the fixtures lease.
+4. It is time yet, by a pace the worker derives rather than one anybody configured.
+
+That fourth point is what makes 55 enough. The worker divides its remaining allowance by the minutes of live football still to cover, so the budget is spread across the day's football instead of across the clock:
+
+| Situation | Roughly one refresh every |
+|---|---|
+| A single 3-hour matchday | 3.3 minutes |
+| A heavy 8-hour Saturday across leagues | 8.7 minutes |
+| Nothing in play | never — zero requests |
+
+It tightens to half that pace in the minutes when a scoreline actually moves (the opening exchanges, the approach to half-time, the last ten and added time), and widens by half again when nothing has changed since the last look. Tightening stops once 75% of the allowance is gone, so a frantic early kick-off cannot eat the evening's football.
+
+**The allowance is enforced, not documented.** Every automated request is reserved through an atomic database consume (`consume_provider_requests`, migration 0091) whose ceiling lives in the database, not in the calling code. If the reservation is refused, no provider call is made at all. Three separate allowances, and none can borrow from another:
+
+| Bucket | Allowance / 24h | What it is |
+|---|---|---|
+| `live` | 55 | The once-a-minute worker |
+| `auto` | 20 | On-demand freshness when somebody opens a football page on stale data |
+| `daily` | 8 | The daily baseline: fixtures plus a few league tables |
+| **unbudgeted** | **~17** | **Yours.** Admin "Sync now" spends from here, and no automated path can reach it |
+
+The window is a rolling 24 hours rather than a calendar day, deliberately: KIVO cannot establish when API-Football's own counter resets, and a trailing cap of 55 means at most 55 in *any* 24-hour period, including whatever day boundary the provider actually uses.
+
+**What you can see.** Admin → Data Health has a "Live worker" panel showing spend per bucket over the last 24 hours, the provider's own reported remaining count, when the worker last ran, and — in plain English — why it is idle right now ("nothing is in play", "next refresh in 3.2 minutes", "the allowance is used up").
+
+**What happens when the allowance runs out.** Refreshes pause and `/live` says so: "Automatic refreshes have paused — today's update allowance is used up, so these scores may be behind the real ones." A stale score that says it might be stale is honest; a frozen one presented as live is not.
+
+**One thing that is NOT gated behind this flag, and is spending quota today.** On-demand freshness (`auto`, the table above) fires from ordinary page views, right now, with this flag off. Before this pass it had a three-minute cooldown and no daily limit at all, which permitted up to 480 requests a day — nearly five times the whole tier. It now has the 20-request allowance above. Nothing had actually hit the old ceiling because nothing has driven that much traffic yet, but it was a bound that did not exist rather than a bound that was generous.
+
+**What could not be tested.** This sandbox has no route to api-football.com, so the budget arithmetic, the pacing and the refusal behaviour are unit-tested (`live-sync-planner.test.ts`, `auto-sync.test.ts`) and the live behaviour is not. Nobody here has watched a real match refresh. The first real matchday is the real test, and the Data Health panel is what to watch it on.
 
 ### FOUNDER: the one paste that turns on the daily baseline
 

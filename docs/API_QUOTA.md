@@ -31,8 +31,44 @@ Because `TheSportsDbProvider.getQuotaRemaining()` always returns `null`, a sync 
 
 **No code changes were made to Data Health for this pass** — it already did this correctly before this pass started; this document exists so that fact is written down rather than re-discovered next time someone asks "does the admin see quota."
 
-## What doesn't exist
+## The enforced budget (2026-08-19, migration 0091)
 
-- No cross-provider or cross-day quota history chart — only "today's used" and "most recent reading" are computed, both from `sync_runs` rows, not a dedicated quota-tracking table.
-- No proactive quota-based throttling (e.g. refusing a sync when remaining quota drops below some threshold) — a 429 is handled gracefully after the fact (classified, surfaced, not retried), but nothing pre-emptively blocks a sync from being *attempted* when quota is low.
-- No alerting (email/push) on quota exhaustion — it's visible on Data Health only, and only when an admin looks.
+Everything above tracks what the provider *reports*. None of it bounded what KIVO *spends*, and that was the real gap:
+
+- the quota floor only refuses once the provider's own remaining count is at or below 10, and that count is `null` until some request has recorded one — so on a fresh day, the exact window in which a once-a-minute worker is most likely to run away is the window in which the guard is asleep;
+- `auto-sync.ts` bounded the *rate* (a 3-minute cooldown) and not the *total*, which permits up to 480 requests a day against a ~100/day tier.
+
+`provider_request_spend` plus `consume_provider_requests()` is the bound. Three properties matter:
+
+**Asking and spending are one statement.** A count-then-insert pair is not a budget: under READ COMMITTED two callers each take their own snapshot, both count under the limit, and both spend — and there is no row to lock, because what needs locking is an *absence* of rows. The consume takes a transaction-scoped advisory lock keyed on `(provider, bucket)`, exactly as migration 0066's `consume_rate_limit` does for the same reason. A refusal means the provider client is never constructed.
+
+**The ceiling is the database's, not the caller's.** An earlier draft passed the limit as an argument, which is check-then-act one level up — a caller that supplies its own ceiling decides its own ceiling. `provider_request_limit(bucket)` holds the real numbers, and an unrecognised bucket returns 0, so a typo fails closed. The TypeScript constants in `request-budget.ts` are a display mirror; a drift between them can make a Data Health figure look wrong but can never let a request through that the database would have refused.
+
+**Separate allowances, not one pool with a floor.** A reserve expressed as "stop when the shared pool gets low" fails the moment anything else spends unexpectedly.
+
+| Bucket | Allowance per rolling 24h | Consumer |
+|---|---|---|
+| `live` | 55 | The once-a-minute worker |
+| `auto` | 20 | On-demand page-view freshness |
+| `daily` | 8 | The daily baseline (fixtures + a few tables) |
+| — | ~17 unbudgeted | Admin "Sync now". No automated path can reach it |
+
+### Why a rolling window rather than a calendar day
+
+Because KIVO cannot establish when API-Football's daily counter resets. This build environment has no route to api-football.com, and the only quota signal the adapter reads is `x-ratelimit-requests-remaining`, which is a count and not a reset time.
+
+A trailing-window cap of N implies at most N spends in **any** 24-hour interval — including whatever calendar day the provider actually uses — so it is conservative under every possible reset time. Assuming UTC midnight and being wrong in the generous direction would mean the budget silently did not exist for part of every day.
+
+**This is the argument, and it is written here rather than only in the migration, because the obvious "simplification" is a per-day counter and the reason not to is not visible from the code.** A per-day counter is smaller and faster and wrong in a way nobody would notice until a matchday.
+
+### What the admin sees, and what a fan sees
+
+Admin → Data Health's "Live worker" panel shows spend per bucket over the trailing 24 hours, the provider's own last reported remaining count, the worker's last decision, and — in plain English — why it is idle. An unreadable ledger reports as **fully spent** rather than as empty, deliberately: "nothing has been spent" is the one wrong answer that would make somebody turn the flag on.
+
+On `/live`, when the live allowance is exhausted the page says so rather than presenting a frozen number as live. See `LiveFreshnessNote`.
+
+## What still doesn't exist
+
+- No cross-provider or cross-day quota history chart — the ledger holds 7 days and the panel shows a rolling 24 hours, but nothing plots it over time.
+- No alerting (email/push) on quota exhaustion — it's visible on Data Health and on `/live`, and only when somebody looks.
+- **No verification against a live provider.** Every number above is arithmetic over a modelled payload. This sandbox cannot reach api-football.com, so the budget arithmetic, the pacing and the refusal behaviour are unit-tested and the *live* behaviour is not. Nobody has watched a real match refresh through this.

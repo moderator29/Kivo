@@ -315,6 +315,20 @@ export class TheSportsDbProvider implements FootballDataProvider {
   }
 
   /**
+   * NOT SUPPORTED by this provider. TheSportsDB's catalog does contain a
+   * livescore endpoint, but none of the sources cross-referenced for this
+   * adapter (see this file's top sourcing note) confirmed its free-tier
+   * availability or its response shape, and a live feed is the worst possible
+   * place to ship a guessed normalizer: a mis-mapped score is not a missing
+   * feature, it is a wrong number presented as a live one. Throws.
+   */
+  async getLiveFixtures(): Promise<NormalizedFixture[]> {
+    throw new Error(
+      "TheSportsDbProvider.getLiveFixtures: not supported by this provider — TheSportsDB's livescore endpoint has no confirmed free-tier shape available to this build. Use ApiFootballProvider for live scores.",
+    );
+  }
+
+  /**
    * NOT SUPPORTED by this provider. Per-player, per-fixture statistics have no
    * confirmed endpoint in TheSportsDB's catalog (see this file's top sourcing
    * note) — and this adapter already throws for the per-TEAM fixture statistics

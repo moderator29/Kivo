@@ -47,6 +47,7 @@ function deps(overrides: {
   lockHeld?: boolean;
   quotaRemaining?: number | null;
   syncFixtures?: () => Promise<{ recordsProcessed: number }>;
+  reserveRequest?: () => Promise<boolean>;
 }) {
   const {
     lastSuccessMinutesAgo = null,
@@ -59,6 +60,9 @@ function deps(overrides: {
     providerName: "api-football",
     now: NOW,
     syncFixtures: overrides.syncFixtures ?? vi.fn(async () => ({ recordsProcessed: 7 })),
+    // The real implementation is the atomic ledger consume (migration 0091);
+    // injected here so the guard ladder stays testable without a database.
+    reserveRequest: overrides.reserveRequest ?? vi.fn(async () => true),
     supabase: fakeSupabase({
       // Order matters and mirrors the module: freshness, cooldown, then quota.
       // The lock lookup reads from its own table.
@@ -157,5 +161,33 @@ describe("runAutoSyncIfStale", () => {
     await expect(
       runAutoSyncIfStale("matches", { providerName: "api-football", supabase: null }),
     ).resolves.toEqual({ decision: "unavailable" });
+  });
+
+  it("refuses to spend once the on-demand allowance is gone, and never calls the provider", async () => {
+    const syncFixtures = vi.fn(async () => ({ recordsProcessed: 7 }));
+    const result = await runAutoSyncIfStale(
+      "matches",
+      deps({
+        lastSuccessMinutesAgo: 600,
+        lastAttemptMinutesAgo: 600,
+        syncFixtures,
+        reserveRequest: async () => false,
+      }),
+    );
+    expect(result).toEqual({ decision: "budget_exhausted" });
+    // The point of an enforced budget rather than a documented one: the
+    // provider call does not happen, rather than happening with a warning.
+    expect(syncFixtures).not.toHaveBeenCalled();
+  });
+
+  it("reserves exactly once, and only after every cheaper guard has passed", async () => {
+    const reserveRequest = vi.fn(async () => true);
+    // Fresh data: the freshness guard ends the run before anything is reserved,
+    // so a page view on fresh data can never consume allowance.
+    await runAutoSyncIfStale("matches", deps({ lastSuccessMinutesAgo: 1, reserveRequest }));
+    expect(reserveRequest).not.toHaveBeenCalled();
+
+    await runAutoSyncIfStale("matches", deps({ lastSuccessMinutesAgo: 600, lastAttemptMinutesAgo: 600, reserveRequest }));
+    expect(reserveRequest).toHaveBeenCalledTimes(1);
   });
 });

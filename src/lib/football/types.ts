@@ -436,6 +436,17 @@ export interface FootballDataProvider {
    * MockFootballProvider), same honesty convention as getQuotaRemaining. */
   getLastRawResponseSample(): unknown | null;
   getFixturesByDate(date: string): Promise<NormalizedFixture[]>;
+  /**
+   * Every fixture in play right now, in one request.
+   *
+   * The shape that makes a live worker affordable: one call refreshes every
+   * live match at once rather than one call per match. Returns ONLY in-play
+   * matches, so a fixture that has just gone final will be absent — a caller
+   * that needs final states must reconcile separately rather than assume
+   * absence means nothing changed. An empty array is a real answer and the
+   * common one: most of most weeks, nothing is in play.
+   */
+  getLiveFixtures(): Promise<NormalizedFixture[]>;
   getFixtureById(providerId: string): Promise<NormalizedFixture | null>;
   getStandings(leagueProviderId: string, season: number): Promise<NormalizedStandingRow[]>;
   /** Full current squad for a team. See provider doc comments for exactly which

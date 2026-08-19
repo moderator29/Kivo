@@ -539,6 +539,19 @@ export class MockFootballProvider implements FootballDataProvider {
     return MOCK_FIXTURES;
   }
 
+  /**
+   * Empty, always — and that is the honest mock, not a gap.
+   *
+   * The mock fixture is `scheduled`, so nothing is in play, so the live feed
+   * returns nothing. Returning a fabricated in-play match here would let a
+   * developer build and "verify" a live surface against a match that does not
+   * exist, which is exactly the confidence this file's other comments exist to
+   * withhold.
+   */
+  async getLiveFixtures(): Promise<NormalizedFixture[]> {
+    return MOCK_FIXTURES.filter((fixture) => fixture.status === "live" || fixture.status === "halftime");
+  }
+
   async getFixtureById(providerId: string): Promise<NormalizedFixture | null> {
     return MOCK_FIXTURES.find((f) => f.providerId === providerId) ?? null;
   }

@@ -14,6 +14,7 @@ import { ReconcileTransfersButton } from "@/components/admin/reconcile-transfers
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
 import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
 import { AutomationStatusPanel } from "@/components/admin/automation-status-panel";
+import { LiveWorkerPanel } from "@/components/admin/live-worker-panel";
 import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { CORRECT_PREDICTION_POINTS, CORRECT_PREDICTION_XP } from "@/lib/predictions";
 import { SCORING_RULES_SUMMARY } from "@/lib/fantasy-scoring";
@@ -634,6 +635,11 @@ export default async function DataHealthPage() {
       </div>
 
       <AutomationStatusPanel />
+
+      {/* Directly under the "has it ever run" panel, because this is the
+          narrower question that only matters once it has: how much quota
+          automation has spent, on what, and why it is idle right now. */}
+      <LiveWorkerPanel />
 
       {/* KIVO_NEXT_GEN KN-83. Placed with the other data-integrity tools rather
           than in its own screen — it is a repair for a specific condition

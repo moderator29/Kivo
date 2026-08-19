@@ -8,6 +8,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LiveCentreSections } from "@/components/matches/live-centre-sections";
+import { LiveFreshnessNote } from "@/components/football/live-freshness-note";
 import type { LiveListFixture } from "@/components/matches/live-fixture-list";
 import { getViewerFantasyRosterBySeasons } from "@/lib/football/fantasy-lineup-crossref";
 import { getNavItem } from "@/lib/navigation";
@@ -145,7 +146,15 @@ export default async function LivePage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
+        {/* Title and freshness are one block, so the row's justify-between
+            keeps the admin action on the right rather than pushing the note
+            into the middle of the header. */}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
+          {/* Said at the top, not the bottom. A fan reading a scoreline needs
+              to know how current it is before they read it, not after. */}
+          <LiveFreshnessNote />
+        </div>
         {/* RECOMMENDATIONS.md item 51: the real guard FOOTBALL_LIVE_POLLING_ENABLED
             sits in front of now — triggerLiveScoresRefresh (src/app/admin/data-health/
             actions.ts) checks the flag itself and returns a clear "disabled until a

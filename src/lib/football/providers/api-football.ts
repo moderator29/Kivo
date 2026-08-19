@@ -32,6 +32,12 @@ const BASE_URL = "https://v3.football.api-sports.io";
 
 /** Free-tier friendly cache window — avoid re-fetching the same day's fixtures repeatedly. */
 const FIXTURE_CACHE_SECONDS = 300;
+/** The live feed is the one endpoint whose entire value is being current, so it
+ * gets the shortest window in this file. It is not what bounds how often the
+ * endpoint is asked — the live worker's own derived pace is (see
+ * `live-sync-planner.ts`); this only stops two callers in the same minute
+ * paying twice for the same answer. */
+const LIVE_FIXTURE_CACHE_SECONDS = 60;
 
 // API-Football's free ("Free"/hobbyist) plan is 100 requests/day and 10 requests/minute
 // (see api-football.com/pricing) — there is no other tier assumed anywhere in this file,
@@ -435,11 +441,16 @@ export class ApiFootballProvider implements FootballDataProvider {
     return this.lastRawResponseSample;
   }
 
-  async getFixturesByDate(date: string): Promise<NormalizedFixture[]> {
-    const data = await this.request<ApiFootballFixtureResponse>(`/fixtures?date=${date}`, FIXTURE_CACHE_SECONDS);
-    const retrievedAt = new Date().toISOString();
-
-    return data.response.map((item) => ({
+  /**
+   * One `/fixtures` response item to a `NormalizedFixture`.
+   *
+   * Extracted so `/fixtures?date=`, `/fixtures?id=` and `/fixtures?live=all`
+   * cannot drift apart: all three return the identical item shape, and three
+   * hand-maintained copies of a twenty-field mapping is three chances for one
+   * of them to quietly stop carrying half-time scores.
+   */
+  private mapFixture(item: ApiFootballFixtureResponse["response"][number], retrievedAt: string): NormalizedFixture {
+    return {
       provider: this.name,
       providerId: String(item.fixture.id),
       competitionProviderId: String(item.league.id),
@@ -465,10 +476,39 @@ export class ApiFootballProvider implements FootballDataProvider {
       homeScoreHt: item.score.halftime.home,
       awayScoreHt: item.score.halftime.away,
       matchday: parseMatchday(item.league.round),
-    venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
+      venueProviderId: item.fixture.venue.id !== null ? String(item.fixture.venue.id) : null,
       venueName: item.fixture.venue.name,
       retrievedAt,
-    }));
+    };
+  }
+
+  /**
+   * Every fixture in play right now, worldwide, in ONE request.
+   *
+   * That is the shape that makes a live worker affordable at all on a
+   * hundred-requests-a-day tier: one request refreshes every live match at once
+   * rather than one request per match. It is also immune to the timezone edge
+   * `?date=` has, where a match kicking off at 23:50 local belongs to
+   * tomorrow's date somewhere.
+   *
+   * **It returns ONLY in-play matches**, which is the trap. A fixture that goes
+   * final between two polls simply stops appearing, so its last written state
+   * would be an in-play scoreline that stays on the product until the next
+   * daily sync — not a stale score but a permanently wrong one. The worker
+   * handles that with a bounded dated fallback (`reconcileDisappearedFixtures`
+   * in `scheduled-sync.ts`). None of that belongs in this adapter, which simply
+   * reports what the endpoint returns.
+   */
+  async getLiveFixtures(): Promise<NormalizedFixture[]> {
+    const data = await this.request<ApiFootballFixtureResponse>(`/fixtures?live=all`, LIVE_FIXTURE_CACHE_SECONDS);
+    const retrievedAt = new Date().toISOString();
+    return data.response.map((item) => this.mapFixture(item, retrievedAt));
+  }
+
+  async getFixturesByDate(date: string): Promise<NormalizedFixture[]> {
+    const data = await this.request<ApiFootballFixtureResponse>(`/fixtures?date=${date}`, FIXTURE_CACHE_SECONDS);
+    const retrievedAt = new Date().toISOString();
+    return data.response.map((item) => this.mapFixture(item, retrievedAt));
   }
 
   async getFixtureById(providerId: string): Promise<NormalizedFixture | null> {

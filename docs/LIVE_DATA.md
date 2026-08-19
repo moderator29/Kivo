@@ -18,7 +18,47 @@ All connected users
 
 This document describes what's **real today** versus what's still deliberately unbuilt, or genuinely can't be verified from this sandbox. Do not read the diagram above as a description of shipped infrastructure — see the status table below.
 
+## 2026-08-19: the worker now bounds what it spends
+
+The honest summary before this pass: the distribution half was real (Supabase Realtime genuinely fans out every write the instant it happens) and the upstream half was not (nothing wrote during a match). Turning the flag on would have made it worse rather than better, and this is why:
+
+**The old worker had six guards and not one of them bounded total spend.** The quota floor refuses only once the provider's own remaining count is at or below 10 — and that count is `null` until some request has recorded one. So on a fresh day, with the flag on and one match live, the worker called the fixtures sync every minute until the floor tripped: roughly ninety requests in ninety minutes, after which the entire product had no data for the rest of the day, including the daily fixture sync. A stale score is bad. No data is worse.
+
+What is new:
+
+| Piece | What it does |
+|---|---|
+| `provider_request_spend` + `consume_provider_requests()` (migration 0091) | An **atomic** reservation. Asking and spending are one statement behind an advisory lock, so two callers cannot both be told yes. The ceiling lives in `provider_request_limit()`, not in the caller. |
+| Three separate allowances (`live` 55, `auto` 20, `daily` 8 per rolling 24h) | The daily baseline's slice is unreachable by the live worker **by construction**. ~17 requests are unbudgeted and reserved for admin "Sync now" — automation cannot reach them. |
+| `live-sync-planner.ts` | Derives a pace instead of using a fixed interval: remaining allowance divided by the minutes of live football still to cover. Tightens around the minutes a scoreline moves, widens when nothing has changed, clamped to 1–15 minutes. |
+| `/fixtures?live=all` | One request refreshes every in-play match at once — the shape that makes this affordable at all. |
+| `reconcileDisappearedFixtures` | The live feed returns ONLY in-play matches, so a fixture that goes final between two polls vanishes from it and its last written state would be an in-play scoreline that stays on the product forever. One bounded dated fetch settles it. |
+| `LiveWorkerPanel` (Data Health) | Spend per bucket, the provider's own remaining count, last decision, and why it is idle right now. |
+| `LiveFreshnessNote` (`/live`) | Says when scores may be behind, rather than presenting a frozen number as live. |
+
+### The reconciliation bound, and why it needed one
+
+"Dropped out of the live set" is ambiguous. A fixture also disappears when the provider hiccups, during a brief outage, or when a match is temporarily misreported. If every disappearance meant "fetch until it is final", a flapping provider costs one request per minute per fixture — the exact runaway this pass exists to remove.
+
+So: exactly one dated fetch per disappearance, tracked by `fixtures.live_reconciled_at` against `provider_last_seen_at` (a second attempt happens only if the fixture came back and vanished again, which is a genuinely new disappearance); the attempt is marked as made **even when the fetch fails**, because a failed request has already been spent; it comes out of the `live` allowance with no exemption, because an allowance with a carve-out is not a ceiling; and at most one per invocation.
+
+If the dated fetch does not show the fixture as finished, nothing more happens. The daily baseline settles it, and KN-86's absence flagging raises it for a human if it never resolves.
+
+### A live run never flags absences
+
+`/fixtures?live=all` returns only what is in play, so absence from it means "not currently in play" — true of almost every fixture on any given day. Running KN-86's absence check against that response would flag the entire day's football as missing from the provider, on every poll. The check is sound; the premise it depends on (the run asked about all of these fixtures) is only true of a dated run. `syncTodayFixtures` skips it explicitly for `source: "live"`.
+
+### What could not be tested, and it is the important half
+
+This sandbox has no route to api-football.com. So:
+
+- **Tested**: the budget arithmetic, the derived pace, the relevance window, the refusal semantics of the atomic consume (exercised directly against the live database, including the ceiling, a refusal at the boundary, and an unknown bucket failing closed), and the guard ladder in `auto-sync.ts`. 15 planner cases plus 11 auto-sync cases.
+- **NOT tested, and stated here rather than left to be discovered**: whether `/fixtures?live=all` returns the shape the adapter models; whether a real Vercel or pg_cron firing carries the auth header the handler requires; and the end-to-end behaviour of a real match. Nobody here has watched a live score change. Every number is arithmetic over a modelled payload.
+
+The failure mode is bounded by design — every new response field is optional and read defensively, so a wrong shape produces nulls rather than wrong values — but "bounded" is not "verified", and the first real matchday is the real test.
+
 ## Status
+
 
 | Piece | Status | Notes |
 |---|---|---|
