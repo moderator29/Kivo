@@ -252,7 +252,7 @@ export function AccountSwitcherSheet({ open, onClose }: { open: boolean; onClose
                   type="button"
                   onClick={handleAdd}
                   disabled={pending || !state}
-                  className="kivo-focus flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-surface-2 px-6 py-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="kivo-focus flex w-full items-center justify-center gap-2 rounded-xl border border-hairline bg-surface-2 px-6 py-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-1 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                   Add account
@@ -318,7 +318,7 @@ function ActiveAccountCard({ account }: { account: AccountSwitcherState["active"
           </span>
           <Link
             href="/profile/edit"
-            className="kivo-glass-sharp kivo-focus rounded-full px-3.5 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
+            className="kivo-glass-sharp kivo-focus rounded-xl px-3.5 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
           >
             Edit profile
           </Link>
@@ -443,7 +443,7 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="kivo-focus rounded-full border border-hairline px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface-2"
+        className="kivo-focus rounded-xl border border-hairline px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface-2"
       >
         Try again
       </button>
