@@ -3192,6 +3192,34 @@ export type Database = {
           rating_count: number
         }[]
       }
+      get_fan_sentiment: {
+        Args: { p_fixture_ids: string[] }
+        Returns: {
+          avg_rating: number
+          fixture_id: string
+          poll_count: number
+          poll_vote_count: number
+          rating_count: number
+        }[]
+      }
+      get_trending_match_rooms: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          comment_count: number
+          fixture_id: string
+          participant_count: number
+          post_count: number
+        }[]
+      }
+      get_trending_posts: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          comment_count: number
+          participant_count: number
+          post_id: string
+          reaction_count: number
+        }[]
+      }
       get_fantasy_league_leaderboard: {
         Args: { p_team_id: string }
         Returns: {
