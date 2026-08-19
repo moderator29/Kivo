@@ -36,6 +36,22 @@ export type SeriesPoint = {
  * HTML for every dot and label. That split is what keeps the dots circular and
  * the type crisp at any container width, which a single stretched SVG cannot
  * do.
+ *
+ * ## The chart is not the only copy of the data
+ *
+ * Every dot, the value pill and the axis labels are decoration as far as
+ * assistive technology is concerned. Before this the SVG carried a `role="img"`
+ * and a one-line `aria-label`, which meant a screen reader got the first and
+ * last values and nothing in between — the middle of the series, which is the
+ * entire reason a series is drawn, simply did not exist non-visually.
+ *
+ * So the graphic is now `aria-hidden` and the real accessible representation is
+ * a table of every observation, visually hidden and fully present in the
+ * accessibility tree. `ariaLabel` became the table's `<caption>`: it is read
+ * once, as the description of the data, rather than twice as a label on a
+ * picture standing in front of the same numbers. Nothing is summarised or
+ * interpreted for the reader — the table is the same points, in order, through
+ * the same `formatValue` the pill uses, so the two can never disagree.
  */
 export function SeriesChart({
   points,
@@ -45,6 +61,8 @@ export function SeriesChart({
   lowerIsBetter = false,
   height = 148,
   ariaLabel,
+  valueColumnLabel = "Value",
+  labelColumnLabel = "Observation",
   className,
 }: {
   points: SeriesPoint[];
@@ -52,6 +70,12 @@ export function SeriesChart({
   lowerIsBetter?: boolean;
   height?: number;
   ariaLabel: string;
+  /** Column heading for the values in the text alternative — "Position",
+   * "Points". Generic by default because a wrong specific word is worse than
+   * a vague correct one, but every caller should pass its own. */
+  valueColumnLabel?: string;
+  /** Column heading for the x-axis labels in the text alternative. */
+  labelColumnLabel?: string;
   className?: string;
 }) {
   // A single observation is not a series. The caller is expected to check
@@ -109,8 +133,7 @@ export function SeriesChart({
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
-            role="img"
-            aria-label={ariaLabel}
+            aria-hidden="true"
             className="absolute inset-0 h-full w-full overflow-visible"
           >
             <defs>
@@ -164,6 +187,10 @@ export function SeriesChart({
             line it is labelling on a narrow screen. */}
         <div className="relative w-12 shrink-0" style={{ height }}>
           <span
+            // Decoration too: the table below carries this value in its last
+            // row. Left readable it would be announced a second time, adrift
+            // from the observation it belongs to.
+            aria-hidden="true"
             className="absolute right-0 -translate-y-1/2 rounded-lg bg-accent-strong px-2 py-1 text-[11px] font-semibold tabular-nums text-on-accent shadow-soft"
             style={{ top: `${y(last.value)}%` }}
           >
@@ -172,13 +199,35 @@ export function SeriesChart({
         </div>
       </div>
 
-      <figcaption className="flex items-center justify-between gap-2 pr-13 text-[11px] text-foreground-subtle">
+      <figcaption className="flex items-center justify-between gap-2 pr-13 text-[11px] text-foreground-subtle" aria-hidden="true">
         <span className="truncate">{points[0].label}</span>
         {points.length > 2 && (
           <span className="hidden truncate sm:inline">{points[Math.floor((points.length - 1) / 2)].label}</span>
         )}
         <span className="truncate">{last.label}</span>
       </figcaption>
+
+      {/* The data, for anyone not reading the picture. Visually hidden rather
+          than behind a toggle: a disclosure only helps someone who can see the
+          control, and this has to be reachable by a reader that never renders
+          the chart at all. Same points, same order, same formatter. */}
+      <table className="sr-only">
+        <caption>{ariaLabel}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{labelColumnLabel}</th>
+            <th scope="col">{valueColumnLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {points.map((point, index) => (
+            <tr key={`row-${point.t}-${index}`}>
+              <th scope="row">{point.label}</th>
+              <td>{formatValue(point.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </figure>
   );
 }

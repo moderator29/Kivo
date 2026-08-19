@@ -121,6 +121,8 @@ export function PositionHistoryCard({
         ariaLabel={`${teamName}'s league position in ${competitionLabel}, from #${first.position} on ${shortDate(
           first.capturedAt,
         )} to #${last.position} on ${shortDate(last.capturedAt)}`}
+        labelColumnLabel="Date"
+        valueColumnLabel="Position"
       />
 
       {available.length > 1 && (
