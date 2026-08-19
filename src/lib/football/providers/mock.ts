@@ -42,6 +42,9 @@ const MOCK_FIXTURES: NormalizedFixture[] = [
     awayScoreHt: null,
     venueProviderId: "mock-venue-1",
     venueName: "Remo Stars Stadium",
+    venueCity: "Ikenne",
+    referee: "Ranti Adeyemi",
+    roundLabel: "Regular Season - 12",
     retrievedAt: new Date().toISOString(),
   },
 ];

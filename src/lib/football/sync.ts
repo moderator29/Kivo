@@ -239,12 +239,21 @@ async function upsertVenue(
   provider: string,
   venueProviderId: string,
   name: string | null,
+  /** Migration 0113. `venues.city` has existed since 0001 and nothing ever
+   * wrote to it from a fixture sync, because the adapter did not declare the
+   * field the provider was already sending. */
+  city: string | null,
   knownMappings: Map<string, string>,
 ): Promise<string> {
   const existing = knownMappings.get(venueProviderId) ?? null;
   if (existing) {
-    if (name !== null) {
-      const { error } = await supabase.from("venues").update({ name }).eq("id", existing);
+    // Each field only when it has something to say. Same never-clobber rule as
+    // everywhere else: a payload without a city must not erase one.
+    const update: Database["public"]["Tables"]["venues"]["Update"] = {};
+    if (name !== null) update.name = name;
+    if (city !== null) update.city = city;
+    if (Object.keys(update).length > 0) {
+      const { error } = await supabase.from("venues").update(update).eq("id", existing);
       if (error) throw error;
     }
     return existing;
@@ -260,6 +269,7 @@ async function upsertVenue(
     p_provider_entity_id: venueProviderId,
   };
   if (name !== null) args.p_name = name;
+  if (city !== null) args.p_city = city;
 
   const { data, error } = await supabase.rpc("upsert_venue_with_mapping", args);
   if (error || !data) throw error ?? new Error("upsert_venue_with_mapping returned no id");
@@ -491,6 +501,13 @@ async function upsertFixture(
   // number an earlier sync legitimately established. See parseMatchday in
   // ./matchday.ts for why a cup round is null and never a guess.
   if (fixture.matchday !== null) args.p_matchday = fixture.matchday;
+  // Migration 0113. Both arrive on the same /fixtures payload KIVO already
+  // pays for and were dropped by the adapter until now. Omitted rather than
+  // passed as null when the provider reports neither, so the function's own
+  // coalesce keeps a value an earlier, richer sync established — a live-score
+  // refresh must not blank the referee mid-match.
+  if (fixture.referee !== null) args.p_referee = fixture.referee;
+  if (fixture.roundLabel !== null) args.p_round_label = fixture.roundLabel;
 
   const { data: kivoFixtureId, error } = await supabase.rpc("upsert_fixture_with_mapping", args);
   if (error) throw error;
@@ -946,7 +963,14 @@ export async function syncTodayFixtures(
           upsertTeam(supabase, provider.name, fixture.homeTeam, teamMappings),
           upsertTeam(supabase, provider.name, fixture.awayTeam, teamMappings),
           fixture.venueProviderId
-            ? upsertVenue(supabase, provider.name, fixture.venueProviderId, fixture.venueName, venueMappings)
+            ? upsertVenue(
+                supabase,
+                provider.name,
+                fixture.venueProviderId,
+                fixture.venueName,
+                fixture.venueCity,
+                venueMappings,
+              )
             : Promise.resolve(null),
         ]);
 

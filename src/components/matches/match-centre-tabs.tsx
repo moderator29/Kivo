@@ -160,6 +160,15 @@ type MatchCentreTabsProps = {
     competitionName: string | null;
     venueName: string | null;
     venueCity: string | null;
+    /** The match official. Null means the provider reported none — the row is
+     * then absent rather than rendered as "Unknown", for the same reason a
+     * competition with no country prints nothing. */
+    referee: string | null;
+    /** The provider's own round label, verbatim ("Quarter-finals"). Distinct
+     * from `matchday`: a cup tie has no number and this is the only thing that
+     * names its round. */
+    roundLabel: string | null;
+    matchday: number | null;
   };
   /** Real head-to-head record between these two clubs, computed by
    * getHeadToHead() from finished fixtures only. Null when either side of
@@ -270,6 +279,31 @@ function EmptyState({ message }: { message: string }) {
  * RECOMMENDATIONS.md item 299 — so this claims only the part that is always
  * true.
  */
+/**
+ * How a fixture's round reads on screen.
+ *
+ * Two columns hold two different facts and neither replaces the other:
+ * `round_label` is the provider's own string ("Regular Season - 12",
+ * "Quarter-finals") and `matchday` is the number parsed out of it, which is
+ * null for any round that has none.
+ *
+ * The label wins when there is one, because it is what the competition calls
+ * the round. But API-Football's league labels are machine-shaped — "Regular
+ * Season - 12" is not how anyone says it — so that one exact shape is rewritten
+ * to "Matchday 12" and every other label is passed through untouched. Narrow on
+ * purpose: a rewrite that tried to prettify arbitrary labels would eventually
+ * mangle a real round name, and "Quarter-finals" needs no help.
+ */
+export function roundText(preMatch: MatchCentreTabsProps["preMatch"]): string | null {
+  const label = preMatch.roundLabel?.trim();
+  if (label) {
+    const regularSeason = /^regular season\s*-\s*(\d+)$/i.exec(label);
+    if (regularSeason) return `Matchday ${regularSeason[1]}`;
+    return label;
+  }
+  return preMatch.matchday !== null ? `Matchday ${preMatch.matchday}` : null;
+}
+
 function OverviewTab({
   preMatch,
   competitionCoverage,
@@ -290,10 +324,17 @@ function OverviewTab({
   ].filter((label): label is string => label !== null);
   const venue = [preMatch.venueName, preMatch.venueCity].filter(Boolean).join(", ");
 
+  // Every row is conditional on KIVO actually holding the fact. An absent row
+  // is the only honest rendering of an absent value — the alternative is a
+  // label with "Unknown" or a dash beside it, which reads as a statement about
+  // the match rather than about the data, and is exactly the pattern removed
+  // from competition names and countries elsewhere in this codebase.
   const facts: { label: string; value: ReactNode }[] = [
     { label: "Kick-off", value: <LocalDateTime iso={preMatch.kickoffAt} format="deadline" /> },
     ...(preMatch.competitionName ? [{ label: "Competition", value: preMatch.competitionName }] : []),
+    ...(roundText(preMatch) ? [{ label: "Round", value: roundText(preMatch) }] : []),
     ...(venue ? [{ label: "Venue", value: venue }] : []),
+    ...(preMatch.referee ? [{ label: "Referee", value: preMatch.referee }] : []),
   ];
 
   return (
