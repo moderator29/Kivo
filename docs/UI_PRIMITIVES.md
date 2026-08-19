@@ -49,6 +49,26 @@ export type SectionTab<T extends string = string> = {
 };
 ```
 
+**`icon` cannot cross a server/client boundary.** A `LucideIcon` is a function
+component, and a Server Component cannot pass a function as a prop into a Client
+Component — so a server-rendered page that builds its `tabs` array server-side
+must omit `icon` entirely. This is not a bug in the rail and there is no way to
+fix it in the rail; it is React's serialization boundary. It surfaces at build
+time with a message about functions not being serializable, which is a confusing
+place to meet it for the first time.
+
+Two ways out, in order of preference:
+
+1. **Omit the icon.** A tab label is a word a fan reads; the glyph is decoration
+   and most rails read better without it. This is the default for a reason.
+2. **Build the `tabs` array inside the Client Component** that owns the rail,
+   where the icon is just an import. Pass the server's data in as plain values
+   and let the client assemble the tabs.
+
+Do not reach for a third option — a string icon name resolved through a lookup
+map re-introduces exactly the stringly-typed indirection the `LucideIcon` type
+exists to prevent, and it fails at runtime rather than at build time.
+
 There is deliberately **no `href`**. The rail switches panels within one page;
 it does not navigate. A row of links between different routes is a nav, not a
 tablist, and wants `<Link>`s — using a tablist for it would announce "tab 3 of
