@@ -29,6 +29,17 @@ export function isGoalEventType(eventType: FixtureEventType): boolean {
   return eventType === "goal" || eventType === "penalty_goal";
 }
 
+/**
+ * The two penalty events. Kept beside its siblings rather than inlined at the
+ * one call site, because `penalty_goal` is deliberately a member of BOTH this
+ * set and `isGoalEventType`'s — the order those two are checked in decides
+ * whether a spot kick reads as a penalty or as a generic goal, and that is a
+ * decision worth being able to find.
+ */
+export function isPenaltyEventType(eventType: FixtureEventType): boolean {
+  return eventType === "penalty_goal" || eventType === "penalty_missed";
+}
+
 export function isRedCardEventType(eventType: FixtureEventType): boolean {
   return eventType === "red_card" || eventType === "second_yellow_card";
 }

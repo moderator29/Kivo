@@ -50,6 +50,15 @@ export type NotificationPayloadByType = {
   match_result: { fixture_id: string; summary: string };
   match_goal: { fixture_id: string; summary: string; player_id: string | null };
   match_red_card: { fixture_id: string; summary: string; player_id: string | null };
+  /** Half time. Same shape as the other status-change notifications — the
+   * summary carries the score, which the renderer cannot reconstruct. */
+  match_halftime: { fixture_id: string; summary: string };
+  /** A penalty, scored or missed. `player_id` is null when the provider sent
+   * the event without a taker, which happens and is not worth discarding the
+   * whole notification over. */
+  match_penalty: { fixture_id: string; summary: string; player_id: string | null };
+  /** Team sheets are in. No player id: this is about eleven of them. */
+  match_lineups: { fixture_id: string; summary: string };
   player_event: { fixture_id: string; summary: string; player_id: string | null };
   /** A completed, recorded move involving a club or player the recipient
    * follows. `summary` is pre-built for the same reason the match ones are:

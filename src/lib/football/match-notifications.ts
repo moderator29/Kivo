@@ -2,7 +2,7 @@ import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
-import { EVENT_LABEL, isGoalEventType, isRedCardEventType } from "./event-labels";
+import { EVENT_LABEL, isGoalEventType, isPenaltyEventType, isRedCardEventType } from "./event-labels";
 import { filterNotifiable, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
 import { buildNotification } from "@/lib/notification-payloads";
 
@@ -130,16 +130,28 @@ export async function notifyFixtureStatusChange(
 ): Promise<void> {
   if (!input.previousStatus || input.previousStatus === input.newStatus) return;
 
-  let type: "match_kickoff" | "match_result" | null = null;
+  let type: "match_kickoff" | "match_halftime" | "match_result" | null = null;
   let summary: string | null = null;
+
+  // The score, when KIVO really has both halves of it. Never "0-0" as a
+  // stand-in for "not synced" — an absent score simply drops out of the line.
+  const score = input.homeScore !== null && input.awayScore !== null ? ` ${input.homeScore}-${input.awayScore}` : "";
 
   if (input.newStatus === "live" && input.previousStatus !== "live") {
     type = "match_kickoff";
     summary = `${input.homeTeamName} vs ${input.awayTeamName} has kicked off`;
+  } else if (input.newStatus === "halftime" && input.previousStatus !== "halftime") {
+    // `fixture_status` has carried 'halftime' since migration 0001 and this
+    // branch never existed, so a real, KIVO-observed transition was being
+    // watched and then thrown away. The same "only on an observed transition"
+    // rule as its siblings applies: a fixture first seen at half time produces
+    // nothing, because "it just happened" would be a guess.
+    type = "match_halftime";
+    summary = score
+      ? `Half time: ${input.homeTeamName}${score} ${input.awayTeamName}`
+      : `Half time: ${input.homeTeamName} vs ${input.awayTeamName}`;
   } else if (input.newStatus === "finished" && input.previousStatus !== "finished") {
     type = "match_result";
-    const score =
-      input.homeScore !== null && input.awayScore !== null ? ` ${input.homeScore}-${input.awayScore}` : "";
     summary = `Full time: ${input.homeTeamName}${score} ${input.awayTeamName}`;
   }
 
@@ -189,15 +201,25 @@ export async function notifyFixtureEvent(
   supabase: ServiceClient,
   input: FixtureEventNotificationInput,
 ): Promise<void> {
-  const isGoal = isGoalEventType(input.eventType);
+  // A penalty is checked before "is this a goal", because `penalty_goal`
+  // is both. The founding brief names penalties as their own notification,
+  // and it is right to: a spot kick is a different moment from an open-play
+  // goal, and a *missed* one — which changes nothing on the scoreboard and so
+  // reached only the taker's own followers — is often the bigger story of the
+  // two. One event still produces one notification; this is a more specific
+  // type, not an extra bell.
+  const isPenalty = isPenaltyEventType(input.eventType);
+  const isGoal = !isPenalty && isGoalEventType(input.eventType);
   const isRedCard = isRedCardEventType(input.eventType);
   const notified = new Set<string>();
 
-  if (isGoal || isRedCard) {
-    const type = isGoal ? "match_goal" : "match_red_card";
-    const summary = isGoal
-      ? `${input.playerName ? `${input.playerName} scores` : "Goal"} for ${input.teamName} (${input.minute}') vs ${input.opponentName}`
-      : `${input.playerName ?? "A player"} is sent off for ${input.teamName} (${input.minute}') vs ${input.opponentName}`;
+  if (isPenalty || isGoal || isRedCard) {
+    const type = isPenalty ? "match_penalty" : isGoal ? "match_goal" : "match_red_card";
+    const summary = isPenalty
+      ? penaltySummary(input)
+      : isGoal
+        ? `${input.playerName ? `${input.playerName} scores` : "Goal"} for ${input.teamName} (${input.minute}') vs ${input.opponentName}`
+        : `${input.playerName ?? "A player"} is sent off for ${input.teamName} (${input.minute}') vs ${input.opponentName}`;
 
     const teamFollowers = await teamAudience(supabase, input.teamId);
     for (const id of teamFollowers) notified.add(id);
@@ -225,5 +247,65 @@ export async function notifyFixtureEvent(
       summary,
       player_id: input.playerId,
     }),
+  );
+}
+
+
+/**
+ * A penalty, in one line, saying which of the two things happened.
+ *
+ * Scored and missed are not the same event and must not read as one — "penalty
+ * for X" would be actively misleading about a save. The taker's name is
+ * included when the provider sent one and left out when it did not, rather
+ * than filled in with a placeholder.
+ */
+function penaltySummary(input: FixtureEventNotificationInput): string {
+  const scored = input.eventType === "penalty_goal";
+  const who = input.playerName;
+  const when = `(${input.minute}') vs ${input.opponentName}`;
+  if (scored) {
+    return who
+      ? `${who} scores a penalty for ${input.teamName} ${when}`
+      : `Penalty scored for ${input.teamName} ${when}`;
+  }
+  return who
+    ? `${who} misses a penalty for ${input.teamName} ${when}`
+    : `Penalty missed for ${input.teamName} ${when}`;
+}
+
+export interface LineupsReleasedInput {
+  fixtureId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+}
+
+/**
+ * Team news is in.
+ *
+ * The most time-sensitive pre-match moment in football — it is when fantasy
+ * squads get changed and predictions get made — and KIVO produced nothing for
+ * it, despite writing the `lineups` rows itself.
+ *
+ * Called only when a fixture goes from having NO lineup rows to having some,
+ * which is what makes this "released" rather than "re-synced". A details sync
+ * re-run over a fixture whose lineup KIVO already held notifies nobody, the
+ * same discipline `upsertFixtureEvent`'s dedupe branch already applies to
+ * goals: repeating a sync must never repeat a notification.
+ */
+export async function notifyLineupsReleased(
+  supabase: ServiceClient,
+  input: LineupsReleasedInput,
+): Promise<void> {
+  const [homeAudience, awayAudience] = await Promise.all([
+    teamAudience(supabase, input.homeTeamId),
+    teamAudience(supabase, input.awayTeamId),
+  ]);
+  const audience = new Set<string>([...homeAudience, ...awayAudience]);
+  const summary = `Team news: lineups are in for ${input.homeTeamName} vs ${input.awayTeamName}`;
+
+  await insertNotifications(supabase, audience, MATCH_NOTIFICATION_COLUMN, (profileId) =>
+    buildNotification(profileId, "match_lineups", { fixture_id: input.fixtureId, summary }),
   );
 }

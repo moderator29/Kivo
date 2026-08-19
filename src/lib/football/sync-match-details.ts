@@ -8,7 +8,7 @@ import { batchFindMappedIds, createMapping, findProviderEntityId } from "./provi
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
-import { notifyFixtureEvent } from "./match-notifications";
+import { notifyFixtureEvent, notifyLineupsReleased } from "./match-notifications";
 import { getKivoSystemProfileId, insertSystemEventPost } from "./match-room-system-posts";
 import {
   recordAnomaly,
@@ -594,8 +594,19 @@ export async function syncFixtureDetails(
   let processed = 0;
 
   if (lineups) {
+    // Asked BEFORE anything is written, because "were team sheets already in
+    // KIVO" is only answerable before this run puts them there. A details sync
+    // re-run over a fixture whose lineup KIVO already held must notify nobody
+    // — the same discipline upsertFixtureEvent's dedupe branch applies to
+    // goals.
+    const { count: lineupRowsBefore } = await supabase
+      .from("lineups")
+      .select("id", { count: "exact", head: true })
+      .eq("fixture_id", fixtureId);
+
+    let lineupRowsWritten = 0;
     for (const side of lineups.teams) {
-      processed += await processLineupSide(
+      lineupRowsWritten += await processLineupSide(
         supabase,
         provider.name,
         fixtureId,
@@ -605,6 +616,26 @@ export async function syncFixtureDetails(
         teamMappings,
         playerMappings,
       );
+    }
+    processed += lineupRowsWritten;
+
+    // Team news is in, and this is the first time KIVO has held it. Needs the
+    // real club names — without them the notification could only say "a match
+    // you follow", which is not worth a bell — so a fixture whose teams could
+    // not be resolved above produces nothing rather than something vague.
+    if (
+      (lineupRowsBefore ?? 0) === 0 &&
+      lineupRowsWritten > 0 &&
+      fixtureTeamsRow?.home_team?.name &&
+      fixtureTeamsRow.away_team?.name
+    ) {
+      await notifyLineupsReleased(supabase, {
+        fixtureId,
+        homeTeamId: fixtureTeamsRow.home_team_id,
+        awayTeamId: fixtureTeamsRow.away_team_id,
+        homeTeamName: fixtureTeamsRow.home_team.name,
+        awayTeamName: fixtureTeamsRow.away_team.name,
+      });
     }
   }
 

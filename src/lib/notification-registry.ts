@@ -2,7 +2,10 @@ import {
   ArrowLeftRight,
   Award,
   Bell,
+  CircleDot,
+  ClipboardList,
   Goal,
+  PauseCircle,
   MessageCircle,
   Radio,
   ShieldAlert,
@@ -24,10 +27,10 @@ import type { NotificationRow } from "@/lib/notifications";
  * reasonably expected to emit next, not a mirror of a DB constraint.
  * "post_like"/"post_comment"/"comment_reply" (src/app/(app)/social/actions.ts
  * and comment-actions.ts), "new_follower" (src/app/(app)/follow-actions.ts),
- * and "match_kickoff"/"match_goal"/"match_red_card"/"match_result"/
- * "player_event" (src/lib/football/match-notifications.ts, wired into the
- * real sync code paths in sync.ts/sync-match-details.ts) are all wired to
- * real producers; prediction/fantasy/badge/moderation types below are still
+ * and "match_kickoff"/"match_lineups"/"match_goal"/"match_penalty"/
+ * "match_red_card"/"match_halftime"/"match_result"/"player_event"
+ * (src/lib/football/match-notifications.ts, wired into the real sync code
+ * paths in sync.ts/sync-match-details.ts) are all wired to real producers; prediction/fantasy/badge/moderation types below are still
  * forward-covered only, so describe()/icon()/href() never fall back to a raw
  * snake_case string once those ship a producer too. Add new types here first.
  */
@@ -37,8 +40,11 @@ export type NotificationType =
   | "comment_reply"
   | "new_follower"
   | "match_kickoff"
+  | "match_lineups"
   | "match_goal"
+  | "match_penalty"
   | "match_red_card"
+  | "match_halftime"
   | "match_result"
   | "player_event"
   | "transfer_recorded"
@@ -135,6 +141,25 @@ export const NOTIFICATION_REGISTRY: Record<NotificationType, RegistryEntry> = {
   match_red_card: {
     title: (p) => str(p, "summary") ?? "Red card in a match you're following",
     icon: ShieldAlert,
+    href: fixtureHref,
+  },
+  // Three the founding brief named and KIVO never sent, every one of them off
+  // data it already had: the 'halftime' fixture status (0001), the two penalty
+  // event types, and the arrival of `lineups` rows. See migration 0087 for the
+  // payload shapes and match-notifications.ts for the producers.
+  match_halftime: {
+    title: (p) => str(p, "summary") ?? "Half time in a match you're following",
+    icon: PauseCircle,
+    href: fixtureHref,
+  },
+  match_penalty: {
+    title: (p) => str(p, "summary") ?? "Penalty in a match you're following",
+    icon: CircleDot,
+    href: fixtureHref,
+  },
+  match_lineups: {
+    title: (p) => str(p, "summary") ?? "Team news is in for a match you're following",
+    icon: ClipboardList,
     href: fixtureHref,
   },
   match_result: {
@@ -251,7 +276,18 @@ export const NOTIFICATION_GROUPS = [
   {
     id: "matches",
     label: "Matches",
-    types: ["match_kickoff", "match_goal", "match_red_card", "match_result", "player_event"],
+    // In the order a match actually happens, so the chip's contents read as a
+    // timeline rather than as the order the types were added.
+    types: [
+      "match_lineups",
+      "match_kickoff",
+      "match_goal",
+      "match_penalty",
+      "match_red_card",
+      "match_halftime",
+      "match_result",
+      "player_event",
+    ],
   },
   {
     id: "transfers",
