@@ -32,10 +32,23 @@ describe("groupFixturesByCompetition", () => {
     expect(groups[0].fixtures).toHaveLength(2);
   });
 
-  it("labels a fixture with no competition at all as unknown", () => {
+  it("leaves a fixture with no competition at all unnamed rather than labelling it", () => {
+    // Deliberately null, not "Unknown competition". The name renders where a
+    // league's name goes, so a placeholder there is indistinguishable from a
+    // real competition called that. See src/lib/football/competition-label.ts.
     const fixtures: Fixture[] = [{ id: "f1", competition: null }];
     const groups = groupFixturesByCompetition(fixtures);
-    expect(groups[0].competitionName).toBe("Unknown competition");
+    expect(groups[0].competitionName).toBeNull();
+  });
+
+  it("groups every unnamed fixture together instead of one group each", () => {
+    const fixtures: Fixture[] = [
+      { id: "f1", competition: null },
+      { id: "f2", competition: null },
+    ];
+    const groups = groupFixturesByCompetition(fixtures);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].fixtures.map((f) => f.id)).toEqual(["f1", "f2"]);
   });
 
   it("returns an empty array for an empty input", () => {

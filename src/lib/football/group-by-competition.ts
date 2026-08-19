@@ -1,3 +1,5 @@
+import { competitionName as competitionNameOf } from "./competition-label";
+
 /**
  * Groups an already-fetched list of fixtures by their real competition —
  * pure client/server-side grouping of data the caller already has (no new
@@ -9,7 +11,14 @@
  */
 export type CompetitionGroup<TFixture> = {
   competitionId: string | null;
-  competitionName: string;
+  /**
+   * Null when the row carries no competition name at all. Callers render
+   * nothing in that case rather than a stand-in: the previous "Unknown
+   * competition" sat exactly where a league's name goes, so a reader could
+   * not tell a competition actually called that from one KIVO could not
+   * name. See src/lib/football/competition-label.ts.
+   */
+  competitionName: string | null;
   fixtures: TFixture[];
 };
 
@@ -21,11 +30,12 @@ export function groupFixturesByCompetition<
 
   for (const fixture of fixtures) {
     const competitionId = fixture.competition?.id ?? null;
-    const competitionName = fixture.competition?.name ?? fixture.competition?.short_name ?? "Unknown competition";
+    const competitionName = competitionNameOf(fixture.competition);
     // Falls back to the display name as the grouping key on the rare row with
     // no competition id at all, so it still groups with same-named rows
-    // instead of each getting its own singleton group.
-    const key = competitionId ?? `name:${competitionName}`;
+    // instead of each getting its own singleton group. Rows with neither an id
+    // nor a name share one unnamed group, which is what they are.
+    const key = competitionId ?? (competitionName === null ? "unnamed" : `name:${competitionName}`);
 
     const existingIndex = indexByKey.get(key);
     if (existingIndex !== undefined) {

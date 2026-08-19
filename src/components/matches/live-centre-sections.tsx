@@ -6,6 +6,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { FixtureGroups, type LiveListFixture } from "@/components/matches/live-fixture-list";
 import { CompetitionFilter, type CompetitionFilterOption } from "@/components/matches/competition-filter";
 import { isLiveStatus } from "@/lib/football/fixture-status";
+import type { CompetitionRankingSignals } from "@/lib/football/competition-tier";
 import { useRealtimeFixtures } from "@/hooks/use-realtime-fixtures";
 
 /** The competitions actually represented in the list, in the order they first
@@ -60,9 +61,17 @@ export function LiveCentreSections({
   fixtures,
   fantasyMatchCounts,
   providerLabel,
+  rankingSignals,
+  signedIn,
 }: {
   fixtures: LiveListFixture[];
   fantasyMatchCounts: Record<string, number>;
+  /** Read on the server once for the whole page (see
+   * src/lib/football/competition-ranking.ts) and handed to both sections, so
+   * "Live now" and "Today's fixtures" order their competitions identically and
+   * a fixture moving between them does not change what leads either list. */
+  rankingSignals: CompetitionRankingSignals;
+  signedIn: boolean;
   /**
    * The football provider actually in use, from `getActiveProviderStatus()`,
    * or null when none is configured. KIVO_NEXT_GEN KN-8: this copy used to say
@@ -123,7 +132,13 @@ export function LiveCentreSections({
               header, unlike "Today's fixtures" below where a fixture could
               flip to live mid-session via Realtime with no other cue on the
               page. */}
-          <FixtureGroups fixtures={live} showLiveDot={false} fantasyMatchCounts={fantasyMatchCounts} />
+          <FixtureGroups
+            fixtures={live}
+            showLiveDot={false}
+            fantasyMatchCounts={fantasyMatchCounts}
+            rankingSignals={rankingSignals}
+            signedIn={signedIn}
+          />
         </FadeIn>
       )}
 
@@ -132,7 +147,12 @@ export function LiveCentreSections({
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             Today&apos;s fixtures
           </h2>
-          <FixtureGroups fixtures={notLive} fantasyMatchCounts={fantasyMatchCounts} />
+          <FixtureGroups
+            fixtures={notLive}
+            fantasyMatchCounts={fantasyMatchCounts}
+            rankingSignals={rankingSignals}
+            signedIn={signedIn}
+          />
         </FadeIn>
       )}
     </>
