@@ -20,7 +20,6 @@ import {
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { AiTeaser } from "@/components/home/ai-teaser";
 import { RecentlyViewedStrip } from "@/components/home/recently-viewed-strip";
-import { TeamCrest } from "@/components/ui/team-crest";
 import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";

@@ -60,7 +60,6 @@ function competitionOptions(fixtures: LiveListFixture[]): CompetitionFilterOptio
 export function LiveCentreSections({
   fixtures,
   fantasyMatchCounts,
-  providerLabel,
   rankingSignals,
   signedIn,
 }: {
@@ -79,7 +78,6 @@ export function LiveCentreSections({
    * selects between two real implementations — a hardcoded vendor name in
    * user-facing copy is the same class of error as a fabricated stat.
    */
-  providerLabel: string | null;
 }) {
   const all = useRealtimeFixtures(fixtures);
 

@@ -46,7 +46,7 @@ type AbsenceStatus = keyof typeof STATUS_STYLE;
 
 export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; teamName: string }) {
   const supabase = createServerSupabaseClient();
-  const { name: providerName, label: providerLabel } = getActiveProviderStatus();
+  const { name: providerName } = getActiveProviderStatus();
 
   const [{ data: rows }, { data: latestFixture }] = await Promise.all([
     supabase
@@ -177,7 +177,6 @@ export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; 
  */
 export async function PlayerAbsenceNote({ playerId }: { playerId: string }) {
   const supabase = createServerSupabaseClient();
-  const { label: providerLabel } = getActiveProviderStatus();
 
   const { data: row } = await supabase
     .from("injuries")
@@ -206,8 +205,6 @@ export async function PlayerAbsenceNote({ playerId }: { playerId: string }) {
               <LocalDateTime iso={`${row.reported_on}T12:00:00Z`} format="dayTime" />
             </>
           )}
-          {" · "}
-          {providerLabel ?? "connected data source"}
         </span>
       </div>
     </div>

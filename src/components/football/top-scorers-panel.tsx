@@ -44,7 +44,7 @@ export async function TopScorersPanel({
   seasonLabel: string | null;
 }) {
   const supabase = createServerSupabaseClient();
-  const { name: providerName, label: providerLabel } = getActiveProviderStatus();
+  const { name: providerName } = getActiveProviderStatus();
 
   const { data: rows } = seasonId
     ? await supabase

@@ -3,7 +3,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { canManageFootballData } from "@/lib/admin";
-import { getActiveProviderStatus } from "@/lib/football";
 import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
@@ -234,12 +233,6 @@ export default async function LivePage() {
       <LiveCentreSections
         fixtures={displayedFixtures}
         fantasyMatchCounts={fantasyMatchCounts}
-        // KIVO_NEXT_GEN KN-8: read the provider actually in use rather than
-        // asserting one. getActiveProviderStatus() is the side-effect-free
-        // mirror of the real selection order (the cron route uses it for
-        // exactly this reason) and returns null when none is configured, in
-        // which case the copy simply doesn't name a source.
-        providerLabel={getActiveProviderStatus().label}
         rankingSignals={rankingSignals}
         signedIn={viewerIsSignedIn(profile)}
       />
