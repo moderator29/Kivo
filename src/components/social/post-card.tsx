@@ -9,6 +9,7 @@ import { reportContent } from "@/app/(app)/social/report-actions";
 import { voteOnPoll } from "@/app/(app)/social/actions";
 import { CommentThread } from "@/components/social/comment-thread";
 import { PostEntityCard } from "@/components/social/post-entity-card";
+import { SharePostButton } from "@/components/social/share-post-button";
 import { ReactionPicker } from "@/components/social/reaction-picker";
 import { SaveButton } from "@/components/ui/save-button";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
@@ -473,6 +474,11 @@ export function PostCard({
 
         <div className="flex items-center gap-1">
           <SaveButton targetType="post" targetId={id} initialSaved={viewerSaved} signedIn={signedIn} />
+
+          {/* Not gated on sign-in: copying a public post's link is not an
+              action on anyone's account, and a guest reading the feed is
+              exactly the person most likely to want to send one on. */}
+          <SharePostButton postId={id} />
 
           <div ref={reportMenuRef} className="relative">
           <motion.button
