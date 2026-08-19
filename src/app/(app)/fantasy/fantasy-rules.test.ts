@@ -5,6 +5,8 @@ import {
   positionGroup,
   type RosterPick,
   validateRoster,
+  assessTransfers,
+  describeTransferCost,
 } from "./fantasy-rules";
 
 /**
@@ -413,5 +415,75 @@ describe("positionGroup", () => {
     expect(positionGroup(null)).toBe("Other");
     expect(positionGroup("")).toBe("Other");
     expect(positionGroup("Utility")).toBe("Other");
+  });
+});
+
+/**
+ * Transfer rules (migration 0098). The case worth writing tests for is not the
+ * arithmetic — it is the counting basis. A rule that charges per edit rather
+ * than per net change looks identical in a one-swap test and is punitive in
+ * real use, and that difference is invisible until somebody complains.
+ */
+describe("assessTransfers", () => {
+  const squad = (...ids: string[]) => ids;
+
+  it("charges nothing for a team's first ever squad, however large", () => {
+    const result = assessTransfers([], squad("a", "b", "c", "d", "e"));
+    expect(result.isInitialSquad).toBe(true);
+    expect(result.transferCount).toBe(0);
+    expect(result.pointsCost).toBe(0);
+    expect(describeTransferCost(result)).toBeNull();
+  });
+
+  it("gives one change per gameweek free", () => {
+    const result = assessTransfers(squad("a", "b", "c"), squad("a", "b", "d"));
+    expect(result.playersIn).toEqual(["d"]);
+    expect(result.playersOut).toEqual(["c"]);
+    expect(result.transferCount).toBe(1);
+    expect(result.chargeableCount).toBe(0);
+    expect(result.pointsCost).toBe(0);
+    expect(describeTransferCost(result)).toContain("free transfer");
+  });
+
+  it("charges 4 points for each change beyond the free one", () => {
+    const result = assessTransfers(squad("a", "b", "c", "d"), squad("a", "x", "y", "z"));
+    expect(result.transferCount).toBe(3);
+    expect(result.chargeableCount).toBe(2);
+    expect(result.pointsCost).toBe(-8);
+    expect(describeTransferCost(result)).toContain("8 points");
+  });
+
+  it("charges nothing when the squad is unchanged", () => {
+    const result = assessTransfers(squad("a", "b", "c"), squad("c", "b", "a"));
+    expect(result.transferCount).toBe(0);
+    expect(result.pointsCost).toBe(0);
+    expect(describeTransferCost(result)).toBeNull();
+  });
+
+  it("does not charge a manager for changing their mind and changing it back", () => {
+    // The counting basis, stated as a test. The comparison is always against
+    // LAST gameweek's squad, so a manager who swaps a player out and then back
+    // in before the deadline has made no net change and owes nothing — where a
+    // per-edit rule would have billed them twice for ending where they started.
+    const lastWeek = squad("a", "b", "c");
+    const afterFirstEdit = squad("a", "b", "z");
+    const afterSecondEdit = squad("a", "b", "c");
+
+    expect(assessTransfers(lastWeek, afterFirstEdit).transferCount).toBe(1);
+    expect(assessTransfers(lastWeek, afterSecondEdit).transferCount).toBe(0);
+    expect(assessTransfers(lastWeek, afterSecondEdit).pointsCost).toBe(0);
+  });
+
+  it("never produces a negative charge, even from a malformed squad size", () => {
+    const result = assessTransfers(squad("a", "b", "c"), squad("a"));
+    expect(result.chargeableCount).toBeGreaterThanOrEqual(0);
+    expect(result.pointsCost).toBeLessThanOrEqual(0);
+  });
+
+  it("honours a different allowance without the caller re-implementing the maths", () => {
+    const twoFree = assessTransfers(squad("a", "b", "c"), squad("x", "y", "c"), 2);
+    expect(twoFree.transferCount).toBe(2);
+    expect(twoFree.chargeableCount).toBe(0);
+    expect(twoFree.pointsCost).toBe(0);
   });
 });

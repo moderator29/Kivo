@@ -10,10 +10,14 @@ import { awardBadge } from "@/lib/rewards";
 import { escapeLikePattern } from "@/lib/text";
 import { PUBLIC_FANTASY_LEAGUES_PAGE_SIZE } from "./browse/constants";
 import {
+  assessTransfers,
+  describeTransferCost,
   generateInviteCode,
   positionGroup,
   validateRoster,
   DEFAULT_FANTASY_PRICE,
+  FREE_TRANSFERS_PER_GAMEWEEK,
+  TRANSFER_HIT_POINTS,
   type PositionGroup,
   type RosterPick,
 } from "./fantasy-rules";
@@ -180,7 +184,9 @@ export async function setGameweekRoster(
 
   const { data: gameweek } = await supabase
     .from("fantasy_gameweeks")
-    .select("id, deadline_at, season_id")
+    // `number` is needed to find the previous gameweek's squad, which is the
+    // baseline transfers are counted against.
+    .select("id, deadline_at, season_id, number")
     .eq("id", gameweekId)
     .maybeSingle();
   if (!gameweek) return { error: "That gameweek no longer exists." };
@@ -269,6 +275,39 @@ export async function setGameweekRoster(
     notice = "Your captain left the squad. Pick a new one so their points get doubled.";
   }
 
+  /**
+   * What this save costs in transfers.
+   *
+   * Measured against the PREVIOUS gameweek's squad, not against whatever this
+   * gameweek's roster contained a moment ago — see `assessTransfers`. The
+   * previous squad is found by walking back through earlier gameweeks for the
+   * last one this team actually picked, the same walk `carryForwardFantasyRoster`
+   * does, because a team can skip a gameweek entirely and "the immediately
+   * previous gameweek" is then the wrong baseline.
+   */
+  const { data: priorGameweeks } = await supabase
+    .from("fantasy_gameweeks")
+    .select("id, number")
+    .eq("season_id", gameweek.season_id)
+    .lt("number", gameweek.number)
+    .order("number", { ascending: false })
+    .limit(20);
+
+  let previousPlayerIds: string[] = [];
+  for (const gw of priorGameweeks ?? []) {
+    const { data: priorRoster } = await supabase
+      .from("fantasy_rosters")
+      .select("player_id")
+      .eq("fantasy_team_id", fantasyTeamId)
+      .eq("gameweek_id", gw.id);
+    if (priorRoster && priorRoster.length > 0) {
+      previousPlayerIds = priorRoster.map((r) => r.player_id);
+      break;
+    }
+  }
+
+  const transfers = assessTransfers(previousPlayerIds, playerIds);
+
   const writer = rosterWriter();
 
   if (toRemove.length > 0) {
@@ -301,6 +340,57 @@ export async function setGameweekRoster(
     logError("fantasy.saveRoster", upsertError);
     return { error: "Couldn't save your squad. Try again." };
   }
+
+  /**
+   * Record what changed. Rewritten wholesale for this gameweek on every save
+   * rather than appended to, because the assessment is a NET diff against last
+   * week — appending would accumulate a row per edit, turning "what changed"
+   * into "what was fiddled with", and charging for it.
+   *
+   * Best-effort by contract: the squad is saved, which is what the manager
+   * asked for. A failure here loses this save's cost record, which the next
+   * save rebuilds from the same diff.
+   */
+  const { error: clearTransfersError } = await writer
+    .from("fantasy_transfers")
+    .delete()
+    .eq("fantasy_team_id", fantasyTeamId)
+    .eq("gameweek_id", gameweekId);
+  if (clearTransfersError) {
+    logError("fantasy.clearTransfers", clearTransfersError);
+  } else if (transfers.transferCount > 0) {
+    // Paired positionally. The pairing is presentational — a transfer is a net
+    // swap, and which departing player "funded" which arrival is not a fact
+    // KIVO has — but a row needs both sides to answer "who did I sell?", and
+    // the free/charged split is assigned in order so the free one is the first,
+    // which is the only ordering a manager could predict.
+    const transferRows = transfers.playersIn
+      .map((playerInId, index) => {
+        const isFree = index < FREE_TRANSFERS_PER_GAMEWEEK;
+        return {
+          fantasy_team_id: fantasyTeamId,
+          gameweek_id: gameweekId,
+          player_in_id: playerInId,
+          player_out_id: transfers.playersOut[index] ?? transfers.playersOut[0] ?? playerInId,
+          is_free: isFree,
+          points_cost: isFree ? 0 : TRANSFER_HIT_POINTS,
+        };
+      })
+      // A degenerate save where a player appears on both sides would violate
+      // fantasy_transfers_distinct_players; dropped rather than allowed to fail
+      // the whole insert, since the squad itself is already saved.
+      .filter((row) => row.player_in_id !== row.player_out_id);
+
+    if (transferRows.length > 0) {
+      const { error: transferError } = await writer.from("fantasy_transfers").insert(transferRows);
+      if (transferError) logError("fantasy.recordTransfers", transferError);
+    }
+  }
+
+  // Merged into the existing notice channel rather than a new one, so the
+  // builder needs no change to show it: it already renders `notice`.
+  const transferNotice = describeTransferCost(transfers);
+  if (transferNotice) notice = notice ? `${notice} ${transferNotice}` : transferNotice;
 
   revalidatePath("/fantasy");
   // The resolved armband goes back to the caller so the builder's client-side

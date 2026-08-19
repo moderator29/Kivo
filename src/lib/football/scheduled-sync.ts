@@ -17,6 +17,7 @@ import {
 } from "@/lib/football/request-budget";
 import { logError } from "@/lib/log";
 import { pruneRateLimitEvents } from "@/lib/rate-limit";
+import { rescoreLiveGameweeks } from "@/lib/fantasy-live-scoring";
 
 /**
  * The automated sync worker, shared by both scheduled entry points:
@@ -740,6 +741,28 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
   // daily sync. Not stale: wrong. This is the bounded fallback.
   const reconciled = await reconcileDisappearedFixtures(supabase, providerLabel);
 
+  /**
+   * Fantasy points that move during a match.
+   *
+   * Runs here rather than on its own schedule because it depends entirely on
+   * what the sync above just wrote, and because it must never cause a provider
+   * request — it reads only KIVO's own tables, so it adds nothing to the
+   * budget this invocation already reserved.
+   *
+   * Best-effort by contract: the fixtures sync has already succeeded by this
+   * point, and a fantasy scoring failure must not make it report itself as
+   * broken. Every row it writes carries `status = 'provisional'` and the
+   * fixture counts that explain why, so a mid-match total says what it is
+   * rather than looking settled.
+   */
+  let fantasyGameweeksScored = 0;
+  try {
+    const liveScoring = await rescoreLiveGameweeks(supabase);
+    fantasyGameweeksScored = liveScoring.gameweeksScored;
+  } catch (error) {
+    logError("cron.sync-live.fantasy-scoring", error);
+  }
+
   return NextResponse.json(
     {
       ok: result.status !== "failed",
@@ -750,6 +773,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
       nextEligibleAt: plan.nextEligibleAt,
       budget: { spent: reservation.spentInWindow, limit: reservation.limit },
       reconciledFixtures: reconciled,
+      fantasyGameweeksScored,
       error: result.error ?? null,
     },
     { status: result.status === "failed" ? 500 : 200 },

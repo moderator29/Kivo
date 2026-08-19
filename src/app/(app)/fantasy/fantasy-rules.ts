@@ -221,3 +221,112 @@ export function deadlineUrgency(deadlineAt: string, now: Date = new Date()): Dea
   if (hoursRemaining < 24) return "soon";
   return "normal";
 }
+
+/**
+ * How many squad changes a manager gets for free each gameweek.
+ *
+ * One, which is the convention every established fantasy game uses, and the
+ * number is the whole point of the format: a squad you can rebuild for nothing
+ * every week is a squad you never have to think about. Before this there was no
+ * limit at all — `setGameweekRoster` accepted any fifteen players that passed
+ * `validateRoster`, forever, for free.
+ */
+export const FREE_TRANSFERS_PER_GAMEWEEK = 1;
+
+/** What each change beyond the free allowance costs, in points. Negative
+ * because it is applied to a score, and stored as an absolute cost on the
+ * transfer row so a past gameweek stays explicable if this number changes. */
+export const TRANSFER_HIT_POINTS = -4;
+
+export type TransferAssessment = {
+  /** Players in the new squad who were not in the previous one. */
+  playersIn: string[];
+  /** Players in the previous squad who are not in the new one. */
+  playersOut: string[];
+  /** How many swaps this represents. */
+  transferCount: number;
+  /** How many of those exceed the free allowance. */
+  chargeableCount: number;
+  /** Total points cost, as a non-positive number. */
+  pointsCost: number;
+  /** True when there is no previous squad to have transferred out of — the
+   * first squad a team ever picks is free and unlimited. */
+  isInitialSquad: boolean;
+};
+
+/**
+ * Works out what a squad change costs.
+ *
+ * ## Counted against LAST GAMEWEEK's squad, never against the current draft
+ *
+ * This is the rule that makes the feature usable rather than punitive. Roster
+ * rows for a gameweek are created by carry-forward and then edited, possibly
+ * many times, before the deadline. Charging per edit would bill a manager for
+ * changing their mind: swap a player in, swap them back out, and they are two
+ * transfers down having ended exactly where they started.
+ *
+ * Diffing against the previous gameweek's squad makes the cost a function of
+ * the NET change, so tinkering is free and only the final shape of the squad is
+ * charged for. Every established fantasy game works this way, and it is the
+ * only version that survives somebody opening the builder twice.
+ *
+ * `previousPlayerIds` empty means there is no previous squad — a team's first
+ * ever pick, or the first gameweek of a season. That is free and unlimited,
+ * because there is nothing to have transferred out of.
+ */
+export function assessTransfers(
+  previousPlayerIds: readonly string[],
+  newPlayerIds: readonly string[],
+  freeAllowance: number = FREE_TRANSFERS_PER_GAMEWEEK,
+  hitPoints: number = TRANSFER_HIT_POINTS,
+): TransferAssessment {
+  if (previousPlayerIds.length === 0) {
+    return {
+      playersIn: [],
+      playersOut: [],
+      transferCount: 0,
+      chargeableCount: 0,
+      pointsCost: 0,
+      isInitialSquad: true,
+    };
+  }
+
+  const previous = new Set(previousPlayerIds);
+  const next = new Set(newPlayerIds);
+
+  const playersIn = [...next].filter((id) => !previous.has(id));
+  const playersOut = [...previous].filter((id) => !next.has(id));
+
+  // A valid squad is always fifteen players, so these are equal in practice.
+  // Taking the max rather than assuming it means a malformed save is charged
+  // for the larger side rather than under-charged by a mismatch — and never
+  // produces a negative count.
+  const transferCount = Math.max(playersIn.length, playersOut.length);
+  const chargeableCount = Math.max(0, transferCount - Math.max(0, freeAllowance));
+
+  return {
+    playersIn,
+    playersOut,
+    transferCount,
+    chargeableCount,
+    // `0 * -4` is negative zero in JavaScript, which is not what anybody means
+    // by "no cost" — it survives into the database, into JSON, and renders as
+    // "-0" in a UI that formats a number it assumed was positive-or-negative.
+    pointsCost: chargeableCount === 0 ? 0 : chargeableCount * hitPoints,
+    isInitialSquad: false,
+  };
+}
+
+/** The sentence shown to a manager when a save costs them points. Returns null
+ * when nothing is owed — there is no message for "you did the ordinary thing". */
+export function describeTransferCost(assessment: TransferAssessment): string | null {
+  if (assessment.isInitialSquad || assessment.transferCount === 0) return null;
+  if (assessment.chargeableCount === 0) {
+    return assessment.transferCount === 1
+      ? "1 transfer, using your free transfer for this gameweek."
+      : `${assessment.transferCount} transfers, within your free allowance.`;
+  }
+  return `${assessment.transferCount} transfers — ${assessment.chargeableCount} beyond your free allowance, costing ${Math.abs(
+    assessment.pointsCost,
+  )} points this gameweek.`;
+}

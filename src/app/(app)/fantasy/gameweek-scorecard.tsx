@@ -74,7 +74,7 @@ export async function GameweekScorecard({
     supabase
       .from("fantasy_points")
       .select(
-        "points, status, fixtures_total, fixtures_finished, fixtures_with_events, computed_at, scoring_model_version",
+        "points, status, fixtures_total, fixtures_finished, fixtures_with_events, computed_at, scoring_model_version, transfer_points_cost",
       )
       .eq("fantasy_team_id", fantasyTeamId)
       .eq("gameweek_id", gameweekId)
@@ -137,8 +137,9 @@ export async function GameweekScorecard({
   // itemised lines must sum to the stored total. If they ever do not, the
   // discrepancy is shown rather than hidden — a breakdown that silently
   // disagrees with the score is worse than no breakdown.
+  const transferCost = pointsRow.transfer_points_cost ?? 0;
   const lineSum = lines.reduce((sum, line) => sum + line.totalPoints, 0);
-  const reconciles = lines.length === 0 || lineSum === pointsRow.points;
+  const reconciles = lines.length === 0 || lineSum + transferCost === pointsRow.points;
 
   return (
     <FadeIn className="kivo-glass mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl p-5">
@@ -195,11 +196,21 @@ export async function GameweekScorecard({
         </div>
       )}
 
+      {/* The transfer hit as a visible line rather than four points silently
+          missing from the total. A manager who took a hit knew they were taking
+          it; a manager who cannot see it just thinks the maths is wrong. */}
+      {transferCost !== 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-surface-1 px-3 py-2">
+          <span className="text-[11px] text-foreground-muted">Transfer cost</span>
+          <span className="text-sm font-semibold tabular-nums text-warning">{transferCost}</span>
+        </div>
+      )}
+
       {!reconciles && (
         <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-warning">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-          The breakdown below adds up to {lineSum}, not {pointsRow.points}. Something is wrong with this score — please
-          report it rather than trusting either number.
+          The breakdown below adds up to {lineSum + transferCost}, not {pointsRow.points}. Something is wrong with this
+          score — please report it rather than trusting either number.
         </p>
       )}
 

@@ -666,6 +666,7 @@ export type Database = {
           points: number
           scoring_model_version: string | null
           status: string
+          transfer_points_cost: number
           updated_at: string
         }
         Insert: {
@@ -680,6 +681,7 @@ export type Database = {
           points?: number
           scoring_model_version?: string | null
           status?: string
+          transfer_points_cost?: number
           updated_at?: string
         }
         Update: {
@@ -694,6 +696,7 @@ export type Database = {
           points?: number
           scoring_model_version?: string | null
           status?: string
+          transfer_points_cost?: number
           updated_at?: string
         }
         Relationships: [
@@ -836,6 +839,68 @@ export type Database = {
             columns: ["owner_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fantasy_transfers: {
+        Row: {
+          created_at: string
+          fantasy_team_id: string
+          gameweek_id: string
+          id: string
+          is_free: boolean
+          player_in_id: string
+          player_out_id: string
+          points_cost: number
+        }
+        Insert: {
+          created_at?: string
+          fantasy_team_id: string
+          gameweek_id: string
+          id?: string
+          is_free: boolean
+          player_in_id: string
+          player_out_id: string
+          points_cost?: number
+        }
+        Update: {
+          created_at?: string
+          fantasy_team_id?: string
+          gameweek_id?: string
+          id?: string
+          is_free?: boolean
+          player_in_id?: string
+          player_out_id?: string
+          points_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fantasy_transfers_fantasy_team_id_fkey"
+            columns: ["fantasy_team_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_transfers_gameweek_id_fkey"
+            columns: ["gameweek_id"]
+            isOneToOne: false
+            referencedRelation: "fantasy_gameweeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_transfers_player_in_id_fkey"
+            columns: ["player_in_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fantasy_transfers_player_out_id_fkey"
+            columns: ["player_out_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
