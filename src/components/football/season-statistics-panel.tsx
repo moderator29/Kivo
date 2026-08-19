@@ -7,6 +7,7 @@ import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { triggerPlayerSeasonStatisticsSync } from "@/app/admin/data-health/provider-data-actions";
+import { PlayerSeasonAdvancedMetrics } from "@/components/football/season-advanced-metrics-panel";
 
 /**
  * A player's season output, split by competition.
@@ -235,6 +236,13 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
           </div>
         );
       })}
+
+      {/* The other twenty-four synced columns, behind a disclosure so the four
+          above stay the headline. Self-contained (its own query, its own
+          rules) — see season-advanced-metrics-panel.tsx. Renders nothing when
+          the provider reported nothing beyond the columns already in the
+          table. */}
+      <PlayerSeasonAdvancedMetrics playerId={playerId} />
 
       {canSync && (
         <InlineSyncButton
