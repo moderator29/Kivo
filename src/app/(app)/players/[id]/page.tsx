@@ -1,48 +1,92 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, LineChart, Trophy } from "lucide-react";
+import {
+  Activity,
+  ArrowLeftRight,
+  ChartColumn,
+  GitCompareArrows,
+  LineChart,
+  ListOrdered,
+  Trophy,
+} from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
-import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { YourPlayerConnection } from "@/components/football/your-connection-card";
 import { getViewerPlayerConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
-import { InlineSyncButton } from "@/components/admin/inline-sync-button";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TeamCrest } from "@/components/ui/team-crest";
-import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TrackView } from "@/components/ui/track-view";
 import { FormBadges } from "@/components/teams/form-badges";
+import { EntityTabs, type EntityTab } from "@/components/football/entity-tabs";
+import { ListSurface, Section, SectionEmpty, StatTile } from "@/components/football/entity-shell";
+import { PlayerHeader } from "@/components/players/player-header";
+import { PlayerMatchLog, type MatchLogRow } from "@/components/players/player-match-log";
+import { CareerChart } from "@/components/players/career-chart";
+import {
+  buildPlayerMatchLog,
+  hasCareerProgression,
+  summarizeCareerBySeason,
+  type PlayerFixtureInput,
+} from "@/components/players/player-career";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
-import { computePlayerForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
-import { calculateAge, formatDate } from "@/lib/format";
+import { computePlayerForm, type ResolvedResult } from "@/lib/football/form-engine";
+import { aggregateSeasonRating, RATING_MODEL_VERSION } from "@/lib/football/rating-engine";
+import { competitionName } from "@/lib/football/competition-label";
+import { formatDate, formatNumber } from "@/lib/format";
 import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { DEFAULT_FANTASY_PRICE, formatFantasyPrice } from "@/app/(app)/fantasy/fantasy-rules";
 import { PlayerAbsenceNote } from "@/components/football/absences-panel";
 import { PlayerSeasonStatisticsPanel } from "@/components/football/season-statistics-panel";
 
-// RECOMMENDATIONS.md item 296: same minimum-sample suppression convention as
-// this document's other real-but-thin aggregates (items 168/170/250) — a
-// gameweek with only a handful of total fantasy picks league-wide shouldn't
-// render a precise-looking ownership percentage.
+/**
+ * A player page, rebuilt around the question a fan opens one with: what has
+ * this player actually done?
+ *
+ * ## Shape
+ *
+ * Identity block with the four numbers that define a player's season, then
+ * depth behind tabs — the same structure as the club page and the Match
+ * Centre, using the same rail (`SectionTabs`, see `docs/UI_PRIMITIVES.md`).
+ *
+ * ## The new thing on this page
+ *
+ * A match log. KIVO could previously tell you a career total and a form strip
+ * and nothing in between: there was no way to see the matches the totals came
+ * from. `buildPlayerMatchLog` assembles one from rows KIVO already holds — the
+ * player's `lineups`, the `fixture_events` they are the subject or the assist
+ * of, and their real minutes where the provider reported them — and rates each
+ * one through the shared KIVO Rating Engine.
+ *
+ * ## Nothing here is invented
+ *
+ * A rating is `null` for a match the engine has no evidence the player played
+ * in, and a null rating renders as no chip rather than a neutral 6.0. Minutes
+ * are never assumed from "started". A season with no goals figure reported
+ * shows a dash, and the dash is explained once rather than per row. The four
+ * headline numbers exist only once the player has played a match KIVO holds.
+ */
+
+// Same minimum-sample suppression convention as this page's other real-but-thin
+// aggregates: a gameweek with only a handful of total fantasy picks league-wide
+// should not render a precise-looking ownership percentage.
 const MIN_FANTASY_OWNERSHIP_SAMPLE = 10;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = createServerSupabaseClient();
   // readOptionalRow, not readRow: a page title is never worth taking the page
-  // down for. The failure is logged, the title falls back, and the page's own
-  // read below still gets its proper chance.
+  // down for.
   const player = readOptionalRow(
     await supabase.from("players").select("known_as, full_name").eq("id", id).maybeSingle(),
     "players.detail.metadata",
@@ -64,7 +108,18 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [playerResult, { data: lineupRows }, { data: eventRows }, { data: assistEventRows }, { data: transfers }, { data: followRow }, isSaved, transfersLastSyncedAt] = await Promise.all([
+  const [
+    playerResult,
+    { data: lineupRows },
+    { data: eventRows },
+    { data: relatedEventRows },
+    { data: matchStatRows },
+    { data: transfers },
+    { data: followRow },
+    isSaved,
+    transfersLastSyncedAt,
+    { data: seasonStatRows },
+  ] = await Promise.all([
     supabase
       .from("players")
       .select(
@@ -77,24 +132,24 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       .from("lineups")
       .select(
         `id, is_starting, team_id,
-         fixture:fixtures(id, status, kickoff_at, home_team_id, away_team_id, home_score, away_score)`,
+         fixture:fixtures(
+           id, status, kickoff_at, home_team_id, away_team_id, home_score, away_score,
+           competition:competitions(name, short_name),
+           home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
+           away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url)
+         )`,
       )
       .eq("player_id", id),
-    supabase
-      .from("fixture_events")
-      .select("event_type")
-      .eq("player_id", id),
-    // Assists. API-Football puts the assister on the goal event itself
-    // (`assist`), which sync-match-details.ts has always mapped to
-    // `related_player_id` — the same field fantasy scoring awards points from.
-    // Counted from the same `fixture_events` rows the goals above come from,
-    // so the two numbers always span the same matches; see
-    // computePlayerMatchStats' own note on why the per-match statistics table
-    // is deliberately not used for this.
-    supabase
-      .from("fixture_events")
-      .select("event_type")
-      .eq("related_player_id", id),
+    // The player as the SUBJECT of an event: their goals, their cards.
+    // `fixture_id` comes along so the match log can attribute each one to the
+    // match it happened in rather than only to a career total.
+    supabase.from("fixture_events").select("fixture_id, event_type").eq("player_id", id),
+    // The player in the RELATED slot. API-Football puts the assister on the
+    // goal event itself, and the incoming player on a substitution event —
+    // both of which sync-match-details.ts maps to `related_player_id`, so one
+    // query carries assists and "came on" together.
+    supabase.from("fixture_events").select("fixture_id, event_type").eq("related_player_id", id),
+    supabase.from("fixture_player_statistics").select("fixture_id, minutes_played").eq("player_id", id),
     supabase
       .from("transfers")
       .select(
@@ -104,9 +159,6 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       )
       .eq("player_id", id)
       .order("transfer_date", { ascending: false }),
-    // RECOMMENDATIONS.md item 287: selecting `muted` (not a head-count) so
-    // the same row also carries this viewer's per-player mute state for
-    // FollowWithMute — a plain existence check would lose it.
     profile
       ? supabase
           .from("follows")
@@ -116,8 +168,6 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           .eq("followed_id", id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    // RECOMMENDATIONS.md item 173: player watchlist — real save state,
-    // saves_select_own already scopes this to the caller's own row.
     profile
       ? supabase
           .from("saves")
@@ -127,27 +177,24 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           .eq("target_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
-    // RECOMMENDATIONS.md item 60: transfer sync writes entity_type 'transfer'
-    // (see syncPlayerTransfers in src/lib/football/sync-transfers.ts).
     getLastSyncedAt(["transfer"]),
+    supabase
+      .from("player_season_statistics")
+      .select("season_year, appearances, minutes_played, goals, assists")
+      .eq("player_id", id),
   ]);
 
-  // Kept as the whole result rather than destructured to `{ data: player }`,
-  // because discarding the error meant a dropped connection rendered
-  // "Offside. That doesn't exist." about a player who exists perfectly well.
-  // A 404 is a claim about the world; a failed read is a fact about the
-  // request. readRow throws on a real error so the error boundary handles it
-  // as what it is, and returns null only for a player who genuinely is not
-  // there. The other reads in this batch stay tolerant on purpose — a missing
-  // transfer list or follow row costs a panel, not the page.
+  // A failed read is a fact about the request, not a claim about the world:
+  // readRow throws so the error boundary handles it as what it is, and returns
+  // null only for a player who genuinely is not there.
   const player = readRow(playerResult, "players.detail");
   if (!player) notFound();
 
-  // RECOMMENDATIONS.md item 296: real fantasy price + ownership, only once a
-  // current season is resolvable for this player's current club — same
-  // team -> standings -> seasons(is_current) pattern teams/[id]/page.tsx
-  // already uses to find "the" current season for a team (a player has no
-  // season/standings row of its own to read this off directly).
+  const displayName = player.known_as ?? player.full_name;
+  const isAdmin = canManageFootballData(profile?.role);
+
+  // Real fantasy price + ownership, only once a current season is resolvable
+  // for this player's current club — a player has no season row of their own.
   let fantasySeasonId: string | null = null;
   if (player.current_team_id) {
     const { data: standingsRows } = await supabase
@@ -160,18 +207,9 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   let fantasyPrice: number | null = null;
   let fantasyOwnership: { playerCount: number; totalCount: number } | null = null;
   if (fantasySeasonId) {
-    // Lazily backfills the flat default if this player has never had a
-    // fantasy_player_prices row for this season (same convention every
-    // other real reader of this table already follows), then reads whatever
-    // its real current price is — dynamic since RECOMMENDATIONS.md item 251
-    // (see fantasy-pricing.ts), the flat default otherwise.
     await ensureFantasyPlayerPrices(fantasySeasonId, [player.id]);
     const [priceMap, { data: ownershipRows }] = await Promise.all([
       getFantasyPriceMap(fantasySeasonId, [player.id]),
-      // Narrow SECURITY DEFINER RPC (migration 0051) over fantasy_rosters —
-      // fantasy_rosters_all_own is owner-only, so a plain cross-user query
-      // can't compute this, same reasoning get_prediction_consensus already
-      // established for a different table.
       supabase.rpc("get_fantasy_ownership", { p_player_id: player.id, p_season_id: fantasySeasonId }),
     ]);
     fantasyPrice = priceMap.get(player.id) ?? DEFAULT_FANTASY_PRICE;
@@ -181,173 +219,196 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
     }
   }
   const hasMeaningfulOwnership = fantasyOwnership !== null && fantasyOwnership.totalCount >= MIN_FANTASY_OWNERSHIP_SAMPLE;
-  const ownershipPct = hasMeaningfulOwnership
-    ? Math.round((fantasyOwnership!.playerCount / fantasyOwnership!.totalCount) * 100)
-    : null;
+  const ownershipPct =
+    hasMeaningfulOwnership && fantasyOwnership
+      ? Math.round((fantasyOwnership.playerCount / fantasyOwnership.totalCount) * 100)
+      : null;
 
   const isFollowing = followRow !== null;
   const isMuted = followRow?.muted ?? false;
 
-  // KN-46: the same page for a stranger and for the manager who has this
-  // player as their captain this gameweek. One targeted, owner-scoped read
-  // fixes that; it renders nothing when the player isn't in the viewer's squad.
   const viewerConnection = profile ? await getViewerPlayerConnection(supabase, profile.id, player.id) : null;
 
-  const stats = computePlayerMatchStats(lineupRows ?? [], eventRows ?? [], assistEventRows ?? []);
-  // Assists only appear once they are genuinely known — `stats.assists` is null
-  // for a caller that never queried them, and null is not zero.
-  const statCells: [string, number][] = [
-    ["Apps", stats.appearances],
-    ["Starts", stats.starts],
-    ["Goals", stats.goals],
-    ...(stats.assists !== null ? ([["Assists", stats.assists]] as [string, number][]) : []),
-    ["Yellow", stats.yellowCards],
-    ["Red", stats.redCards],
-  ];
+  // Career totals stay on the shared `computePlayerMatchStats`, unchanged: the
+  // match log below is a different view of the same rows, not a second
+  // accountant, and two functions counting one career would eventually
+  // disagree.
+  const stats = computePlayerMatchStats(
+    lineupRows ?? [],
+    (eventRows ?? []).map((row) => ({ event_type: row.event_type })),
+    (relatedEventRows ?? []).map((row) => ({ event_type: row.event_type })),
+  );
   const hasMatchData = stats.appearances > 0;
 
-  // KIVO Form Engine (src/lib/football/form-engine.ts): each lineups row
-  // already carries the team_id this player was named for in that fixture,
-  // so it resolves to the same "own vs opponent score" shape team form uses
-  // (teams/[id]/page.tsx) rather than a per-player individual result, which
-  // doesn't exist in football — a player shares their team's real result.
-  // Sorted newest-first client-side (bounded row count: one per fixture this
-  // player has ever been named in a lineup for) rather than a second
-  // DB round trip just to order by a joined column.
-  const playerResultsNewestFirst: ResolvedResult[] = (lineupRows ?? [])
-    .flatMap((row) => {
-      if (!row.fixture) return [];
-      const resolved = resolveFixtureResult(
-        {
-          id: row.fixture.id,
-          kickoff_at: row.fixture.kickoff_at,
-          status: row.fixture.status,
-          home_score: row.fixture.home_score,
-          away_score: row.fixture.away_score,
-          home_team_id: row.fixture.home_team_id,
-          away_team_id: row.fixture.away_team_id,
-        },
-        row.team_id,
-      );
-      return resolved ? [resolved] : [];
-    })
-    .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
-  const recentForm = computePlayerForm(playerResultsNewestFirst, "last5");
+  // --- The match log, and everything derived from it -----------------------
 
-  const displayName = player.known_as ?? player.full_name;
-  const showFullNameSubtitle = Boolean(player.known_as) && player.known_as !== player.full_name;
+  const fixtureById = new Map<string, NonNullable<NonNullable<typeof lineupRows>[number]["fixture"]>>();
+  const playerFixtures: PlayerFixtureInput[] = [];
+  for (const row of lineupRows ?? []) {
+    if (!row.fixture) continue;
+    fixtureById.set(row.fixture.id, row.fixture);
+    playerFixtures.push({
+      fixtureId: row.fixture.id,
+      kickoffAt: row.fixture.kickoff_at,
+      status: row.fixture.status,
+      teamId: row.team_id,
+      isStarting: row.is_starting,
+      homeTeamId: row.fixture.home_team_id,
+      awayTeamId: row.fixture.away_team_id,
+      homeScore: row.fixture.home_score,
+      awayScore: row.fixture.away_score,
+    });
+  }
 
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <TrackView type="player" id={player.id} name={displayName} imageUrl={player.photo_url} />
-      <div className="kivo-glass-brand rounded-2xl p-6">
-        <div className="flex items-center gap-4">
-          <FadeIn delay={0} className="shrink-0">
-            <PlayerAvatar photoUrl={player.photo_url} name={displayName} size={64} />
-          </FadeIn>
-          <FadeIn delay={0.05} className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold text-foreground">{displayName}</h1>
-            {showFullNameSubtitle && <p className="truncate text-xs text-foreground-subtle">{player.full_name}</p>}
-            {player.position && (
-              <span className="mt-1 inline-block rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
-                {player.position}
-              </span>
-            )}
-          </FadeIn>
-          <FadeIn delay={0.1} className="flex items-center gap-2">
-            <SaveButton targetType="player" targetId={player.id} initialSaved={isSaved} signedIn={viewerIsSignedIn(profile)} />
-            <FollowWithMute
-              targetType="player"
-              targetId={player.id}
-              initialFollowing={isFollowing}
-              initialMuted={isMuted}
-              signedIn={viewerIsSignedIn(profile)}
-            />
-          </FadeIn>
-        </div>
+  const minutesByFixture = new Map<string, number | null>(
+    (matchStatRows ?? []).map((row) => [row.fixture_id, row.minutes_played]),
+  );
 
-        <FadeIn delay={0.15} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex items-center gap-2 text-sm text-foreground-muted">
-            <Flag className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-            {player.nationality ?? "Nationality not listed"}
-          </div>
-          <div className="flex items-center gap-2 text-sm text-foreground-muted">
-            <Cake className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-            {player.date_of_birth
-              ? `${formatDate(player.date_of_birth)} (age ${calculateAge(player.date_of_birth)})`
-              : "Date of birth not listed"}
-          </div>
-        </FadeIn>
-        <FadeIn delay={0.18}>
-          <Link
-            href={`/players/compare?a=${player.id}`}
-            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent/80"
-          >
-            <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            Compare with another player
-          </Link>
-        </FadeIn>
-        {/* RECOMMENDATIONS.md items 184/185: real, player-scoped AI grounding
-            entry point — see ask-ai-link.tsx. */}
-        <FadeIn delay={0.2}>
-          <AskAiLink ctx="player" id={player.id} label={`Ask AI about ${displayName}`} />
-        </FadeIn>
-      </div>
+  const matchLog = buildPlayerMatchLog({
+    playerId: player.id,
+    position: player.position,
+    fixtures: playerFixtures,
+    subjectEvents: (eventRows ?? []).map((row) => ({ fixtureId: row.fixture_id, eventType: row.event_type })),
+    relatedEvents: (relatedEventRows ?? []).map((row) => ({ fixtureId: row.fixture_id, eventType: row.event_type })),
+    minutesByFixture,
+  });
 
-      {/* Above everything else about this player, because whether they are
-          currently available changes how every number below it should be read.
-          Renders nothing at all when there is no report — an "available" badge
-          would be a fitness claim KIVO cannot make, since the absence of a
-          report is not evidence of fitness. */}
+  const matchLogRows: MatchLogRow[] = matchLog.map((entry) => {
+    const fixture = fixtureById.get(entry.fixtureId);
+    const opponent = entry.isHome ? fixture?.away_team : fixture?.home_team;
+    return {
+      ...entry,
+      opponentName: opponent?.name ?? "Opponent",
+      opponentShortName: opponent?.short_name ?? null,
+      opponentCrestUrl: opponent?.crest_url ?? null,
+      competitionLabel: competitionName(fixture?.competition ?? null, "short"),
+    };
+  });
+
+  // Form, from the same log. A player has no individual W/D/L in football —
+  // they share their team's real result, resolved against the team they were
+  // named for on the day (`lineups.team_id`).
+  const resolvedResults: ResolvedResult[] = matchLog.flatMap((entry) =>
+    entry.ownScore !== null && entry.oppScore !== null
+      ? [{ fixtureId: entry.fixtureId, kickoffAt: entry.kickoffAt, ownScore: entry.ownScore, oppScore: entry.oppScore }]
+      : [],
+  );
+  const recentForm = computePlayerForm(resolvedResults, "last5");
+
+  // KIVO's own average match rating. `aggregateSeasonRating` returns null for
+  // zero rated matches and flags a thin sample rather than hiding it, so the
+  // number can be shown with an honest caveat instead of disappearing.
+  const ratingSummary = aggregateSeasonRating(
+    matchLog.flatMap((entry) => (entry.rating ? [entry.rating] : [])),
+  );
+
+  const careerSeasons = summarizeCareerBySeason(seasonStatRows ?? []);
+  const showCareerChart = hasCareerProgression(careerSeasons);
+
+  // The four numbers in the header. Assists are omitted entirely rather than
+  // shown as zero when KIVO has not counted them — `stats.assists` is null for
+  // a caller that never queried them, and null is not zero.
+  const headline: { label: string; value: string; hint?: string; tone?: "default" | "accent" }[] = hasMatchData
+    ? [
+        { label: "Apps", value: String(stats.appearances) },
+        { label: "Goals", value: String(stats.goals) },
+        ...(stats.assists !== null ? [{ label: "Assists", value: String(stats.assists) }] : []),
+        ...(ratingSummary
+          ? [
+              {
+                label: "Rating",
+                value: ratingSummary.average.toFixed(2),
+                hint: ratingSummary.isSufficientSample ? undefined : `${ratingSummary.sampleSize} rated`,
+                tone: "accent" as const,
+              },
+            ]
+          : []),
+      ]
+    : [];
+
+  // --- Tabs ----------------------------------------------------------------
+
+  const overviewTab = (
+    <>
+      {/* Above everything else, because whether a player is currently available
+          changes how every number below should be read. Renders nothing at all
+          when there is no report — an "available" badge would be a fitness
+          claim KIVO cannot make. */}
       <PlayerAbsenceNote playerId={player.id} />
 
-      {viewerConnection && (
-        <FadeIn delay={0.18}>
-          <YourPlayerConnection connection={viewerConnection} />
-        </FadeIn>
+      {viewerConnection && <YourPlayerConnection connection={viewerConnection} />}
+
+      {hasMatchData ? (
+        <>
+          {ratingSummary && (
+            <Section title="KIVO rating" icon={<Activity className="h-3.5 w-3.5" strokeWidth={2} />}>
+              <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+                <div className="flex items-baseline gap-3">
+                  <span className="text-4xl font-semibold tabular-nums leading-none text-accent">
+                    {ratingSummary.average.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-foreground-muted">
+                    across {ratingSummary.sampleSize} rated{" "}
+                    {ratingSummary.sampleSize === 1 ? "match" : "matches"}
+                  </span>
+                </div>
+                <p className="border-t border-hairline-soft pt-3 text-[11px] leading-relaxed text-foreground-subtle">
+                  KIVO&apos;s own model (v{RATING_MODEL_VERSION}), computed from real goals, assists, cards and the
+                  match result — not a rating published by anyone else.
+                  {!ratingSummary.isSufficientSample &&
+                    ` Only ${ratingSummary.sampleSize} rated ${ratingSummary.sampleSize === 1 ? "match" : "matches"} so far, so read it lightly.`}
+                </p>
+              </div>
+            </Section>
+          )}
+
+          {recentForm.isSufficientSample && (
+            <Section title="Recent form" icon={<LineChart className="h-3.5 w-3.5" strokeWidth={2} />}>
+              <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+                <FormBadges form={recentForm.sequence} />
+                <p className="text-[11px] leading-relaxed text-foreground-subtle">
+                  {displayName}&apos;s team in the {recentForm.sampleSize} most recent finished{" "}
+                  {recentForm.sampleSize === 1 ? "match" : "matches"} they were named for: {recentForm.wins}W{" "}
+                  {recentForm.draws}D {recentForm.losses}L · {recentForm.goalsScored} scored, {recentForm.goalsConceded}{" "}
+                  conceded.
+                </p>
+              </div>
+            </Section>
+          )}
+
+          {matchLogRows.length > 0 && (
+            <Section title="Last matches" icon={<ListOrdered className="h-3.5 w-3.5" strokeWidth={2} />}>
+              <ListSurface>
+                <MatchLogPreview rows={matchLogRows.slice(0, 3)} />
+              </ListSurface>
+            </Section>
+          )}
+        </>
+      ) : (
+        <SectionEmpty
+          icon={<Activity className="h-6 w-6" strokeWidth={1.75} />}
+          message={
+            player.current_team
+              ? `${displayName} hasn't appeared in a match KIVO covers yet. Their matches for ${player.current_team.name} will show up here.`
+              : `${displayName} hasn't appeared in a match KIVO covers yet.`
+          }
+          action={
+            player.current_team ? (
+              <Link
+                href={`/teams/${player.current_team.id}`}
+                className="kivo-focus flex min-h-11 items-center gap-2 rounded-xl border border-hairline px-3.5 text-xs font-semibold text-foreground-muted transition hover:border-hairline-strong hover:text-foreground"
+              >
+                <TeamCrest crestUrl={player.current_team.crest_url} name={player.current_team.name} size={16} />
+                {player.current_team.name}
+              </Link>
+            ) : undefined
+          }
+          className="py-12"
+        />
       )}
 
-      {/* The provider's own per-competition season aggregates. Renders nothing
-          when none are synced — the match log below is already built from
-          KIVO's own fixtures, and two empty panels would say the same nothing
-          twice. */}
-      <PlayerSeasonStatisticsPanel playerId={player.id} />
-
-      <FadeIn delay={0.2} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Shield className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Current club
-        </h2>
-        {player.current_team ? (
-          <Link
-            href={`/teams/${player.current_team.id}`}
-            className="kivo-glass kivo-glass-interactive flex items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
-          >
-            <TeamCrest crestUrl={player.current_team.crest_url} name={player.current_team.name} />
-            <div className="min-w-0">
-              <p className="truncate text-sm text-foreground">{player.current_team.name}</p>
-              {player.current_team.short_name && (
-                <p className="truncate text-[11px] text-foreground-subtle">{player.current_team.short_name}</p>
-              )}
-            </div>
-          </Link>
-        ) : (
-          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No current club on record.
-          </div>
-        )}
-      </FadeIn>
-
-      {/* RECOMMENDATIONS.md item 296: only rendered once a current season is
-          resolvable for this player's club — a player with no synced
-          current club (or a club not in any currently-running season) has
-          nothing real to price against. */}
       {fantasySeasonId && fantasyPrice !== null && (
-        <FadeIn delay={0.22} className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Trophy className="h-4 w-4 text-kivo-cyan" strokeWidth={1.75} />
-            Fantasy
-          </h2>
+        <Section title="Fantasy" icon={<Trophy className="h-3.5 w-3.5 text-kivo-cyan" strokeWidth={2} />}>
           <div className="kivo-glass flex flex-col gap-4 rounded-2xl p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -356,178 +417,269 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
               </div>
               <div className="text-right">
                 <p className="text-2xl font-semibold tabular-nums text-foreground">
-                  {ownershipPct !== null ? `${ownershipPct}%` : "-"}
+                  {ownershipPct !== null ? `${ownershipPct}%` : "–"}
                 </p>
                 <p className="text-[11px] text-foreground-subtle">
                   {ownershipPct !== null ? "Rostered this gameweek" : "Not enough squads yet"}
                 </p>
               </div>
             </div>
-            <p className="border-t border-white/5 pt-3 text-xs text-foreground-subtle">
-              KIVO&apos;s own internal fantasy-game currency — not a real transfer-market value — moves in small,
-              capped steps based on this player&apos;s real recent match performance relative to their position group.
+            <p className="border-t border-hairline-soft pt-3 text-[11px] leading-relaxed text-foreground-subtle">
+              KIVO&apos;s own internal fantasy-game currency — not a real transfer-market value — moves in small, capped
+              steps based on this player&apos;s real recent match performance relative to their position group.
             </p>
             <Link
               href="/fantasy"
-              className="flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
+              className="kivo-focus flex items-center gap-1.5 text-xs font-medium text-kivo-cyan hover:text-kivo-cyan/80"
             >
               <Trophy className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               Build your fantasy squad
             </Link>
           </div>
-        </FadeIn>
+        </Section>
       )}
 
-      <FadeIn delay={0.25} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <Activity className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Career on KIVO
-        </h2>
-        {hasMatchData ? (
-          // Six cells with assists, five without, and the wide grid follows the
-          // real count so the row never ends in a single orphaned tile.
-          <div className={`grid grid-cols-3 gap-2 text-center ${statCells.length === 6 ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
-            {statCells.map(([label, value]) => (
-              <div key={label} className="kivo-glass rounded-xl px-2 py-3">
-                <div className="text-lg font-semibold text-foreground">{value}</div>
-                <div className="text-[11px] uppercase tracking-wide text-foreground-subtle">{label}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No match data yet.
-          </div>
-        )}
-
-        {/* These were headed "Season stats", which was false in two ways at
-            once. They are not a season: computePlayerMatchStats counts KIVO's
-            own synced lineups and fixture_events with no season filter at all.
-            And they are not one competition: every synced match is counted in
-            here together.
-            PlayerSeasonStatisticsPanel, which renders above this block, shows
-            the provider's own per-competition figures instead — so for any
-            player whose fixtures are only partly synced, the two WILL
-            disagree. Until now the page offered no way to tell why, which made
-            two true sets of numbers read as one contradiction. Naming the
-            scope is the whole fix; the numbers were never wrong. */}
-        {hasMatchData && (
-          <p className="px-1 text-[11px] leading-relaxed text-foreground-subtle">
-            From the {stats.appearances} completed{" "}
-            {stats.appearances === 1 ? "match" : "matches"} KIVO has for {displayName}, across all competitions. The
-            by-competition table above splits the same career up league by league.
-          </p>
-        )}
-      </FadeIn>
-
-      <FadeIn delay={0.28} className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-          <LineChart className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          Recent form
-        </h2>
-        {recentForm.isSufficientSample ? (
-          <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
-            <FormBadges form={recentForm.sequence} />
-            <p className="text-xs text-foreground-subtle">
-              {displayName}&apos;s team in the {recentForm.sampleSize} most recent finished match
-              {recentForm.sampleSize === 1 ? "" : "es"} they were named in the squad for:{" "}
-              {recentForm.wins}W {recentForm.draws}D {recentForm.losses}L · {recentForm.goalsScored} scored,{" "}
-              {recentForm.goalsConceded} conceded.
-            </p>
-          </div>
-        ) : (
-          <div className="kivo-glass rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            {playerResultsNewestFirst.length > 0
-              ? `Only ${playerResultsNewestFirst.length} completed match${playerResultsNewestFirst.length === 1 ? "" : "es"} so far — not enough to read a form trend from.`
-              : `No completed matches for ${displayName} yet.`}
-          </div>
-        )}
-      </FadeIn>
-
-      <FadeIn delay={0.3} className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <ArrowLeftRight className="h-4 w-4 text-accent" strokeWidth={1.75} />
-            Transfer history
-          </h2>
-          <LastSyncedNote timestamp={transfersLastSyncedAt} />
-        </div>
-        {transfers && transfers.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {transfers.map((transfer) => (
-              <div
-                key={transfer.id}
-                className="kivo-glass flex flex-col gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
-              >
-                <div className="flex items-center gap-2">
-                  {transfer.from_team ? (
-                    <Link
-                      href={`/teams/${transfer.from_team.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-accent"
-                    >
-                      <TeamCrest crestUrl={transfer.from_team.crest_url} name={transfer.from_team.name} />
-                      <span className="truncate">{transfer.from_team.short_name ?? transfer.from_team.name}</span>
-                    </Link>
-                  ) : (
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
-                      <TeamCrest crestUrl={null} name="" />
-                      Club not listed
-                    </span>
-                  )}
-                  <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
-                  {transfer.to_team ? (
-                    <Link
-                      href={`/teams/${transfer.to_team.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-accent"
-                    >
-                      <TeamCrest crestUrl={transfer.to_team.crest_url} name={transfer.to_team.name} />
-                      <span className="truncate">{transfer.to_team.short_name ?? transfer.to_team.name}</span>
-                    </Link>
-                  ) : (
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
-                      <TeamCrest crestUrl={null} name="" />
-                      Club not listed
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-3 border-t border-hairline-soft pt-3">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-muted">
-                      {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
-                    </span>
-                    <span className="text-[11px] text-foreground-subtle">{formatDate(transfer.transfer_date)}</span>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">{transfer.fee_text ?? "-"}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-5 text-center text-sm text-foreground-muted">
-            No transfer history recorded for this player yet.
-            {canManageFootballData(profile?.role) && (
-              <InlineSyncButton
-                label="Sync transfers"
-                action={triggerPlayerTransfersSync.bind(null, player.id)}
-                hint="Needs this player's club squad first, so this player has a mapping."
-              />
-            )}
-          </div>
-        )}
-      </FadeIn>
-
-      {/* Renders nothing at all if KIVO has no synced numbers for this player
-          — an empty card is not worth offering. */}
-      <FadeIn delay={0.16} className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
+      {/* Renders nothing at all if KIVO has no synced numbers for this player. */}
+      <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
         <ShareCardPanel
           kind="player-performance"
           id={player.id}
           shareUrl={`/players/${player.id}`}
-          shareText={`${player.known_as ?? player.full_name} on KIVO.`}
+          shareText={`${displayName} on KIVO.`}
           heading="Share this player"
           description="Pick a background. The preview is the exact image you save."
         />
+      </div>
+    </>
+  );
+
+  const tabs: EntityTab[] = [{ id: "overview", label: "Overview", content: overviewTab }];
+
+  if (matchLogRows.length > 0) {
+    tabs.push({
+      id: "matches",
+      label: "Matches",
+      count: matchLogRows.length,
+      content: (
+        <Section title="Match by match" icon={<ListOrdered className="h-3.5 w-3.5" strokeWidth={2} />}>
+          <PlayerMatchLog rows={matchLogRows} />
+        </Section>
+      ),
+    });
+  }
+
+  // Offered whenever there is a by-competition breakdown to show, a career to
+  // chart, or a career total counted from KIVO's own fixtures.
+  //
+  // `isAdmin` is in this condition and nowhere else on the page: it does not
+  // add a control, it only keeps `PlayerSeasonStatisticsPanel` reachable for
+  // staff on a player it holds nothing for. That panel owns its own staff
+  // affordance and lives outside this page; gating the tab is the least this
+  // page can do without reaching into it.
+  const hasSeasonStatistics = (seasonStatRows ?? []).length > 0;
+  if (hasSeasonStatistics || hasMatchData || isAdmin) {
+    tabs.push({
+      id: "stats",
+      label: "Stats",
+      content: (
+        <>
+          {showCareerChart && (
+            <Section title="Season by season" icon={<ChartColumn className="h-3.5 w-3.5" strokeWidth={2} />}>
+              <CareerChart seasons={careerSeasons} />
+            </Section>
+          )}
+
+          {hasMatchData && (
+            <Section title="Career on KIVO" icon={<Activity className="h-3.5 w-3.5" strokeWidth={2} />}>
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  <StatTile label="Apps" value={formatNumber(stats.appearances)} />
+                  <StatTile label="Starts" value={formatNumber(stats.starts)} />
+                  <StatTile label="Goals" value={formatNumber(stats.goals)} />
+                  {stats.assists !== null && <StatTile label="Assists" value={formatNumber(stats.assists)} />}
+                  <StatTile label="Yellow" value={formatNumber(stats.yellowCards)} />
+                  <StatTile label="Red" value={formatNumber(stats.redCards)} />
+                </div>
+                {/* These were once headed "Season stats", which was false twice
+                    over: not one season, and not one competition. Naming the
+                    scope is the whole fix — the numbers were never wrong. */}
+                <p className="px-1 text-[11px] leading-relaxed text-foreground-subtle">
+                  From the {stats.appearances} completed {stats.appearances === 1 ? "match" : "matches"} KIVO holds for{" "}
+                  {displayName}, across all competitions. The by-competition table below splits the same career up
+                  league by league, and will differ wherever KIVO holds only part of a season.
+                </p>
+              </div>
+            </Section>
+          )}
+
+          <PlayerSeasonStatisticsPanel playerId={player.id} />
+        </>
+      ),
+    });
+  }
+
+  // No admin branch here on purpose. This tab used to be offered to staff with
+  // no transfers to show, purely to carry a "Sync transfers" button — an
+  // internal control living on a fan-facing page. It is triggered per club from
+  // Admin instead, on a cheaper endpoint (one request for a club's whole
+  // history rather than one per player). The freshness line it sat next to is a
+  // real fact for a reader and stays.
+  if ((transfers ?? []).length > 0) {
+    tabs.push({
+      id: "transfers",
+      label: "Transfers",
+      count: transfers!.length,
+      content: (
+        <Section
+          title="Transfer history"
+          icon={<ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={2} />}
+          action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}
+        >
+          <ListSurface>
+            {(transfers ?? []).map((transfer) => (
+                <li key={transfer.id} className="flex flex-col gap-2 px-3 py-3">
+                  <span className="flex items-center gap-2">
+                    <ClubSide team={transfer.from_team} />
+                    <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-foreground-subtle" strokeWidth={2} />
+                    <ClubSide team={transfer.to_team} />
+                  </span>
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2">
+                      <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground-muted">
+                        {TRANSFER_TYPE_LABEL[transfer.transfer_type]}
+                      </span>
+                      <span className="text-[11px] text-foreground-subtle">
+                        {formatDate(transfer.transfer_date, { month: "short" })}
+                      </span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {transfer.fee_text ?? "–"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+          </ListSurface>
+        </Section>
+      ),
+    });
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 lg:px-8">
+      <TrackView type="player" id={player.id} name={displayName} imageUrl={player.photo_url} />
+
+      <PlayerHeader
+        name={displayName}
+        fullName={player.full_name}
+        photoUrl={player.photo_url}
+        position={player.position}
+        nationality={player.nationality}
+        dateOfBirth={player.date_of_birth}
+        club={
+          player.current_team
+            ? {
+                id: player.current_team.id,
+                name: player.current_team.name,
+                shortName: player.current_team.short_name,
+                crestUrl: player.current_team.crest_url,
+              }
+            : null
+        }
+        headline={headline}
+        actions={
+          <>
+            <SaveButton
+              targetType="player"
+              targetId={player.id}
+              initialSaved={isSaved}
+              signedIn={viewerIsSignedIn(profile)}
+            />
+            <FollowWithMute
+              targetType="player"
+              targetId={player.id}
+              initialFollowing={isFollowing}
+              initialMuted={isMuted}
+              signedIn={viewerIsSignedIn(profile)}
+            />
+          </>
+        }
+        footer={
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link
+              href={`/players/compare?a=${player.id}`}
+              className="kivo-focus flex items-center gap-1.5 text-xs font-medium text-accent transition hover:text-accent/80"
+            >
+              <GitCompareArrows className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              Compare
+            </Link>
+            <AskAiLink ctx="player" id={player.id} label={`Ask AI about ${displayName}`} />
+          </div>
+        }
+      />
+
+      <FadeIn delay={0.22}>
+        <EntityTabs tabs={tabs} ariaLabel={`${displayName} sections`} idPrefix="player" />
       </FadeIn>
     </div>
+  );
+}
+
+/** One club on a transfer row. A transfer whose other side KIVO does not hold
+ * still happened, so the row renders with the side it knows and says the other
+ * is not listed rather than dropping the transfer entirely. */
+function ClubSide({
+  team,
+}: {
+  team: { id: string; name: string; short_name: string | null; crest_url: string | null } | null;
+}) {
+  if (!team) {
+    return (
+      <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground-subtle">
+        <TeamCrest crestUrl={null} name="" size={18} />
+        Club not listed
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={`/teams/${team.id}`}
+      className="kivo-focus flex min-w-0 flex-1 items-center gap-2 text-xs text-foreground transition hover:text-accent"
+    >
+      <TeamCrest crestUrl={team.crest_url} name={team.name} size={18} />
+      <span className="truncate">{team.short_name ?? team.name}</span>
+    </Link>
+  );
+}
+
+/** The Overview's three-row taste of the match log. Deliberately the same rows
+ * the Matches tab renders — a preview that reformats its rows teaches the
+ * reader two layouts for one list. */
+function MatchLogPreview({ rows }: { rows: MatchLogRow[] }) {
+  return (
+    <>
+      {rows.map((row) => (
+        <li key={row.fixtureId}>
+          <Link
+            href={`/matches/${row.fixtureId}`}
+            className="kivo-focus flex min-h-[3.25rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
+          >
+            <TeamCrest crestUrl={row.opponentCrestUrl} name={row.opponentName} size={22} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm text-foreground">
+                {row.opponentShortName ?? row.opponentName}
+              </span>
+              <span className="block truncate text-[11px] text-foreground-subtle">
+                {[formatDate(row.kickoffAt, { month: "short" }), row.competitionLabel].filter(Boolean).join(" · ")}
+              </span>
+            </span>
+            {row.ownScore !== null && row.oppScore !== null && (
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                {row.ownScore}–{row.oppScore}
+              </span>
+            )}
+          </Link>
+        </li>
+      ))}
+    </>
   );
 }

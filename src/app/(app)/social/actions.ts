@@ -7,6 +7,7 @@ import { awardBadge, evaluateBadgeCriteria, hasBadge } from "@/lib/rewards";
 import { awardSocialPostXp } from "@/lib/xp-policy";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isReactionType, type ReactionType } from "@/lib/reactions";
+import { isUuid } from "@/lib/params";
 import { shouldNotify, withQuietHours } from "@/lib/notification-preferences";
 import { blockExistsBetween } from "@/lib/blocks";
 import { fetchPostsPage, type PostListItem } from "./posts";
@@ -349,6 +350,36 @@ export async function loadMorePosts(
     teamId: scope.kind === "team" ? scope.teamId : undefined,
     cursor: options?.cursor,
   });
+}
+
+/**
+ * The next page of one person's posts, for `/u/[username]`.
+ *
+ * Separate from `loadMorePosts` rather than another option on it, because the
+ * two answer to different rules. The feed's scope is deliberately re-derived
+ * from the viewer's own profile and never accepted from the client — a team id
+ * from a request would let anyone page through any club's fan feed. An author
+ * id is the opposite: it is the public identity of a page anyone can already
+ * open, every row it reaches is one `posts_select_public` would have returned
+ * to this viewer anyway, and shadow-muting and blocks (0045 / 0086) still
+ * apply to the read. So it is safe to take, and folding it into the feed's
+ * action would have meant relaxing that action's rule for a case that does not
+ * need it.
+ */
+export async function loadMoreProfilePosts(
+  authorProfileId: string,
+  cursor?: { createdAt: string; id: string },
+): Promise<{
+  error: string | null;
+  posts: PostListItem[];
+  hasMore: boolean;
+  nextCursor: { createdAt: string; id: string } | null;
+}> {
+  if (!isUuid(authorProfileId)) {
+    return { error: null, posts: [], hasMore: false, nextCursor: null };
+  }
+  const viewer = await getOrCreateProfile();
+  return fetchPostsPage(0, viewer?.id ?? null, { authorProfileId, cursor });
 }
 
 /**

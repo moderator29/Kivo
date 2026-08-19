@@ -1,21 +1,25 @@
-import { cache } from "react";
+import { Suspense, cache } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Flame, Award, Lock } from "lucide-react";
+import { Flame, Award, Lock, MessagesSquare } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { logError } from "@/lib/log";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FollowButton } from "@/components/ui/follow-button";
 import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import { timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 import { HeadToHeadPanel } from "@/components/profile/head-to-head-panel";
+import { ProfilePosts } from "@/components/social/profile-posts";
+import { ProfileSections } from "./profile-sections";
+import { fetchPostsPage } from "@/app/(app)/social/posts";
 import { BlockButton } from "@/components/profile/block-button";
 import { viewerHasBlocked } from "@/lib/blocks";
 
@@ -119,6 +123,11 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     getOrCreateProfile(),
     supabase.rpc("get_public_profile_stats", { p_profile_id: profile.id }),
   ]);
+
+  // This person's own posts — the same feed query, the same cards, filtered to
+  // one author. Fetched after `viewer` resolves because the viewer's id is
+  // what decides which reaction is theirs and what they have saved.
+  const authored = await fetchPostsPage(0, viewer?.id ?? null, { authorProfileId: profile.id });
 
   // The identity above already refuses to collapse "RPC errored" into "no such
   // profile". The same distinction has to hold one level down: this read
@@ -232,31 +241,74 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           description="KIVO couldn't read this person's record just now. Rather than show you a zero that isn't theirs, here's the truth — try again."
         />
       ) : isPublic ? (
-        <>
-          <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
-            <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
-              <Flame className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
-            </div>
-            <div>
-              <span className="text-2xl font-semibold text-foreground">{totalXp} XP</span>
-              <p className="text-xs text-foreground-subtle">Earned across KIVO</p>
-            </div>
-          </FadeIn>
+        <FadeIn delay={0.05} className="kivo-glass-brand flex items-center gap-4 rounded-2xl p-5">
+          <div className="kivo-gradient-victory flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <Flame className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
+          </div>
+          <div>
+            <span className="text-2xl font-semibold text-foreground">{totalXp} XP</span>
+            <p className="text-xs text-foreground-subtle">Earned across KIVO</p>
+          </div>
+        </FadeIn>
+      ) : null}
 
-          <FadeIn delay={0.1} className="flex flex-col gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-              <Award className="h-4 w-4 text-accent" strokeWidth={1.75} />
-              Badges
-            </h2>
-
-            {badges.length === 0 ? (
-              <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
-                No badges earned yet. Badges arrive for predicting, posting and turning up on matchday.
-              </div>
+      {/* Posts first. A profile is what somebody has said; the badges are what
+          saying it earned them, and KIVO's own tally of a person is not the
+          headline on that person's page. */}
+      <Suspense fallback={null}>
+        <ProfileSections
+          postCount={authored.posts.length}
+          badgeCount={badges.length}
+          showCompare={Boolean(viewer) && !isViewerOwnProfile}
+          posts={
+            authored.error ? (
+              <LoadFailed
+                title="This profile's posts"
+                tone="section"
+                icon={<MessagesSquare className="h-6 w-6" strokeWidth={1.75} />}
+                description="KIVO couldn't read what this person has written just now. Nothing has been deleted — try again."
+              />
+            ) : (
+              <ProfilePosts
+                authorProfileId={profile.id}
+                authorName={profile.display_name || `@${profile.username}`}
+                initialPosts={authored.posts}
+                initialHasMore={authored.hasMore}
+                initialCursor={authored.nextCursor}
+                signedIn={Boolean(viewer)}
+                isOwnProfile={isViewerOwnProfile}
+              />
+            )
+          }
+          badges={
+            statsOutcome.failed ? (
+              <LoadFailed
+                title="This profile's badges"
+                tone="section"
+                icon={<Award className="h-6 w-6" strokeWidth={1.75} />}
+                description="KIVO couldn't read this person's record just now. Rather than show you a zero that isn't theirs, here's the truth — try again."
+              />
+            ) : !isPublic ? (
+              // RECOMMENDATIONS.md item 286: an honest privacy state, not a
+              // bare zero — "0 XP earned" would misread as "hasn't earned
+              // anything" when this profile's owner has simply opted out.
+              <EmptyState
+                icon={Lock}
+                tone="section"
+                title="This profile is kept private"
+                description="Its owner has chosen not to show what they've earned on KIVO."
+              />
+            ) : badges.length === 0 ? (
+              <EmptyState
+                icon={Award}
+                tone="section"
+                title="No badges yet"
+                description="They arrive for predicting, posting and turning up on matchday."
+              />
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {badges.map((badge, index) => (
-                  <FadeIn key={badge.code} delay={0.12 + staggerDelay(index, 0.03)}>
+                  <FadeIn key={badge.code} delay={staggerDelay(index, 0.03)}>
                     <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-4 text-center ring-1 ring-inset ring-accent/25 transition hover:-translate-y-0.5">
                       {badge.icon_url && (
                         <Image
@@ -276,26 +328,23 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                   </FadeIn>
                 ))}
               </div>
-            )}
-          </FadeIn>
-        </>
-      ) : (
-        // RECOMMENDATIONS.md item 286: an honest privacy state, not a bare
-        // zero — "0 XP earned" would misread as "hasn't earned anything" when
-        // this profile's owner has simply opted out of showing it.
-        <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl p-8 text-center">
-          <Lock className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
-          <p className="text-sm text-foreground-muted">This user keeps their activity private.</p>
-        </FadeIn>
-      )}
-
-      {/* KIVO_NEXT_GEN KN-105. Only for a signed-in viewer looking at somebody
-          else: comparing an account with itself is meaningless, and a signed-out
-          visitor has no side of their own to compare. The RPC enforces both
-          independently — this is the cheap check, not the guarantee. */}
-      {viewer && !isViewerOwnProfile && (
-        <HeadToHeadPanel otherProfileId={profile.id} otherName={profile.display_name ?? `@${profile.username}`} />
-      )}
+            )
+          }
+          compare={
+            /* KIVO_NEXT_GEN KN-105. Only for a signed-in viewer looking at
+               somebody else: comparing an account with itself is meaningless,
+               and a signed-out visitor has no side of their own to compare.
+               The RPC enforces both independently — the tab being absent is
+               the cheap check, not the guarantee. */
+            viewer && !isViewerOwnProfile ? (
+              <HeadToHeadPanel
+                otherProfileId={profile.id}
+                otherName={profile.display_name ?? `@${profile.username}`}
+              />
+            ) : null
+          }
+        />
+      </Suspense>
     </div>
   );
 }

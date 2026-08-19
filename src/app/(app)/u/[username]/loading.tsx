@@ -1,6 +1,14 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { PostSkeleton, SectionTabsSkeleton } from "@/components/ui/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * A profile's wait, shaped like the profile it is waiting for: the header, the
+ * XP band, the section rail and the posts that now open underneath it. The
+ * posts are the part that changed — this used to promise a badge grid, which
+ * is no longer what lands first, and a skeleton that promises the wrong layout
+ * is a reflow with extra steps.
+ */
 export default function PublicProfileLoading() {
   return (
     <PageSkeleton label="Loading this profile">
@@ -21,14 +29,8 @@ export default function PublicProfileLoading() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-4 w-16" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-2xl" />
-          ))}
-        </div>
-      </div>
+      <SectionTabsSkeleton />
+      <PostSkeleton posts={2} />
     </PageSkeleton>
   );
 }

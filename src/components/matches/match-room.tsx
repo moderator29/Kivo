@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Eye, Lock, PencilLine } from "lucide-react";
+import { Clock, Eye, Lock, MessagesSquare, PencilLine } from "lucide-react";
 import { RoomComposer } from "@/components/matches/room-composer";
-import { PostCard } from "@/components/social/post-card";
+import { RoomMessage } from "@/components/social/room-message";
 import { useRealtimeRoomPosts } from "@/hooks/use-realtime-room-posts";
 import { useRoomPresence } from "@/hooks/use-room-presence";
 import { useMatchRoomWindow } from "@/hooks/use-match-room-window";
 import { LocalDateTime } from "@/components/ui/relative-time";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { MatchRoomWindow } from "@/lib/match-room-window";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import type { PollSummary } from "@/app/(app)/social/posts";
@@ -127,7 +128,12 @@ export function MatchRoomTab({
 
       {roomWindow.phase === "pre-match" && <RoomPreMatchNote kickoffAt={kickoffAt} />}
 
+      {/* Sticky, because a live room is read with one thumb: the box you type
+          into has to still be reachable after you have scrolled, and with a
+          newest-first list the composer sitting above it means a new message
+          lands exactly where you are already looking. */}
       {roomWindow.open ? (
+        <div className="sticky top-16 z-20 -mx-1 bg-background/85 px-1 py-1 backdrop-blur-xl">
         <RoomComposer
           signedIn={signedIn}
           fixtureId={fixtureId}
@@ -136,21 +142,27 @@ export function MatchRoomTab({
           awayTeamName={awayTeamName}
           isFinished={isFinished}
         />
+        </div>
       ) : (
         <RoomClosedNote closedAt={roomWindow.closedAt} />
       )}
 
+      {/* Chat density, not feed density. `RoomMessage` is the same content as
+          a PostCard with the card taken off — see its own comment for the
+          measurement, and for why KIVO's own goal and red-card posts are drawn
+          as match events rather than as messages. */}
       {posts.length === 0 ? (
-        <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          <p className="text-sm text-foreground-muted">
-            No one&apos;s posted in this match room yet. Be the first.
-          </p>
-        </div>
+        <EmptyState
+          icon={MessagesSquare}
+          tone="section"
+          title="Nobody's said anything yet"
+          description="Rooms open the moment a fixture lands and stay open a day after full time. First word is yours."
+        />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col divide-y divide-hairline-soft">
           {posts.map((post, index) => (
-            <div key={post.id} className="flex flex-col gap-3">
-            <PostCard
+            <div key={post.id} className="flex flex-col gap-3 py-0.5">
+            <RoomMessage
               id={post.id}
               body={post.body}
               createdAt={post.createdAt}

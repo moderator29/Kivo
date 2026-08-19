@@ -1,50 +1,62 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "motion/react";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { SectionTabs, type SectionTab } from "@/components/ui/section-tabs";
 import { SOCIAL_FILTERS, SOCIAL_FILTER_LABELS, socialFilterHref, type SocialFilter } from "@/lib/social-filters";
-import { cn } from "@/lib/utils";
 
 /**
- * The feed's four readings. Plain links to a different query, not client-side
- * tab state: which feed you are reading is a real, shareable, back-button-able
- * location, and the server has to re-query for it anyway.
+ * The feed's four readings, on the app's one tab rail.
  *
- * Horizontally scrollable at 390px rather than wrapped or truncated — four
- * labels, one of which is two words, do not fit a phone's width, and a tab
- * strip that wraps to two lines stops reading as a tab strip.
+ * This used to be a hand-rolled pill strip with its own scroller, its own
+ * `layoutId` indicator and its own focus handling — one of the six independent
+ * solutions to the same problem that made the product read as assembled rather
+ * than designed. It is now `SectionTabs` (docs/UI_PRIMITIVES.md), which brings
+ * the edge fades, the roving tabindex, the arrow keys and the 44px targets
+ * this never had.
+ *
+ * `tone="pill"` rather than `underline` on purpose: the rail is not choosing a
+ * *place* on this screen, it is filtering the one thing the screen is — which
+ * is the exact distinction the primitive draws between its two tones.
+ *
+ * WHY IT STILL CHANGES THE URL
+ * ---------------------------------------------------------------------------
+ * Each reading is a different server query — "posts by people who support my
+ * club" cannot be filtered out of a list the browser already holds, because
+ * the client is never sent one — so the tab has to reach the server either
+ * way. Keeping it in `?filter=` is what makes a feed shareable and the back
+ * gesture work, and the page stays `/social` throughout, so this is a filter
+ * with a shareable address rather than navigation between routes.
+ *
+ * `useTransition` is what stops that round trip reading as a dead tap: React
+ * keeps the current feed on screen and marks the rail busy while the next one
+ * is fetched, instead of blanking the page.
  */
 export function FeedFilterTabs({ active }: { active: SocialFilter }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  // No counts. KIVO does not know how many posts are in a feed it has not
+  // fetched, and a tab that says a number it has not counted is the one thing
+  // the rail's contract forbids outright.
+  const tabs: SectionTab<SocialFilter>[] = SOCIAL_FILTERS.map((filter) => ({
+    id: filter,
+    label: SOCIAL_FILTER_LABELS[filter],
+  }));
+
   return (
-    <nav aria-label="Feed filter" className="-mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
-      <ul className="flex w-max items-center gap-1 rounded-2xl border border-hairline bg-surface-1 p-1">
-        {SOCIAL_FILTERS.map((filter) => {
-          const isActive = filter === active;
-          return (
-            <li key={filter}>
-              <Link
-                href={socialFilterHref(filter)}
-                aria-current={isActive ? "page" : undefined}
-                scroll={false}
-                className={cn(
-                  "kivo-focus relative flex items-center rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors",
-                  isActive ? "text-on-accent" : "text-foreground-subtle hover:text-foreground",
-                )}
-              >
-                {isActive && (
-                  <motion.span
-                    aria-hidden="true"
-                    layoutId="social-filter-active"
-                    className="kivo-gradient-prime absolute inset-0 rounded-xl"
-                    transition={{ type: "spring", stiffness: 480, damping: 40 }}
-                  />
-                )}
-                <span className="relative whitespace-nowrap">{SOCIAL_FILTER_LABELS[filter]}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <SectionTabs
+      tabs={tabs}
+      value={active}
+      onChange={(next) => {
+        if (next === active) return;
+        startTransition(() => router.push(socialFilterHref(next), { scroll: false }));
+      }}
+      ariaLabel="Feed filter"
+      idPrefix="social-feed"
+      tone="pill"
+      bleed
+      className={pending ? "opacity-70 transition-opacity" : undefined}
+    />
   );
 }

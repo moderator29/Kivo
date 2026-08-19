@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { ArrowUp } from "lucide-react";
+import Link from "next/link";
+import { ArrowUp, MessagesSquare } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PostCard } from "@/components/social/post-card";
 import { PostThread } from "@/components/social/post-thread";
 import { groupPostsIntoThreads } from "@/lib/social-threads";
@@ -15,12 +17,27 @@ import type { SocialFilter } from "@/lib/social-filters";
 /** What an empty feed means depends entirely on which feed it is — "nobody
  * has posted" and "nobody who supports your club has posted" are different
  * facts, and telling someone the first when the second is true is how an
- * honest empty state turns into a misleading one. */
-const EMPTY_COPY: Record<SocialFilter, string> = {
-  all: "Nobody's posted yet. Be the first to share your take on the game.",
-  following: "Nobody you follow has posted yet. Follow someone from their profile to see their posts here.",
-  clubmates: "No other fan of your club has posted yet. Yours would be the first.",
-  rivals: "Nobody who supports your rival has posted yet.",
+ * honest empty state turns into a misleading one.
+ *
+ * Each is a title and the one line under it, per `<EmptyState>`'s rule: say
+ * what the fan can expect or act on, never what failed. */
+const EMPTY_COPY: Record<SocialFilter, { title: string; description: string }> = {
+  all: {
+    title: "Nothing said yet",
+    description: "Be the first. Pick the match you're watching and put your take on it.",
+  },
+  following: {
+    title: "Nobody you follow has posted",
+    description: "Follow a fan from their profile and their takes land here.",
+  },
+  clubmates: {
+    title: "No other fan of your club has posted",
+    description: "Yours would be the first — and every fan of your club would see it.",
+  },
+  rivals: {
+    title: "Nobody who supports your rival has posted",
+    description: "This fills up on its own, usually about ten minutes after they concede.",
+  },
 };
 
 /** `/social`'s post list plus a "Load more" button that appends the next page
@@ -32,7 +49,6 @@ export function SocialFeed({
   initialHasMore,
   signedIn,
   filter = "all",
-  emptyLabel,
   scrollToPostId = null,
   initialOffset,
 }: {
@@ -45,9 +61,6 @@ export function SocialFeed({
    * Club mates/Rivals is re-derived server-side from the viewer's own profile,
    * so a hand-edited request cannot page through another club's feed. */
   filter?: SocialFilter;
-  /** The active tab's own label, for the empty state — "Nothing in Rivals yet"
-   * is a different sentence from "Nothing here yet". */
-  emptyLabel?: string;
   /** RECOMMENDATIONS item 237: a post id to scroll to and briefly highlight
    * on mount — the page.tsx server component has already guaranteed this id
    * is present in `initialPosts` (prepending it if it wasn't on the normal
@@ -208,12 +221,22 @@ export function SocialFeed({
       <div className="flex flex-col gap-3">
         {realtimeWatcher}
         {newPostsPill}
-        <FadeIn delay={0.12} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-10 text-center">
-          <p className="text-sm text-foreground-muted">{EMPTY_COPY[filter]}</p>
-          {emptyLabel && filter !== "all" && (
-            <p className="text-xs text-foreground-subtle">You&rsquo;re reading the {emptyLabel} feed.</p>
-          )}
-        </FadeIn>
+        <EmptyState
+          icon={MessagesSquare}
+          tone="section"
+          title={EMPTY_COPY[filter].title}
+          description={EMPTY_COPY[filter].description}
+          action={
+            signedIn ? (
+              <Link
+                href="/social/compose"
+                className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-4 py-2 text-sm font-semibold text-on-accent"
+              >
+                Write a post
+              </Link>
+            ) : undefined
+          }
+        />
       </div>
     );
   }
