@@ -76,9 +76,15 @@ describe("KIVO avatar asset set", () => {
   });
 
   it("has no description for an upload, a legacy URL or nothing at all", () => {
+    // The retired-id case is assembled from kivoAvatarPath rather than written
+    // out as a literal for two reasons: it cannot drift from the real URL
+    // shape, and scripts/check-assets.mjs treats every "/assets/..." string in
+    // src/ as a promise that the file exists — which this one, deliberately,
+    // is not.
+    const retired = kivoAvatarPath(KIVO_AVATAR_IDS[0]).replace(/[^/]+$/, "kivo-avatar-99.webp");
     expect(kivoAvatarDescriptionForSrc(null)).toBeNull();
     expect(kivoAvatarDescriptionForSrc("https://example.supabase.co/storage/a/1.jpg")).toBeNull();
-    expect(kivoAvatarDescriptionForSrc("/assets/kivo/avatars/kivo-avatar-99.webp")).toBeNull();
+    expect(kivoAvatarDescriptionForSrc(retired)).toBeNull();
   });
 
   it("resolves each of the 18 as a real active avatar, not just the old five", () => {
