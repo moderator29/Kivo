@@ -8,6 +8,12 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { isLiveStatus } from "@/lib/football/fixture-status";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
+import {
+  rankCompetitionGroups,
+  NO_COMPETITION_RANKING_SIGNALS,
+  type CompetitionRankingSignals,
+} from "@/lib/football/competition-tier";
+import { CompetitionGroupHeader } from "@/components/matches/competition-group-header";
 import type { Database } from "@/lib/supabase/types";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -23,7 +29,16 @@ export type LiveListFixture = {
   minute_elapsed: number | null;
   home_team: { name: string; crest_url: string | null } | null;
   away_team: { name: string; crest_url: string | null } | null;
-  competition: { id: string | null; name: string; short_name: string | null; logo_url?: string | null } | null;
+  competition: {
+    id: string | null;
+    name: string;
+    short_name: string | null;
+    logo_url?: string | null;
+    /** `competitions.country`. Null on every row the live provider has synced
+     * so far — the header omits the line entirely rather than filling it in.
+     * See CompetitionGroupHeader. */
+    country?: string | null;
+  } | null;
 };
 
 /**
@@ -40,6 +55,8 @@ export function FixtureGroups({
   fixtures,
   showLiveDot = true,
   fantasyMatchCounts,
+  rankingSignals = NO_COMPETITION_RANKING_SIGNALS,
+  signedIn = false,
 }: {
   fixtures: LiveListFixture[];
   /** Whether a row that's actually live also gets the pulsing status dot
@@ -53,28 +70,33 @@ export function FixtureGroups({
    * row with no entry (or a count of 0, filtered out by the caller) renders
    * exactly as it does today. */
   fantasyMatchCounts?: Record<string, number>;
+  /** The four signals that decide which competition leads the list — the
+   * viewer's own favourites, KIVO's configured coverage scope, real follower
+   * counts, then the kickoff order it already had. Read on the server (see
+   * src/lib/football/competition-ranking.ts) and passed down, because none of
+   * them is derivable from the fixtures themselves. Defaults to none, which
+   * leaves the kickoff order exactly as it was. */
+  rankingSignals?: CompetitionRankingSignals;
+  /** Whether the viewer is signed in — the favourite star routes a guest to
+   * sign-up instead of firing a server action that would be refused. */
+  signedIn?: boolean;
 }) {
-  const groups = groupFixturesByCompetition(fixtures);
+  const groups = rankCompetitionGroups(groupFixturesByCompetition(fixtures), rankingSignals);
 
   return (
     <div className="flex flex-col gap-4">
       {groups.map((group) => (
-        <div key={group.competitionId ?? group.competitionName} className="flex flex-col gap-1">
-          <div className="flex items-center justify-between px-2">
-            {group.competitionId ? (
-              <Link
-                href={`/leagues/${group.competitionId}`}
-                className="text-xs font-semibold text-foreground-muted transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-              >
-                {group.competitionName}
-              </Link>
-            ) : (
-              <span className="text-xs font-semibold text-foreground-muted">{group.competitionName}</span>
-            )}
-            <span className="text-[11px] text-foreground-subtle">
-              {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
-            </span>
-          </div>
+        <div key={group.competitionId ?? group.competitionName ?? "unnamed"} className="flex flex-col gap-1">
+          <CompetitionGroupHeader
+            competitionId={group.competitionId}
+            competitionName={group.competitionName}
+            country={group.fixtures[0]?.competition?.country ?? null}
+            logoUrl={group.fixtures[0]?.competition?.logo_url ?? null}
+            fixtureCount={group.fixtures.length}
+            isFavourite={group.isFavourite}
+            signedIn={signedIn}
+            density="compact"
+          />
           <div className="flex flex-col divide-y divide-hairline-soft">
             {group.fixtures.map((fixture) => (
               <FixtureRowCard
@@ -141,15 +163,15 @@ function FixtureRowCard({
           />
         </div>
         <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-            <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+            <span className="line-clamp-2 break-words text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
           </div>
           <span className={`shrink-0 text-sm font-semibold ${live ? "text-live" : "text-foreground"}`}>
             {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
           </span>
-          <div className="flex flex-1 items-center justify-end gap-2">
-            <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <span className="line-clamp-2 break-words text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
             <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
           </div>
         </div>

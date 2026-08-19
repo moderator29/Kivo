@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
 import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
@@ -15,6 +16,7 @@ import type { LiveListFixture } from "@/components/matches/live-fixture-list";
 import { getViewerFantasyRosterBySeasons } from "@/lib/football/fantasy-lineup-crossref";
 import { getNavItem } from "@/lib/navigation";
 import { scheduleAutoSyncIfStale } from "@/lib/football/auto-sync";
+import { getCompetitionRankingSignals } from "@/lib/football/competition-ranking";
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 
 /** The list rows this page works with: everything LiveCentreSections renders,
@@ -69,7 +71,7 @@ export default async function LivePage() {
   const fixtureSelect = `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id,
        home_team:teams!fixtures_home_team_id_fkey(name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(name, crest_url),
-       competition:competitions(id, name, short_name, logo_url)`;
+       competition:competitions(id, name, short_name, logo_url, country)`;
 
   // KIVO_NEXT_GEN KN-5: one list, not two mutually-exclusive ones. Both queries
   // still exist because they answer different questions — "what is in play
@@ -164,6 +166,20 @@ export default async function LivePage() {
     }
   }
 
+  // Which competition leads each section, from the same four real signals
+  // /matches uses — the viewer's own favourites, KIVO's configured coverage
+  // scope, real follower counts, then kickoff order. Read once here rather
+  // than inside the client component: none of it is derivable from the
+  // fixtures, and the Realtime subscription downstream must not have to
+  // re-fetch it on every score change. See src/lib/football/competition-tier.ts.
+  const rankingSignals = await getCompetitionRankingSignals(
+    supabase,
+    displayedFixtures
+      .map((fixture) => fixture.competition?.id ?? null)
+      .filter((id): id is string => id !== null),
+    profile?.id ?? null,
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
       <FadeIn className="flex items-start justify-between gap-3">
@@ -193,6 +209,8 @@ export default async function LivePage() {
         // exactly this reason) and returns null when none is configured, in
         // which case the copy simply doesn't name a source.
         providerLabel={getActiveProviderStatus().label}
+        rankingSignals={rankingSignals}
+        signedIn={viewerIsSignedIn(profile)}
       />
     </div>
   );

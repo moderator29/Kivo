@@ -23,12 +23,17 @@ export function MatchesCompetitionFilter({
   selectedId,
   totalCount,
   dateParam,
+  liveOnly = false,
 }: {
   options: CompetitionFilterOption[];
   selectedId: string | null;
   totalCount: number;
   /** The `?date=` currently on the URL, or null for today. */
   dateParam: string | null;
+  /** Whether `?live=1` is currently on. Carried through so choosing a
+   * competition narrows what the reader is already looking at rather than
+   * silently dropping them back into the full day. */
+  liveOnly?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -37,6 +42,7 @@ export function MatchesCompetitionFilter({
     const params = new URLSearchParams();
     if (dateParam) params.set("date", dateParam);
     if (id) params.set("competition", id);
+    if (liveOnly) params.set("live", "1");
     const query = params.toString();
     startTransition(() => {
       router.push(query ? `/matches?${query}` : "/matches", { scroll: false });

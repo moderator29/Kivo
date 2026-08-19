@@ -3570,6 +3570,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      club_picker_facets: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          club_count: number
+          facet: string
+          key: string
+          label: string
+        }[]
+      }
       claim_sync_lock: {
         Args: {
           p_entity_type: Database["public"]["Enums"]["provider_entity_type"]
@@ -3631,6 +3640,20 @@ export type Database = {
         Returns: {
           current_streak: number
           longest_streak: number
+        }[]
+      }
+      get_competition_follower_counts: {
+        Args: { p_competition_ids: string[] }
+        Returns: {
+          competition_id: string
+          follower_count: number
+        }[]
+      }
+      get_competition_provider_ids: {
+        Args: { p_competition_ids: string[]; p_provider: string }
+        Returns: {
+          competition_id: string
+          provider_competition_id: string
         }[]
       }
       get_data_anomaly_summary: {
@@ -4047,6 +4070,22 @@ export type Database = {
           p_provider_entity_ids: string[]
         }
         Returns: number
+      }
+      search_clubs_ranked: {
+        Args: {
+          p_competition_id?: string | null
+          p_country?: string | null
+          p_limit?: number
+          p_query?: string | null
+        }
+        Returns: {
+          country: string | null
+          crest_url: string | null
+          follower_count: number
+          id: string
+          name: string
+          short_name: string | null
+        }[]
       }
       set_reaction: {
         Args: {

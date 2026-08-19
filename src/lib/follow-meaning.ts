@@ -19,10 +19,17 @@
  * - **competition** — deliberately the flattest sentence of the four, and
  *   re-checked against every consumer on 2026-08-19 (the audit the
  *   coordinator asked for after a `.eq("followed_type", "team")` on /home
- *   made half the graph invisible). A competition follow has exactly two real
- *   consumers: your Following list, and `buildGroundingContext` in
+ *   made half the graph invisible). A competition follow has exactly three real
+ *   consumers: your Following list, `buildGroundingContext` in
  *   src/lib/ai/grounding.ts, which passes the competitions you follow to the
- *   Copilot as context. It has none in match-notifications.ts, none in
+ *   Copilot as context — and, since the matches list was rebuilt around
+ *   competition groups, the star on each competition header on /matches and
+ *   /live, which pins that competition to the top of the list for you
+ *   (src/lib/football/competition-tier.ts). That star writes an ordinary
+ *   `follows` row through this same `toggleFollow` action; there is no
+ *   separate "favourites" concept, which is why favouriting a competition on
+ *   /matches also makes it appear under Following. It has none in
+ *   match-notifications.ts, none in
  *   watchlist-digest.ts and none on /home — all three are scoped to teams and
  *   players, and deliberately: a division is ~380 fixtures, so a per-goal
  *   audience would be spam and a 12-item digest would be drowned by one
@@ -42,7 +49,7 @@ export const FOLLOW_MEANING: Record<FollowTargetKind, string> = {
   team: "Kickoff, goals, red cards and full time reach your notifications, and their fixtures lead your home screen.",
   player: "You'll hear when they score, get sent off, or feature in a match KIVO has synced.",
   competition:
-    "It's saved to your Following list, and the Copilot uses it as context when you ask about football. KIVO doesn't send competition alerts — this is a bookmark, not a subscription.",
+    "It's pinned to the top of your matches list, saved to your Following list, and used as context when you ask the Copilot about football. KIVO doesn't send competition alerts — this is a bookmark, not a subscription.",
   user: "Their posts show up in your Following feed, and they'll know you followed them.",
 };
 

@@ -10,9 +10,15 @@ import { MatchesDateStrip, dateKey, todayIn } from "@/components/matches/date-st
 import { MatchesCompetitionFilter } from "@/components/matches/matches-competition-filter";
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { getOrCreateProfile } from "@/lib/profile";
+import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { getLastSyncedAt } from "@/lib/football/last-synced";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
+import { getCompetitionRankingSignals } from "@/lib/football/competition-ranking";
+import { rankCompetitionGroups } from "@/lib/football/competition-tier";
+import { isLiveStatus } from "@/lib/football/fixture-status";
+import { CompetitionGroupHeader } from "@/components/matches/competition-group-header";
+import { MatchesLiveToggle } from "@/components/matches/matches-live-toggle";
 import { getMatchRoomActivity } from "@/lib/football/match-room-activity";
 import { RoomActivityNote } from "@/components/matches/room-activity-note";
 import { getNavItem } from "@/lib/navigation";
@@ -51,7 +57,7 @@ function resolveSelectedDate(dateParam: string | undefined, timeZone: string): D
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; competition?: string }>;
+  searchParams: Promise<{ date?: string; competition?: string; live?: string }>;
 }) {
   // Founder instruction (2026-08-18): football data arrives without anybody
   // pressing anything. This asks for a sync only if what this page is about
@@ -62,7 +68,7 @@ export default async function MatchesPage({
   // scores, and that file says so in as many words.
   scheduleAutoSyncIfStale("matches");
 
-  const { date: dateParam, competition: competitionParam } = await searchParams;
+  const { date: dateParam, competition: competitionParam, live: liveParam } = await searchParams;
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
@@ -80,7 +86,7 @@ export default async function MatchesPage({
         `id, kickoff_at, status, home_score, away_score,
        home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
-       competition:competitions(id, name, short_name, logo_url)`,
+       competition:competitions(id, name, short_name, logo_url, country)`,
       )
       .gte("kickoff_at", startOfDay.toISOString())
       .lt("kickoff_at", endOfDay.toISOString())
@@ -115,17 +121,35 @@ export default async function MatchesPage({
     fixtures.map((fixture) => fixture.id),
   );
 
+  // The Live toggle narrows the day to what is actually in play. Applied
+  // before grouping, so the competition filter below only ever offers
+  // competitions that still have something on screen once it is on.
+  const liveOnly = liveParam === "1";
+  const liveFixtures = fixtures.filter((fixture) => isLiveStatus(fixture.status));
+  const visibleFixtures = liveOnly ? liveFixtures : fixtures;
+  // Offered on today's date, and on any other date that genuinely has a
+  // fixture in play (a late kickoff still running past local midnight). A
+  // toggle that could only ever produce an empty list is not a choice — the
+  // same rule CompetitionFilter applies to a day with one competition on it.
+  const showLiveToggle = fixtures.length > 0 && (isToday || liveFixtures.length > 0);
+
   // Real match counts per competition, grouping fixtures already fetched
   // above — no new provider/DB call. See groupFixturesByCompetition.
-  const dayGroups = groupFixturesByCompetition(fixtures);
+  const dayGroups = groupFixturesByCompetition(visibleFixtures);
 
   // The filter's options are the day's own groups, so a competition is only
   // offered when narrowing to it would leave something on screen. `?competition=`
   // is validated against that list rather than trusted: an id for a competition
   // with nothing on this date resolves to no filter at all, which is the same
   // page a hand-edited URL would otherwise turn into a permanently empty one.
+  // A group KIVO cannot name is not offered as a filter: a chip with no label
+  // is not a choice a person can make. Its fixtures still render in the list
+  // below, under a heading that is simply absent.
   const filterOptions = dayGroups
-    .filter((group): group is typeof group & { competitionId: string } => group.competitionId !== null)
+    .filter(
+      (group): group is typeof group & { competitionId: string; competitionName: string } =>
+        group.competitionId !== null && group.competitionName !== null,
+    )
     .map((group) => ({
       id: group.competitionId,
       name: group.competitionName,
@@ -133,14 +157,39 @@ export default async function MatchesPage({
       logoUrl: group.fixtures[0]?.competition?.logo_url ?? null,
       count: group.fixtures.length,
     }));
+  // Which competition leads the page, and why.
+  //
+  // Kickoff order put "III Liga - Group 2" above the Champions League, because
+  // the third division kicks off earlier in the day. Four real signals decide
+  // it instead, in priority order: the viewer's own favourited competitions,
+  // KIVO's configured coverage scope (competitions-config.ts — an operator
+  // setting, not a ranking invented in the UI), how many KIVO profiles follow
+  // it, then the kickoff order it already had. Every one of them is a row that
+  // exists or a setting somebody made; none of them is a list of league names
+  // ranked by hand. The derivation is documented in
+  // src/lib/football/competition-tier.ts and the two reads it needs in
+  // competition-ranking.ts. If either read fails the list simply keeps kickoff
+  // order — a worse ordering, never a wrong claim.
+  const rankingSignals = await getCompetitionRankingSignals(
+    supabase,
+    dayGroups.map((group) => group.competitionId).filter((id): id is string => id !== null),
+    profile?.id ?? null,
+  );
+  const rankedGroups = rankCompetitionGroups(dayGroups, rankingSignals);
+
   const selectedCompetitionId =
     competitionParam && filterOptions.some((option) => option.id === competitionParam) ? competitionParam : null;
   const competitionGroups = selectedCompetitionId
-    ? dayGroups.filter((group) => group.competitionId === selectedCompetitionId)
-    : dayGroups;
+    ? rankedGroups.filter((group) => group.competitionId === selectedCompetitionId)
+    : rankedGroups;
   const selectedCompetitionName = selectedCompetitionId
     ? (filterOptions.find((option) => option.id === selectedCompetitionId)?.name ?? null)
     : null;
+  // Only worth labelling the pinned block when there is something below it to
+  // distinguish it from — one favourited competition and nothing else needs no
+  // heading explaining why it is first.
+  const favouriteGroupCount = competitionGroups.filter((group) => group.isFavourite).length;
+  const showFavouriteHeadings = favouriteGroupCount > 0 && favouriteGroupCount < competitionGroups.length;
   let cardIndex = 0;
 
   return (
@@ -155,19 +204,34 @@ export default async function MatchesPage({
 
       <FadeIn delay={0.04} className="flex flex-col gap-3">
         <MatchesDateStrip selected={startOfDay} timeZone={viewerTimeZone} />
-        {filterOptions.length > 1 && (
-          <div className="flex items-center justify-between gap-3">
+        {(showLiveToggle || filterOptions.length > 1) && (
+          <div className="flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-xs text-foreground-subtle">
               {selectedCompetitionName
                 ? `Showing ${selectedCompetitionName} only.`
-                : `${filterOptions.length} competitions on this date.`}
+                : liveOnly
+                  ? `${visibleFixtures.length} in play.`
+                  : `${filterOptions.length} ${filterOptions.length === 1 ? "competition" : "competitions"}.`}
             </p>
-            <MatchesCompetitionFilter
-              options={filterOptions}
-              selectedId={selectedCompetitionId}
-              totalCount={fixtures.length}
-              dateParam={dateParam && DATE_PARAM_RE.test(dateParam) ? dateParam : null}
-            />
+            <div className="flex shrink-0 items-center gap-2">
+              {showLiveToggle && (
+                <MatchesLiveToggle
+                  active={liveOnly}
+                  liveCount={liveFixtures.length}
+                  dateParam={dateParam && DATE_PARAM_RE.test(dateParam) ? dateParam : null}
+                  competitionParam={selectedCompetitionId}
+                />
+              )}
+              {filterOptions.length > 1 && (
+                <MatchesCompetitionFilter
+                  options={filterOptions}
+                  selectedId={selectedCompetitionId}
+                  totalCount={visibleFixtures.length}
+                  dateParam={dateParam && DATE_PARAM_RE.test(dateParam) ? dateParam : null}
+                  liveOnly={liveOnly}
+                />
+              )}
+            </div>
           </div>
         )}
       </FadeIn>
@@ -187,24 +251,46 @@ export default async function MatchesPage({
             Try another date above, or check back once KIVO&apos;s football data sync has run.
           </p>
         </FadeIn>
+      ) : visibleFixtures.length === 0 ? (
+        /* A third, separate fact. There ARE fixtures on this date — the reader
+           just filtered them all away by asking for what is in play, and
+           nothing is. Saying "no fixtures synced" here would be false, and
+           saying nothing at all would look like a failure. */
+        <FadeIn delay={0.08} className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-16 text-center">
+          <p className="text-sm text-foreground-muted">Nothing is in play right now.</p>
+          <p className="max-w-xs text-xs text-foreground-subtle">
+            {fixtures.length} {fixtures.length === 1 ? "fixture is" : "fixtures are"} scheduled on this date.
+          </p>
+          <Link
+            href={
+              dateParam && DATE_PARAM_RE.test(dateParam) ? `/matches?date=${dateParam}` : "/matches"
+            }
+            className="kivo-focus mt-1 rounded-lg text-xs font-semibold text-accent transition hover:text-accent-strong"
+          >
+            Show all {fixtures.length === 1 ? "of it" : "of them"}
+          </Link>
+        </FadeIn>
       ) : (
         <div className="flex flex-col gap-6">
-          {competitionGroups.map((group) => (
-            <div key={group.competitionId ?? group.competitionName} className="flex flex-col gap-2">
-              <FadeIn delay={0.06} className="flex items-center justify-between px-1">
-                {group.competitionId ? (
-                  <Link
-                    href={`/leagues/${group.competitionId}`}
-                    className="text-sm font-semibold text-foreground transition hover:text-accent"
-                  >
-                    {group.competitionName}
-                  </Link>
-                ) : (
-                  <span className="text-sm font-semibold text-foreground">{group.competitionName}</span>
-                )}
-                <span className="text-xs text-foreground-subtle">
-                  {group.fixtures.length} {group.fixtures.length === 1 ? "fixture" : "fixtures"}
-                </span>
+          {competitionGroups.map((group, groupIndex) => (
+            <div key={group.competitionId ?? group.competitionName ?? "unnamed"} className="flex flex-col gap-2">
+              {/* Says why the order is what it is, but only where a reader
+                  could otherwise wonder: above the pinned block, and above the
+                  first competition that is not pinned. */}
+              {showFavouriteHeadings && groupIndex === 0 && <SectionLabel>Your favourites</SectionLabel>}
+              {showFavouriteHeadings && groupIndex === favouriteGroupCount && (
+                <SectionLabel>Other competitions</SectionLabel>
+              )}
+              <FadeIn delay={0.06}>
+                <CompetitionGroupHeader
+                  competitionId={group.competitionId}
+                  competitionName={group.competitionName}
+                  country={group.fixtures[0]?.competition?.country ?? null}
+                  logoUrl={group.fixtures[0]?.competition?.logo_url ?? null}
+                  fixtureCount={group.fixtures.length}
+                  isFavourite={group.isFavourite}
+                  signedIn={viewerIsSignedIn(profile)}
+                />
               </FadeIn>
               <div className="flex flex-col gap-2">
                 {group.fixtures.map((fixture) => {
@@ -233,32 +319,32 @@ export default async function MatchesPage({
                         <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} />
                       </div>
                       <div className="relative z-0 flex items-center justify-between gap-3">
-                        <div className="flex flex-1 items-center gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
                           <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
                           {fixture.home_team?.id ? (
                             <Link
                               href={`/teams/${fixture.home_team.id}`}
-                              className="relative z-10 truncate text-sm text-foreground hover:text-accent"
+                              className="relative z-10 line-clamp-2 break-words text-sm text-foreground hover:text-accent"
                             >
                               {fixture.home_team.name}
                             </Link>
                           ) : (
-                            <span className="truncate text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
+                            <span className="line-clamp-2 break-words text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
                           )}
                         </div>
                         <span className="shrink-0 text-sm font-semibold text-foreground">
                           {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
                         </span>
-                        <div className="flex flex-1 items-center justify-end gap-2">
+                        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
                           {fixture.away_team?.id ? (
                             <Link
                               href={`/teams/${fixture.away_team.id}`}
-                              className="relative z-10 truncate text-right text-sm text-foreground hover:text-accent"
+                              className="relative z-10 line-clamp-2 break-words text-right text-sm text-foreground hover:text-accent"
                             >
                               {fixture.away_team.name}
                             </Link>
                           ) : (
-                            <span className="truncate text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
+                            <span className="line-clamp-2 break-words text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
                           )}
                           <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
                         </div>
@@ -277,5 +363,13 @@ export default async function MatchesPage({
         </div>
       )}
     </div>
+  );
+}
+
+/** The one-line divider above the pinned block and above the rest. Deliberately
+ * quiet — it explains an ordering, it is not a heading for content. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">{children}</p>
   );
 }
