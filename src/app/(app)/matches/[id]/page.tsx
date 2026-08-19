@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
+import { getActiveProviderStatus } from "@/lib/football";
 import { triggerFixtureDetailsSync } from "@/app/admin/data-health/actions";
 import { FadeIn } from "@/components/ui/fade-in";
 import { WidgetErrorBoundary } from "@/components/ui/soft-error-boundary";
@@ -86,7 +87,7 @@ export default async function MatchCentrePage({
         `id, kickoff_at, status, home_score, away_score, minute_elapsed, season_id, matchday,
          home_team:teams!fixtures_home_team_id_fkey(id, name, short_name, crest_url),
          away_team:teams!fixtures_away_team_id_fkey(id, name, short_name, crest_url),
-         competition:competitions(name, short_name),
+         competition:competitions(id, name, short_name),
          venue:venues(id, name, city)`,
       )
       .eq("id", id)
@@ -110,6 +111,10 @@ export default async function MatchCentrePage({
     ? await getRoomVerdictExtras(supabase, id, fixture.kickoff_at)
     : { busiestMinute: null, topReaction: null };
 
+  // Read once, above the parallel block, because two things below need it and
+  // it is a pure environment read rather than a query.
+  const activeProvider = getActiveProviderStatus();
+
   const [
     { data: events },
     { data: lineups },
@@ -124,6 +129,15 @@ export default async function MatchCentrePage({
     { data: managers },
     { data: ownPredictions },
     viewerFantasyRosterBySeason,
+    // KN-53's own stated limitation, now closeable. That comment says the
+    // Overview tab "cannot distinguish 'the provider does not support this for
+    // this competition' from 'nobody has synced it yet', so it claims only the
+    // second, which is the one thing that is always true." The coverage
+    // registry (migration 0082) is the provider's own answer to the first, and
+    // it is one filtered row on a public-select table — cheap enough for the
+    // most-opened page in the product, and read with the ordinary client
+    // because `provider_coverage_select_public` allows it.
+    { data: coverageRow },
   ] = await Promise.all([
     supabase
       .from("fixture_events")
@@ -207,6 +221,16 @@ export default async function MatchCentrePage({
     profile
       ? getViewerFantasyRosterBySeasons(supabase, profile.id, [fixture.season_id])
       : Promise.resolve(new Map<string, ViewerFantasyRosterMap>()),
+    fixture.competition?.id && activeProvider.name
+      ? supabase
+          .from("provider_coverage")
+          .select("fixture_events, fixture_lineups, fixture_statistics, retrieved_at")
+          .eq("provider", activeProvider.name)
+          .eq("competition_id", fixture.competition.id)
+          .order("season_year", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const viewerFantasyRoster = viewerFantasyRosterBySeason.get(fixture.season_id) ?? new Map();
@@ -537,6 +561,18 @@ export default async function MatchCentrePage({
             // clubs resolved, and the tab itself is only offered when there is
             // a real prior meeting on record — a debut fixture between them
             // shows no H2H tab at all rather than an empty one.
+            // The provider's own statement, passed through untouched: a false
+            // is a denial it made, a null is KIVO not knowing. The Overview
+            // panel is the only reader, and it says nothing on a null.
+            competitionCoverage={
+              coverageRow
+                ? {
+                    events: coverageRow.fixture_events,
+                    lineups: coverageRow.fixture_lineups,
+                    statistics: coverageRow.fixture_statistics,
+                  }
+                : null
+            }
             headToHead={
               headToHead && fixture.home_team && fixture.away_team
                 ? {

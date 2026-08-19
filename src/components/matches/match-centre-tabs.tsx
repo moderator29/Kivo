@@ -170,6 +170,22 @@ type MatchCentreTabsProps = {
     teamB: { name: string; shortName: string | null };
     record: HeadToHeadRecord;
   } | null;
+  /** The provider's OWN statement about what it publishes for this fixture's
+   * competition (`provider_coverage`, migration 0082), or null when the
+   * registry has never been synced for it.
+   *
+   * This closes the limitation the KN-53 comment below states about itself: an
+   * empty Timeline, Stats or Lineups tab has two causes that look identical
+   * from here — the provider does not publish that for this competition, or
+   * nobody has synced this fixture yet — and until now the Overview panel
+   * could only claim the second, because it was the only one always true.
+   * `false` means the provider says it does not publish it; `null` means KIVO
+   * has not established either way, and says nothing rather than guessing. */
+  competitionCoverage: {
+    events: boolean | null;
+    lineups: boolean | null;
+    statistics: boolean | null;
+  } | null;
 };
 
 /**
@@ -219,6 +235,12 @@ function PlayerNameLink({ playerId, playerName, className }: { playerId: string;
   );
 }
 
+/** "stats", "stats and lineups", "the timeline, stats and lineups". */
+function formatAreaList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm text-foreground-muted">
@@ -243,8 +265,24 @@ function EmptyState({ message }: { message: string }) {
  * RECOMMENDATIONS.md item 299 — so this claims only the part that is always
  * true.
  */
-function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] }) {
+function OverviewTab({
+  preMatch,
+  competitionCoverage,
+}: {
+  preMatch: MatchCentreTabsProps["preMatch"];
+  competitionCoverage: MatchCentreTabsProps["competitionCoverage"];
+}) {
   const started = preMatch.status !== "scheduled";
+
+  // Only the areas the provider has explicitly said it does NOT publish for
+  // this competition. `null` is not a denial — it means the registry has never
+  // been synced, or has no opinion, and KIVO says nothing rather than inventing
+  // a capability gap it has not established.
+  const unsupported = [
+    competitionCoverage?.events === false ? "the timeline" : null,
+    competitionCoverage?.statistics === false ? "stats" : null,
+    competitionCoverage?.lineups === false ? "lineups" : null,
+  ].filter((label): label is string => label !== null);
   const venue = [preMatch.venueName, preMatch.venueCity].filter(Boolean).join(", ");
 
   const facts: { label: string; value: ReactNode }[] = [
@@ -264,12 +302,29 @@ function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] 
         ))}
       </div>
 
-      <p className="px-1 text-xs leading-relaxed text-foreground-muted">
-        {started
-          ? "Timeline, stats and lineups for this match haven't been synced yet. They'll appear here as their own tabs the moment they land."
-          : "Timeline, stats and lineups appear here as their own tabs once this fixture has been synced — usually around kick-off."}{" "}
-        The Room is open now.
-      </p>
+      {/* Two different sentences, because they are two different facts and a
+          fan acts on them differently: "not synced yet" means wait, and "the
+          provider does not publish this for this competition" means stop
+          waiting. The second is only ever said on the provider's own authority
+          — see `competitionCoverage`. */}
+      {unsupported.length > 0 ? (
+        <p className="px-1 text-xs leading-relaxed text-foreground-muted">
+          {`KIVO's football provider doesn't publish ${formatAreaList(unsupported)} for this competition, so ${
+            unsupported.length === 1 ? "that tab" : "those tabs"
+          } won't fill however long you wait.`}{" "}
+          {unsupported.length < 3
+            ? "Whatever it does publish appears here as its own tab once this fixture has been synced. "
+            : ""}
+          The Room is open now.
+        </p>
+      ) : (
+        <p className="px-1 text-xs leading-relaxed text-foreground-muted">
+          {started
+            ? "Timeline, stats and lineups for this match haven't been synced yet. They'll appear here as their own tabs the moment they land."
+            : "Timeline, stats and lineups appear here as their own tabs once this fixture has been synced — usually around kick-off."}{" "}
+          The Room is open now.
+        </p>
+      )}
     </div>
   );
 }
@@ -1038,6 +1093,7 @@ function MatchCentreTabsInner({
   detailsLastSyncedAt,
   preMatch,
   headToHead,
+  competitionCoverage,
 }: MatchCentreTabsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1195,7 +1251,7 @@ function MatchCentreTabsInner({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       >
-        {active === "Overview" && <OverviewTab preMatch={preMatch} />}
+        {active === "Overview" && <OverviewTab preMatch={preMatch} competitionCoverage={competitionCoverage} />}
         {active === "Timeline" && (
           <TimelineTab
             events={liveEvents}
