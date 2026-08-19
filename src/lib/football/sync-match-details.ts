@@ -299,6 +299,12 @@ async function processLineupSide(
         shirt_number: entry.shirtNumber,
         position: entry.position,
         formation: side.formation,
+        // The provider's own formation slot ("row:col", migration 0081). Real
+        // positional data that this request already paid for — the same
+        // reasoning that maps `photo` through on squads rather than leaving a
+        // field KIVO was sent on the floor. Null for every substitute, which is
+        // the provider's answer and not a gap.
+        grid: entry.grid,
       },
       { onConflict: "fixture_id,team_id,player_id" },
     );

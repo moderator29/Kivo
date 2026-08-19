@@ -161,6 +161,42 @@ export type Database = {
         }
         Relationships: []
       }
+      blocks: {
+        Row: {
+          blocked_profile_id: string
+          blocker_profile_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_profile_id: string
+          blocker_profile_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_profile_id?: string
+          blocker_profile_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_profile_id_fkey"
+            columns: ["blocked_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_blocker_profile_id_fkey"
+            columns: ["blocker_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           author_profile_id: string
@@ -733,6 +769,148 @@ export type Database = {
           },
         ]
       }
+      fixture_player_statistics: {
+        Row: {
+          assists: number | null
+          blocks: number | null
+          created_at: string
+          dribbled_past: number | null
+          dribbles_attempted: number | null
+          dribbles_succeeded: number | null
+          duels_total: number | null
+          duels_won: number | null
+          fixture_id: string
+          fouls_committed: number | null
+          fouls_drawn: number | null
+          goals: number | null
+          goals_conceded: number | null
+          id: string
+          interceptions: number | null
+          is_substitute: boolean | null
+          minutes_played: number | null
+          offsides: number | null
+          pass_accuracy: number | null
+          passes_key: number | null
+          passes_total: number | null
+          penalties_committed: number | null
+          penalties_missed: number | null
+          penalties_saved: number | null
+          penalties_scored: number | null
+          penalties_won: number | null
+          player_id: string
+          position: string | null
+          provider_rating: number | null
+          red_cards: number | null
+          saves: number | null
+          shots_on_target: number | null
+          shots_total: number | null
+          tackles_total: number | null
+          team_id: string
+          updated_at: string
+          yellow_cards: number | null
+        }
+        Insert: {
+          assists?: number | null
+          blocks?: number | null
+          created_at?: string
+          dribbled_past?: number | null
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fixture_id: string
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          is_substitute?: boolean | null
+          minutes_played?: number | null
+          offsides?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_committed?: number | null
+          penalties_missed?: number | null
+          penalties_saved?: number | null
+          penalties_scored?: number | null
+          penalties_won?: number | null
+          player_id: string
+          position?: string | null
+          provider_rating?: number | null
+          red_cards?: number | null
+          saves?: number | null
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id: string
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Update: {
+          assists?: number | null
+          blocks?: number | null
+          created_at?: string
+          dribbled_past?: number | null
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fixture_id?: string
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          is_substitute?: boolean | null
+          minutes_played?: number | null
+          offsides?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_committed?: number | null
+          penalties_missed?: number | null
+          penalties_saved?: number | null
+          penalties_scored?: number | null
+          penalties_won?: number | null
+          player_id?: string
+          position?: string | null
+          provider_rating?: number | null
+          red_cards?: number | null
+          saves?: number | null
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id?: string
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixture_player_statistics_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixture_player_statistics_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixture_player_statistics_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fixture_statistics: {
         Row: {
           corners: number | null
@@ -957,14 +1135,95 @@ export type Database = {
           },
         ]
       }
+      injuries: {
+        Row: {
+          competition_id: string | null
+          created_at: string
+          fixture_id: string | null
+          id: string
+          player_id: string
+          provider: string
+          reason: string | null
+          reported_on: string | null
+          season_id: string | null
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          competition_id?: string | null
+          created_at?: string
+          fixture_id?: string | null
+          id?: string
+          player_id: string
+          provider: string
+          reason?: string | null
+          reported_on?: string | null
+          season_id?: string | null
+          status: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: string | null
+          created_at?: string
+          fixture_id?: string | null
+          id?: string
+          player_id?: string
+          provider?: string
+          reason?: string | null
+          reported_on?: string | null
+          season_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "injuries_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "injuries_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lineups: {
         Row: {
           created_at: string
           fixture_id: string
           formation: string | null
+          grid: string | null
           id: string
           is_starting: boolean
-          pitch_heatmap: Json | null
           player_id: string
           position: string | null
           shirt_number: number | null
@@ -974,9 +1233,9 @@ export type Database = {
           created_at?: string
           fixture_id: string
           formation?: string | null
+          grid?: string | null
           id?: string
           is_starting?: boolean
-          pitch_heatmap?: Json | null
           player_id: string
           position?: string | null
           shirt_number?: number | null
@@ -986,9 +1245,9 @@ export type Database = {
           created_at?: string
           fixture_id?: string
           formation?: string | null
+          grid?: string | null
           id?: string
           is_starting?: boolean
-          pitch_heatmap?: Json | null
           player_id?: string
           position?: string | null
           shirt_number?: number | null
@@ -1229,6 +1488,243 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_heatmaps: {
+        Row: {
+          actions_without_period: number
+          anchor: Json | null
+          class_mix: Json
+          derivation: string
+          engine_version: number
+          fixture_id: string
+          generated_at: string
+          grid: Json
+          id: string
+          inputs_fingerprint: string
+          period: string
+          player_id: string
+          sources: string[]
+          team_id: string
+          total_actions: number
+        }
+        Insert: {
+          actions_without_period?: number
+          anchor?: Json | null
+          class_mix?: Json
+          derivation: string
+          engine_version: number
+          fixture_id: string
+          generated_at?: string
+          grid: Json
+          id?: string
+          inputs_fingerprint: string
+          period: string
+          player_id: string
+          sources?: string[]
+          team_id: string
+          total_actions?: number
+        }
+        Update: {
+          actions_without_period?: number
+          anchor?: Json | null
+          class_mix?: Json
+          derivation?: string
+          engine_version?: number
+          fixture_id?: string
+          generated_at?: string
+          grid?: Json
+          id?: string
+          inputs_fingerprint?: string
+          period?: string
+          player_id?: string
+          sources?: string[]
+          team_id?: string
+          total_actions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_heatmaps_fixture_id_fkey"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_heatmaps_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_heatmaps_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_season_statistics: {
+        Row: {
+          appearances: number | null
+          assists: number | null
+          blocks: number | null
+          competition_id: string | null
+          competition_name: string | null
+          created_at: string
+          dribbles_attempted: number | null
+          dribbles_succeeded: number | null
+          duels_total: number | null
+          duels_won: number | null
+          fouls_committed: number | null
+          fouls_drawn: number | null
+          goals: number | null
+          goals_conceded: number | null
+          id: string
+          interceptions: number | null
+          lineups: number | null
+          minutes_played: number | null
+          pass_accuracy: number | null
+          passes_key: number | null
+          passes_total: number | null
+          penalties_missed: number | null
+          penalties_scored: number | null
+          player_id: string
+          position: string | null
+          provider: string
+          provider_competition_id: string
+          provider_rating: number | null
+          provider_team_id: string | null
+          red_cards: number | null
+          retrieved_at: string
+          saves: number | null
+          season_id: string | null
+          season_year: number
+          shots_on_target: number | null
+          shots_total: number | null
+          tackles_total: number | null
+          team_id: string | null
+          team_name: string | null
+          updated_at: string
+          yellow_cards: number | null
+        }
+        Insert: {
+          appearances?: number | null
+          assists?: number | null
+          blocks?: number | null
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          lineups?: number | null
+          minutes_played?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_missed?: number | null
+          penalties_scored?: number | null
+          player_id: string
+          position?: string | null
+          provider: string
+          provider_competition_id: string
+          provider_rating?: number | null
+          provider_team_id?: string | null
+          red_cards?: number | null
+          retrieved_at?: string
+          saves?: number | null
+          season_id?: string | null
+          season_year: number
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id?: string | null
+          team_name?: string | null
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Update: {
+          appearances?: number | null
+          assists?: number | null
+          blocks?: number | null
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          dribbles_attempted?: number | null
+          dribbles_succeeded?: number | null
+          duels_total?: number | null
+          duels_won?: number | null
+          fouls_committed?: number | null
+          fouls_drawn?: number | null
+          goals?: number | null
+          goals_conceded?: number | null
+          id?: string
+          interceptions?: number | null
+          lineups?: number | null
+          minutes_played?: number | null
+          pass_accuracy?: number | null
+          passes_key?: number | null
+          passes_total?: number | null
+          penalties_missed?: number | null
+          penalties_scored?: number | null
+          player_id?: string
+          position?: string | null
+          provider?: string
+          provider_competition_id?: string
+          provider_rating?: number | null
+          provider_team_id?: string | null
+          red_cards?: number | null
+          retrieved_at?: string
+          saves?: number | null
+          season_id?: string | null
+          season_year?: number
+          shots_on_target?: number | null
+          shots_total?: number | null
+          tackles_total?: number | null
+          team_id?: string | null
+          team_name?: string | null
+          updated_at?: string
+          yellow_cards?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_season_statistics_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_season_statistics_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_season_statistics_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_season_statistics_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -1513,7 +2009,9 @@ export type Database = {
             | null
           prediction_type: Database["public"]["Enums"]["prediction_type"]
           profile_id: string
-          resolution: Database["public"]["Enums"]["prediction_resolution"] | null
+          resolution:
+            | Database["public"]["Enums"]["prediction_resolution"]
+            | null
           resolved_at: string | null
           unresolvable_reason: string | null
           updated_at: string
@@ -1699,6 +2197,89 @@ export type Database = {
             columns: ["rival_team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_coverage: {
+        Row: {
+          competition_id: string | null
+          competition_name: string | null
+          created_at: string
+          fixture_events: boolean | null
+          fixture_lineups: boolean | null
+          fixture_player_statistics: boolean | null
+          fixture_statistics: boolean | null
+          id: string
+          injuries: boolean | null
+          odds: boolean | null
+          players: boolean | null
+          predictions: boolean | null
+          provider: string
+          provider_competition_id: string
+          raw: Json | null
+          retrieved_at: string
+          season_year: number
+          standings: boolean | null
+          top_assists: boolean | null
+          top_cards: boolean | null
+          top_scorers: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          fixture_events?: boolean | null
+          fixture_lineups?: boolean | null
+          fixture_player_statistics?: boolean | null
+          fixture_statistics?: boolean | null
+          id?: string
+          injuries?: boolean | null
+          odds?: boolean | null
+          players?: boolean | null
+          predictions?: boolean | null
+          provider: string
+          provider_competition_id: string
+          raw?: Json | null
+          retrieved_at?: string
+          season_year: number
+          standings?: boolean | null
+          top_assists?: boolean | null
+          top_cards?: boolean | null
+          top_scorers?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: string | null
+          competition_name?: string | null
+          created_at?: string
+          fixture_events?: boolean | null
+          fixture_lineups?: boolean | null
+          fixture_player_statistics?: boolean | null
+          fixture_statistics?: boolean | null
+          id?: string
+          injuries?: boolean | null
+          odds?: boolean | null
+          players?: boolean | null
+          predictions?: boolean | null
+          provider?: string
+          provider_competition_id?: string
+          raw?: Json | null
+          retrieved_at?: string
+          season_year?: number
+          standings?: boolean | null
+          top_assists?: boolean | null
+          top_cards?: boolean | null
+          top_scorers?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_coverage_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
             referencedColumns: ["id"]
           },
         ]
@@ -2282,6 +2863,86 @@ export type Database = {
           },
         ]
       }
+      top_scorers: {
+        Row: {
+          appearances: number | null
+          assists: number | null
+          captured_at: string
+          competition_id: string
+          created_at: string
+          goals: number | null
+          id: string
+          minutes_played: number | null
+          penalties_scored: number | null
+          player_id: string
+          rank: number
+          season_id: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          appearances?: number | null
+          assists?: number | null
+          captured_at?: string
+          competition_id: string
+          created_at?: string
+          goals?: number | null
+          id?: string
+          minutes_played?: number | null
+          penalties_scored?: number | null
+          player_id: string
+          rank: number
+          season_id: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          appearances?: number | null
+          assists?: number | null
+          captured_at?: string
+          competition_id?: string
+          created_at?: string
+          goals?: number | null
+          id?: string
+          minutes_played?: number | null
+          penalties_scored?: number | null
+          player_id?: string
+          rank?: number
+          season_id?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "top_scorers_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "top_scorers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "top_scorers_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "top_scorers_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transfers: {
         Row: {
           created_at: string
@@ -2471,6 +3132,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      create_templated_poll: {
+        Args: {
+          p_fixture_id: string
+          p_labels: string[]
+          p_player_ids: string[]
+          p_poll_kind: Database["public"]["Enums"]["poll_kind"]
+          p_question: string
+        }
+        Returns: string
+      }
       evaluate_badge_criteria: {
         Args: { p_profile_id: string }
         Returns: number
@@ -2553,6 +3224,16 @@ export type Database = {
           team_id: string
         }[]
       }
+      get_motm_poll_result: {
+        Args: { p_fixture_id: string }
+        Returns: {
+          label: string
+          option_id: string
+          player_id: string
+          post_id: string
+          vote_count: number
+        }[]
+      }
       get_my_followers: {
         Args: never
         Returns: {
@@ -2564,16 +3245,6 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: {
           option_id: string
-          vote_count: number
-        }[]
-      }
-      get_motm_poll_result: {
-        Args: { p_fixture_id: string }
-        Returns: {
-          label: string
-          option_id: string
-          player_id: string
-          post_id: string
           vote_count: number
         }[]
       }
@@ -2593,32 +3264,12 @@ export type Database = {
           reaction_count: number
         }[]
       }
-      create_templated_poll: {
-        Args: {
-          p_fixture_id: string
-          p_labels: string[]
-          p_player_ids: string[]
-          p_poll_kind: Database["public"]["Enums"]["poll_kind"]
-          p_question: string
-        }
-        Returns: string
-      }
       get_prediction_consensus: {
         Args: { p_fixture_ids: string[] }
         Returns: {
           fixture_id: string
           pick_count: number
           predicted_outcome: Database["public"]["Enums"]["prediction_outcome"]
-        }[]
-      }
-      get_prediction_type_breakdown: {
-        Args: { p_profile_id: string }
-        Returns: {
-          correct_count: number
-          points: number
-          prediction_type: Database["public"]["Enums"]["prediction_type"]
-          settled_count: number
-          unresolvable_count: number
         }[]
       }
       get_prediction_league_leaderboard: {
@@ -2631,6 +3282,16 @@ export type Database = {
           settled: number
           total_points: number
           username: string
+        }[]
+      }
+      get_prediction_type_breakdown: {
+        Args: { p_profile_id: string }
+        Returns: {
+          correct_count: number
+          points: number
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
+          settled_count: number
+          unresolvable_count: number
         }[]
       }
       get_predictions_leaderboard: {
@@ -2988,12 +3649,16 @@ export type Database = {
         | "transfer"
         | "lineup"
         | "standing"
+        | "fixture_player_statistic"
+        | "coverage"
+        | "injury"
+        | "top_scorer"
+        | "player_season_statistic"
       reaction_target_type: "post" | "comment"
       reaction_type: "like" | "fire" | "clap" | "laugh" | "wow" | "sad"
       report_status: "pending" | "reviewing" | "actioned" | "dismissed"
       save_target_type: "post" | "team" | "player"
       support_request_status: "open" | "in_progress" | "closed"
-      total_goals_band: "goals_0_1" | "goals_2_3" | "goals_4_plus"
       support_request_topic:
         | "sign_in"
         | "account"
@@ -3001,6 +3666,7 @@ export type Database = {
         | "data_correction"
         | "other"
       sync_status: "running" | "success" | "partial" | "failed" | "skipped"
+      total_goals_band: "goals_0_1" | "goals_2_3" | "goals_4_plus"
       transfer_type: "transfer" | "loan" | "free" | "end_of_loan" | "unknown"
       user_role:
         | "user"
@@ -3140,6 +3806,8 @@ export const Constants = {
     Enums: {
       ai_message_role: ["system", "user", "assistant", "tool"],
       avatar_type: ["kivo", "uploaded"],
+      cards_band: ["cards_0_2", "cards_3_4", "cards_5_plus"],
+      corners_band: ["corners_0_8", "corners_9_12", "corners_13_plus"],
       data_anomaly_type: [
         "score_regression",
         "status_regression",
@@ -3173,7 +3841,17 @@ export const Constants = {
       follow_target_type: ["team", "player", "competition", "user"],
       moderation_status: ["active", "shadow_muted", "suspended", "banned"],
       moderation_target_type: ["post", "comment", "profile"],
+      poll_kind: ["motm", "referee_decision"],
       prediction_outcome: ["home_win", "draw", "away_win"],
+      prediction_resolution: ["correct", "incorrect", "unresolvable"],
+      prediction_type: [
+        "winner",
+        "correct_score",
+        "first_scorer",
+        "total_goals",
+        "cards_corners",
+        "motm",
+      ],
       provider_entity_type: [
         "competition",
         "season",
@@ -3186,6 +3864,11 @@ export const Constants = {
         "transfer",
         "lineup",
         "standing",
+        "fixture_player_statistic",
+        "coverage",
+        "injury",
+        "top_scorer",
+        "player_season_statistic",
       ],
       reaction_target_type: ["post", "comment"],
       reaction_type: ["like", "fire", "clap", "laugh", "wow", "sad"],
@@ -3200,6 +3883,7 @@ export const Constants = {
         "other",
       ],
       sync_status: ["running", "success", "partial", "failed", "skipped"],
+      total_goals_band: ["goals_0_1", "goals_2_3", "goals_4_plus"],
       transfer_type: ["transfer", "loan", "free", "end_of_loan", "unknown"],
       user_role: [
         "user",
