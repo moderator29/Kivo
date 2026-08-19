@@ -8,7 +8,6 @@ import type { PitchOrientation } from "@/lib/football/heatmap/pitch-coordinates"
 import { buildPlayerHeatmap, type FixtureHeatmapSet, type PlayerHeatmapSubject } from "@/lib/football/heatmap/fixture-heatmap";
 import type { AggregatedHeatmap } from "@/lib/football/heatmap/heatmap-aggregator";
 import type { MatchPeriod, PitchActionClass } from "@/lib/football/heatmap/event-normalizer";
-import type { PositionalObservation } from "@/lib/football/positional-types";
 import { loadFixtureHeatmaps } from "@/app/(app)/matches/heatmap-actions";
 
 /**
@@ -47,31 +46,7 @@ export type FixtureHeatmapViewProps = {
   awayTeamName: string;
 };
 
-/**
- * The shape this component took before it could build its own heatmaps, kept
- * alive for exactly one call site while `match-centre-tabs.tsx` — owned by
- * another agent on this branch — migrates to the new props.
- *
- * It is not a fallback and it is not a placeholder. That call site passes a
- * hardcoded empty `observations` array (no `PositionalDataProvider` is
- * implemented anywhere in KIVO, so nothing can produce a non-empty one), which
- * genuinely means "KIVO has no positional data here" — and this component
- * renders exactly that, honestly, the same empty state an unsynced fixture
- * gets.
- *
- * DELETE THIS, and the `"heatmaps" in props` branch below, the moment Match
- * Centre passes `heatmaps`. It exists so that changing this component's props
- * does not break somebody else's file mid-flight, not because two prop shapes
- * are a good idea.
- */
-export type LegacyHeatmapViewProps = {
-  observations: PositionalObservation[];
-  playerId?: string;
-  matchId?: string;
-  subjectLabel: string;
-};
-
-export type HeatmapViewProps = FixtureHeatmapViewProps | LegacyHeatmapViewProps;
+export type HeatmapViewProps = FixtureHeatmapViewProps;
 
 /** Server-enriched grids, tagged with the fixture and period they answer for. */
 type LoadedHeatmaps = {
@@ -167,16 +142,7 @@ function basisSentence(
   return `Not tracking data. This shape is inferred from ${anchorBasis} and ${source} — ${heatmap.totalActions.toLocaleString("en-GB")} recorded ${heatmap.totalActions === 1 ? "action" : "actions"}.${shapedBy}`;
 }
 
-export function HeatmapView(props: HeatmapViewProps) {
-  if (!("heatmaps" in props)) {
-    // See LegacyHeatmapViewProps. An empty observation set is a real answer, and
-    // this is the real empty state for it — not a stand-in for a feature.
-    return <HeatmapEmptyState reason="nothing-synced" />;
-  }
-  return <FixtureHeatmapView {...props} />;
-}
-
-function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHeatmapViewProps) {
+export function HeatmapView({ heatmaps, homeTeamName, awayTeamName }: HeatmapViewProps) {
   const gradientId = useId();
   const blurId = useId();
 
@@ -195,7 +161,9 @@ function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHea
    * value, with no effect needed to keep them consistent.
    */
   const [loaded, setLoaded] = useState<LoadedHeatmaps | null>(null);
-  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [settled, setSettled] = useState<{ key: string; outcome: "unavailable" | "failed" } | null>(null);
+  const settledKey = settled?.key ?? null;
+  const settledOutcome = settled?.outcome ?? null;
 
   const team = side === "home" ? heatmaps.home : heatmaps.away;
   const teamName = side === "home" ? homeTeamName : awayTeamName;
@@ -223,29 +191,34 @@ function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHea
   const requestKey = `${heatmaps.fixtureId}:${activePeriod}`;
   const enriched = loaded?.key === requestKey ? loaded.heatmaps : null;
   const usedPlayerStatistics = loaded?.key === requestKey ? loaded.usedPlayerStatistics : false;
-  const loadState: "idle" | "loading" | "failed" =
-    enriched !== null ? "idle" : failedKey === requestKey ? "failed" : "loading";
+
+  // Four states, not three. "There is no richer version to fetch" is the
+  // ordinary path — a fixture KIVO does not hold, a signed-out reader — and it
+  // must not tell anybody something went wrong, because nothing did. Only a
+  // genuine failure earns a line of explanation.
+  const loadState: "idle" | "loading" | "unavailable" | "failed" =
+    enriched !== null ? "idle" : (settledKey === requestKey ? (settledOutcome ?? "unavailable") : "loading");
 
   useEffect(() => {
     let cancelled = false;
     loadFixtureHeatmaps(heatmaps.fixtureId, activePeriod)
       .then((result) => {
         if (cancelled) return;
-        if (!result) {
-          // Not an error the reader needs to see: the baseline shape is already
-          // on screen and is genuinely correct, just built from less. This only
-          // changes one line of caption, never the pitch.
-          setFailedKey(requestKey);
+        if (result.status === "ok") {
+          setLoaded({
+            key: requestKey,
+            heatmaps: result.heatmaps,
+            usedPlayerStatistics: result.usedPlayerStatistics,
+          });
           return;
         }
-        setLoaded({
-          key: requestKey,
-          heatmaps: result.heatmaps,
-          usedPlayerStatistics: result.usedPlayerStatistics,
-        });
+        setSettled({ key: requestKey, outcome: result.status === "error" ? "failed" : "unavailable" });
       })
       .catch(() => {
-        if (!cancelled) setFailedKey(requestKey);
+        // A rejected action is a genuine failure — a network drop, a server
+        // error — as distinct from the action itself reporting that there is
+        // nothing to fetch.
+        if (!cancelled) setSettled({ key: requestKey, outcome: "failed" });
       });
     return () => {
       cancelled = true;
@@ -299,10 +272,16 @@ function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHea
             <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
               {teamName} {team.formation ? `· ${team.formation}` : ""}
             </span>
-            {/* Horizontal scroll rather than a wrapped grid: a full XI wraps to
-                three ragged rows on a phone, and the team-sheet order that makes
-                the list readable is lost the moment it wraps. */}
-            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* Two behaviours, because the right one differs by width.
+                On a phone a full XI cannot wrap without becoming three ragged
+                rows that destroy the team-sheet order, so it scrolls — with a
+                fade at the trailing edge, because a row that simply stops at the
+                card's edge mid-name reads as broken rather than as scrollable.
+                From `sm:` up there is room to wrap, so it wraps and nothing is
+                hidden at all; the mask is switched off there so it cannot fade
+                a chip that is fully visible. */}
+            <div className="relative">
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [mask-image:linear-gradient(to_right,transparent_0,black_10px,black_calc(100%-28px),transparent_100%)] [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible sm:[mask-image:none] [&::-webkit-scrollbar]:hidden">
               {drawable.map((player) => {
                 const active = subject?.playerId === player.playerId;
                 return (
@@ -325,6 +304,12 @@ function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHea
                   </button>
                 );
               })}
+              </div>
+              {/* Named, not just faded. A gradient alone tells you something is
+                  cut off; it does not tell you how much. */}
+              <p className="mt-1 text-[11px] text-foreground-subtle sm:hidden">
+                {drawable.length} players · scroll for more
+              </p>
             </div>
           </div>
         ) : (
@@ -364,8 +349,14 @@ function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHea
           </div>
 
           {heatmap.hasData ? (
+            // A 100x140 pitch drawn at full container width is over a
+            // thousand pixels tall on a desktop, which pushes the caption that
+            // qualifies it below the fold — and a disclaimer only does its job
+            // if it is on screen at the same time as the thing it disclaims.
+            // Capped and centred, so picture and caption are read together at
+            // every width.
             <svg
-              className="relative w-full"
+              className="relative mx-auto w-full max-w-[min(100%,340px)]"
               viewBox={`0 0 ${PITCH_DIMENSIONS.width} ${PITCH_DIMENSIONS.height}`}
               preserveAspectRatio="xMidYMid meet"
               style={{ aspectRatio: `${PITCH_DIMENSIONS.width} / ${PITCH_DIMENSIONS.height}` }}
@@ -467,8 +458,8 @@ function FixtureHeatmapView({ heatmaps, homeTeamName, awayTeamName }: FixtureHea
 
             {loadState === "failed" && (
               <p className="text-[11px] leading-relaxed text-foreground-subtle">
-                Showing the shape KIVO could build from this page&apos;s own data. A richer version couldn&apos;t be
-                loaded just now.
+                Showing the shape KIVO could build from this page&apos;s own data — a more detailed version
+                couldn&apos;t be loaded just now.
               </p>
             )}
           </div>

@@ -8,13 +8,27 @@ import type { CachePeriod } from "@/lib/football/heatmap/heatmap-cache";
 
 const PERIODS: readonly CachePeriod[] = ["full-match", "first-half", "second-half", "extra-time"];
 
-export type LoadFixtureHeatmapsResult = {
-  /** Player id -> that player's grid for the requested period. */
-  heatmaps: Record<string, AggregatedHeatmap>;
-  /** True when per-player match statistics fed the shapes, rather than only the
-   * team sheet and the goals/cards timeline. The caption says which. */
-  usedPlayerStatistics: boolean;
-};
+/**
+ * Three outcomes, deliberately, because two of them are ordinary and one is not.
+ *
+ * `unavailable` is the normal path whenever there is simply no richer version to
+ * fetch — a signed-out caller, a fixture KIVO does not hold, an argument that is
+ * not an id. `error` means KIVO tried and something broke. Collapsing them into
+ * one null made the view say "a richer version couldn't be loaded just now" in
+ * the perfectly ordinary case, which reads as a fault when nothing is at fault.
+ * The reader should only be told something went wrong when something did.
+ */
+export type LoadFixtureHeatmapsResult =
+  | {
+      status: "ok";
+      /** Player id -> that player's grid for the requested period. */
+      heatmaps: Record<string, AggregatedHeatmap>;
+      /** True when per-player match statistics fed the shapes, rather than only
+       * the team sheet and the goals/cards timeline. The caption says which. */
+      usedPlayerStatistics: boolean;
+    }
+  | { status: "unavailable" }
+  | { status: "error" };
 
 /**
  * The server-side upgrade behind `HeatmapView`.
@@ -38,27 +52,30 @@ export type LoadFixtureHeatmapsResult = {
 export async function loadFixtureHeatmaps(
   fixtureId: string,
   period: CachePeriod = "full-match",
-): Promise<LoadFixtureHeatmapsResult | null> {
+): Promise<LoadFixtureHeatmapsResult> {
   // The whole (app) route group is gated, and this reads only football
   // reference data — but a server action is its own entry point, reachable
   // without ever rendering the page that calls it, so it checks rather than
-  // assumes. Returning null (not an error) keeps the caller's degradation path
-  // the same for "signed out" as for "nothing to show".
+  // assumes.
   const profile = await getOrCreateProfile();
-  if (!profile) return null;
+  if (!profile) return { status: "unavailable" };
 
-  if (!PERIODS.includes(period)) return null;
+  if (!PERIODS.includes(period)) return { status: "unavailable" };
   // Cheap shape check before anything touches the database: this id arrives
   // from a client component, and an id-shaped argument that is not an id should
   // not become a query.
-  if (!/^[0-9a-f-]{36}$/i.test(fixtureId)) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(fixtureId)) return { status: "unavailable" };
 
   try {
     const payload = await createHeatmapService().getFixtureHeatmaps(fixtureId, period);
-    if (!payload) return null;
-    return { heatmaps: payload.heatmaps, usedPlayerStatistics: payload.usedPlayerStatistics };
+    if (!payload) return { status: "unavailable" };
+    return {
+      status: "ok",
+      heatmaps: payload.heatmaps,
+      usedPlayerStatistics: payload.usedPlayerStatistics,
+    };
   } catch (error) {
     logError("football.heatmap.loadFixtureHeatmaps", error, { fixtureId, period });
-    return null;
+    return { status: "error" };
   }
 }
