@@ -206,6 +206,15 @@ interface ApiFootballStandingsResponse {
           rank: number;
           team: { id: number; name: string; logo: string | null };
           points: number;
+          // All three of these arrive on every /standings row and were
+          // undeclared here, so getStandings never saw them and a league table
+          // could not draw its qualification lines, split a group stage, or
+          // show form. Same bug shape as the dropped referee, round label and
+          // venue city: an adapter's response interface is not documentation,
+          // it is a filter — anything it omits, the product cannot have.
+          description?: string | null;
+          group?: string | null;
+          form?: string | null;
           all: {
             played: number;
             win: number;
@@ -676,6 +685,12 @@ export class ApiFootballProvider implements FootballDataProvider {
       goalsFor: row.all.goals.for,
       goalsAgainst: row.all.goals.against,
       points: row.points,
+      // Verbatim, never classified here. Any "colour this green" decision is a
+      // presentation choice made downstream over data that stays intact — see
+      // NormalizedStandingRow.zoneDescription.
+      zoneDescription: row.description?.trim() || null,
+      groupLabel: row.group?.trim() || null,
+      form: row.form?.trim() || null,
     }));
   }
 

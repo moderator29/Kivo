@@ -3000,6 +3000,9 @@ export type Database = {
           lost: number
           played: number
           points: number
+          zone_description: string | null
+          group_label: string | null
+          form: string | null
           position: number | null
           season_id: string
           team_id: string
@@ -3015,6 +3018,9 @@ export type Database = {
           lost?: number
           played?: number
           points?: number
+          zone_description?: string | null
+          group_label?: string | null
+          form?: string | null
           position?: number | null
           season_id: string
           team_id: string
@@ -3030,6 +3036,9 @@ export type Database = {
           lost?: number
           played?: number
           points?: number
+          zone_description?: string | null
+          group_label?: string | null
+          form?: string | null
           position?: number | null
           season_id?: string
           team_id?: string

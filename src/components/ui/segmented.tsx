@@ -23,6 +23,14 @@ export type SegmentedOption<T extends string> = {
  * or reshapes content that is already on screen. Use it for "Social | People"
  * style choices, not for page-level navigation.
  *
+ * The tab list is `<SectionTabs>` (src/components/ui/section-tabs.tsx), and the
+ * two are close enough in appearance to be merged by mistake, which is why both
+ * files say so. The test is what the reader is choosing: a *place* in the page,
+ * with its own panel and its own URL — that is `SectionTabs`; or a *setting*
+ * applied to what is already in front of them — that is this. A radiogroup
+ * announced as a tablist tells a screen reader user there are panels to move
+ * between when there are none.
+ *
  * Accessibility: a real `radiogroup` with roving tabindex, so the whole group
  * is one tab stop and the arrow keys move within it. That is the pattern
  * screen readers and keyboard users expect from a control that looks like

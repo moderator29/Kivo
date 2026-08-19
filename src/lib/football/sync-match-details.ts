@@ -793,6 +793,16 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
           goals_against: row.goalsAgainst,
           points: row.points,
           position: row.rank,
+          // Migration 0117. All three arrive on the same /standings response
+          // KIVO already pays for and were dropped by the adapter until now.
+          // Written even when null: unlike a crest or a photo, a row losing its
+          // zone is real information (a club that dropped out of the European
+          // places), so the never-clobber-with-null rule used elsewhere would
+          // freeze a table's zones at whatever they were the first time it
+          // synced.
+          zone_description: row.zoneDescription,
+          group_label: row.groupLabel,
+          form: row.form,
         },
         { onConflict: "season_id,team_id" },
       );

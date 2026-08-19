@@ -59,6 +59,14 @@
   --kivo-dur-fast: 120ms;
   --kivo-dur-base: 180ms;
   --kivo-dur-slow: 320ms;
+
+  /* The app header's height, named so anything that has to sit directly under
+     it can say so instead of guessing. `<SectionTabs sticky>` is the first
+     caller: a tab rail that sticks 8px too high slides under the header and
+     disappears, and 8px too low leaves a stripe of scrolling content showing
+     through the gap. `TopBar` (src/components/layout/top-bar.tsx) sets its own
+     `min-height` from this value, so the two cannot drift apart. */
+  --kivo-header-h: 3.25rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1484,5 +1492,94 @@ h3 {
 
   [data-theme="light"] .kivo-glow-soft {
     box-shadow: 0 4px 14px -6px color-mix(in oklab, var(--accent-strong) 40%, transparent);
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------------------
+     TAB RAIL
+
+     The scroll container behind `<SectionTabs>` (src/components/ui/section-tabs.tsx).
+     Lives in CSS rather than in utilities because most of what it does has no
+     Tailwind equivalent, and the part that does (the mask) has to be driven by
+     state the component measures at runtime.
+
+     The founder's note was specific: the Match Centre's tabs should behave the
+     way a real football app's do — one horizontal rail you flick along, never
+     wrapping to a second line, never collapsing into a dropdown, never
+     shortening a label so twelve of them fit. That means the rail scrolls, and
+     the moment a rail scrolls it has to say so, because a tab sliced off at a
+     hard edge reads as a rendering bug rather than as more content.
+
+     The fade is therefore per-edge and driven by `data-overflow-*`, which the
+     component sets from real scroll position. A static both-edges mask (what
+     `.kivo-scroll-fade-x` gives you) would ghost the first tab on a rail of
+     three tabs with nothing to scroll — fading content that is already fully
+     visible, which is worse than no fade at all.
+
+     `scroll-padding-inline` matters more than it looks: it is the same 2rem
+     the component leaves around a tab when it scrolls one into view, so a
+     programmatic scroll lands exactly on a snap position instead of being
+     nudged off it by proximity snapping a frame later. Change one and change
+     the other — SCROLL_PADDING in section-tabs.tsx.
+  --------------------------------------------------------------------------- */
+  .kivo-tab-rail {
+    --kivo-tab-fade-start: 0px;
+    --kivo-tab-fade-end: 0px;
+    position: relative;
+    display: flex;
+    overflow-x: auto;
+    /* Flicking the rail past its end must not start pulling the page or arm a
+       browser back-swipe. */
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* `proximity`, not `mandatory`: mandatory snapping fights a user who is
+       scrolling the rail to *read* it rather than to select, and on a rail of
+       twelve short tabs it makes the flick feel notched. */
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 2rem;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--kivo-tab-fade-start),
+      #000 calc(100% - var(--kivo-tab-fade-end)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--kivo-tab-fade-start),
+      #000 calc(100% - var(--kivo-tab-fade-end)),
+      transparent 100%
+    );
+  }
+
+  .kivo-tab-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kivo-tab-rail[data-overflow-start="true"] {
+    --kivo-tab-fade-start: 1.5rem;
+  }
+
+  .kivo-tab-rail[data-overflow-end="true"] {
+    --kivo-tab-fade-end: 1.5rem;
+  }
+
+  .kivo-tab-rail > [role="tab"] {
+    scroll-snap-align: start;
+  }
+
+  /* The app ring, drawn INSIDE the control. `overflow-x: auto` makes the
+     rail clip on both axes whatever the y value says, so the standard
+     `.kivo-focus` halo (2px ring, 2px offset) would be shaved off at the top
+     and bottom of every tab. A 44px tap target has room to carry the ring
+     internally, and this is the only place in the app that needs the inset
+     variant. */
+  .kivo-tab-rail > [role="tab"]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -3px;
+    border-radius: 0.75rem;
   }
 }

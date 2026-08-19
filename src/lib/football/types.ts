@@ -131,6 +131,31 @@ export interface NormalizedStandingRow {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+  /**
+   * The provider's own qualification/relegation phrase for this row, verbatim
+   * ("Promotion - Champions League (Group Stage)", "Relegation - Championship").
+   *
+   * This is what lets a league table draw the lines that make it football
+   * WITHOUT KIVO asserting anything: the zone is the provider's statement about
+   * its own competition, not a rule hardcoded here. Hardcoding "top four go to
+   * the Champions League" would be an unverifiable claim with an expiry date —
+   * coefficients change, leagues restructure — and a line drawn confidently in
+   * the wrong place is worse than no line.
+   *
+   * Null is a real answer meaning "the provider said nothing about this row",
+   * which is NOT the same as "this row is in no zone". A renderer must show
+   * nothing rather than imply mid-table safety.
+   */
+  zoneDescription: string | null;
+  /** The provider's group name ("Group A"), null for a single-table league.
+   * `rank` is per-group, so a consumer that ignores this renders a group stage
+   * as one nonsensical ladder. */
+  groupLabel: string | null;
+  /** The provider's own last-five string ("WWDLW"). Deliberately distinct from
+   * KIVO's own form-engine.ts derivation over fixtures it holds: one is the
+   * provider's statement, the other is KIVO's, and they must stay tellable
+   * apart. */
+  form: string | null;
 }
 
 export interface NormalizedPlayer {

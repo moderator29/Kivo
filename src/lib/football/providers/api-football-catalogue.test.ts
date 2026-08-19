@@ -271,3 +271,97 @@ describe("fixture details depth", () => {
     expect(fixture.venueName).toBe("Old Trafford");
   });
 });
+
+/**
+ * The three standings fields the adapter used to drop.
+ *
+ * These are what let a league table draw the lines that make it football —
+ * the Champions League places, the relegation zone — WITHOUT KIVO asserting
+ * anything. The zone is the provider's own statement about its own
+ * competition. The alternative on the table was hardcoding "Premier League top
+ * four qualify for the Champions League", which is an unverifiable claim with
+ * an expiry date and exactly what this product must not do.
+ */
+describe("standings zone, group and form", () => {
+  function standingsResponse(rows: unknown[]) {
+    return { response: [{ league: { id: 39, season: 2024, standings: [rows] } }] };
+  }
+
+  const ROW = {
+    rank: 1,
+    team: { id: 33, name: "Manchester United", logo: null },
+    points: 23,
+    description: "Promotion - Champions League (Group Stage)",
+    group: "Premier League",
+    form: "WWDLW",
+    all: { played: 10, win: 7, draw: 2, lose: 1, goals: { for: 20, against: 8 } },
+  };
+
+  it("keeps the provider's own zone phrase, verbatim", async () => {
+    respondWith(standingsResponse([ROW]));
+    const [row] = await (await makeProvider()).getStandings("39", 2024);
+
+    // Verbatim: not parsed into an enum, not shortened, not classified. Any
+    // "colour this green" decision belongs downstream, over data left intact.
+    expect(row.zoneDescription).toBe("Promotion - Champions League (Group Stage)");
+    expect(row.groupLabel).toBe("Premier League");
+    expect(row.form).toBe("WWDLW");
+  });
+
+  it("reports null for a row the provider says nothing about", async () => {
+    // The common case — most rows in most tables carry no zone. Null must not
+    // become an empty string, which a renderer could show as a blank zone chip
+    // and read as mid-table safety asserted rather than absent.
+    respondWith(standingsResponse([{ ...ROW, description: null, group: null, form: null }]));
+    const [row] = await (await makeProvider()).getStandings("39", 2024);
+
+    expect(row.zoneDescription).toBeNull();
+    expect(row.groupLabel).toBeNull();
+    expect(row.form).toBeNull();
+  });
+
+  it("survives a response with the fields absent entirely", async () => {
+    const bare = { ...ROW } as Record<string, unknown>;
+    delete bare.description;
+    delete bare.group;
+    delete bare.form;
+    respondWith(standingsResponse([bare]));
+
+    const [row] = await (await makeProvider()).getStandings("39", 2024);
+    expect(row.zoneDescription).toBeNull();
+    expect(row.rank).toBe(1);
+    expect(row.points).toBe(23);
+  });
+
+  it("treats whitespace as nothing said", async () => {
+    respondWith(standingsResponse([{ ...ROW, description: "   ", group: "", form: " " }]));
+    const [row] = await (await makeProvider()).getStandings("39", 2024);
+    expect(row.zoneDescription).toBeNull();
+    expect(row.groupLabel).toBeNull();
+    expect(row.form).toBeNull();
+  });
+
+  it("keeps each group's rows distinguishable in a group-stage competition", async () => {
+    // Without groupLabel a Champions League group stage renders as one
+    // 32-row ladder, because `rank` restarts at 1 in every group.
+    respondWith({
+      response: [
+        {
+          league: {
+            id: 2,
+            season: 2024,
+            standings: [
+              [{ ...ROW, rank: 1, group: "Group A", team: { id: 1, name: "A1", logo: null } }],
+              [{ ...ROW, rank: 1, group: "Group B", team: { id: 2, name: "B1", logo: null } }],
+            ],
+          },
+        },
+      ],
+    });
+
+    const rows = await (await makeProvider()).getStandings("2", 2024);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.groupLabel)).toEqual(["Group A", "Group B"]);
+    expect(rows.map((r) => r.rank)).toEqual([1, 1]);
+  });
+});
