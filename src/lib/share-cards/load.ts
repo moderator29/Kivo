@@ -263,24 +263,40 @@ async function loadFantasyPerformance(
   const scored = latest as unknown as { points: number; gameweek: { id: string; number: number } | null } | null;
   if (!scored?.gameweek) return null;
 
-  const [{ data: leaderboard }, { count: squadSize }] = await Promise.all([
+  // The standing comes from `get_fantasy_league_leaderboard`, and it has to:
+  // `fantasy_points` is RLS-scoped to the owning manager, so a direct read of
+  // rival teams' scores returns nothing at all (verified against the seeded
+  // database — a hand-rolled cross-team query came back with one row, this
+  // viewer's own). That RPC is the SECURITY DEFINER aggregate built for
+  // exactly this, and it is the only honest source.
+  //
+  // What it returns is **season totals**, and the first version of this card
+  // printed them beside a gameweek score: "36 gameweek points", "league
+  // average 80", "1st of 2". Three real numbers arranged into a
+  // contradiction, because two measured a season and one measured a week,
+  // and nothing on the card said so. Caught by looking at a rendered card.
+  //
+  // So: the standing stays and now says which season it is a standing in,
+  // and the average is gone. There is no per-gameweek league average this
+  // viewer is allowed to compute, and an average on a different basis to the
+  // number above it is worse than no average.
+  const [{ data: leaderboard }, { count: squadSize }, { data: league }] = await Promise.all([
     supabase.rpc("get_fantasy_league_leaderboard", { p_team_id: fantasyTeamId }),
     supabase
       .from("fantasy_rosters")
       .select("id", { count: "exact", head: true })
       .eq("fantasy_team_id", fantasyTeamId)
       .eq("gameweek_id", scored.gameweek.id),
+    supabase.from("fantasy_leagues").select("name").eq("id", teamRow.league_id).maybeSingle(),
   ]);
 
-  const { data: league } = await supabase
-    .from("fantasy_leagues")
-    .select("name")
-    .eq("id", teamRow.league_id)
-    .maybeSingle();
-
   const rows = (leaderboard ?? []) as { team_id: string; total_points: number; has_scores: boolean }[];
-  const scoredRows = rows.filter((r) => r.has_scores);
-  const rankIndex = scoredRows.findIndex((r) => r.team_id === fantasyTeamId);
+  const scoredRows = rows.filter((row) => row.has_scores);
+  const rankIndex = scoredRows.findIndex((row) => row.team_id === fantasyTeamId);
+
+  // A league of one has nobody to be ranked against: "1st of 1" is true and
+  // says nothing.
+  const comparable = scoredRows.length > 1 && rankIndex >= 0;
 
   const owner = teamRow.owner as unknown as { username: string; display_name: string | null } | null;
 
@@ -290,14 +306,13 @@ async function loadFantasyPerformance(
     gameweekNumber: scored.gameweek.number,
     gameweekName: null,
     points: scored.points,
-    // Only a leaderboard that actually has scores can produce a standing.
-    rank: rankIndex >= 0 ? rankIndex + 1 : null,
+    rank: comparable ? rankIndex + 1 : null,
     leagueName: league?.name ?? null,
-    entriesInLeague: scoredRows.length > 0 ? scoredRows.length : null,
-    averagePoints:
-      scoredRows.length > 0
-        ? Math.round(scoredRows.reduce((sum, r) => sum + r.total_points, 0) / scoredRows.length)
-        : null,
+    entriesInLeague: comparable ? scoredRows.length : null,
+    // Deliberately never set: see above. The field stays on the input type
+    // because a per-gameweek average is a real thing to add later, behind an
+    // RPC that can compute it — not because one is available now.
+    averagePoints: null,
     squadSize: squadSize && squadSize > 0 ? squadSize : null,
   });
 }

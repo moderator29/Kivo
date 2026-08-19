@@ -387,15 +387,21 @@ export function buildFantasyPerformanceCard(input: {
     // no row doesn't produce a card at all (see load.ts), so a 0 here is a
     // scored zero.
     points: input.points,
+    // The standing is the league's SEASON table (the only cross-team read a
+    // manager is allowed — see load.ts), which is a different basis from the
+    // gameweek score above it. The card labels it "Season standing" for
+    // exactly that reason: a standing with no stated basis is the easiest
+    // number here to read the wrong way, and it once sat beside a season
+    // average dressed as a gameweek one.
     rankLabel:
-      input.rank != null && input.leagueName
-        ? input.entriesInLeague != null
+      input.rank != null && input.entriesInLeague != null
+        ? input.leagueName
           ? `${ordinal(input.rank)} of ${input.entriesInLeague} · ${input.leagueName}`
-          : `${ordinal(input.rank)} · ${input.leagueName}`
+          : `${ordinal(input.rank)} of ${input.entriesInLeague}`
         : null,
     stats: compactStats([
       stat("Squad", input.squadSize),
-      stat("League average", input.averagePoints),
+      stat("GW average", input.averagePoints),
     ]),
   };
 }

@@ -617,7 +617,7 @@ function fantasyBody(data: Extract<ShareCardData, { kind: "fantasy-performance" 
 
       {data.rankLabel || data.stats.length > 0 ? (
         <Panel padding={30} gap={26} direction="row" align="center" justify="space-around">
-          {data.rankLabel ? <StatBlock item={{ label: "Standing", value: data.rankLabel }} size={34} /> : <div style={{ display: "none" }} />}
+          {data.rankLabel ? <StatBlock item={{ label: "Season standing", value: data.rankLabel }} size={34} /> : <div style={{ display: "none" }} />}
           {data.stats.map((s, i) => (
             <StatBlock key={i} item={s} size={44} />
           ))}

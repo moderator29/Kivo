@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_TABLE_ROWS,
+  buildFantasyPerformanceCard,
   buildLeagueTableCard,
   buildLiveScoreCard,
   buildPlayerComparisonCard,
@@ -272,5 +273,39 @@ describe("stat emphasis", () => {
   it("never accents a zero, because the accent means 'this is the number'", () => {
     expect(stat("Goals", 0, true)?.emphasis).toBe(false);
     expect(stat("Goals", 17, true)?.emphasis).toBe(true);
+  });
+});
+
+describe("buildFantasyPerformanceCard", () => {
+  const base = {
+    teamName: "Harbour Heroes",
+    managerName: "Ada O.",
+    gameweekNumber: 4,
+    gameweekName: null,
+    points: 36,
+    rank: 2,
+    leagueName: "Sandbox Supporters",
+    entriesInLeague: 8,
+    averagePoints: null,
+    squadSize: 15,
+  };
+
+  it("names the league the standing is in, beside the gameweek score", () => {
+    const card = buildFantasyPerformanceCard(base);
+    expect(card.rankLabel).toBe("2nd of 8 · Sandbox Supporters");
+  });
+
+  it("drops the standing entirely when there is nobody to be ranked against", () => {
+    const card = buildFantasyPerformanceCard({ ...base, rank: null, entriesInLeague: null });
+    expect(card.rankLabel).toBeNull();
+  });
+
+  it("prints no league average, because none is readable on the same basis", () => {
+    // `fantasy_points` is RLS-scoped to its owner, so a per-gameweek league
+    // average cannot be computed by the viewer at all. The season average the
+    // leaderboard RPC could give would sit beside a gameweek score and read
+    // as a comparison it is not. Omission is the honest answer.
+    const card = buildFantasyPerformanceCard({ ...base, averagePoints: null });
+    expect(card.stats.map((s) => s.label)).toEqual(["Squad"]);
   });
 });
