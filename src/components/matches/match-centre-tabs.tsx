@@ -358,7 +358,7 @@ function TimelineEventCard({
         scored ? "ring-1 ring-accent/25" : "",
         justArrived ? "kivo-row-flash" : "",
         side === "home" ? "sm:flex-row-reverse sm:text-right" : "",
-        side === null ? "sm:justify-center sm:text-center" : "",
+
       ]
         .filter(Boolean)
         .join(" ")}
@@ -373,24 +373,34 @@ function TimelineEventCard({
         <span className={`text-sm ${scored ? "font-semibold text-foreground" : "text-foreground"}`}>
           {EVENT_LABEL[event.eventType]}
         </span>
-        <span className="text-xs text-foreground-subtle">
-          <PlayerNameLink
-            playerId={event.playerId ?? ""}
-            playerName={event.playerName ?? "Unknown player"}
-            className="hover:text-accent hover:underline"
-          />
-          {event.relatedPlayerName ? (
-            <>
-              {" · "}
+        {/* A VAR review, and some cards, arrive with no player attached at
+            all. The old copy printed "Unknown player" for those, which reads
+            as "KIVO lost the name" when in fact the event never had one — a
+            small fabrication in the most-read part of the screen. When there
+            is genuinely no player, the detail stands on its own, and when
+            there is no detail either the label alone is the whole event. */}
+        {(event.playerName || event.relatedPlayerName || event.detail) && (
+          <span className="text-xs text-foreground-subtle">
+            {event.playerName && (
               <PlayerNameLink
-                playerId={event.relatedPlayerId ?? ""}
-                playerName={event.relatedPlayerName}
+                playerId={event.playerId ?? ""}
+                playerName={event.playerName}
                 className="hover:text-accent hover:underline"
               />
-            </>
-          ) : null}
-          {event.detail ? ` · ${event.detail}` : ""}
-        </span>
+            )}
+            {event.relatedPlayerName ? (
+              <>
+                {event.playerName ? " · " : ""}
+                <PlayerNameLink
+                  playerId={event.relatedPlayerId ?? ""}
+                  playerName={event.relatedPlayerName}
+                  className="hover:text-accent hover:underline"
+                />
+              </>
+            ) : null}
+            {event.detail ? `${event.playerName || event.relatedPlayerName ? " · " : ""}${event.detail}` : ""}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -451,7 +461,14 @@ function TimelineTab({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: staggerDelay(index, 0.03), ease: [0.22, 1, 0.36, 1] }}
-              className="relative grid grid-cols-[2.75rem_1fr] items-center gap-2 sm:grid-cols-[1fr_3rem_1fr]"
+              className={`relative grid grid-cols-[2.75rem_1fr] items-center gap-2 ${
+                // An event with no resolvable club has no side to sit on, so
+                // the two-sided desktop layout has nothing to say about it —
+                // straddling the spine just looks like a broken row. It keeps
+                // the single-column shape at every width instead, which reads
+                // as deliberate rather than misplaced.
+                side === null ? "" : "sm:grid-cols-[1fr_3rem_1fr]"
+              }`}
             >
               {/* A screen reader gets the side as words, since a grid column
                   says nothing when the page is read linearly. */}
@@ -469,9 +486,9 @@ function TimelineTab({
                   side === "home"
                     ? "order-2 sm:order-none"
                     : side === null
-                      ? // Nothing sits opposite an unattributed event, and an
-                        // empty first column would push its card off the grid's
-                        // three tracks. It keeps the mobile shape on every size.
+                      ? // Nothing sits opposite an unattributed event; its row
+                        // stays two-column at every width, so there is no third
+                        // track for an empty cell to occupy.
                         "hidden"
                       : "hidden sm:block sm:order-none"
                 }
@@ -494,7 +511,7 @@ function TimelineTab({
                   side === "away"
                     ? "order-2 sm:order-none"
                     : side === null
-                      ? "order-2 sm:order-none sm:col-span-2"
+                      ? "order-2"
                       : "hidden sm:block sm:order-none"
                 }
                 aria-hidden={side === "home"}
