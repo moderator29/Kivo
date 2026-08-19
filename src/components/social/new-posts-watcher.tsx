@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { safeSubscribe } from "@/lib/realtime-safe";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
 
@@ -85,10 +86,14 @@ export function NewPostsWatcher({
           onNewPostsRef.current();
         },
       )
-      .subscribe();
+      ;
+
+    // Realtime is an enhancement; a socket that cannot open must not take
+    // the page down. See src/lib/realtime-safe.ts.
+    const teardown = safeSubscribe(channel, "newPosts", (c) => supabase.removeChannel(c));
 
     return () => {
-      supabase.removeChannel(channel);
+      teardown();
     };
   }, [supabase, followingOnly]);
 

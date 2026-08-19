@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { safeSubscribe } from "@/lib/realtime-safe";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
 
@@ -105,10 +106,12 @@ export function useRealtimeFixtures<T extends FixtureRealtimeFields>(initialFixt
       );
     }
 
-    channel.subscribe();
+    // Realtime is an enhancement; a socket that cannot open must not take the
+    // page down. See src/lib/realtime-safe.ts.
+    const teardown = safeSubscribe(channel, "fixtures", (c) => supabase.removeChannel(c));
 
     return () => {
-      supabase.removeChannel(channel);
+      teardown();
     };
     // The subscription only needs to change when the *set* of ids being
     // watched changes — `watchedIds` is exactly that set, sorted, so a

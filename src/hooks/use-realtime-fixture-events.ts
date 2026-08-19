@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { safeSubscribe } from "@/lib/realtime-safe";
 import { useSupabaseClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
 import type { MatchEvent } from "@/components/matches/match-centre-tabs";
@@ -167,11 +168,15 @@ export function useRealtimeFixtureEvents(
           });
         },
       )
-      .subscribe();
+      ;
+
+    // Realtime is an enhancement; a socket that cannot open must not take
+    // the page down. See src/lib/realtime-safe.ts.
+    const teardown = safeSubscribe(channel, "fixtureEvents", (c) => supabase.removeChannel(c));
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      teardown();
     };
   }, [supabase, fixtureId, enabled]);
 
