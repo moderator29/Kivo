@@ -1136,3 +1136,125 @@ Ordered by leverage, weighing "unblocks a whole feature" over "polishes a workin
 9. **Fix the three real bugs: AI history order (item 19), fantasy position filter after limit (item 84), and the like-count revert (item 118).** All three are small, all three are currently wrong, and the first two make their features behave incorrectly rather than just imperfectly.
 
 10. **Extract the duplicated primitives (`TeamCrest`, fixture status, `positionGroup`, `timeAgo`) and the sync mapping helpers (items 66 to 69, 29).** Eight copies of the same crest component and four copies of the same provider-mapping logic is the main structural debt in a codebase that is otherwise unusually well reasoned. Doing this now, while the copies are still identical, is an afternoon; doing it after they drift is a week.
+
+---
+
+## Frontend sweep, 2026-08-19 — findings worth keeping
+
+Written during the sweep that followed the founder's verdict on the deployed
+product ("the whole structure and frontend of the platform is so fucking dumb").
+These are the findings that generalise; the fixes themselves are in the three
+commits under `claude/kivo-master-build-2qijfs` and their messages carry the
+per-change reasoning.
+
+### F1. Honesty and internal vocabulary are not the same thing, and KIVO kept confusing them
+
+The single biggest quality problem on the live product was that KIVO's own
+plumbing was rendered into it, everywhere. "Score and status synced 5h" on the
+match hero. "Sync time unknown" above full-time scorelines. "No players synced
+yet." "No loaded teams match 'Real madrid'." "Provider requests remaining today."
+
+None of these were lies, and that is exactly why they survived review. Each was
+written to be scrupulously honest about what KIVO does and does not have, and in
+this codebase honesty is — correctly — the highest value. But **"synced" is a
+fact about our job queue, not about football.** A fan cannot act on it, did not
+ask for it, and reads a product that keeps mentioning its own pipeline as a
+product that is broken.
+
+The rule that came out of it, and that should be applied to anything written from
+here: *state the same true fact in the reader's language.* "Statistics aren't
+available for this match yet", never "not synced yet". The banned vocabulary on
+any surface under `src/app/(app)`: synced, syncing, provider, quota, ingested,
+pulled, loaded, scraped, endpoint, and any database or provider id.
+
+A cheap regression check, until something better exists:
+
+```
+grep -rniE "\b(synced|syncing|quota|provider|ingested|scraped)\b" \
+  src/app/\(app\) src/components --include=*.tsx | grep -v components/admin/
+```
+
+### F2. Role-gating an admin control is not the same as marking it
+
+Every admin control on a public page was **already correctly gated** behind
+`canManageFootballData(profile?.role)`. The gating was never the bug. The bug was
+that a super_admin reviewing his own product could not tell which parts of the
+screen the public actually sees — "Sync match details", a quota checkbox and a
+squad-dependency footnote rendered in exactly the same visual language as the
+match itself, so they were reviewed as product and shaped an opinion the product
+did not deserve.
+
+`src/components/admin/admin-only-control.tsx` is the fix: dashed amber, a wrench,
+and the word "Staff", borrowing the vocabulary `PreviewMarker` already
+established. It is not a security control — the role check upstream is. It is a
+**review** control, and the failure it prevents is a founder mis-reading his own
+screenshots.
+
+Rule: if a control is gated on a role and renders anywhere under
+`src/app/(app)` rather than `src/app/admin`, it goes in that shell. If it does
+not need to be on the public page at all, it belongs in `/admin`.
+
+### F3. The design system already prescribed the fix for "everything is a card"
+
+`src/lib/design-system.ts` has said this since it was written —
+`CONTAINER_ROLES.row`: "One item among many inside a grouped card. It inherits
+the card's corners and is separated by a hairline, never by its own box —
+stacked boxes are what makes a list look cluttered." And `DENSITY_RULES`, one
+divider weight per boundary: "Do not stack a card inside a card to separate two
+rows."
+
+The code had drifted straight off it. Every fixture on /matches, /live, Home and
+a team page was its own `kivo-glass rounded-2xl p-4`, stacked with `gap-2`.
+
+**The lesson is not "write the rule down".** The rule was written down, in a file
+built specifically so a component author could check a choice in ten seconds, and
+it did not hold. What actually held the line was giving the correct shape a name
+and an import — `MatchList` / `MatchListRow`. A rule you have to remember loses to
+a component you can reach for. When a `DENSITY_RULES` entry keeps being violated,
+that is a signal the missing thing is a component, not more prose.
+
+### F4. Four components rendered a match four ways, and nobody had to decide to build the fourth
+
+/matches, /live, Home and the team page each had their own match row. They drifted
+apart one reasonable local decision at a time — Home wanted a stagger, /live
+wanted a flash, /matches wanted a competition label. No single commit was wrong.
+
+Home's was the expensive one: it is the first screen anyone opens, so KIVO's first
+impression was a row that appeared nowhere else in KIVO.
+
+Note the exception, because it is the interesting half. The team page's row is
+team-relative (H/A, opponent only, W/D/L from that club's point of view) and it
+was **right** to be different — that is genuinely different information, and the
+founder's rule is to use the correct component for each piece of information, not
+to make everything the same. Only its container was wrong. "Consolidate the four
+rows" would have destroyed something real; the actual question is always which of
+the differences carry meaning.
+
+### F5. A skeleton that does not match its content is worse than no skeleton
+
+/matches and /live drew skeletons in the shape of the *old* fixture cards, so
+every load ended in a reflow at the exact moment the reader started reading.
+
+Contextual skeletons are not about having a skeleton per route. They are about the
+skeleton and the content having the **same geometry** — same rail width, same row
+height, same divider positions — so the transition is a fill, not a jump. A
+skeleton is a promise about what is arriving, and a wrong one is a broken promise
+the reader feels without being able to name.
+
+Anything that changes a list's layout must change its skeleton in the same commit.
+
+### F6. Still open, deliberately not done in this sweep
+
+- **`FixtureDetailsSyncControl` still renders on the public match page** (behind
+  the role check, and now inside the staff shell). Per F2 it should move into
+  `/admin` entirely — an operator fetching one fixture's details does not need to
+  be standing on that fixture's page. Not done here because it requires
+  restructuring `src/components/matches/match-centre-tabs.tsx`, which another
+  agent owns this pass.
+- **`getTransparencyFreshness()` still returns `quotaRemaining`** with no reader
+  left on any public surface. Harmless, and it lives under `src/lib/football/`,
+  which the data-architecture pass owns.
+- **`LastSyncedNote` / `getLastSyncedAt` keep "synced" in their names.** Fan-visible
+  output is clean; the names are not. Renaming them would enforce F1 structurally
+  rather than by grep, and is worth doing when the branch is not moving under three
+  agents at once.
