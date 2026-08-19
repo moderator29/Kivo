@@ -566,6 +566,8 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
         service,
         (notifiableTeams ?? []).map((team) => ({
           ownerProfileId: team.owner_profile_id,
+          gameweekId,
+          fantasyTeamId: team.id,
           gameweekNumber: gameweek.number,
           points: pointsByTeamId.get(team.id) ?? null,
           carriedFromGameweekNumber: carriedFromByTeam.get(team.id)?.fromGameweekNumber ?? null,

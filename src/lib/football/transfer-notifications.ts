@@ -2,8 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { filterNotifiable } from "@/lib/notification-preferences";
-import { buildNotification } from "@/lib/notification-payloads";
-import { logError } from "@/lib/log";
+import { buildDedupeKey, buildNotification } from "@/lib/notification-payloads";
+import { writeNotifications } from "@/lib/notification-write";
 
 /**
  * Transfer follow alerts — the directive's "follow alerts" for the Transfer
@@ -109,15 +109,22 @@ export async function notifyTransferRecorded(
   if (recipients.length === 0) return;
 
   const summary = buildTransferSummary(input);
+  // Migration 0104. A transfer is one real event with one real id, and the
+  // transfer sync is re-runnable by design — without this, every re-run
+  // re-announces every transfer it re-reads.
+  const dedupeKey = buildDedupeKey(["transfer_recorded", input.transferId]);
   const rows = (await filterNotifiable(supabase, recipients, "in_app_enabled")).map((profileId) =>
-    buildNotification(profileId, "transfer_recorded", {
-      transfer_id: input.transferId,
-      player_id: input.playerId,
-      summary,
-    }),
+    buildNotification(
+      profileId,
+      "transfer_recorded",
+      { transfer_id: input.transferId, player_id: input.playerId, summary },
+      dedupeKey,
+    ),
   );
   if (rows.length === 0) return;
 
-  const { error } = await supabase.from("notifications").insert(rows);
-  if (error) logError("football.transfer-notifications.insert", error);
+  // `transfer_recorded` is a SUPERSEDE type: a transfer's fee, date or clubs
+  // can land incomplete and be corrected by a later sync, and the corrected
+  // version is the one worth reading. See NOTIFICATION_DEDUPE_MODE.
+  await writeNotifications(supabase, rows);
 }

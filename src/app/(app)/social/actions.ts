@@ -421,6 +421,14 @@ async function notifyPostLiked(postId: string, liker: { id: string; username: st
   // Migration 0088: written either way, but held back from the unread badge
   // until this author's quiet window ends. A like is the lowest-priority thing
   // KIVO produces — if anything should wait until morning, it is this.
+  // Deliberately NO `dedupe_key` (migration 0104), and this is the one place
+  // where that column would have been the wrong tool. Its unique index is
+  // permanent, which would turn the rule above — "don't stack UNREAD
+  // duplicates" — into "notify once, ever". The comment above explains why
+  // that is a different bug: once the author has read the last notification
+  // about this post, a later reaction from the same person is genuinely new
+  // information. The unread-scoped check stays the mechanism here; the column
+  // is for events that are re-announced by a re-run, not for a toggle.
   const { error } = await serviceClient.from("notifications").insert(
     await withQuietHours(
       serviceClient,

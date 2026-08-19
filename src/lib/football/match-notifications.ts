@@ -1,11 +1,12 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { EVENT_LABEL, isGoalEventType, isPenaltyEventType, isRedCardEventType } from "./event-labels";
 import { resolveNotifiableRecipients, type NotificationPreferenceColumn } from "@/lib/notification-preferences";
 import { breaksThroughQuietHours } from "@/lib/notification-registry";
-import { buildNotification } from "@/lib/notification-payloads";
+import { buildDedupeKey, buildNotification } from "@/lib/notification-payloads";
+import { filterOutMuted, type MuteTarget } from "@/lib/notification-mutes";
+import { writeNotifications } from "@/lib/notification-write";
 
 // RECOMMENDATIONS.md item 285: every notification type this file produces
 // (match_kickoff, match_result, match_goal, match_red_card, player_event) is
@@ -64,6 +65,30 @@ async function teamAudience(supabase: ServiceClient, teamId: string): Promise<Se
   return ids;
 }
 
+/**
+ * A team's audience with that team's own mutes already removed.
+ *
+ * Filtering here rather than in `insertNotifications` is what makes the
+ * per-entity rule correct for a two-team notification: each audience is
+ * narrowed by the mute that applies to *it*, and only then are they unioned.
+ * Doing it after the union would take a derby away from someone who follows
+ * both clubs and silenced one.
+ *
+ * This is also where the favourite-club hole closes. `teamAudience` draws from
+ * `profiles.favourite_team_id` as well as `follows`, and only the `follows`
+ * half has ever had a `muted` column — so before migration 0104 a person's
+ * favourite club was the one club they could not turn down.
+ */
+async function mutableTeamAudience(supabase: ServiceClient, teamId: string): Promise<Set<string>> {
+  const audience = await teamAudience(supabase, teamId);
+  return new Set(await filterOutMuted(supabase, audience, [{ type: "team", id: teamId }]));
+}
+
+async function mutablePlayerAudience(supabase: ServiceClient, playerId: string): Promise<Set<string>> {
+  const audience = await playerAudience(supabase, playerId);
+  return new Set(await filterOutMuted(supabase, audience, [{ type: "player", id: playerId }]));
+}
+
 async function playerAudience(supabase: ServiceClient, playerId: string): Promise<Set<string>> {
   const { data: followers } = await supabase
     .from("follows")
@@ -93,8 +118,14 @@ async function insertNotifications(
   profileIds: Iterable<string>,
   column: NotificationPreferenceColumn,
   build: (profileId: string) => NotificationInsert,
+  /** Migration 0104. The entities that put these people in this audience, plus
+   * the fixture's competition. Anyone who has muted any of them is dropped
+   * before the preference check — see src/lib/notification-mutes.ts for why
+   * this is per audience rather than over the union. */
+  muteTargets: MuteTarget[] = [],
 ): Promise<void> {
-  const ids = Array.from(new Set(profileIds));
+  const unmuted = await filterOutMuted(supabase, profileIds, muteTargets);
+  const ids = Array.from(new Set(unmuted));
   if (ids.length === 0) return;
 
   // Migration 0088. One resolution per audience, not per recipient: the same
@@ -104,7 +135,7 @@ async function insertNotifications(
   const recipients = await resolveNotifiableRecipients(supabase, ids, column);
   if (recipients.length === 0) return;
 
-  const rows = recipients.map((recipient) => {
+  const rows: NotificationInsert[] = recipients.map((recipient) => {
     const row = build(recipient.profileId);
     // The row is written either way — quiet hours defer the interruption, not
     // the information. `quiet_until` only holds it back from the unread badge,
@@ -112,8 +143,30 @@ async function insertNotifications(
     return breaksThroughQuietHours(row.type) ? row : { ...row, quiet_until: recipient.quietUntil };
   });
 
-  const { error } = await supabase.from("notifications").insert(rows);
-  if (error) logError("football.match-notifications.matchNotificationsInsertNotification", error);
+  // Migrations 0104/0105. How a second write about the same event resolves is
+  // a property of the notification's type, not of this producer — a goal is a
+  // one-time event and a full-time scoreline is a computed value a provider can
+  // correct. `writeNotifications` reads that off the registry so this file does
+  // not have to decide it per call.
+  await writeNotifications(supabase, rows);
+}
+
+/**
+ * The competition a fixture belongs to, for the competition-level mute.
+ *
+ * Read here rather than threaded through every producer's input on purpose:
+ * the three call sites live in `sync.ts` and `sync-match-details.ts`, which
+ * belong to the data-sync surface, and one extra narrow read inside a fan-out
+ * that already runs several audience queries is a much smaller cost than
+ * changing three signatures across two files another agent is actively editing.
+ *
+ * A fixture whose competition cannot be read simply has no competition target,
+ * so the mute silently does not apply — the notification still goes out. That
+ * is the right failure direction for a filter that only ever subtracts.
+ */
+async function competitionTargetFor(supabase: ServiceClient, fixtureId: string): Promise<MuteTarget[]> {
+  const { data } = await supabase.from("fixtures").select("competition_id").eq("id", fixtureId).maybeSingle();
+  return data?.competition_id ? [{ type: "competition", id: data.competition_id }] : [];
 }
 
 export interface FixtureStatusChangeInput {
@@ -170,9 +223,12 @@ export async function notifyFixtureStatusChange(
 
   if (!type || !summary) return;
 
+  // Filtered per team before the union, so someone who follows both clubs in a
+  // derby and has muted one of them still hears about the derby.
+  const competitionTargets = await competitionTargetFor(supabase, input.fixtureId);
   const [homeAudience, awayAudience] = await Promise.all([
-    teamAudience(supabase, input.homeTeamId),
-    teamAudience(supabase, input.awayTeamId),
+    mutableTeamAudience(supabase, input.homeTeamId),
+    mutableTeamAudience(supabase, input.awayTeamId),
   ]);
   const audience = new Set<string>([...homeAudience, ...awayAudience]);
   const finalType = type;
@@ -182,8 +238,18 @@ export async function notifyFixtureStatusChange(
   // match notification cannot ship without the two fields its renderer has no
   // way to reconstruct (the fixture it links to, and the summary line built
   // here from team names the renderer never sees).
-  await insertNotifications(supabase, audience, MATCH_NOTIFICATION_COLUMN, (profileId) =>
-    buildNotification(profileId, finalType, { fixture_id: input.fixtureId, summary: finalSummary }),
+  // Keyed on the transition, not on the moment it was observed: a fixture that
+  // flaps live -> halftime -> live -> halftime is one half time, and a re-run
+  // sync walking the same transition again is not a second kickoff.
+  const dedupeKey = buildDedupeKey([finalType, input.fixtureId]);
+
+  await insertNotifications(
+    supabase,
+    audience,
+    MATCH_NOTIFICATION_COLUMN,
+    (profileId) =>
+      buildNotification(profileId, finalType, { fixture_id: input.fixtureId, summary: finalSummary }, dedupeKey),
+    competitionTargets,
   );
 }
 
@@ -234,32 +300,72 @@ export async function notifyFixtureEvent(
         ? `${input.playerName ? `${input.playerName} scores` : "Goal"} for ${input.teamName} (${input.minute}') vs ${input.opponentName}`
         : `${input.playerName ?? "A player"} is sent off for ${input.teamName} (${input.minute}') vs ${input.opponentName}`;
 
-    const teamFollowers = await teamAudience(supabase, input.teamId);
+    // The event's natural key — the same identity `fixture_events` is keyed on
+    // (migration 0056). The in-memory `notified` set below still runs, and this
+    // is now the thing that actually guarantees one row: the set only spans one
+    // call, and this spans the table.
+    const dedupeKey = buildDedupeKey([type, input.fixtureId, input.eventType, input.minute, input.playerId]);
+    const competitionTargets = await competitionTargetFor(supabase, input.fixtureId);
+
+    const teamFollowers = await mutableTeamAudience(supabase, input.teamId);
     for (const id of teamFollowers) notified.add(id);
-    await insertNotifications(supabase, teamFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) =>
-      buildNotification(profileId, type, { fixture_id: input.fixtureId, summary, player_id: input.playerId }),
+    await insertNotifications(
+      supabase,
+      teamFollowers,
+      MATCH_NOTIFICATION_COLUMN,
+      (profileId) =>
+        buildNotification(
+          profileId,
+          type,
+          { fixture_id: input.fixtureId, summary, player_id: input.playerId },
+          dedupeKey,
+        ),
+      competitionTargets,
     );
 
     if (input.playerId) {
-      const playerFollowers = await playerAudience(supabase, input.playerId);
+      const playerFollowers = await mutablePlayerAudience(supabase, input.playerId);
       const newOnes = [...playerFollowers].filter((id) => !notified.has(id));
       for (const id of newOnes) notified.add(id);
-      await insertNotifications(supabase, newOnes, MATCH_NOTIFICATION_COLUMN, (profileId) =>
-        buildNotification(profileId, type, { fixture_id: input.fixtureId, summary, player_id: input.playerId }),
+      await insertNotifications(
+        supabase,
+        newOnes,
+        MATCH_NOTIFICATION_COLUMN,
+        (profileId) =>
+          buildNotification(
+            profileId,
+            type,
+            { fixture_id: input.fixtureId, summary, player_id: input.playerId },
+            dedupeKey,
+          ),
+        competitionTargets,
       );
     }
     return;
   }
 
   if (!input.playerId) return;
-  const playerFollowers = await playerAudience(supabase, input.playerId);
+  const playerFollowers = await mutablePlayerAudience(supabase, input.playerId);
   const summary = `${input.playerName ?? "A player you follow"} — ${EVENT_LABEL[input.eventType]} (${input.minute}') in ${input.teamName} vs ${input.opponentName}`;
-  await insertNotifications(supabase, playerFollowers, MATCH_NOTIFICATION_COLUMN, (profileId) =>
-    buildNotification(profileId, "player_event", {
-      fixture_id: input.fixtureId,
-      summary,
-      player_id: input.playerId,
-    }),
+  const dedupeKey = buildDedupeKey([
+    "player_event",
+    input.fixtureId,
+    input.eventType,
+    input.minute,
+    input.playerId,
+  ]);
+  await insertNotifications(
+    supabase,
+    playerFollowers,
+    MATCH_NOTIFICATION_COLUMN,
+    (profileId) =>
+      buildNotification(
+        profileId,
+        "player_event",
+        { fixture_id: input.fixtureId, summary, player_id: input.playerId },
+        dedupeKey,
+      ),
+    await competitionTargetFor(supabase, input.fixtureId),
   );
 }
 
@@ -311,14 +417,23 @@ export async function notifyLineupsReleased(
   supabase: ServiceClient,
   input: LineupsReleasedInput,
 ): Promise<void> {
+  const competitionTargets = await competitionTargetFor(supabase, input.fixtureId);
   const [homeAudience, awayAudience] = await Promise.all([
-    teamAudience(supabase, input.homeTeamId),
-    teamAudience(supabase, input.awayTeamId),
+    mutableTeamAudience(supabase, input.homeTeamId),
+    mutableTeamAudience(supabase, input.awayTeamId),
   ]);
   const audience = new Set<string>([...homeAudience, ...awayAudience]);
   const summary = `Team news: lineups are in for ${input.homeTeamName} vs ${input.awayTeamName}`;
 
-  await insertNotifications(supabase, audience, MATCH_NOTIFICATION_COLUMN, (profileId) =>
-    buildNotification(profileId, "match_lineups", { fixture_id: input.fixtureId, summary }),
+  // Lineups are released once. The producer already guards on "no rows before,
+  // rows now", and this makes that guarantee survive a re-run.
+  const dedupeKey = buildDedupeKey(["match_lineups", input.fixtureId]);
+
+  await insertNotifications(
+    supabase,
+    audience,
+    MATCH_NOTIFICATION_COLUMN,
+    (profileId) => buildNotification(profileId, "match_lineups", { fixture_id: input.fixtureId, summary }, dedupeKey),
+    competitionTargets,
   );
 }

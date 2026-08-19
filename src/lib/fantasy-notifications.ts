@@ -1,9 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
-import { buildNotification } from "@/lib/notification-payloads";
+import { buildDedupeKey, buildNotification } from "@/lib/notification-payloads";
+import { writeNotifications } from "@/lib/notification-write";
 import { filterNotifiable } from "@/lib/notification-preferences";
-import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -35,6 +35,13 @@ type ServiceClient = SupabaseClient<Database>;
 
 export type FantasyScoringNotice = {
   ownerProfileId: string;
+  /** The gameweek's real id, not its number — the identity half of the dedupe
+   * key. Numbers repeat across seasons; ids do not. */
+  gameweekId: string;
+  /** The team this notice is about. One owner can hold a team in more than one
+   * league, so the owner and the gameweek together are not enough to identify
+   * which squad scored what. */
+  fantasyTeamId: string;
   gameweekNumber: number;
   /** Null when this owner's team scored nothing at all this gameweek — they
    * still get told their squad was carried, which is the more surprising fact
@@ -81,25 +88,44 @@ export async function notifyFantasyGameweekOutcome(
       // The type follows what the notification is *about*: a squad that scored
       // is a points notification even if it was also carried; a squad that was
       // only carried is a carry notification. Both land on /fantasy.
+      // Migrations 0104/0105. Keyed on the gameweek and the team, so re-scoring
+      // — a late provider correction, a re-sync, the live worker running twice
+      // — SUPERSEDES the earlier notification instead of appending a second
+      // one. Both fantasy types are `supersede` in NOTIFICATION_DEDUPE_MODE,
+      // which is the whole point: their payload is a computed total, and a
+      // recomputed total is a better answer to the same question, not a
+      // duplicate of it.
+      //
+      // The type is part of the key. A squad that was carried and scored
+      // nothing this run, and then scores on a later run, is genuinely a
+      // different notification — not a correction of the carry notice.
+      const dedupeKey = buildDedupeKey([
+        n.points !== null ? "fantasy_points" : "fantasy_roster_carried",
+        n.gameweekId,
+        n.fantasyTeamId,
+      ]);
+
       return n.points !== null
-        ? buildNotification(n.ownerProfileId, "fantasy_points", {
-            gameweek_number: n.gameweekNumber,
-            points: n.points,
-            summary,
-          })
-        : buildNotification(n.ownerProfileId, "fantasy_roster_carried", {
-            gameweek_number: n.gameweekNumber,
-            carried_from_gameweek_number: n.carriedFromGameweekNumber as number,
-            summary,
-          });
+        ? buildNotification(
+            n.ownerProfileId,
+            "fantasy_points",
+            { gameweek_number: n.gameweekNumber, points: n.points, summary },
+            dedupeKey,
+          )
+        : buildNotification(
+            n.ownerProfileId,
+            "fantasy_roster_carried",
+            {
+              gameweek_number: n.gameweekNumber,
+              carried_from_gameweek_number: n.carriedFromGameweekNumber as number,
+              summary,
+            },
+            dedupeKey,
+          );
     });
 
   if (rows.length === 0) return { notified: 0 };
 
-  const { error } = await service.from("notifications").insert(rows);
-  if (error) {
-    logError("fantasy.notifyGameweekOutcome", error, { count: rows.length });
-    return { notified: 0 };
-  }
+  await writeNotifications(service, rows);
   return { notified: rows.length };
 }

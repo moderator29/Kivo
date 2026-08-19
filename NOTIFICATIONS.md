@@ -66,7 +66,42 @@ Real, queryable state. No inferred audience anywhere.
 - Goals, penalties and red cards notify the involved team's audience *and* the player's own followers, deduplicated so somebody who both favourites the club and follows the player gets one row.
 - Every other event type notifies only the involved player's followers, so a routine yellow card does not page everyone who supports the club.
 
-`profiles.favourite_team_id` has no per-entity mute — a favourite club is not mutable that way today, and that is stated rather than papered over.
+### Per-entity mutes (migration 0104)
+
+Each audience is then filtered by what that person has actually muted, and the
+filter runs **per audience, before the union**. Somebody who follows both clubs
+in a derby and has muted one of them still gets the derby — they are in the
+audience twice and only one of the two reasons was silenced. Filtering the
+union would take the match away from them entirely.
+
+Two stores are consulted and a row in either one means muted:
+
+| Store | Written by | Reaches |
+|---|---|---|
+| `follows.muted` | the mute toggle beside the follow star | teams and players the user follows |
+| `notification_mutes` | Settings → Notifications | teams, players and competitions, **followed or not** |
+
+The second exists because the first cannot reach the two entities people most
+want to silence. A **favourite club** has no `follows` row — it lives in
+`profiles.favourite_team_id` — so until 0104 the club somebody cares most about
+was the one club they could not turn down. And **competitions** had no
+notification control at all, despite `follows` carrying
+`followed_type = 'competition'` since 0001 with no producer ever reading it.
+"Keep the league, silence the cup" was unexpressible.
+
+Honouring both stores rather than migrating one into the other means nothing
+that was already muted becomes unmuted. Unmuting from Settings clears both,
+so the switch never reports a state it did not achieve.
+
+The competition is read from the fixture inside the producer rather than
+threaded through every call site, and a fixture whose competition cannot be read
+simply has no competition target — the notification still goes out. That is the
+right failure direction for a filter that only ever subtracts.
+
+`notification_mutes` deliberately refuses `target_type = 'user'`, even though
+the enum allows it. Silencing a person is blocking, which KIVO already has with
+its own reciprocal-visibility rules; a second, quieter way to express it that
+looked like the real thing would be worse than not offering it.
 
 ---
 
@@ -82,6 +117,22 @@ Two rules worth knowing:
 `in_app_enabled` is folded into every category check, because in-app is the only channel that exists — a category being on cannot matter if the one real channel is off. When a second channel ships this must become channel-aware rather than a blanket fold-in.
 
 The lookup is chunked at 300 ids per query, because an audience is unbounded by nature and the ids travel in a URL-encoded `in.(...)` filter.
+
+These eight booleans decide notification **types**; the per-entity mutes in §3
+decide which clubs, players and competitions they are about. Both halves live on
+Settings → Notifications, next to each other rather than a page apart, because
+"turn off match alerts" and "turn off match alerts *for this club*" are the same
+question at two levels and a fan who can only reach the first one turns the lot
+off. The mute list only ever offers entities that can actually produce a
+notification for that person — their club, and what they follow — because a
+searchable directory of every club in the database would be a page full of
+switches that change nothing.
+
+The mute filter fails **open**, unlike the preference gate, and the asymmetry is
+deliberate. An unreadable *preference* is not consent, so that fails closed. An
+unreadable *mute* is a transient error on a filter that only ever subtracts, and
+failing closed there would silence every notification for everybody for the
+duration of the fault.
 
 ---
 
@@ -125,7 +176,7 @@ The line is drawn on one question — what does this person lose by reading it i
 
 ---
 
-## 7. Batching — what exists, and what does not
+## 7. Batching and deduplication
 
 The brief asks for "intelligent batching". Half of it exists as a property of the design rather than as a feature: everything produced inside one quiet window carries the same `quiet_until`, so a night of notifications surfaces together when the window ends. That is deferred *surfacing*.
 
@@ -133,7 +184,85 @@ The brief asks for "intelligent batching". Half of it exists as a property of th
 
 Building it would mean either a new scheduled worker with its own failure modes and quota, or writing a "pending" notification and mutating it later, which breaks the append-only property that makes the current table easy to reason about. Neither is a small change, and a half-built version — one that batched sometimes, or only within a single sync run — would be worse than none, because it would make the delivery contract unpredictable.
 
-The other half of the brief's requirement, **deduplication**, is real: `notifyPostLiked` refuses to write a second unread like notification for the same post, so thirty taps on a reaction cannot put thirty rows in one author's bell.
+### Deduplication
+
+Real, and enforced in two different ways on purpose, because there are two
+genuinely different questions hiding under one word.
+
+**"Is this the same real-world event?"** — a unique index on
+`(profile_id, dedupe_key)` (migration 0104), resolved according to the type's
+own `NOTIFICATION_DEDUPE_MODE`. Producers build the key from the event's own
+identity; what happens on a conflict is declared once in the registry, not
+decided per producer. This is what covers a retried sync, a fixture whose
+status flaps `live → halftime → live → halftime`, and any future producer that
+happens to overlap an existing one. Before it, every producer deduplicated with
+an in-memory `Set` inside one function call — correct for the case it was
+written for (one person who both favourites the club and follows the scorer)
+and blind to everything outside that call.
+
+Keys are built from the same natural key the data layer uses: for a match event
+that is fixture + type + minute + player, which is exactly what
+`fixture_events` is keyed on. Choosing a looser identity — "one goal per player
+per match" — would make the notification layer disagree with the table it
+reports on and would swallow a real second goal from the same striker. The
+honest consequence, worth stating rather than hiding: if a provider *corrects* a
+goal's minute from 45 to 45+2, `fixture_events` treats that as a different event
+and so does this, so it can still notify twice. Fixing that means changing what
+KIVO considers one event, which is a data-layer decision, not a notification one.
+
+A null `dedupe_key` never deduplicates (`NULLS DISTINCT`), so producers with no
+meaningful identity to offer are unaffected — two replies to one post are two
+notifications, not a duplicate.
+
+#### Ignore, or supersede?
+
+`on conflict do nothing` is the obvious resolution and it is wrong for a whole
+class of type. A seeded account's bell held six fantasy notifications where
+three belonged: gameweeks 3 and 4 had each notified twice, and gameweek 4
+appeared with **two different totals, 28 and 36**, while `fantasy_points` held
+only 36 — as did the home tile, the scorecard and the share card. The 28 existed
+nowhere else in KIVO and sat in a notification a fan would read as
+authoritative.
+
+Ignoring the duplicate would have kept the 28 and discarded the 36. For a
+re-scored gameweek the second write is not a duplicate at all; it is a
+correction, and the newer value is the true one.
+
+So the rule turns on *why* the second write happened, which is knowable from the
+type:
+
+| Mode | Types | Because |
+|---|---|---|
+| `none` | `post_like`, `new_follower`, `post_comment`, `comment_reply` | Two occurrences are two notifications. The toggle-shaped pair use the unread-scoped rule below instead. |
+| `ignore` | goals, penalties, red cards, kickoff, lineups, `player_event`, `badge_earned` | A one-time event. Re-syncing re-reads it; it does not repeat it, and the first row already says it correctly. |
+| `supersede` | `fantasy_points`, `fantasy_roster_carried`, `match_halftime`, `match_result`, `transfer_recorded`, `prediction_result` | The payload is **computed**, so it can be recomputed to a better answer. |
+
+Superseding replaces the payload in place, moves `created_at` to now and clears
+`read_at` — a fan who read "you scored 28" needs to see the corrected 36, and
+leaving it read hides the correction behind the thing it corrects.
+
+It does all of that **only when the payload actually differs**, which is why it
+goes through `upsert_notifications_superseding` (migration 0105) rather than a
+plain upsert: PostgREST cannot emit the `DO UPDATE ... WHERE` that makes the
+no-change case a genuine no-op. Without it, an ordinary re-sync would bump every
+full-time notification back to the top of the bell and mark it unread again — a
+re-notification carrying no new information, which is the exact spam this
+mechanism exists to prevent.
+
+Verified against the live database inside a transaction that was then aborted:
+one row rather than two, final value 36 rather than 28, and an identical re-run
+updating zero rows, leaving `read_at` set and `created_at` unchanged.
+
+**"Is this already sitting unread in their bell?"** — a scoped lookup before
+writing, used by `notifyPostLiked` and `notifyNewFollower`. Likes and follows
+are toggles: one tap each way, repeatable forever. The rule there is
+deliberately *don't stack unread duplicates*, not *notify once, ever* — once the
+recipient has read the last one, a later reaction or a re-follow months on is
+genuinely new information. The unique index cannot express that, because its
+constraint is permanent; using it on these two would have silently converted a
+considered rule into a stricter one. Both checks fail **open**: if KIVO cannot
+tell whether a duplicate exists, one extra notification is a much smaller harm
+than dropping the only one somebody was going to get.
 
 ---
 

@@ -73,6 +73,36 @@ async function notifyNewFollower(
   // KN-90: built through the typed constructor rather than an object literal,
   // so a missing or renamed payload field is a type error here instead of a
   // notification that renders fine and links nowhere.
+  // Follow / unfollow / follow again is one tap each way, and until now every
+  // cycle wrote another row — the same unbounded shape `notifyPostLiked`
+  // already closed for reactions, on a button that is just as cheap to press.
+  //
+  // Same rule as there, deliberately, rather than migration 0104's
+  // `dedupe_key`: don't stack UNREAD duplicates, rather than "notify once,
+  // ever". Someone who followed in January, drifted away, and followed again in
+  // June is real news the second time; someone toggling the button twice in a
+  // minute is not. A permanent unique key cannot tell those apart, and would
+  // permanently silence the first one to protect against the second.
+  //
+  // Fails OPEN, matching notifyPostLiked: if KIVO cannot tell whether a
+  // duplicate exists, one extra notification is a far smaller harm than
+  // dropping the only one somebody was going to get.
+  const { data: existing, error: existingError } = await serviceClient
+    .from("notifications")
+    .select("id")
+    .eq("profile_id", followedProfileId)
+    .eq("type", "new_follower")
+    .is("read_at", null)
+    .eq("payload->>follower_username", follower.username)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    logError("follow-actions.checkDuplicateFollowerNotification", existingError);
+  } else if (existing) {
+    return;
+  }
+
   const { error } = await serviceClient.from("notifications").insert(
     await withQuietHours(
       serviceClient,

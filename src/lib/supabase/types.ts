@@ -1673,9 +1673,42 @@ export type Database = {
           },
         ]
       }
+      notification_mutes: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          target_id: string
+          target_type: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          target_id?: string
+          target_type?: Database["public"]["Enums"]["follow_target_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_mutes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
+          dedupe_key: string | null
           id: string
           payload: Json
           profile_id: string
@@ -1685,6 +1718,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          dedupe_key?: string | null
           id?: string
           payload?: Json
           profile_id: string
@@ -1694,6 +1728,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          dedupe_key?: string | null
           id?: string
           payload?: Json
           profile_id?: string
@@ -3963,6 +3998,10 @@ export type Database = {
           p_provider_entity_id: string
         }
         Returns: string
+      }
+      upsert_notifications_superseding: {
+        Args: { p_rows: Json }
+        Returns: number
       }
       vote_on_poll: {
         Args: { p_option_id: string; p_post_id: string }
