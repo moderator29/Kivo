@@ -5,7 +5,7 @@ import { getFootballDataProvider } from "./index";
 import { batchFindMappedIds, findProviderEntityId } from "./provider-mappings";
 import { shouldAttemptCapability } from "./coverage-registry";
 import { SyncRunRecorder } from "./sync-run-recorder";
-import { currentProviderSeason } from "./sync-coverage";
+import { resolveSeasonYear } from "./target-season";
 import type { SyncResult } from "./sync";
 import type { NormalizedTopScorer } from "./types";
 import { logError } from "@/lib/log";
@@ -33,7 +33,10 @@ import { logError } from "@/lib/log";
 export async function syncCompetitionTopScorers(competitionId: string, season?: number): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
-  const seasonYear = season ?? currentProviderSeason();
+  // The operator's target season, not the calendar's. Season-scoped
+  // endpoints are refused outright by a free API-Football plan asked for the
+  // current year — see target-season.ts for the provider's own wording.
+  const seasonYear = await resolveSeasonYear(supabase, provider.name, season);
 
   const recorder = await SyncRunRecorder.start(supabase, provider, "top_scorer");
   if (!recorder) return { status: "failed", recordsProcessed: 0, error: "Could not create sync_runs row" };

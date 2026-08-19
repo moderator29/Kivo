@@ -4,8 +4,8 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import { DEFAULT_API_FOOTBALL_COMPETITIONS, getCompetitionScope } from "./competitions-config";
-import { currentProviderSeason } from "./sync-coverage";
-import { findMappedId } from "./provider-mappings";
+import { resolveSeasonYear } from "./target-season";
+import { findMappedId, findProviderEntityId } from "./provider-mappings";
 import { readLastSpendAt, reserveProviderRequests, type BudgetDecision } from "./request-budget";
 import { shouldAttemptCapability } from "./coverage-registry";
 import { syncTeamSquad } from "./sync-squads";
@@ -335,7 +335,17 @@ export async function backfillCompetitionCountries(): Promise<{ error: string | 
     return { error: "Couldn't read the coverage registry. Try again.", recordsProcessed: 0 };
   }
   if (!rows || rows.length === 0) {
-    return { error: null, recordsProcessed: 0 };
+    // An empty registry is NOT a successful backfill that found nothing to do.
+    // Returning `{ error: null, recordsProcessed: 0 }` here rendered as a green
+    // "0 competitions updated" while 83 of 85 competitions still showed
+    // "International" — a failed read drawn as an empty state, which is this
+    // project's recurring bug and the one it can least afford. Say what is
+    // actually missing, and what fills it.
+    return {
+      error:
+        "The coverage registry is empty, so there is nothing to read a country from. Refresh the coverage registry first — and if that is being refused, check the target season: /leagues is season-scoped and a plan that does not cover the season refuses it outright.",
+      recordsProcessed: 0,
+    };
   }
 
   // One competition can have several coverage rows (one per season). They carry
@@ -450,7 +460,10 @@ export async function syncCompetitionTeams(
 ): Promise<CompetitionTeamsSyncResult> {
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
-  const seasonYear = season ?? currentProviderSeason();
+  // The operator's target season, not the calendar's. Season-scoped
+  // endpoints are refused outright by a free API-Football plan asked for the
+  // current year — see target-season.ts for the provider's own wording.
+  const seasonYear = await resolveSeasonYear(supabase, provider.name, season);
 
   const fail = (message: string, spent = 0, budget: BudgetDecision | null = null): CompetitionTeamsSyncResult => ({
     status: "failed",
@@ -460,13 +473,15 @@ export async function syncCompetitionTeams(
     budget,
   });
 
-  const competitionProviderId = await findMappedId(supabase, provider.name, "competition", competitionId);
-  if (!competitionProviderId) {
-    return fail(
-      `This competition has no ${provider.name} mapping, so KIVO has no league id to ask for. Adopt the allowlisted competitions first.`,
-    );
-  }
-
+  // The run row is opened BEFORE the mapping check, not after.
+  //
+  // It used to be the other way round, and the consequence was that this
+  // button's most common failure left no trace anywhere: the reversed lookup
+  // below meant every press returned "no mapping, adopt the competitions
+  // first", `sync_runs` recorded nothing at all, and Data Health showed a
+  // catalogue that had simply never been used. A failure nobody can see is
+  // indistinguishable from a button nobody pressed, and the two need
+  // completely different responses.
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
     .insert({ provider: provider.name, entity_type: "team", status: "running", trigger_source: "manual" })
@@ -504,6 +519,28 @@ export async function syncCompetitionTeams(
       budget,
     };
   };
+
+  /**
+   * `findProviderEntityId`, not `findMappedId` — the same reversed-direction
+   * mistake `sync-squads.ts` carried, in the same shape. `competitionId` is a
+   * KIVO uuid (it is written straight into `competition_teams.competition_id`
+   * and passed to `ensureSeason` below); `findMappedId` searched
+   * `provider_entity_id` for that uuid, matched nothing for every competition
+   * that has ever existed, and so this button could only ever report "no
+   * mapping, adopt the competitions first" no matter how many times the
+   * competitions had been adopted. `provider_coverage` being 0 on the live
+   * database is downstream of the plan refusal; this button being 0 was this.
+   */
+  const competitionProviderId = await findProviderEntityId(supabase, provider.name, "competition", competitionId);
+  if (!competitionProviderId) {
+    return finish(
+      "failed",
+      0,
+      `This competition has no ${provider.name} mapping, so KIVO has no league id to ask for. Adopt the allowlisted competitions first.`,
+      0,
+      null,
+    );
+  }
 
   // The ledger is the permission, not a warning. Reserved before the request,
   // for exactly the count about to be spent.

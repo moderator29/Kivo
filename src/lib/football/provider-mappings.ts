@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -52,6 +53,36 @@ const PROVIDER_ID_CHUNK_SIZE = 100;
  * item in the same run that references the same provider id reuses it instead
  * of inserting again. Empty input issues no request at all.
  */
+/**
+ * Catches the one mistake this module's shape makes easy.
+ *
+ * `findMappedId` and `findProviderEntityId` run in opposite directions and
+ * take the same types in the same order, so passing a KIVO uuid where a
+ * provider id belongs compiles cleanly and then fails at runtime as "this
+ * entity has no provider mapping yet" — a sentence that blames the data and
+ * sends whoever reads it to re-run a sync that was never the problem. It cost
+ * this project the squad sync and the whole club catalogue: two call sites,
+ * both silently returning null for every row, for as long as they had existed.
+ *
+ * Neither API-Football nor TheSportsDB issues uuids as entity ids — both are
+ * numeric strings — so a uuid arriving here is always the arguments being the
+ * wrong way round. Logged rather than thrown: instrumentation must never fail
+ * a sync (the rule `sync-instrumentation.ts` states), and the lookup returning
+ * null is already the correct behaviour for a genuinely unknown id.
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function warnIfKivoIdUsedAsProviderId(caller: string, entityType: EntityType, providerEntityId: string): void {
+  if (!UUID_PATTERN.test(providerEntityId)) return;
+  logError(
+    "football.providerMappings.reversedLookup",
+    new Error(
+      `${caller} was given what looks like a KIVO uuid ("${providerEntityId}") as a ${entityType} PROVIDER id. ` +
+        `That lookup can only ever return null. To go from a KIVO id to the provider's own id, call findProviderEntityId.`,
+    ),
+  );
+}
+
 export async function batchFindMappedIds(
   supabase: ServiceClient,
   provider: string,
@@ -61,6 +92,7 @@ export async function batchFindMappedIds(
   const known = new Map<string, string>();
   const unique = [...new Set(providerEntityIds)];
   if (unique.length === 0) return known;
+  for (const id of unique) warnIfKivoIdUsedAsProviderId("batchFindMappedIds", entityType, id);
 
   const chunks: string[][] = [];
   for (let i = 0; i < unique.length; i += PROVIDER_ID_CHUNK_SIZE) {
@@ -90,6 +122,7 @@ export async function findMappedId(
   entityType: EntityType,
   providerEntityId: string,
 ): Promise<string | null> {
+  warnIfKivoIdUsedAsProviderId("findMappedId", entityType, providerEntityId);
   const { data, error } = await supabase
     .from("provider_mappings")
     .select("kivo_entity_id")

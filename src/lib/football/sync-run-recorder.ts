@@ -4,6 +4,7 @@ import type { Database } from "@/lib/supabase/types";
 import { logError } from "@/lib/log";
 import type { FootballDataProvider } from "./types";
 import type { SyncResult } from "./sync";
+import { reapAbandonedSyncRuns } from "./sync-instrumentation";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -53,6 +54,11 @@ export class SyncRunRecorder {
     entityType: EntityType,
     triggerSource?: string,
   ): Promise<SyncRunRecorder | null> {
+    // Close anything a dead process left `running` before adding another row.
+    // Every sync that uses this class therefore also cleans up after the ones
+    // that died — see reapAbandonedSyncRuns for why a `finally` cannot.
+    await reapAbandonedSyncRuns(supabase);
+
     const { data, error } = await supabase
       .from("sync_runs")
       .insert({

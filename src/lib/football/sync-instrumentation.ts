@@ -37,6 +37,56 @@ export const SYNC_LEASE_SECONDS = 600;
 /** Extend when the run passes this fraction of its lease. */
 const RENEW_AFTER_SECONDS = SYNC_LEASE_SECONDS / 2;
 
+/**
+ * How long a `running` row may sit untouched before it is treated as dead.
+ *
+ * Longer than `SYNC_LEASE_SECONDS` on purpose. A run that is genuinely alive
+ * renews its lease indefinitely, so the lease alone cannot say "this one is
+ * over"; what CAN say it is that no serverless invocation anywhere runs for
+ * fifteen minutes. Below the lease this would reap live runs; far above it,
+ * Data Health shows a phantom for an hour.
+ */
+export const ABANDONED_RUN_AFTER_SECONDS = 900;
+
+/**
+ * Closes `sync_runs` rows whose process died before it could report.
+ *
+ * `syncTodayFixtures` funnels its success path, its catch and its `finally`
+ * through one `finalizeRun`, and that is correct — but `finally` is a language
+ * construct and needs a live process to execute in. A serverless invocation
+ * killed at its duration limit, or an aborted request tearing down the isolate,
+ * runs none of it. The live database held seven `running` rows with a null
+ * `finished_at`, hours old, for exactly that reason.
+ *
+ * So the run row gets what the lease already has: an expiry that needs nothing
+ * from the dead process. The SQL function (migration 0116) never writes
+ * `last_synced_at` and never invents a `records_processed` — a reaped run's
+ * outcome is genuinely unknown, and this codebase does not fill unknowns with
+ * numbers.
+ *
+ * Returns the count reaped, or null when the call itself failed. Null is not
+ * zero and callers must not render it as one: "nothing was abandoned" and "we
+ * could not find out" are different facts.
+ */
+export async function reapAbandonedSyncRuns(
+  supabase: ServiceClient,
+  staleAfterSeconds: number = ABANDONED_RUN_AFTER_SECONDS,
+): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.rpc("reap_abandoned_sync_runs", {
+      p_stale_after_seconds: staleAfterSeconds,
+    });
+    if (error) {
+      logError("sync.reapAbandonedSyncRuns", error);
+      return null;
+    }
+    return typeof data === "number" ? data : null;
+  } catch (error) {
+    logError("sync.reapAbandonedSyncRuns", error);
+    return null;
+  }
+}
+
 export type SyncLock = {
   provider: string;
   entityType: EntityType;

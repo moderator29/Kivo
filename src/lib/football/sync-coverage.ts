@@ -6,6 +6,7 @@ import { getFootballDataProvider } from "./index";
 import { findMappedId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedCompetitionCoverage } from "./types";
+import { resolveSeasonYear } from "./target-season";
 import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
@@ -40,18 +41,18 @@ type ServiceClient = SupabaseClient<Database>;
  */
 
 /**
- * The season to ask about when the caller does not name one.
+ * Re-exported, not defined here any more.
  *
- * API-Football identifies a season by its starting year, so the 2025/26 season
- * is 2025. Northern-hemisphere seasons start in July/August, so before July the
- * current season is still last calendar year's. This is a calendar fact about
- * how the provider numbers things, not a guess about football.
+ * The calendar season used to be the only answer to "which season?". It is now
+ * the LAST of three (`target-season.ts`): an operator's `provider_season_target`
+ * row wins, then `FOOTBALL_TARGET_SEASON`, then this. That chain exists because
+ * a free API-Football plan refuses every season-scoped endpoint for the current
+ * season — see `target-season.ts` for the provider's own recorded wording.
+ *
+ * Kept exported from this module so nothing that already imported it breaks;
+ * new callers should prefer `resolveSeasonYear`, which consults the whole chain.
  */
-export function currentProviderSeason(now: Date = new Date()): number {
-  const year = now.getUTCFullYear();
-  // getUTCMonth is 0-based; 6 is July.
-  return now.getUTCMonth() >= 6 ? year : year - 1;
-}
+export { currentProviderSeason } from "./target-season";
 
 async function upsertCoverageRow(
   supabase: ServiceClient,
@@ -111,7 +112,11 @@ async function upsertCoverageRow(
 export async function syncProviderCoverage(season?: number): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
   const provider = await getFootballDataProvider();
-  const seasonYear = season ?? currentProviderSeason();
+  // The operator's target season, not the calendar's — `/leagues?season=` is
+  // season-scoped and is refused outright by a free plan asked for the current
+  // year, which is why this registry has never once been filled on the live
+  // database. See target-season.ts.
+  const seasonYear = await resolveSeasonYear(supabase, provider.name, season);
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")

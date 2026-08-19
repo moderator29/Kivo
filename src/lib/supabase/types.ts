@@ -2769,6 +2769,38 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_season_target: {
+        Row: {
+          provider: string
+          reason: string | null
+          season_year: number
+          set_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          provider: string
+          reason?: string | null
+          season_year: number
+          set_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          provider?: string
+          reason?: string | null
+          season_year?: number
+          set_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_season_target_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rate_limit_events: {
         Row: {
           action: string
@@ -4007,6 +4039,10 @@ export type Database = {
         Returns: number
       }
       prune_sync_runs: { Args: { p_older_than_days?: number }; Returns: number }
+      reap_abandoned_sync_runs: {
+        Args: { p_stale_after_seconds?: number }
+        Returns: number
+      }
       record_data_anomaly: {
         Args: {
           p_anomaly_type: Database["public"]["Enums"]["data_anomaly_type"]

@@ -514,6 +514,37 @@ export interface NormalizedPlayerSeasonStatistics {
   penaltiesMissed: number | null;
 }
 
+/**
+ * What the provider says about the account KIVO is using.
+ *
+ * Every field is nullable and every value is the provider's own, read off its
+ * own account endpoint. Nothing here is inferred from behaviour: KIVO must
+ * never tell the founder "you appear to be on the free plan" on the strength
+ * of a refusal it half-understood — either the provider stated the plan or
+ * KIVO does not know it, and those are the only two things this type can say.
+ *
+ * `supportedSeasons` is deliberately NOT here. No provider publishes it on an
+ * account endpoint; the only place it is ever stated is inside a refusal
+ * message ("try from 2022 to 2024"), which is evidence about a past request
+ * rather than a property of the account, and it is surfaced as exactly that.
+ */
+export interface NormalizedProviderPlan {
+  /** The plan's name in the provider's own words ("Free", "Pro"). */
+  planName: string | null;
+  /** Whether the provider reports the subscription as active. */
+  active: boolean | null;
+  /** ISO date the subscription ends, when the provider states one. */
+  endsAt: string | null;
+  /** Requests already spent in the provider's own current day. */
+  requestsToday: number | null;
+  /** The provider's stated daily ceiling. */
+  requestsPerDay: number | null;
+  /** The account's first name/email as the provider holds it — shown so the
+   * founder can confirm which account a deployment is actually using, which is
+   * otherwise unknowable from inside KIVO. Null when not reported. */
+  accountLabel: string | null;
+}
+
 export interface FootballDataProvider {
   readonly name: string;
   /** Most recent remaining-quota count the provider itself reported, or null if
@@ -611,4 +642,18 @@ export interface FootballDataProvider {
    * that season. Empty array when the provider has nothing for this player.
    */
   getPlayerSeasonStatistics(playerProviderId: string, season: number): Promise<NormalizedPlayerSeasonStatistics[]>;
+  /**
+   * The provider's own statement about this account: which plan, how much of
+   * today's allowance is gone, when the subscription ends.
+   *
+   * Null — never a throw and never an invented plan — from a provider that
+   * publishes no such endpoint. "This provider does not report a plan" and
+   * "this account is on the free plan" are different facts, and only the
+   * second one is something to act on.
+   *
+   * Not season-scoped, so on API-Football this is one of the few requests that
+   * still answers on a plan whose season is refused. That is precisely why it
+   * is worth having: it is the one call that can explain the refusals.
+   */
+  getProviderPlan(): Promise<NormalizedProviderPlan | null>;
 }

@@ -22,6 +22,7 @@ interface FootballDataProvider {
   getInjuries(competitionProviderId: string, season: number): Promise<NormalizedInjury[]>;
   getTopScorers(competitionProviderId: string, season: number): Promise<NormalizedTopScorer[]>;
   getPlayerSeasonStatistics(playerProviderId: string, season: number): Promise<NormalizedPlayerSeasonStatistics[]>;
+  getProviderPlan(): Promise<NormalizedProviderPlan | null>;
 }
 ```
 
@@ -61,6 +62,7 @@ If `FOOTBALL_DATA_PROVIDER=thesportsdb` is set but `THE_SPORTS_DB_API_KEY` is no
 | `getTopScorers` | Real (`/players/topscorers`) | **Not supported** — throws |
 | `getPlayerSeasonStatistics` | Real (`/players?id=&season=`), one entry per competition | **Not supported** — throws |
 | `getQuotaRemaining` | Real (`x-ratelimit-requests-remaining` response header) | Always `null` — TheSportsDB sends no quota header on any response |
+| `getProviderPlan` | Real (`/status` — plan name, subscription state, today's request count against the day limit). Not season-scoped, so it still answers on a plan whose seasons are refused, which is exactly what makes it worth having | **`null`, not a throw** — TheSportsDB has no account/status endpoint; the key rides in the URL path and nothing comes back describing its tier. Null lands consumers on "this provider does not report a plan", which is true; a fabricated `{ planName: "Free" }` would be KIVO asserting a fact about somebody's subscription on no evidence |
 
 **`getCompetitionCoverage` is the one deliberate exception to the throwing rule**, and it inverts it for a reason. Everywhere else, throwing is what keeps "this provider has no such data category" distinguishable from "this query genuinely found nothing". The coverage registry's own contract is the opposite: an absent flag means *KIVO does not know*, and an empty result is exactly how a provider says it publishes no capability declaration. TheSportsDB publishes none, so returning nothing is the accurate answer — it lands consumers on "unknown", which is true, rather than on "unsupported", which would be KIVO asserting a limitation on TheSportsDB's behalf for every competition at once. See `docs/API_FOOTBALL.md` for the registry's three-state model and `src/lib/football/coverage-registry.ts` for the rule that a sync skips only on a definite `false`.
 

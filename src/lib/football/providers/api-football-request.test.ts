@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { extractProviderError,
   ApiFootballError,
   classifyHttpError,
+  classifyProviderErrorKind,
+  describePlanRefusal,
   isRetryable,
   parseQuotaRemaining,
+  parseSupportedSeasonRange,
   requestWithRetry,
 } from "./api-football-request";
 
@@ -303,5 +306,64 @@ describe("extractProviderError", () => {
       key: "0",
       message: "Plan does not allow this endpoint.",
     });
+  });
+});
+
+describe("classifyProviderErrorKind", () => {
+  it("classifies the provider's own `plan` key as a plan refusal, not a client error", () => {
+    // The live database recorded exactly this under `client_error`, which is
+    // why "check your API key" was the wrong advice for a whole day.
+    expect(
+      classifyProviderErrorKind("plan", "Free plans do not have access to this season, try from 2022 to 2024."),
+    ).toBe("plan");
+  });
+
+  it("keeps account problems as auth — they are fixed somewhere else entirely", () => {
+    expect(classifyProviderErrorKind("access", "Your account is suspended.")).toBe("auth");
+    expect(classifyProviderErrorKind("token", "Invalid API key.")).toBe("auth");
+  });
+
+  it("reads the sentence when the key is generic but the message is about the plan", () => {
+    expect(classifyProviderErrorKind("season", "Free plans do not have access to this season.")).toBe("plan");
+    expect(classifyProviderErrorKind("endpoint", "Please upgrade your plan to use this endpoint.")).toBe("plan");
+  });
+
+  it("leaves an ordinary parameter complaint as a client error", () => {
+    expect(classifyProviderErrorKind("date", "The Date field must be a valid date.")).toBe("client_error");
+  });
+});
+
+describe("parseSupportedSeasonRange", () => {
+  it("pulls the seasons the provider named out of its own sentence", () => {
+    expect(parseSupportedSeasonRange("Free plans do not have access to this season, try from 2022 to 2024.")).toEqual({
+      from: 2022,
+      to: 2024,
+    });
+  });
+
+  it("returns null rather than guessing when no range is named", () => {
+    expect(parseSupportedSeasonRange("Free plans do not have access to this season.")).toBeNull();
+    // A wrong range would send an operator to a season that is also refused.
+    expect(parseSupportedSeasonRange("try from 2024 to 2022")).toBeNull();
+  });
+});
+
+describe("describePlanRefusal", () => {
+  const providerMessage = "Free plans do not have access to this season, try from 2022 to 2024.";
+
+  it("leads with what to do and keeps the provider's own words attached", () => {
+    const message = describePlanRefusal(providerMessage, "/standings?league=39&season=2026");
+    expect(message).toContain("does not cover season 2026");
+    expect(message).toContain("2022 to 2024");
+    expect(message).toContain("target season");
+    // KIVO must never present its paraphrase as if it were the provider's
+    // statement, so the raw sentence travels with it.
+    expect(message).toContain(providerMessage);
+  });
+
+  it("still gives an instruction when the provider named no range and the path has no season", () => {
+    const message = describePlanRefusal("This endpoint is not available on your plan.", "/leagues");
+    expect(message).toContain("does not cover this request");
+    expect(message).toContain("target season");
   });
 });
