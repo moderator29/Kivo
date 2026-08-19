@@ -14,7 +14,7 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TrackView } from "@/components/ui/track-view";
 import { TeamAbsencesPanel } from "@/components/football/absences-panel";
-import { EntityTabs, type EntityTab } from "@/components/football/entity-tabs";
+import { PanelTabs, type PanelTab } from "@/components/ui/panel-tabs";
 import { FieldLabel, Section } from "@/components/ui/section";
 import { ListRow, ListSurface } from "@/components/ui/list-surface";
 import { StatBlock, StatGrid } from "@/components/ui/stat-block";
@@ -522,7 +522,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     </>
   );
 
-  const tabs: EntityTab[] = [{ id: "overview", label: "Overview", content: overviewTab }];
+  const tabs: PanelTab[] = [{ id: "overview", label: "Overview", content: overviewTab }];
 
   // Offered only when there is a squad. There is deliberately no staff-only
   // version of this tab any more: it existed to carry a "Sync squad" button,
@@ -787,7 +787,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
         </FadeIn>
       )}
 
-      <EntityTabs tabs={tabs} ariaLabel={`${team.name} sections`} idPrefix="team" />
+      <PanelTabs tabs={tabs} ariaLabel={`${team.name} sections`} idPrefix="team" />
     </div>
   );
 }

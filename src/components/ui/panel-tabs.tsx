@@ -4,7 +4,7 @@ import { Suspense, type ReactNode } from "react";
 import { SectionTabs, TabPanel, useTabParam, type SectionTab } from "@/components/ui/section-tabs";
 
 /**
- * The bridge that lets a SERVER-rendered entity page use KIVO's one tab rail.
+ * The bridge that lets a SERVER-rendered page use KIVO's one tab rail.
  *
  * This is not a second tab bar and must never become one. `SectionTabs`
  * (`src/components/ui/section-tabs.tsx`, documented in `docs/UI_PRIMITIVES.md`)
@@ -20,11 +20,25 @@ import { SectionTabs, TabPanel, useTabParam, type SectionTab } from "@/component
  * Twelve lines of glue rather than a fork. If a behaviour is missing from the
  * rail, it gets fixed in `section-tabs.tsx` for every surface at once.
  *
- * `src/components/leagues/competition-tabs.tsx` is the same twelve lines with
- * its `ariaLabel` and `idPrefix` hardcoded, written independently for the
- * competition page. Two copies of one bridge is one too many: this one is the
- * general shape and both pages could share it, but `leagues/**` belongs to
- * another surface, so consolidating is flagged rather than done here.
+ * WHY IT LIVES IN `ui/` RATHER THAN NEXT TO ONE OF ITS CALLERS
+ * ---------------------------------------------------------------------------
+ * It was written twice. This version came from the club and player pages;
+ * `leagues/competition-tabs.tsx` was the same glue with its `ariaLabel` and
+ * `idPrefix` hardcoded, written independently for the competition page on the
+ * same night. Neither author could see the other's file, and both were right
+ * that the glue was too thin to be worth a shared component — which is exactly
+ * how a codebase ends up with two of something.
+ *
+ * `docs/UI_PRIMITIVES.md` states the rule this violates: "If you are about to
+ * write a second one of anything on that list, the primitive is probably
+ * missing a prop. Add the prop." The missing props were `ariaLabel` and
+ * `idPrefix`, and they cost four lines.
+ *
+ * Consolidating on THIS version was not arbitrary. The competition page's
+ * Suspense fallback rendered the first panel with no rail above it, so the rail
+ * appeared a frame later and pushed the content down — a reflow on the page's
+ * primary content. The fallback below renders the real rail with the first tab
+ * selected, so the boundary costs no spinner and no jump.
  */
 /**
  * `icon` is deliberately dropped from `SectionTab` here. A `LucideIcon` is a
@@ -32,14 +46,14 @@ import { SectionTabs, TabPanel, useTabParam, type SectionTab } from "@/component
  * page passing one would fail at the boundary rather than at the type. A
  * club's sections read perfectly well as words.
  */
-export type EntityTab = Omit<SectionTab, "icon"> & { content: ReactNode };
+export type PanelTab = Omit<SectionTab, "icon"> & { content: ReactNode };
 
-function EntityTabsInner({
+function PanelTabsInner({
   tabs,
   ariaLabel,
   idPrefix,
 }: {
-  tabs: EntityTab[];
+  tabs: PanelTab[];
   ariaLabel: string;
   idPrefix: string;
 }) {
@@ -77,12 +91,12 @@ function EntityTabsInner({
  * already rendered — so the boundary costs no spinner and no reflow, and the
  * page's primary content is in the first HTML either way.
  */
-export function EntityTabs({
+export function PanelTabs({
   tabs,
   ariaLabel,
   idPrefix,
 }: {
-  tabs: EntityTab[];
+  tabs: PanelTab[];
   ariaLabel: string;
   idPrefix: string;
 }) {
@@ -110,7 +124,7 @@ export function EntityTabs({
         </div>
       }
     >
-      <EntityTabsInner tabs={tabs} ariaLabel={ariaLabel} idPrefix={idPrefix} />
+      <PanelTabsInner tabs={tabs} ariaLabel={ariaLabel} idPrefix={idPrefix} />
     </Suspense>
   );
 }

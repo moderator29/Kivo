@@ -16,7 +16,7 @@ import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TrackView } from "@/components/ui/track-view";
 import { FormBadges } from "@/components/teams/form-badges";
-import { EntityTabs, type EntityTab } from "@/components/football/entity-tabs";
+import { PanelTabs, type PanelTab } from "@/components/ui/panel-tabs";
 import { Section } from "@/components/ui/section";
 import { ListSurface } from "@/components/ui/list-surface";
 import { StatBlock, StatGrid } from "@/components/ui/stat-block";
@@ -449,7 +449,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
     </>
   );
 
-  const tabs: EntityTab[] = [{ id: "overview", label: "Overview", content: overviewTab }];
+  const tabs: PanelTab[] = [{ id: "overview", label: "Overview", content: overviewTab }];
 
   if (matchLogRows.length > 0) {
     tabs.push({
@@ -610,7 +610,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       />
 
       <FadeIn delay={0.22}>
-        <EntityTabs tabs={tabs} ariaLabel={`${displayName} sections`} idPrefix="player" />
+        <PanelTabs tabs={tabs} ariaLabel={`${displayName} sections`} idPrefix="player" />
       </FadeIn>
     </div>
   );
