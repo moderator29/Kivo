@@ -92,7 +92,10 @@ export async function createMotmPoll(fixtureId: string) {
   if (starters.length < 2) {
     return {
       error:
-        "KIVO hasn't synced this match's lineup yet, so there's no real list of players to vote on. Once the lineup lands, this becomes one tap.",
+        // No "synced". A fan reading this needs to know when they can do the
+        // thing, not which of KIVO's jobs has not run — see the frontend
+        // sweep's own note in RECOMMENDATIONS.md.
+        "The line-ups for this match aren't out yet, so there's no list of players to vote on. Line-ups are usually published about an hour before kick-off.",
     };
   }
 

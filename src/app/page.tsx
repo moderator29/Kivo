@@ -189,7 +189,7 @@ const WHY_KIVO = [
     icon: Eye,
     title: "Honest when data isn't there",
     description:
-      "No data yet doesn't get a fabricated placeholder. If a leaderboard hasn't scored or a fixture hasn't synced, KIVO says so plainly instead of faking a number.",
+      "No data yet doesn't get a fabricated placeholder. If a leaderboard hasn't scored or a match's stats aren't published, KIVO says so plainly instead of faking a number.",
     href: "/transparency",
     cta: "Read the freshness log",
   },
