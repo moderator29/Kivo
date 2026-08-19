@@ -134,7 +134,6 @@ export function LiveCentreSections({
               page. */}
           <FixtureGroups
             fixtures={live}
-            showLiveDot={false}
             fantasyMatchCounts={fantasyMatchCounts}
             rankingSignals={rankingSignals}
             signedIn={signedIn}

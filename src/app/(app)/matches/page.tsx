@@ -4,8 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
-import { TeamCrest } from "@/components/ui/team-crest";
-import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
+import { MatchList, MatchListRow } from "@/components/matches/match-list";
 import { MatchesDateStrip, dateKey, todayIn } from "@/components/matches/date-strip";
 import { MatchesCompetitionFilter } from "@/components/matches/matches-competition-filter";
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
@@ -190,7 +189,6 @@ export default async function MatchesPage({
   // heading explaining why it is first.
   const favouriteGroupCount = competitionGroups.filter((group) => group.isFavourite).length;
   const showFavouriteHeadings = favouriteGroupCount > 0 && favouriteGroupCount < competitionGroups.length;
-  let cardIndex = 0;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
@@ -290,72 +288,22 @@ export default async function MatchesPage({
                   signedIn={viewerIsSignedIn(profile)}
                 />
               </FadeIn>
-              <div className="flex flex-col gap-2">
-                {group.fixtures.map((fixture) => {
-                  const index = cardIndex++;
-                  const hasScore = fixture.home_score !== null && fixture.away_score !== null;
-                  return (
-                    <FadeIn
+              {/* FRONTEND SWEEP: one surface per competition, matches as rows
+                  inside it — see src/components/matches/match-list.tsx for why
+                  the stack of per-fixture cards this replaced was the single
+                  biggest reason /matches read as flat and fit half as many
+                  matches on a phone as the apps it is measured against. */}
+              <FadeIn delay={0.08 + staggerDelay(groupIndex, 0.04)}>
+                <MatchList>
+                  {group.fixtures.map((fixture) => (
+                    <MatchListRow
                       key={fixture.id}
-                      delay={0.08 + staggerDelay(index, 0.03)}
-                      className="kivo-glass relative rounded-2xl p-4 transition hover:-translate-y-0.5 hover:bg-surface-2"
-                    >
-                      {/* Stretched-link overlay: makes the whole card navigate to
-                          Match Centre (item 110), matching Home's FixtureRow and
-                          /live's cards, while the team-name links below stay
-                          clickable to their team pages by sitting above this
-                          overlay in stacking order (`relative z-10`) instead of
-                          nesting a second interactive <a> inside this one. */}
-                      <Link
-                        href={`/matches/${fixture.id}`}
-                        className="absolute inset-0 z-0 rounded-2xl"
-                        aria-label={`${fixture.home_team?.name ?? "Home team"} vs ${fixture.away_team?.name ?? "Away team"}, match centre`}
-                      />
-                      {/* No per-card competition label here — the group header
-                          above already names it. */}
-                      <div className="relative z-0 mb-2 flex items-center justify-end">
-                        <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} />
-                      </div>
-                      <div className="relative z-0 flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <TeamCrest crestUrl={fixture.home_team?.crest_url ?? null} name={fixture.home_team?.name ?? "Home"} />
-                          {fixture.home_team?.id ? (
-                            <Link
-                              href={`/teams/${fixture.home_team.id}`}
-                              className="relative z-10 line-clamp-2 break-words text-sm text-foreground hover:text-accent"
-                            >
-                              {fixture.home_team.name}
-                            </Link>
-                          ) : (
-                            <span className="line-clamp-2 break-words text-sm text-foreground">{fixture.home_team?.name ?? "Home team"}</span>
-                          )}
-                        </div>
-                        <span className="shrink-0 text-sm font-semibold text-foreground">
-                          {hasScore ? `${fixture.home_score} – ${fixture.away_score}` : "vs"}
-                        </span>
-                        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-                          {fixture.away_team?.id ? (
-                            <Link
-                              href={`/teams/${fixture.away_team.id}`}
-                              className="relative z-10 line-clamp-2 break-words text-right text-sm text-foreground hover:text-accent"
-                            >
-                              {fixture.away_team.name}
-                            </Link>
-                          ) : (
-                            <span className="line-clamp-2 break-words text-right text-sm text-foreground">{fixture.away_team?.name ?? "Away team"}</span>
-                          )}
-                          <TeamCrest crestUrl={fixture.away_team?.crest_url ?? null} name={fixture.away_team?.name ?? "Away"} />
-                        </div>
-                      </div>
-                      <RoomActivityNote
-                        fixtureId={fixture.id}
-                        activity={roomActivity.get(fixture.id)}
-                        className="mt-2"
-                      />
-                    </FadeIn>
-                  );
-                })}
-              </div>
+                      fixture={fixture}
+                      meta={<RoomActivityNote fixtureId={fixture.id} activity={roomActivity.get(fixture.id)} />}
+                    />
+                  ))}
+                </MatchList>
+              </FadeIn>
             </div>
           ))}
         </div>
