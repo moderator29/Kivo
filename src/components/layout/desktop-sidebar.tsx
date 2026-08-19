@@ -4,9 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { Search, UserRound } from "lucide-react";
+import { Search } from "lucide-react";
 import { NAV_ITEMS, isActiveRoute, type NavItem } from "@/lib/navigation";
 import { buildNavGroups, NAV_GROUPS } from "@/lib/nav-groups";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { PreviewModeToggle } from "@/components/admin/preview-mode-toggle";
 import { cn } from "@/lib/utils";
@@ -63,20 +64,10 @@ export function DesktopSidebar({
           href="/profile"
           className="kivo-glass kivo-focus mb-3 flex items-center gap-2.5 rounded-2xl p-2 transition-colors hover:bg-surface-2"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-1">
-            {viewerProfile.avatarUrl ? (
-              <Image
-                src={viewerProfile.avatarUrl}
-                alt=""
-                width={32}
-                height={32}
-                className="h-full w-full object-cover"
-                unoptimized
-              />
-            ) : (
-              <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-            )}
-          </span>
+          {/* KivoAvatar, not a local <Image> in a rounded box. The local
+              version is what made this sidebar show a torso where the profile
+              header showed a face. */}
+          <KivoAvatar src={viewerProfile.avatarUrl} alt="" size={32} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-semibold text-foreground">
               {viewerProfile.displayName || `@${viewerProfile.username}`}

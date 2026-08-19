@@ -2,8 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { BarChart3, Plus, X, PenSquare, UserRound } from "lucide-react";
+import { BarChart3, Plus, X, PenSquare } from "lucide-react";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { motion } from "motion/react";
 import { createPost, createPoll } from "@/app/(app)/social/actions";
 import { cn } from "@/lib/utils";
@@ -106,13 +106,7 @@ export function ComposeForm({
           field is three lines tall on a 844px screen is the cramped thing this
           page was built to stop being. */}
       <div className="flex min-h-0 flex-1 gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-1">
-          {avatarUrl ? (
-            <Image src={avatarUrl} alt="" width={40} height={40} className="h-full w-full object-cover" unoptimized />
-          ) : (
-            <UserRound className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} />
-          )}
-        </span>
+        <KivoAvatar src={avatarUrl} alt="" size={40} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1">
           <span className="text-xs text-foreground-subtle">@{username}</span>
           <textarea

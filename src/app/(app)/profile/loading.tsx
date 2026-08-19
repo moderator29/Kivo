@@ -13,7 +13,7 @@ export default function ProfileLoading() {
         <div className="px-4 pb-5 sm:px-6">
           <div className="flex items-end justify-between gap-3">
             <div className="-mt-12 rounded-full bg-background p-1">
-              <Skeleton className="h-[92px] w-[92px] rounded-full" />
+              <Skeleton className="h-[92px] w-[92px] rounded-[28%]" />
             </div>
             <Skeleton className="mb-1 h-9 w-28 rounded-full" />
           </div>

@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "motion/react";
-import { Menu, UserRound, Copy, Check, Plus, UsersRound, Search } from "lucide-react";
+import { Menu, Copy, Check, Plus, UsersRound, Search } from "lucide-react";
+import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { isActiveRoute, NAV_ITEMS, type NavItem } from "@/lib/navigation";
 import { buildNavGroups } from "@/lib/nav-groups";
 import { getViewerNavStats, type ViewerNavStats } from "@/app/(app)/nav-actions";
@@ -305,22 +305,14 @@ function IdentityBlock({
               a glow would not. */}
           <span
             aria-hidden="true"
-            className="absolute -right-1.5 -top-1.5 h-[68px] w-[68px] rounded-2xl border border-hairline bg-surface-2"
+            className="absolute -right-1.5 -top-1.5 h-[68px] w-[68px] rounded-[28%] border border-hairline bg-surface-2"
           />
-          <span className="relative flex h-[68px] w-[68px] items-center justify-center overflow-hidden rounded-2xl border border-hairline bg-surface-1">
-            {viewer.avatarUrl ? (
-              <Image
-                src={viewer.avatarUrl}
-                alt=""
-                width={68}
-                height={68}
-                className="h-full w-full object-cover"
-                unoptimized
-              />
-            ) : (
-              <UserRound className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
-            )}
-          </span>
+          <KivoAvatar
+            src={viewer.avatarUrl}
+            alt=""
+            size={68}
+            className="relative border border-hairline"
+          />
         </Link>
 
         <Link
