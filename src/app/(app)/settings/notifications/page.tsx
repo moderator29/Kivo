@@ -15,8 +15,8 @@ export default async function NotificationSettingsPage() {
   if (!profile) redirect(await signInHref());
 
   const [preferences, quietHours] = await Promise.all([
-    getNotificationPreferences(profile.id),
-    getQuietHours(profile.id),
+    getNotificationPreferences(),
+    getQuietHours(),
   ]);
 
   return (

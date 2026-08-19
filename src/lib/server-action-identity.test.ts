@@ -103,21 +103,20 @@ const IDENTITY_PARAM = /^(profileId|profile_id|userId|user_id|actorId|authUserId
 /**
  * Known violations, recorded rather than hidden.
  *
- * `getQuietHours` and `getNotificationPreferences` both take a `profileId` and
- * query with it directly. Neither leaks anything today, because both use the
- * ordinary session client and `notification_preferences_all_own` restricts the
- * read to `private.current_profile_id()` — so passing somebody else's id
- * returns no rows. But that is RLS saving an action that asked the caller who
- * they were, and the failure is silent in the wrong direction: no rows reads as
- * "no preferences saved", so the caller is handed the DEFAULTS as though they
- * were that profile's real settings.
+ * Empty, and kept rather than deleted. The two entries it held —
+ * `getQuietHours` and `getNotificationPreferences` — were fixed in
+ * SECURITY_REVIEW.md F13: both dropped their `profileId` parameter and now read
+ * `getOrCreateProfile()`. Neither ever leaked, because
+ * `notification_preferences_all_own` restricted the read to the caller — but
+ * that was RLS rescuing an action that asked the caller who they were, and it
+ * failed in the wrong direction, since no rows reads as "no preferences saved"
+ * and handed back the DEFAULTS as though they were that profile's real
+ * settings.
  *
- * Listed here so the invariant can be enforced for everything else immediately
- * rather than waiting on a fix in another agent's file. Fix in
- * docs/SECURITY_REVIEW.md, F13: drop the parameter and read
- * `(await getOrCreateProfile())?.id`.
+ * The set stays so the next genuine exception is recorded here in the open
+ * rather than by loosening the check that found it.
  */
-const KNOWN_IDENTITY_PARAM_VIOLATIONS = new Set(["getQuietHours", "getNotificationPreferences"]);
+const KNOWN_IDENTITY_PARAM_VIOLATIONS = new Set<string>();
 
 /** Ways an action can establish who is calling. */
 const DERIVES_IDENTITY = /getOrCreateProfile\s*\(|resolveViewerProfile\s*\(|getSessionUser\s*\(|requireModerationActor\s*\(|auth\.getUser\s*\(/;

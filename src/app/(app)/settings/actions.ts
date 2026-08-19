@@ -28,12 +28,25 @@ export type QuietHoursSettings = { enabled: boolean; start: string; end: string 
  * booleans — folding them in would have meant widening a type every caller
  * treats as a toggle map.
  */
-export async function getQuietHours(profileId: string): Promise<QuietHoursSettings> {
+export async function getQuietHours(): Promise<QuietHoursSettings> {
+  // SECURITY_REVIEW.md F13. This used to take a `profileId` and query with it.
+  // Nothing leaked, because notification_preferences_all_own restricts the read
+  // to the caller — but that is RLS rescuing an action that asked the caller
+  // who they were, and it failed in the wrong direction: no rows reads as "no
+  // preferences saved", so a caller passing somebody else's id was handed the
+  // DEFAULTS as though they were that person's real settings. A confident wrong
+  // answer, which is worse here than an error would have been.
+  //
+  // A server action is a public endpoint. The caller's identity is never an
+  // argument.
+  const profile = await getOrCreateProfile();
+  if (!profile) return { enabled: false, start: "22:00", end: "07:00" };
+
   const supabase = createServerSupabaseClient();
   const { data } = await supabase
     .from("notification_preferences")
     .select("quiet_hours_enabled, quiet_hours_start, quiet_hours_end")
-    .eq("profile_id", profileId)
+    .eq("profile_id", profile.id)
     .maybeSingle();
 
   // Mirrors migration 0088's own column defaults. Off, because KIVO cannot
@@ -49,9 +62,13 @@ export async function getQuietHours(profileId: string): Promise<QuietHoursSettin
   };
 }
 
-export async function getNotificationPreferences(
-  profileId: string,
-): Promise<Record<NotificationPreferenceColumn, boolean>> {
+export async function getNotificationPreferences(): Promise<
+  Record<NotificationPreferenceColumn, boolean>
+> {
+  // SECURITY_REVIEW.md F13, same reasoning as getQuietHours above.
+  const profile = await getOrCreateProfile();
+  if (!profile) return { ...NOTIFICATION_PREFERENCE_DEFAULTS };
+
   const supabase = createServerSupabaseClient();
   // Column list kept as a literal (not NOTIFICATION_PREFERENCE_COLUMNS.join(","))
   // so supabase-js can infer the row type from the query string itself; the
@@ -61,7 +78,7 @@ export async function getNotificationPreferences(
     .select(
       "email_enabled, push_enabled, in_app_enabled, marketing_emails_enabled, match_alerts_enabled, social_alerts_enabled, prediction_alerts_enabled, fantasy_alerts_enabled",
     )
-    .eq("profile_id", profileId)
+    .eq("profile_id", profile.id)
     .maybeSingle();
 
   if (!data) return { ...NOTIFICATION_PREFERENCE_DEFAULTS };
