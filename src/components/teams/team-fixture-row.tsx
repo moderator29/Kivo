@@ -17,10 +17,16 @@ import { resultFor, type FormResult } from "@/lib/football/results";
  * a century — home or away, who against, and how it went.
  *
  * So the row is team-relative on purpose, and it uses `MatchList` (the shared
- * surface) as its container so the club page's list and `/matches`' list are
- * the same object with the same corners, the same dividers and the same
- * hairlines. Only the row's contents differ, because only the row's contents
- * should.
+ * surface from match-list.tsx) as its container so the club page's list and
+ * `/matches`' list are the same object with the same corners, the same
+ * dividers and the same hairlines. Only the row's contents differ, because
+ * only the row's contents should.
+ *
+ * `docs/UI_PRIMITIVES.md` says fixtures use `MatchListRow` and not to build a
+ * fifth fixture row. This is the documented exception and it is narrow: the
+ * shared row is neutral because `/matches` and `/live` have no "our" side, and
+ * a club's own results column does. Everything else about it — the surface,
+ * the row shape, the 44px target, the time rail's width — is the shared one's.
  *
  * ## Nothing here is invented
  *
@@ -108,7 +114,7 @@ export function TeamFixtureRow({ fixture, teamId }: { fixture: TeamFixture; team
       <Link
         href={`/matches/${fixture.id}`}
         aria-label={`${isHome ? "Home" : "Away"} against ${opponentName}, match centre`}
-        className="kivo-focus flex min-h-[3.25rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
+        className="kivo-focus flex min-h-11 items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-2 motion-reduce:transition-none"
       >
         <div className="flex w-11 shrink-0 flex-col items-center gap-1">
           <span
@@ -123,7 +129,7 @@ export function TeamFixtureRow({ fixture, teamId }: { fixture: TeamFixture; team
             </span>
           ) : (
             (isHome || isAway) && (
-              <span className="text-[10px] font-semibold uppercase leading-none text-foreground-subtle">
+              <span className="text-[11px] font-semibold uppercase tracking-wider leading-none text-foreground-subtle">
                 {isHome ? "H" : "A"}
               </span>
             )

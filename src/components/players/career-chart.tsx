@@ -29,7 +29,7 @@ export function CareerChart({ seasons }: { seasons: CareerSeason[] }) {
 
   return (
     <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
-      <div className="flex items-center gap-4 text-[11px] text-foreground-subtle">
+      <div className="flex items-center gap-4 text-xs text-foreground-subtle">
         <span className="flex items-center gap-1.5">
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />
           Goals
@@ -49,7 +49,7 @@ export function CareerChart({ seasons }: { seasons: CareerSeason[] }) {
 
           return (
             <li key={season.seasonYear} className="flex items-center gap-3">
-              <span className="w-14 shrink-0 text-[11px] tabular-nums text-foreground-subtle">{label}</span>
+              <span className="w-14 shrink-0 text-xs tabular-nums text-foreground-subtle">{label}</span>
               <span className="flex h-2.5 min-w-0 flex-1 items-stretch gap-px overflow-hidden rounded-full bg-surface-track">
                 {/* The container is already rounded and clipping, so the
                     segments stay square and the bar's ends come from the
@@ -62,7 +62,7 @@ export function CareerChart({ seasons }: { seasons: CareerSeason[] }) {
                   <span className="bg-kivo-violet" style={{ width: `${(assists / max) * 100}%` }} />
                 )}
               </span>
-              <span className="w-24 shrink-0 whitespace-nowrap text-right text-[11px] font-semibold tabular-nums text-foreground">
+              <span className="w-24 shrink-0 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-foreground">
                 {reported ? (
                   <>
                     {goals ?? "–"}
@@ -79,7 +79,7 @@ export function CareerChart({ seasons }: { seasons: CareerSeason[] }) {
         })}
       </ul>
 
-      <p className="text-[11px] leading-relaxed text-foreground-subtle">
+      <p className="text-xs leading-relaxed text-foreground-subtle">
         Every competition the season was reported in, added together. A season with a dash was reported without goal or
         assist figures — it is not a season without goals.
       </p>

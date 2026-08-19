@@ -4,7 +4,7 @@ import { Cake, Flag } from "lucide-react";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FadeIn } from "@/components/ui/fade-in";
-import { StatTile } from "@/components/football/entity-shell";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
 import { calculateAge } from "@/lib/format";
 
 /**
@@ -75,18 +75,18 @@ export function PlayerHeader({
       {(position || nationality || dateOfBirth) && (
         <FadeIn delay={0.12} className="flex flex-wrap items-center gap-2">
           {position && (
-            <span className="rounded-full border border-hairline px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground-muted">
+            <span className="rounded-full border border-hairline px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-muted">
               {position}
             </span>
           )}
           {nationality && (
-            <span className="flex items-center gap-1.5 rounded-full border border-hairline px-2.5 py-1 text-[11px] text-foreground-muted">
+            <span className="flex items-center gap-1.5 rounded-full border border-hairline px-2.5 py-1 text-xs text-foreground-muted">
               <Flag className="h-3 w-3 shrink-0 text-accent" strokeWidth={2} />
               {nationality}
             </span>
           )}
           {dateOfBirth && (
-            <span className="flex items-center gap-1.5 rounded-full border border-hairline px-2.5 py-1 text-[11px] text-foreground-muted">
+            <span className="flex items-center gap-1.5 rounded-full border border-hairline px-2.5 py-1 text-xs text-foreground-muted">
               <Cake className="h-3 w-3 shrink-0 text-accent" strokeWidth={2} />
               {/* "Age 29", not a bare "29" — beside a nationality chip, a lone
                   number next to a small glyph is a guess the reader has to
@@ -98,13 +98,14 @@ export function PlayerHeader({
       )}
 
       {headline.length > 0 && (
-        <FadeIn
-          delay={0.15}
-          className={`grid gap-2 border-t border-hairline-soft pt-4 ${headline.length >= 4 ? "grid-cols-4" : headline.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
-        >
-          {headline.map((tile) => (
-            <StatTile key={tile.label} label={tile.label} value={tile.value} hint={tile.hint} tone={tile.tone} />
-          ))}
+        <FadeIn delay={0.15} className="border-t border-hairline-soft pt-4">
+          {/* `inset`: the identity block is already the surface. A StatGrid
+              with its own would be a card inside a card. */}
+          <StatGrid inset columns={headline.length >= 4 ? 4 : 3}>
+            {headline.map((tile) => (
+              <StatBlock key={tile.label} label={tile.label} value={tile.value} meta={tile.hint} tone={tile.tone} />
+            ))}
+          </StatGrid>
         </FadeIn>
       )}
 

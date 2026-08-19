@@ -1,21 +1,8 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeftRight,
-  CalendarClock,
-  ChartColumn,
-  ChevronRight,
-  Clock,
-  GitCompareArrows,
-  Goal,
-  History,
-  ShieldAlert,
-  Table2,
-  Trophy,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { CalendarClock, GitCompareArrows, Goal, UserRound } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -28,7 +15,11 @@ import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TrackView } from "@/components/ui/track-view";
 import { TeamAbsencesPanel } from "@/components/football/absences-panel";
 import { EntityTabs, type EntityTab } from "@/components/football/entity-tabs";
-import { ListSurface, Section, SectionEmpty, StatTile } from "@/components/football/entity-shell";
+import { FieldLabel, Section } from "@/components/ui/section";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
+import { StatBlock, StatGrid } from "@/components/ui/stat-block";
+import { EmptyState } from "@/components/ui/empty-state";
+import { MatchList } from "@/components/matches/match-list";
 import { TeamHeader } from "@/components/teams/team-header";
 import { NextMatchCard } from "@/components/teams/next-match-card";
 import { TeamFixtureRow, type TeamFixture } from "@/components/teams/team-fixture-row";
@@ -441,22 +432,17 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   const overviewTab = (
     <>
       {nextMatch ? (
-        <Section title="Next match" icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />}>
+        <Section title="Next match">
           <NextMatchCard fixture={nextMatch} teamId={team.id} venueName={venue?.name ?? null} />
         </Section>
       ) : hasAnyFootball ? (
-        <Section title="Next match" icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />}>
-          <SectionEmpty
-            icon={<CalendarClock className="h-5 w-5" strokeWidth={1.75} />}
-            message={`${team.name} have no scheduled match right now.`}
-            action={
-              <Link
-                href="/matches"
-                className="kivo-focus rounded-xl border border-hairline px-3 py-2 text-xs font-semibold text-foreground-muted transition hover:border-hairline-strong hover:text-foreground"
-              >
-                Today&apos;s matches
-              </Link>
-            }
+        <Section title="Next match">
+          <EmptyState
+            tone="section"
+            icon={CalendarClock}
+            title="Nothing scheduled"
+            description={`${team.name} have no confirmed fixture at the moment.`}
+            action={<OnwardLink href="/matches">Today&apos;s matches</OnwardLink>}
           />
         </Section>
       ) : null}
@@ -464,20 +450,19 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       {recentFixtures.length > 0 && (
         <Section
           title="Recent results"
-          icon={<History className="h-3.5 w-3.5" strokeWidth={2} />}
           action={
             form.sampleSize > 0 ? (
-              <span className="text-[11px] tabular-nums text-foreground-subtle">
+              <FieldLabel className="tabular-nums">
                 {form.wins}W {form.draws}D {form.losses}L
-              </span>
+              </FieldLabel>
             ) : undefined
           }
         >
-          <ListSurface>
+          <MatchList>
             {recentFixtures.slice(0, OVERVIEW_PREVIEW).map((fixture) => (
               <TeamFixtureRow key={fixture.id} fixture={fixture} teamId={team.id} />
             ))}
-          </ListSurface>
+          </MatchList>
         </Section>
       )}
 
@@ -485,7 +470,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           rail above already offers Table, and a second, non-interactive
           pointer to it is the kind of decorative label that pads a page. */}
       {table.length > 0 && (
-        <Section title="In the table" icon={<Table2 className="h-3.5 w-3.5" strokeWidth={2} />}>
+        <Section title="In the table">
           <LeagueTable
             rows={focusWindow(ownGroupRows, team.id)}
             highlightTeamId={team.id}
@@ -495,50 +480,41 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       )}
 
       {manager && (
-        <Section title="Manager" icon={<UserRound className="h-3.5 w-3.5" strokeWidth={2} />}>
-          <Link
-            href={`/managers/${manager.id}`}
-            className="kivo-glass kivo-glass-interactive kivo-focus flex min-h-[3.5rem] items-center gap-3 rounded-2xl p-4 transition-all hover:-translate-y-0.5"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2">
-              <UserRound className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm text-foreground">{manager.full_name}</span>
-              <span className="block truncate text-[11px] text-foreground-subtle">
-                {[manager.nationality, manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : null]
+        <Section title="Manager">
+          <ListSurface>
+            <ListRow
+              href={`/managers/${manager.id}`}
+              chevron
+              leading={
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2">
+                  <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
+                </span>
+              }
+              title={manager.full_name}
+              subtitle={
+                [manager.nationality, manager.date_of_birth ? `Age ${calculateAge(manager.date_of_birth)}` : null]
                   .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-          </Link>
+                  .join(" · ") || undefined
+              }
+            />
+          </ListSurface>
         </Section>
       )}
 
       {hasAnyFootball && <TeamAbsencesPanel teamId={team.id} teamName={team.name} />}
 
       {!hasAnyFootball && (
-        <SectionEmpty
-          icon={<Goal className="h-6 w-6" strokeWidth={1.75} />}
-          message={`KIVO doesn't cover ${team.name}'s matches yet. Follow the club and it will appear here the moment it does.`}
+        <EmptyState
+          tone="page"
+          icon={Goal}
+          title="No matches yet"
+          description={`Follow ${team.name} and their fixtures, results and table will appear here the moment they start.`}
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Link
-                href="/matches"
-                className="kivo-focus flex min-h-11 items-center rounded-xl border border-hairline px-3.5 text-xs font-semibold text-foreground-muted transition hover:border-hairline-strong hover:text-foreground"
-              >
-                Today&apos;s matches
-              </Link>
-              <Link
-                href="/leagues"
-                className="kivo-focus flex min-h-11 items-center rounded-xl border border-hairline px-3.5 text-xs font-semibold text-foreground-muted transition hover:border-hairline-strong hover:text-foreground"
-              >
-                Browse competitions
-              </Link>
+              <OnwardLink href="/matches">Today&apos;s matches</OnwardLink>
+              <OnwardLink href="/leagues">Browse competitions</OnwardLink>
             </div>
           }
-          className="py-12"
         />
       )}
 
@@ -562,11 +538,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       count: squadPlayers.length,
       content: (
         <>
-          <Section
-            title="Squad"
-            icon={<Users className="h-3.5 w-3.5" strokeWidth={2} />}
-            action={<LastSyncedNote timestamp={squadLastSyncedAt} />}
-          >
+          <Section title="Squad" action={<LastSyncedNote timestamp={squadLastSyncedAt} />}>
             <SquadSummary players={squadPlayers} />
           </Section>
           <SquadPanel groups={squadGroups} />
@@ -581,12 +553,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       label: "Fixtures",
       count: upcomingFixtures.length,
       content: (
-        <Section title="Upcoming" icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />}>
-          <ListSurface>
+        <Section title="Upcoming">
+          <MatchList>
             {upcomingFixtures.map((fixture) => (
               <TeamFixtureRow key={fixture.id} fixture={fixture} teamId={team.id} />
             ))}
-          </ListSurface>
+          </MatchList>
         </Section>
       ),
     });
@@ -600,25 +572,25 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       content: (
         <>
           {form.sampleSize > 0 && (
-            <Section title={`Form · ${form.windowLabel}`} icon={<History className="h-3.5 w-3.5" strokeWidth={2} />}>
-              <div className="grid grid-cols-4 gap-2">
-                <StatTile label="Won" value={String(form.wins)} />
-                <StatTile label="Drawn" value={String(form.draws)} />
-                <StatTile label="Lost" value={String(form.losses)} />
-                <StatTile
+            <Section title={form.windowLabel} description="How this club has been playing.">
+              <StatGrid columns={4}>
+                <StatBlock label="Won" value={form.wins} />
+                <StatBlock label="Drawn" value={form.draws} />
+                <StatBlock label="Lost" value={form.losses} />
+                <StatBlock
                   label="Goals"
                   value={`${form.goalsScored}–${form.goalsConceded}`}
-                  hint={form.goalDifference >= 0 ? `+${form.goalDifference}` : String(form.goalDifference)}
+                  meta={form.goalDifference >= 0 ? `+${form.goalDifference}` : String(form.goalDifference)}
                 />
-              </div>
+              </StatGrid>
             </Section>
           )}
-          <Section title="Results" icon={<History className="h-3.5 w-3.5" strokeWidth={2} />}>
-            <ListSurface>
+          <Section title="Results">
+            <MatchList>
               {recentFixtures.map((fixture) => (
                 <TeamFixtureRow key={fixture.id} fixture={fixture} teamId={team.id} />
               ))}
-            </ListSurface>
+            </MatchList>
           </Section>
         </>
       ),
@@ -632,7 +604,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       content: (
         <>
           {tableGroups.length > 0 && (
-            <Section title="Standings" icon={<Table2 className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="Standings">
               {tableGroups.map((group) => (
                 <LeagueTable
                   key={group.label ?? "single"}
@@ -648,7 +620,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           )}
 
           {positionHistory.length >= 2 && currentStanding && (
-            <Section title="Position over the season" icon={<Trophy className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="Position over the season">
               <PositionHistoryCard
                 snapshots={positionHistory}
                 teamName={team.name}
@@ -658,23 +630,24 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           )}
 
           {otherStandings.length > 0 && (
-            <Section title="Also this season" icon={<Trophy className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="Also this season" as="h3">
               <ListSurface>
                 {otherStandings.map((standing) => (
-                  <li
+                  <ListRow
                     key={standing.season?.id ?? standing.season?.name}
-                    className="flex min-h-[3rem] items-center justify-between gap-3 px-3 py-2.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm text-foreground-muted">
-                      {standing.season?.competition?.short_name ?? standing.season?.competition?.name ?? "Competition"}
-                    </span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                      {standing.position !== null ? `${standing.position}${ordinal(standing.position)}` : "–"}
-                    </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-foreground-subtle">
-                      {standing.played} played · {standing.points} pts
-                    </span>
-                  </li>
+                    title={
+                      standing.season?.competition?.short_name ?? standing.season?.competition?.name ?? "Competition"
+                    }
+                    subtitle={`${standing.played} played · ${standing.points} pts`}
+                    trailing={
+                      standing.position !== null ? (
+                        <span className="font-semibold text-foreground">
+                          {standing.position}
+                          {ordinal(standing.position)}
+                        </span>
+                      ) : undefined
+                    }
+                  />
                 ))}
               </ListSurface>
             </Section>
@@ -691,61 +664,56 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       content: (
         <>
           {hasStatistics && (
-            <Section title="How they play" icon={<ChartColumn className="h-3.5 w-3.5" strokeWidth={2} />}>
+            <Section title="How they play">
               <TeamStatisticsPanel summary={statistics} />
             </Section>
           )}
 
           {goalsScored > 0 && (
-            <Section title="Goal timing" icon={<Clock className="h-3.5 w-3.5" strokeWidth={2} />}>
-              <div className="kivo-glass flex flex-col gap-2 rounded-2xl p-5">
-                <p className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold tabular-nums text-foreground">{goalsAfter70}</span>
-                  <span className="text-sm text-foreground-muted">
-                    of {goalsScored} goals scored after the 70th minute
-                  </span>
-                </p>
-                <p className="text-[11px] text-foreground-subtle">{matchSampleLabel}</p>
-              </div>
+            <Section title="Goal timing" description={matchSampleLabel}>
+              <p className="kivo-glass flex items-baseline gap-2 rounded-2xl p-5">
+                <span className="text-3xl font-semibold tabular-nums text-foreground">{goalsAfter70}</span>
+                <span className="text-sm text-foreground-muted">
+                  of {goalsScored} goals scored after the 70th minute
+                </span>
+              </p>
             </Section>
           )}
 
           {hasDiscipline && (
-            <Section title="Discipline" icon={<ShieldAlert className="h-3.5 w-3.5" strokeWidth={2} />}>
-              <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <StatTile label="Yellow cards" value={formatNumber(teamYellowCards)} />
-                  <StatTile label="Red cards" value={formatNumber(teamRedCards)} />
-                </div>
-                {disciplineRows.length > 0 && (
-                  <ListSurface>
-                    {disciplineRows.map((row) => (
-                      <li key={row.id}>
-                        <Link
-                          href={`/players/${row.id}`}
-                          className="kivo-focus flex min-h-[3rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2"
-                        >
-                          <PlayerAvatar photoUrl={row.photoUrl} name={row.name} size={28} />
-                          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.name}</span>
-                          <span className="flex shrink-0 items-center gap-2 text-[11px] font-semibold tabular-nums">
-                            {row.yellow > 0 && (
-                              <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-warning">
-                                {row.yellow}
-                              </span>
-                            )}
-                            {row.red > 0 && (
-                              <span className="rounded border border-critical/30 bg-critical/10 px-1.5 py-0.5 text-critical">
-                                {row.red}
-                              </span>
-                            )}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ListSurface>
-                )}
-                <p className="px-1 text-[11px] text-foreground-subtle">{matchSampleLabel}</p>
-              </div>
+            <Section title="Discipline" description={matchSampleLabel}>
+              <StatGrid columns={2}>
+                <StatBlock label="Yellow cards" value={formatNumber(teamYellowCards)} />
+                <StatBlock label="Red cards" value={formatNumber(teamRedCards)} />
+              </StatGrid>
+              {disciplineRows.length > 0 && (
+                <ListSurface>
+                  {disciplineRows.map((row) => (
+                    <ListRow
+                      key={row.id}
+                      href={`/players/${row.id}`}
+                      leading={<PlayerAvatar photoUrl={row.photoUrl} name={row.name} size={28} />}
+                      title={row.name}
+                      trailing={
+                        <span className="flex items-center gap-2 text-[11px] font-semibold">
+                          {row.yellow > 0 && (
+                            <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-warning">
+                              {row.yellow}
+                              <span className="sr-only"> yellow cards</span>
+                            </span>
+                          )}
+                          {row.red > 0 && (
+                            <span className="rounded border border-critical/30 bg-critical/10 px-1.5 py-0.5 text-critical">
+                              {row.red}
+                              <span className="sr-only"> red cards</span>
+                            </span>
+                          )}
+                        </span>
+                      }
+                    />
+                  ))}
+                </ListSurface>
+              )}
             </Section>
           )}
         </>
@@ -759,11 +727,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       label: "Transfers",
       count: transferEntries.length,
       content: (
-        <Section
-          title="Transfer activity"
-          icon={<ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={2} />}
-          action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}
-        >
+        <Section title="Transfer activity" action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}>
           <TransferLedger entries={transferEntries} />
         </Section>
       ),
@@ -771,7 +735,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 lg:px-8">
+    <div className="kivo-page">
       <TrackView type="team" id={team.id} name={team.name} imageUrl={team.crest_url} />
 
       <TeamHeader
@@ -825,6 +789,24 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
 
       <EntityTabs tabs={tabs} ariaLabel={`${team.name} sections`} idPrefix="team" />
     </div>
+  );
+}
+
+/**
+ * The one button shape an empty state on this page offers.
+ *
+ * `<EmptyState action>` takes any node, and left to itself every caller
+ * invents its own border and padding. One local component keeps the two on
+ * this page identical, at the 44px target the rest of the product uses.
+ */
+function OnwardLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="kivo-focus flex min-h-11 items-center rounded-xl border border-hairline px-3.5 text-sm font-semibold text-foreground-muted transition-colors duration-150 hover:border-hairline-strong hover:text-foreground motion-reduce:transition-none"
+    >
+      {children}
+    </Link>
   );
 }
 
