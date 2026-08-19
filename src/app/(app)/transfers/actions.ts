@@ -1,9 +1,9 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { TRANSFERS_PAGE_SIZE } from "./constants";
 import { TRANSFER_SELECT, parseTransferFilters, type TransferFilterParams, type TransferListItem } from "./shared";
+import { logError } from "@/lib/log";
 
 /** Fetches one page of transfers starting at `offset`, applying the same
  * validated filters as the page's own initial query (audit item 2) —

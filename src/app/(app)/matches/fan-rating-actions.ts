@@ -1,10 +1,10 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 
 /**
  * RECOMMENDATIONS item 170: fan match ratings, explicitly opinion not a

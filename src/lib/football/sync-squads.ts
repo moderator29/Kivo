@@ -1,4 +1,3 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -7,6 +6,7 @@ import { getFootballDataProvider } from "./index";
 import { createMapping, findMappedId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedManager, NormalizedPlayer } from "./types";
+import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
 

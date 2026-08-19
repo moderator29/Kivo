@@ -1,10 +1,10 @@
-import { logError } from "@/lib/log";
 import "server-only";
 import { cache } from "react";
 import { createServerSupabaseClient } from "./supabase/server";
 import { getAuthUser } from "./auth";
 import { randomKivoAvatarId } from "./kivo-assets";
 import type { Database } from "./supabase/types";
+import { logError } from "@/lib/log";
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 

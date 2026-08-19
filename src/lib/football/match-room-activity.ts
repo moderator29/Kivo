@@ -1,6 +1,6 @@
-import { logError } from "@/lib/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { logError } from "@/lib/log";
 
 export type MatchRoomActivity = {
   /** Real human posts in this fixture's Room — KIVO's own system-authored

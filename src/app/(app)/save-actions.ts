@@ -1,10 +1,10 @@
 "use server";
 
-import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 
 // RECOMMENDATIONS item 173: "saves table mirroring follows" — same
 // polymorphic shape, same toggle pattern as toggleFollow (follow-actions.ts)
