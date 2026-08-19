@@ -5,6 +5,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { NoDataYet } from "@/components/ui/no-data-yet";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { readList } from "@/lib/query-result";
 import { PredictionCard, type PredictionConsensus } from "@/components/predictions/prediction-card";
 import { PredictionsLeaderboard, type LeaderboardEntry } from "@/components/predictions/predictions-leaderboard";
 import { getNavItem } from "@/lib/navigation";
@@ -34,37 +36,69 @@ export default async function PredictionsPage() {
   }
   const supabase = createServerSupabaseClient();
 
-  const { data: fixtures } = await supabase
-    .from("fixtures")
-    .select(
-      `id, kickoff_at, status,
+  const fixturesOutcome = readList(
+    await supabase
+      .from("fixtures")
+      .select(
+        `id, kickoff_at, status,
        home_team:teams!fixtures_home_team_id_fkey(id, name, crest_url),
        away_team:teams!fixtures_away_team_id_fkey(id, name, crest_url),
        competition:competitions(name, short_name)`,
-    )
-    .eq("status", "scheduled")
-    .gt("kickoff_at", new Date().toISOString())
-    .order("kickoff_at", { ascending: true })
-    .limit(20);
+      )
+      .eq("status", "scheduled")
+      .gt("kickoff_at", new Date().toISOString())
+      .order("kickoff_at", { ascending: true })
+      .limit(20),
+    "predictions.upcomingFixtures",
+  );
 
-  if (!fixtures || fixtures.length === 0) {
+  if (fixturesOutcome.failed) {
+    return (
+      <LoadFailed
+        title={item.label}
+        icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />}
+        description="KIVO couldn't read the upcoming fixtures just now, so it can't offer you anything to call. Try again."
+      />
+    );
+  }
+
+  const fixtures = fixturesOutcome.rows;
+
+  if (fixtures.length === 0) {
     return (
       <NoDataYet icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />} title={item.label} description={item.comingSoonDescription ?? "Nothing synced yet."} />
     );
   }
 
   const fixtureIds = fixtures.map((f) => f.id);
-  const existingPredictions = profile
-    ? (
-        await supabase
+  const existingPredictionsOutcome = readList(
+    profile
+      ? await supabase
           .from("predictions")
           .select("fixture_id, predicted_outcome")
           .eq("profile_id", profile.id)
           .in("fixture_id", fixtureIds)
-      ).data
-    : null;
+      : { data: [], error: null },
+    "predictions.ownPicks",
+  );
 
-  const predictionByFixture = new Map((existingPredictions ?? []).map((p) => [p.fixture_id, p.predicted_outcome]));
+  // Gated, unlike the consensus bar and the leaderboard below it. A failed
+  // read here does not leave a card looking incomplete — it leaves every card
+  // looking un-picked, which invites the reader to make a prediction they
+  // already made. The rest of this page is decoration by comparison.
+  if (existingPredictionsOutcome.failed) {
+    return (
+      <LoadFailed
+        title={item.label}
+        icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />}
+        description="KIVO couldn't read the calls you've already made, and showing these matches as un-picked would invite you to make them twice. Try again."
+      />
+    );
+  }
+
+  const predictionByFixture = new Map(
+    existingPredictionsOutcome.rows.map((p) => [p.fixture_id, p.predicted_outcome]),
+  );
 
   // RECOMMENDATIONS item 168: same predictions_select_own restriction as the
   // leaderboard below — a plain client query can never see picks other than

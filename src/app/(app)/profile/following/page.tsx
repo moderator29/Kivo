@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { Star, Shield, UserRound, BellOff, Users } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FollowButton } from "@/components/ui/follow-button";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
@@ -45,7 +47,7 @@ export default async function FollowingPage() {
   // competition — 'user' rows are this page's own "who this profile follows"
   // half of the new People section, so a single unfiltered query covers all
   // four types instead of adding a fifth query just for the 'user' slice.
-  const [{ data: follows }, { data: followerRows }] = await Promise.all([
+  const [followsResult, followerRowsResult] = await Promise.all([
     supabase
       .from("follows")
       // KN-52: `muted` comes back with the row now. The mute control has
@@ -63,48 +65,76 @@ export default async function FollowingPage() {
     supabase.rpc("get_my_followers"),
   ]);
 
-  // id -> muted, for the two types a mute means anything for (team/player).
-  const mutedFollowIds = new Set((follows ?? []).filter((f) => f.muted).map((f) => f.followed_id));
+  // This page is a list of the reader's own decisions. "You aren't following
+  // anyone yet" is a claim about them, and it is wrong in the way that makes
+  // someone re-follow clubs they never stopped following.
+  const followsOutcome = readList(followsResult, "following.follows");
+  const followersOutcome = readList(followerRowsResult, "following.followers");
 
-  const teamIds = (follows ?? []).filter((f) => f.followed_type === "team").map((f) => f.followed_id);
-  const playerIds = (follows ?? []).filter((f) => f.followed_type === "player").map((f) => f.followed_id);
-  const competitionIds = (follows ?? []).filter((f) => f.followed_type === "competition").map((f) => f.followed_id);
-  const followingUserIds = (follows ?? []).filter((f) => f.followed_type === "user").map((f) => f.followed_id);
+  const follows = followsOutcome.rows;
+  const followerRows = followersOutcome.rows;
+
+  // id -> muted, for the two types a mute means anything for (team/player).
+  const mutedFollowIds = new Set(follows.filter((f) => f.muted).map((f) => f.followed_id));
+
+  const teamIds = follows.filter((f) => f.followed_type === "team").map((f) => f.followed_id);
+  const playerIds = follows.filter((f) => f.followed_type === "player").map((f) => f.followed_id);
+  const competitionIds = follows.filter((f) => f.followed_type === "competition").map((f) => f.followed_id);
+  const followingUserIds = follows.filter((f) => f.followed_type === "user").map((f) => f.followed_id);
 
   // get_my_followers() has no ORDER BY (a plain set-returning SQL function),
   // so newest-first is applied here rather than trusted from the RPC.
-  const followerUserIds = (followerRows ?? [])
+  const followerUserIds = followerRows
     .slice()
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map((f) => f.follower_profile_id);
 
   const peopleIds = Array.from(new Set([...followingUserIds, ...followerUserIds]));
 
-  const [{ data: teams }, { data: players }, { data: competitions }, { data: people }] = await Promise.all([
+  const [teamsResult, playersResult, competitionsResult, peopleResult] = await Promise.all([
     teamIds.length
       ? supabase.from("teams").select("id, name, short_name, crest_url").in("id", teamIds)
-      : Promise.resolve({ data: [] as TeamRow[] }),
+      : Promise.resolve({ data: [] as TeamRow[], error: null }),
     playerIds.length
       ? supabase
           .from("players")
           .select("id, full_name, known_as, position, current_team:teams(name, crest_url)")
           .in("id", playerIds)
-      : Promise.resolve({ data: [] as PlayerRow[] }),
+      : Promise.resolve({ data: [] as PlayerRow[], error: null }),
     competitionIds.length
       ? supabase.from("competitions").select("id, name, short_name, country").in("id", competitionIds)
-      : Promise.resolve({ data: [] as CompetitionRow[] }),
+      : Promise.resolve({ data: [] as CompetitionRow[], error: null }),
     // profiles has no cross-user SELECT policy — resolved through the same
     // narrow SECURITY DEFINER RPC every other cross-user identity lookup in
     // this codebase already uses (get_public_profiles, migration 0011).
     peopleIds.length
       ? supabase.rpc("get_public_profiles", { p_ids: peopleIds })
-      : Promise.resolve({ data: [] as PersonRow[] }),
+      : Promise.resolve({ data: [] as PersonRow[], error: null }),
   ]);
 
-  const teamMap = new Map((teams ?? []).map((t) => [t.id, t]));
-  const playerMap = new Map((players ?? []).map((p) => [p.id, p]));
-  const competitionMap = new Map((competitions ?? []).map((c) => [c.id, c]));
-  const personMap = new Map((people ?? []).map((p) => [p.id, p]));
+  // Four hydration reads, all gating rather than tolerated. Each one turns an
+  // id the page already holds into something it can name; when one fails the
+  // id survives and the row it names does not, so the entry disappears from
+  // the list entirely. On this page in particular that is indistinguishable
+  // from having been unfollowed, which is the one outcome a follow list must
+  // never fake.
+  const teamsOutcome = readList(teamsResult, "following.teams");
+  const playersOutcome = readList(playersResult, "following.players");
+  const competitionsOutcome = readList(competitionsResult, "following.competitions");
+  const peopleOutcome = readList(peopleResult, "following.people");
+
+  const loadFailed =
+    followsOutcome.failed ||
+    followersOutcome.failed ||
+    teamsOutcome.failed ||
+    playersOutcome.failed ||
+    competitionsOutcome.failed ||
+    peopleOutcome.failed;
+
+  const teamMap = new Map(teamsOutcome.rows.map((t) => [t.id, t]));
+  const playerMap = new Map(playersOutcome.rows.map((p) => [p.id, p]));
+  const competitionMap = new Map(competitionsOutcome.rows.map((c) => [c.id, c]));
+  const personMap = new Map(peopleOutcome.rows.map((p) => [p.id, p]));
 
   // followed_id has no DB-level FK (it's polymorphic across three tables), so
   // a followed row whose target was since deleted resolves to nothing here —
@@ -149,7 +179,11 @@ export default async function FollowingPage() {
           decision; this is where a user comes back to when they have already
           followed a dozen things and want to know what they signed up for.
           Both read from the same sentences (src/lib/follow-meaning.ts). */}
-      {!isEmpty && (
+      {/* The explainer describes what following *does*, and it is only
+          meaningful next to a real list. Suppressed on a failed read as well
+          as an empty one — it would otherwise sit above a "couldn't load"
+          panel explaining the semantics of things nobody can see. */}
+      {!isEmpty && !loadFailed && (
         <FadeIn delay={0.03} className="kivo-glass flex flex-col gap-2 rounded-2xl p-4">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">What following does</h2>
           <p className="text-xs leading-relaxed text-foreground-muted">
@@ -175,7 +209,13 @@ export default async function FollowingPage() {
         </FadeIn>
       )}
 
-      {isEmpty ? (
+      {loadFailed ? (
+        <LoadFailed
+          tone="section"
+          title="Who you follow"
+          description="KIVO couldn't read your follows just now. Nothing has been unfollowed — try again."
+        />
+      ) : isEmpty ? (
         <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
           <Star className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
           <p className="text-sm text-foreground-muted">

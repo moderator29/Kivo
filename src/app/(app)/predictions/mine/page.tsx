@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Target } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { TeamCrest } from "@/components/ui/team-crest";
@@ -56,10 +58,7 @@ export default async function MyPredictionsPage() {
   // real total alongside that page so the stats block can honestly disclose
   // when it's only covering a slice, instead of silently under-reporting a
   // user's lifetime record.
-  const {
-    data: predictionRows,
-    count: totalPredictionCount,
-  } = await supabase
+  const predictionsResult = await supabase
     .from("predictions")
     .select(
       `id, points_awarded, created_at, ${PREDICTION_PICK_COLUMNS},
@@ -76,11 +75,29 @@ export default async function MyPredictionsPage() {
     .order("created_at", { ascending: false })
     .limit(100);
 
+  // This page computes an accuracy percentage, a streak and a per-competition
+  // record. Every one of those is a claim about the reader, and every one of
+  // them is derived from this single read — so a failure does not produce a
+  // page missing its numbers, it produces a page full of confident zeroes and
+  // a "you haven't predicted anything yet" that is flatly untrue.
+  const predictionsOutcome = readList(predictionsResult, "predictions.mine");
+
+  if (predictionsOutcome.failed) {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+        <LoadFailed
+          title="Your predictions"
+          description="KIVO couldn't read your prediction history just now. Your record hasn't changed — try again rather than reading a zero it can't stand behind."
+        />
+      </div>
+    );
+  }
+
   // `fixture_id` cascades on fixture delete (RECOMMENDATIONS item 47), so this
   // should never actually be null in practice — filtered defensively anyway
   // rather than rendering a broken row.
-  const rows = (predictionRows ?? []).filter((row) => row.fixture !== null);
-  const totalPredictions = totalPredictionCount ?? rows.length;
+  const rows = predictionsOutcome.rows.filter((row) => row.fixture !== null);
+  const totalPredictions = predictionsResult.count ?? rows.length;
   const isTruncatedHistory = totalPredictions > rows.length;
 
   const scoredRows = rows.filter((row) => row.points_awarded !== null);

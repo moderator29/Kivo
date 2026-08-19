@@ -3,6 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight, Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
+import { logError } from "@/lib/log";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
 import { CountUp } from "@/components/ui/count-up";
@@ -121,7 +124,7 @@ export default async function RewardsPage() {
   const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const weekStartUtc = mondayOfWeekUtc(todayUtc);
 
-  const [{ data: xpTotal }, { data: earnedBadges }, { data: allBadges }, { data: xpHistory }, { data: streak }, { data: weekXp }] =
+  const [xpTotalResult, earnedBadgesResult, allBadgesResult, { data: xpHistory }, { data: streak }, { data: weekXp }] =
     await Promise.all([
       // Single aggregate round trip instead of fetching every xp_ledger row
       // and summing in JS (RECOMMENDATIONS item 36) — see get_xp_total in
@@ -153,8 +156,33 @@ export default async function RewardsPage() {
         .gte("created_at", weekStartUtc.toISOString()),
     ]);
 
-  const totalXp = xpTotal ?? 0;
-  const earnedBadgeDates = new Map((earnedBadges ?? []).map((b) => [b.badge_id, b.awarded_at] as const));
+  // The three reads that make a claim about this person's own record, as
+  // opposed to decorating it. A failed XP total renders a confident "0 XP"; a
+  // failed user_badges read renders every badge in the catalogue as unearned.
+  // Both tell the reader they have achieved nothing, which is the single
+  // worst thing this page can be wrong about, and neither is distinguishable
+  // on screen from a brand-new account.
+  //
+  // xpHistory, the streak and the week strip stay tolerant below: each owns
+  // one panel beside the headline, and a missing panel is visibly missing in
+  // a way a wrong number is not.
+  const xpTotalFailed = Boolean(xpTotalResult.error);
+  if (xpTotalFailed) logError("query.rewards.xpTotal", new Error(xpTotalResult.error!.message));
+  const earnedBadgesOutcome = readList(earnedBadgesResult, "rewards.earnedBadges");
+  const allBadgesOutcome = readList(allBadgesResult, "rewards.badgeCatalogue");
+
+  if (xpTotalFailed || earnedBadgesOutcome.failed || allBadgesOutcome.failed) {
+    return (
+      <LoadFailed
+        title="Your rewards"
+        description="KIVO couldn't read your XP and badges just now. Nothing has been taken away — this page would otherwise show you a zero it can't stand behind. Try again."
+      />
+    );
+  }
+
+  const allBadges = allBadgesOutcome.rows;
+  const totalXp = xpTotalResult.data ?? 0;
+  const earnedBadgeDates = new Map(earnedBadgesOutcome.rows.map((b) => [b.badge_id, b.awarded_at] as const));
 
   const currentStreak = streak?.current_streak ?? 0;
   const longestStreak = streak?.longest_streak ?? 0;
@@ -280,7 +308,7 @@ export default async function RewardsPage() {
           Badges
         </h2>
 
-        {!allBadges || allBadges.length === 0 ? (
+        {allBadges.length === 0 ? (
           <div className="kivo-glass rounded-2xl p-6 text-center text-sm text-foreground-muted">
             No badges available yet.
           </div>

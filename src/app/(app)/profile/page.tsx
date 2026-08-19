@@ -4,6 +4,8 @@ import Image from "next/image";
 import { CircleUserRound, Pencil, MessageSquare, Target, Award, ArrowRight } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readList } from "@/lib/query-result";
+import { LoadFailed } from "@/components/ui/load-failed";
 import { ProfileHeader, type ProfileHeaderClub } from "@/components/profile/profile-header";
 import { ProfileStatRail } from "@/components/profile/profile-stat-rail";
 import { XpMomentum } from "@/components/profile/xp-momentum";
@@ -70,14 +72,14 @@ export default async function ProfilePage({
   // these are the numbers that stay on screen while the tabs change under
   // them, so they are never re-fetched per tab.
   const [
-    { data: follows },
-    { data: followerRows },
+    followsResult,
+    followerRowsResult,
     { data: xpTotal },
     { count: totalBadgeCount },
     { count: earnedBadgeCount },
     { count: savedCount },
     { data: club },
-    { data: xpEntries },
+    xpEntriesResult,
   ] = await Promise.all([
     supabase.from("follows").select("followed_type").eq("follower_profile_id", profile.id),
     // `follows` has no cross-user SELECT policy — the reverse direction goes
@@ -113,17 +115,35 @@ export default async function ProfilePage({
       .limit(XP_WINDOW_ROW_LIMIT + 1),
   ]);
 
-  const xpRows = xpEntries ?? [];
+  // The header's follower and following counts, and the XP windows beside
+  // them, are all statements about this person. A failed read renders "0
+  // followers" — which is not a missing number, it is a wrong one, and it is
+  // the kind of wrong that makes someone think they lost something.
+  const followsOutcome = readList(followsResult, "profile.follows");
+  const followersOutcome = readList(followerRowsResult, "profile.followers");
+  const xpOutcome = readList(xpEntriesResult, "profile.xpWindows");
+
+  const xpRows = xpOutcome.rows;
   const xpWindows =
-    xpRows.length > XP_WINDOW_ROW_LIMIT
+    xpOutcome.failed || xpRows.length > XP_WINDOW_ROW_LIMIT
       ? []
       : summariseXpWindows(
           xpRows.map((row) => ({ amount: row.amount, createdAt: row.created_at })),
           profile.created_at,
         );
 
-  const followingCount = (follows ?? []).length;
-  const followerCount = (followerRows ?? []).length;
+  // The whole connections row is dropped when either count failed, rather
+  // than either being shown as 0. "0 followers" is not a missing number, it
+  // is a wrong one, and it is wrong in the direction that makes someone think
+  // they lost something. An absent row is visibly absent; a zero is not.
+  const connections =
+    followsOutcome.failed || followersOutcome.failed
+      ? null
+      : {
+          following: followsOutcome.rows.length,
+          followers: followersOutcome.rows.length,
+          followingHref: "/profile/following",
+        };
   const headerClub: ProfileHeaderClub | null = club
     ? { id: club.id, name: club.name, shortName: club.short_name, crestUrl: club.crest_url }
     : null;
@@ -141,11 +161,7 @@ export default async function ProfilePage({
           country={profile.country}
           joinedAt={profile.created_at}
           club={headerClub}
-          connections={{
-            following: followingCount,
-            followers: followerCount,
-            followingHref: "/profile/following",
-          }}
+          connections={connections}
           action={
             <Link
               href="/profile/edit"
@@ -256,14 +272,27 @@ async function PostsPanel({ profileId }: { profileId: string }) {
   // authorization result, and hydrating it through the shared loader is what
   // keeps reactions, comment counts, polls and save state identical to how the
   // same post renders in /social.
-  const { data: rows } = await supabase
-    .from("posts")
-    .select("id")
-    .eq("author_profile_id", profileId)
-    .order("created_at", { ascending: false })
-    .limit(PROFILE_POST_LIMIT);
+  const postIdsOutcome = readList(
+    await supabase
+      .from("posts")
+      .select("id")
+      .eq("author_profile_id", profileId)
+      .order("created_at", { ascending: false })
+      .limit(PROFILE_POST_LIMIT),
+    "profile.postIds",
+  );
 
-  const postIds = (rows ?? []).map((row) => row.id);
+  if (postIdsOutcome.failed) {
+    return (
+      <LoadFailed
+        tone="section"
+        title="Your posts"
+        description="KIVO couldn't read your posts just now. Nothing has been deleted — try again."
+      />
+    );
+  }
+
+  const postIds = postIdsOutcome.rows.map((row) => row.id);
   const { posts } = await fetchPostsPage(0, profileId, { postIds });
 
   if (posts.length === 0) {
@@ -301,7 +330,7 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
   // plain query is enough. The full record, streaks and per-competition
   // accuracy live on /predictions/mine — this is the recent slice plus a way
   // through to it, not a second copy of that page.
-  const { data: rows, count } = await supabase
+  const predictionsResult = await supabase
     .from("predictions")
     .select(
       `id, points_awarded, created_at, ${PREDICTION_PICK_COLUMNS},
@@ -317,9 +346,23 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
     .order("created_at", { ascending: false })
     .limit(PROFILE_PREDICTION_LIMIT);
 
+  const predictionsOutcome = readList(predictionsResult, "profile.predictions");
+
+  if (predictionsOutcome.failed) {
+    return (
+      <LoadFailed
+        tone="section"
+        title="Your predictions"
+        description="KIVO couldn't read your recent calls. Your record hasn't changed — try again."
+      />
+    );
+  }
+
+  const count = predictionsResult.count;
+
   // fixture_id cascades on fixture delete, so this should not happen —
   // filtered defensively rather than rendering half a row.
-  const predictions = (rows ?? []).filter((row) => row.fixture !== null);
+  const predictions = predictionsOutcome.rows.filter((row) => row.fixture !== null);
 
   if (predictions.length === 0) {
     return (
@@ -394,19 +437,41 @@ async function PredictionsPanel({ profileId }: { profileId: string }) {
 
 async function BadgesPanel({ profileId }: { profileId: string }) {
   const supabase = createServerSupabaseClient();
-  const { data: earned } = await supabase
-    .from("user_badges")
-    .select("badge_id, awarded_at")
-    .eq("profile_id", profileId)
-    .order("awarded_at", { ascending: false });
+  const earnedOutcome = readList(
+    await supabase
+      .from("user_badges")
+      .select("badge_id, awarded_at")
+      .eq("profile_id", profileId)
+      .order("awarded_at", { ascending: false }),
+    "profile.earnedBadges",
+  );
 
-  const badgeIds = (earned ?? []).map((row) => row.badge_id);
+  if (earnedOutcome.failed) {
+    return (
+      <LoadFailed
+        tone="section"
+        title="Your badges"
+        description="KIVO couldn't read the badges you've earned. They haven't been taken away — try again."
+      />
+    );
+  }
+
+  const earned = earnedOutcome.rows;
+  const badgeIds = earned.map((row) => row.badge_id);
   // Same two-step lookup as exportUserData: resolve the small reference table
   // in a second query rather than relying on PostgREST's FK-embed syntax.
-  const { data: badges } = badgeIds.length
-    ? await supabase.from("badges").select("id, name, description, icon_url").in("id", badgeIds)
-    : { data: [] as { id: string; name: string; description: string | null; icon_url: string | null }[] };
-  const badgeById = new Map((badges ?? []).map((badge) => [badge.id, badge]));
+  //
+  // Tolerant, unlike the read above: a badge whose name fails to resolve is
+  // skipped by the `if (!badge) return null` below, so the count stays honest
+  // even if one tile is missing. "You have earned nothing" is the claim worth
+  // guarding, and that one comes from `earned`.
+  const badgesOutcome = readList(
+    badgeIds.length
+      ? await supabase.from("badges").select("id, name, description, icon_url").in("id", badgeIds)
+      : { data: [] as { id: string; name: string; description: string | null; icon_url: string | null }[], error: null },
+    "profile.badgeCatalogue",
+  );
+  const badgeById = new Map(badgesOutcome.rows.map((badge) => [badge.id, badge]));
 
   if (badgeIds.length === 0) {
     return (
@@ -422,7 +487,7 @@ async function BadgesPanel({ profileId }: { profileId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {(earned ?? []).map((row, index) => {
+        {earned.map((row, index) => {
           const badge = badgeById.get(row.badge_id);
           if (!badge) return null;
           return (
