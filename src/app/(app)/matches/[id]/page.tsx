@@ -12,7 +12,6 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { MatchCentreTabs } from "@/components/matches/match-centre-tabs";
 import { TeamCrest } from "@/components/ui/team-crest";
-import { HeadToHeadCard } from "@/components/football/head-to-head-card";
 import { FanRatingCard } from "@/components/matches/fan-rating-card";
 import { MatchVerdictCard } from "@/components/matches/match-verdict-card";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
@@ -435,19 +434,6 @@ export default async function MatchCentrePage({
         </FadeIn>
       )}
 
-      {/* RECOMMENDATIONS.md item 161: only shown when these two teams have
-          at least one prior finished meeting on record — a debut fixture
-          between them shouldn't render a zero-state card here. */}
-      {headToHead && headToHead.meetings.length > 0 && fixture.home_team && fixture.away_team && (
-        <FadeIn delay={0.11}>
-          <HeadToHeadCard
-            teamA={{ name: fixture.home_team.name, shortName: fixture.home_team.short_name }}
-            teamB={{ name: fixture.away_team.name, shortName: fixture.away_team.short_name }}
-            record={headToHead}
-          />
-        </FadeIn>
-      )}
-
       {/* RECOMMENDATIONS.md's MatchShareCard feature: a real, dynamic share
           card for this exact fixture -- never rendered for a fixture with no
           resolved teams (shareCardData is null in that case). */}
@@ -487,6 +473,20 @@ export default async function MatchCentrePage({
               venueName: fixture.venue?.name ?? null,
               venueCity: fixture.venue?.city ?? null,
             }}
+            // RECOMMENDATIONS.md item 161, now as a Match Centre tab rather
+            // than a card stranded below the whole tab strip. Null unless both
+            // clubs resolved, and the tab itself is only offered when there is
+            // a real prior meeting on record — a debut fixture between them
+            // shows no H2H tab at all rather than an empty one.
+            headToHead={
+              headToHead && fixture.home_team && fixture.away_team
+                ? {
+                    teamA: { name: fixture.home_team.name, shortName: fixture.home_team.short_name },
+                    teamB: { name: fixture.away_team.name, shortName: fixture.away_team.short_name },
+                    record: headToHead,
+                  }
+                : null
+            }
             viewerFantasyRoster={viewerFantasyRosterForTab}
             events={(events ?? []).map((e) => ({
               id: e.id,

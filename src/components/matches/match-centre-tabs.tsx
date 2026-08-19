@@ -12,6 +12,8 @@ import { LastSyncedNote } from "@/components/football/last-synced-note";
 import { MatchRoomTab, type RoomPost } from "@/components/matches/match-room";
 import { LineupPitch, buildPitchRows } from "@/components/matches/lineup-pitch";
 import { HeatmapView } from "@/components/matches/heatmap-view";
+import { HeadToHeadCard } from "@/components/football/head-to-head-card";
+import type { HeadToHeadRecord } from "@/lib/football/head-to-head";
 import type { PositionalObservation } from "@/lib/football/positional-types";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
 import { LocalDateTime } from "@/components/ui/relative-time";
@@ -130,10 +132,24 @@ type MatchCentreTabsProps = {
     venueName: string | null;
     venueCity: string | null;
   };
+  /** Real head-to-head record between these two clubs, computed by
+   * getHeadToHead() from finished fixtures only. Null when either side of
+   * the fixture has no resolved team row — the tab is then not offered at
+   * all rather than rendering a card about two unnamed teams.
+   *
+   * This used to render as a standalone card in the page body *below* these
+   * tabs, which meant a fan had to scroll past the entire tab panel to reach
+   * it. The Master Directive lists H2H as a Match Centre section alongside
+   * Stats, Lineups and Standings, and that is where it belongs. */
+  headToHead: {
+    teamA: { name: string; shortName: string | null };
+    teamB: { name: string; shortName: string | null };
+    record: HeadToHeadRecord;
+  } | null;
 };
 
 /**
- * KN-53. Details, Stats, Lineups and Heatmap each rendered a near-identical
+ * KN-53. Timeline, Stats, Lineups and Heatmap each rendered a near-identical
  * "hasn't been synced yet" panel, so on a scheduled fixture — which is *every*
  * fixture before kickoff — the user paid four taps to learn one fact, and the
  * tab strip promised four things that were all the same nothing.
@@ -149,21 +165,32 @@ type MatchCentreTabsProps = {
  * has synced it yet" — so the Overview panel says only the second, which is
  * the one thing that is always true.
  */
-const ALL_TABS = ["Overview", "Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"] as const;
+const ALL_TABS = ["Overview", "Timeline", "Stats", "Lineups", "Heatmap", "H2H", "Standings", "Room"] as const;
 type Tab = (typeof ALL_TABS)[number];
 
 /** The tabs that hold provider-synced match detail — the ones that collapse. */
-const DATA_TABS = ["Details", "Stats", "Lineups", "Heatmap"] as const;
+const DATA_TABS = ["Timeline", "Stats", "Lineups", "Heatmap"] as const;
 
 function tabSlug(tab: Tab): string {
   return tab.toLowerCase();
 }
 
+/** Slugs that used to name a tab and still appear in links people have
+ * already shared or bookmarked. "Details" was renamed to "Timeline" (it
+ * always rendered fixture events chronologically — the name just didn't say
+ * so), and an existing `?tab=details` link should land on that same panel
+ * rather than silently falling back to whatever tab happens to be first. */
+const LEGACY_TAB_SLUGS: Record<string, Tab> = { details: "Timeline" };
+
 /** Falls back to the *first visible* tab, not to a fixed one: with the data
  * tabs collapsed, `?tab=stats` names a tab that isn't on screen, and landing
  * on a tab the strip doesn't show would leave nothing highlighted. */
 function tabFromSlug(slug: string | null, visible: readonly Tab[]): Tab {
-  return visible.find((tab) => tabSlug(tab) === slug) ?? visible[0];
+  const direct = visible.find((tab) => tabSlug(tab) === slug);
+  if (direct) return direct;
+  const legacy = slug ? LEGACY_TAB_SLUGS[slug] : undefined;
+  if (legacy && visible.includes(legacy)) return legacy;
+  return visible[0];
 }
 
 function PlayerNameLink({ playerId, playerName, className }: { playerId: string; playerName: string; className?: string }) {
@@ -230,7 +257,19 @@ function OverviewTab({ preMatch }: { preMatch: MatchCentreTabsProps["preMatch"] 
   );
 }
 
-function DetailsTab({ events }: { events: MatchEvent[] }) {
+/**
+ * The Master Directive's "live event timeline" for a fixture. This is the tab
+ * that was called "Details" — it has always rendered `fixture_events` in
+ * minute order, the label just never said so, which is why the Match Centre
+ * read as if it had no timeline at all.
+ *
+ * What it is not: full text commentary. The provider's /fixtures/events
+ * returns discrete scoring and disciplinary events only (goals, penalties,
+ * cards, substitutions, VAR reviews) with no ball-by-ball narration on any
+ * tier, so the footnote below says exactly that rather than leaving a fan to
+ * conclude the commentary feed is broken.
+ */
+function TimelineTab({ events }: { events: MatchEvent[] }) {
   if (events.length === 0) {
     return <EmptyState message="No match events synced yet. The timeline appears once this fixture's details have been synced." />;
   }
@@ -275,8 +314,30 @@ function DetailsTab({ events }: { events: MatchEvent[] }) {
           </div>
         </motion.div>
       ))}
+
+      <p className="px-1 pt-1 text-[11px] leading-relaxed text-foreground-subtle">
+        Goals, penalties, cards, substitutions and VAR reviews. KIVO&apos;s provider does not
+        publish ball-by-ball commentary, so this is the complete event record for the match
+        rather than a shortened one.
+      </p>
     </div>
   );
+}
+
+/**
+ * H2H as a real Match Centre tab.
+ *
+ * The card itself is unchanged and still shared with /teams/compare — only
+ * where it lives moved. Previously it rendered in the fixture page body
+ * underneath the whole tab strip, so reaching a section the directive lists
+ * next to Stats and Standings meant scrolling past every tab panel first.
+ *
+ * The tab is only offered when there is a real prior meeting on record (see
+ * visibleTabs below), so this component never has to render a zero state for
+ * two clubs meeting for the first time.
+ */
+function HeadToHeadTab({ headToHead }: { headToHead: NonNullable<MatchCentreTabsProps["headToHead"]> }) {
+  return <HeadToHeadCard teamA={headToHead.teamA} teamB={headToHead.teamB} record={headToHead.record} />;
 }
 
 /** RECOMMENDATIONS.md item 294: a small real "In your XI" pill (+ captain
@@ -707,6 +768,7 @@ function MatchCentreTabsInner({
   syncDetailsAction,
   detailsLastSyncedAt,
   preMatch,
+  headToHead,
 }: MatchCentreTabsProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -715,8 +777,16 @@ function MatchCentreTabsInner({
   // positional source wired up at all yet (see HeatmapTab), so today it is
   // always in the collapsed group — which is more honest than a permanently
   // empty tab that implies the feature is a sync away.
+  //
+  // When a positional source does land, this must become a question about the
+  // observations themselves, not a proxy for them: a lineup count says a
+  // formation was published, not that any position could be derived from it,
+  // and wiring it to `lineups.length > 0` would make the tab reachable while
+  // HeatmapTab still hands HeatmapView an empty array. Compute the
+  // observations once here, pass them into HeatmapTab, and key availability
+  // off their length so the strip and the panel cannot disagree.
   const dataTabAvailability: Record<(typeof DATA_TABS)[number], boolean> = {
-    Details: events.length > 0,
+    Timeline: events.length > 0,
     Stats: stats.length > 0,
     Lineups: lineups.length > 0,
     Heatmap: false,
@@ -724,8 +794,15 @@ function MatchCentreTabsInner({
   const availableDataTabs = DATA_TABS.filter((tab) => dataTabAvailability[tab]);
   const collapsed = availableDataTabs.length === 0;
 
+  // H2H is not a "data tab" in the collapsing sense — it is computed from
+  // finished fixtures KIVO already has, not from this fixture's own sync — so
+  // it can be present on a scheduled match where every other data tab is
+  // empty, and it is offered only when these two clubs have actually met.
+  const hasHeadToHead = (headToHead?.record.meetings.length ?? 0) > 0;
+
   const visibleTabs: Tab[] = [
     ...(collapsed ? (["Overview"] as const) : availableDataTabs),
+    ...(hasHeadToHead ? (["H2H"] as const) : []),
     "Standings",
     "Room",
   ];
@@ -806,7 +883,7 @@ function MatchCentreTabsInner({
           pull fresher stats), not just an entirely-unsynced one. Standings and
           Room aren't backed by this action, so the bar only shows for the
           other three. */}
-      {(active === "Overview" || active === "Details" || active === "Stats" || active === "Lineups") && (
+      {(active === "Overview" || active === "Timeline" || active === "Stats" || active === "Lineups") && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1">
           <LastSyncedNote timestamp={detailsLastSyncedAt} label="Match details synced" />
           {canSyncDetails && <FixtureDetailsSyncControl action={syncDetailsAction} />}
@@ -839,7 +916,7 @@ function MatchCentreTabsInner({
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       >
         {active === "Overview" && <OverviewTab preMatch={preMatch} />}
-        {active === "Details" && <DetailsTab events={events} />}
+        {active === "Timeline" && <TimelineTab events={events} />}
         {active === "Stats" && <StatsTab stats={stats} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
         {active === "Lineups" && (
           <LineupsTab
@@ -852,6 +929,7 @@ function MatchCentreTabsInner({
           />
         )}
         {active === "Heatmap" && <HeatmapTab fixtureId={fixtureId} homeTeamName={homeTeamName} awayTeamName={awayTeamName} />}
+        {active === "H2H" && headToHead && <HeadToHeadTab headToHead={headToHead} />}
         {active === "Standings" && <StandingsTab standings={standings} homeTeamId={homeTeamId} awayTeamId={awayTeamId} />}
         {active === "Room" && (
           <MatchRoomTab
