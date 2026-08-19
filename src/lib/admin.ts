@@ -1,5 +1,6 @@
 import "server-only";
 import type { Database } from "./supabase/types";
+import { ADMIN_NAV, type AdminCapability } from "./admin-nav";
 
 type UserRole = Database["public"]["Enums"]["user_role"];
 
@@ -58,4 +59,32 @@ const SUPPORT_ROLES: UserRole[] = ["support_admin", "admin", "super_admin"];
 
 export function canHandleSupport(role: UserRole | undefined | null): boolean {
   return !!role && SUPPORT_ROLES.includes(role);
+}
+
+/**
+ * The admin pages this role can actually use, as plain href strings.
+ *
+ * ADMIN IA PASS 2026-08-19. The nav used to list every page to every admin
+ * role, and the pages a role could not use answered with a lock screen. With
+ * one football page that was a fair trade — with four of them, a moderator's
+ * nav advertised four dead ends. Resolving the capability here rather than in
+ * the nav module keeps one source of truth for what each role can see: the
+ * same predicates the pages themselves gate on, above.
+ *
+ * Returned as strings specifically so a Server Component can hand the result
+ * to the two "use client" nav components — see the header of
+ * `src/lib/admin-nav.ts` for why anything richer cannot cross that boundary.
+ *
+ * The lock screens stay. This hides a link; it never becomes the authorization
+ * check, which is the page's own gate plus RLS underneath it.
+ */
+export function permittedAdminNavHrefs(role: UserRole | undefined | null): string[] {
+  const allows: Record<AdminCapability, boolean> = {
+    any: true,
+    football: canManageFootballData(role),
+    moderation: canViewModerationData(role),
+    users: canViewUserData(role),
+    support: canHandleSupport(role),
+  };
+  return ADMIN_NAV.filter((item) => allows[item.capability]).map((item) => item.href);
 }

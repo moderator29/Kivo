@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
-import { hasAdminAccess } from "@/lib/admin";
+import { hasAdminAccess, permittedAdminNavHrefs } from "@/lib/admin";
 import { getAuthUser } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
@@ -43,19 +43,26 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // setting reaches every `motion` component under it via context regardless
   // of DOM nesting depth. A second one here was redundant. RECOMMENDATIONS.md
   // item 74.
+  // Which admin pages this role can actually use, as plain href strings —
+  // resolved once here, server-side, against the same predicates the pages
+  // themselves gate on. Strings cross the client boundary; the nav items
+  // themselves cannot (see src/lib/admin-nav.ts). This hides links, it does
+  // not replace any gate: every page still checks its own role and RLS still
+  // backs that up.
+  const permitted = permittedAdminNavHrefs(profile.role);
+
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
       {/* Renders nothing — see src/hooks/use-in-app-history.ts. */}
       <BackNavigationTracker />
-      <AdminMobileNav />
-      <AdminSidebar />
+      <AdminMobileNav permitted={permitted} />
+      <AdminSidebar permitted={permitted} />
       <main className="flex min-w-0 flex-1 flex-col gap-4 px-4 py-6 lg:px-10 lg:py-8">
         {/* /admin's own navigation is a sidebar at lg+ and a hamburger drawer
-            below it, so on a phone every page under here — Moderation, Users,
-            Data health, Support, Design system — was a screen you tapped into
-            with nothing on it that points back out. One control, in the same
-            place on every admin page: up to the Overview from a sub-page, out
-            to KIVO from the Overview itself. */}
+            below it, so on a phone every page under here was a screen you
+            tapped into with nothing on it that points back out. One control,
+            in the same place on every admin page: up to the Overview from a
+            sub-page, out to KIVO from the Overview itself. */}
         <RouteBackLink tone="inline" />
         {children}
       </main>

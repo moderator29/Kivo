@@ -1,5 +1,6 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeaderSkeleton } from "@/components/ui/skeletons";
 
 /**
  * The loading state for the pages built on `<ProfilePageShell>`.
@@ -28,11 +29,7 @@ export function ProfilePageSkeleton({
 }) {
   return (
     <PageSkeleton className="kivo-page kivo-page--narrow" label={label}>
-      {/* PageHeader: h1 is text-xl/28px, description text-sm/20px, gap-1.5. */}
-      <div className="flex flex-col gap-1.5">
-        <Skeleton className="h-7 w-40" />
-        {withDescription && <Skeleton className="h-5 w-64" />}
-      </div>
+      <PageHeaderSkeleton description={withDescription} />
 
       {/* The avatar picker's own shape: 18 square tiles, three across on a
           phone and six on a tablet, at the avatar's own corner radius — the

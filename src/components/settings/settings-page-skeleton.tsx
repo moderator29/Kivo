@@ -1,5 +1,6 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeaderSkeleton } from "@/components/ui/skeletons";
 
 /**
  * The loading state for the nine pages built on `<SettingsPageShell>`.
@@ -17,11 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function SettingsPageSkeleton({ cards = 3, label = "Loading" }: { cards?: number; label?: string }) {
   return (
     <PageSkeleton label={label}>
-      {/* PageHeader: title text-xl, description text-sm, gap-1.5. */}
-      <div className="flex flex-col gap-1.5">
-        <Skeleton className="h-7 w-44" />
-        <Skeleton className="h-5 w-72" />
-      </div>
+      <PageHeaderSkeleton titleWidth="w-44" />
 
       {/* SettingsPageShell wraps its children in `flex flex-col gap-4`. */}
       <div className="flex flex-col gap-4">
