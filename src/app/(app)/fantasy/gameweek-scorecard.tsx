@@ -183,9 +183,10 @@ export async function GameweekScorecard({
           {missingEvents !== null && missingEvents > 0 && (
             <span className="flex items-start gap-1.5 text-[11px] leading-relaxed text-warning">
               <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              {missingEvents} finished {missingEvents === 1 ? "match has" : "matches have"} no match data synced yet.
-              Goals, assists and cards from {missingEvents === 1 ? "it" : "them"} are not in this total — it may be
-              short.
+              {missingEvents} finished {missingEvents === 1 ? "match has" : "matches have"} no events on record.
+              That is either a goalless, cardless {missingEvents === 1 ? "match" : "set of matches"} or data that has
+              not synced, and KIVO cannot tell which from here — so this total may be short by whatever happened in{" "}
+              {missingEvents === 1 ? "it" : "them"}.
             </span>
           )}
           {finished !== null && total !== null && finished === total && missingEvents === 0 && (
