@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Shield, Flag, Cake, Activity, ArrowLeftRight, GitCompareArrows, LineChart, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { readOptionalRow, readRow } from "@/lib/query-result";
 import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { triggerPlayerTransfersSync } from "@/app/admin/data-health/actions";
@@ -39,7 +40,13 @@ const MIN_FANTASY_OWNERSHIP_SAMPLE = 10;
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = createServerSupabaseClient();
-  const { data: player } = await supabase.from("players").select("known_as, full_name").eq("id", id).maybeSingle();
+  // readOptionalRow, not readRow: a page title is never worth taking the page
+  // down for. The failure is logged, the title falls back, and the page's own
+  // read below still gets its proper chance.
+  const player = readOptionalRow(
+    await supabase.from("players").select("known_as, full_name").eq("id", id).maybeSingle(),
+    "players.detail.metadata",
+  );
   const name = (player?.known_as ?? player?.full_name) || null;
   if (!name) return { title: "Player" };
 
@@ -57,7 +64,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [{ data: player }, { data: lineupRows }, { data: eventRows }, { data: assistEventRows }, { data: transfers }, { data: followRow }, isSaved, transfersLastSyncedAt] = await Promise.all([
+  const [playerResult, { data: lineupRows }, { data: eventRows }, { data: assistEventRows }, { data: transfers }, { data: followRow }, isSaved, transfersLastSyncedAt] = await Promise.all([
     supabase
       .from("players")
       .select(
@@ -125,6 +132,15 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
     getLastSyncedAt(["transfer"]),
   ]);
 
+  // Kept as the whole result rather than destructured to `{ data: player }`,
+  // because discarding the error meant a dropped connection rendered
+  // "Offside. That doesn't exist." about a player who exists perfectly well.
+  // A 404 is a claim about the world; a failed read is a fact about the
+  // request. readRow throws on a real error so the error boundary handles it
+  // as what it is, and returns null only for a player who genuinely is not
+  // there. The other reads in this batch stay tolerant on purpose — a missing
+  // transfer list or follow row costs a panel, not the page.
+  const player = readRow(playerResult, "players.detail");
   if (!player) notFound();
 
   // RECOMMENDATIONS.md item 296: real fantasy price + ownership, only once a
