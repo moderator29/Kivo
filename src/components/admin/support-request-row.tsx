@@ -75,7 +75,7 @@ export function SupportRequestRow({ request }: { request: SupportRequestView }) 
 
       <a
         href={`mailto:${request.replyEmail}`}
-        className="inline-flex w-fit items-center gap-1.5 rounded-full border border-hairline bg-surface-inset px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:text-foreground"
+        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-full border border-hairline bg-surface-inset px-4 text-xs font-medium text-accent transition-colors hover:text-foreground"
       >
         <Mail className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
         {request.replyEmail}
@@ -89,7 +89,7 @@ export function SupportRequestRow({ request }: { request: SupportRequestView }) 
           rows={2}
           maxLength={4000}
           placeholder="What you did, what's still outstanding. Never shown to the reporter."
-          className="kivo-focusable w-full resize-y rounded-xl border border-hairline bg-surface-inset px-3 py-2 text-sm text-foreground transition-colors placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
+          className="kivo-focusable min-h-11 w-full resize-y rounded-xl border border-hairline bg-surface-inset px-3 py-2.5 text-sm text-foreground transition-colors placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
         />
       </label>
 

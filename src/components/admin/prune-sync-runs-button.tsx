@@ -35,7 +35,7 @@ export function PruneSyncRunsButton() {
           disabled={pending}
           aria-busy={pending}
           onClick={handleClick}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50 ${
+          className={`flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50 ${
             armed ? "bg-critical/15 text-critical hover:bg-critical/25" : "bg-surface-1 text-foreground-muted hover:bg-surface-2"
           }`}
         >

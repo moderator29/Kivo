@@ -51,7 +51,7 @@ export function FootballSyncButton() {
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className="rounded-lg border border-hairline bg-surface-inset px-2 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+              className="h-11 rounded-lg border border-hairline bg-surface-inset px-2 text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </label>
         )}
@@ -63,7 +63,7 @@ export function FootballSyncButton() {
             setResult(null);
           }}
           aria-pressed={dateOpen}
-          className="rounded-lg px-2 py-1.5 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-medium text-foreground-subtle transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {dateOpen ? "Cancel" : "Pick a date"}
         </button>
@@ -74,7 +74,7 @@ export function FootballSyncButton() {
         disabled={pending}
         aria-busy={pending}
         onClick={handleClick}
-        className="flex items-center gap-2 rounded-lg bg-accent/15 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+        className="flex min-h-11 items-center gap-2 rounded-lg bg-accent/15 px-4 text-sm font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
       >
         <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} strokeWidth={2} />
         {pending ? "Syncing…" : dateOpen && !isToday ? `Sync ${date}` : "Sync now"}

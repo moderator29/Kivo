@@ -27,7 +27,7 @@ export function PreviewModeToggle({ active }: { active: boolean }) {
           ? "Exit preview mode"
           : "Admin-only: preview not-yet-synced fields with clearly labeled sample data"
       }
-      className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+      className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors ${
         active
           ? "border-amber-400 bg-amber-400 text-black hover:bg-amber-300"
           : "border-hairline text-foreground-muted hover:border-amber-400/60 hover:text-amber-400"

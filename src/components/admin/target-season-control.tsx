@@ -56,7 +56,7 @@ export function TargetSeasonControl({
               setValue(event.target.value);
               setSaved(false);
             }}
-            className="w-32 rounded-lg border border-hairline bg-surface-1 px-3 py-1.5 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="h-11 w-32 rounded-lg border border-hairline bg-surface-1 px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             aria-label="Season starting year"
           />
         </label>
@@ -67,7 +67,7 @@ export function TargetSeasonControl({
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             placeholder="e.g. free plan only covers 2022-2024"
-            className="w-full rounded-lg border border-hairline bg-surface-1 px-3 py-1.5 text-sm text-foreground placeholder:text-foreground-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="h-11 w-full rounded-lg border border-hairline bg-surface-1 px-3 text-sm text-foreground placeholder:text-foreground-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           />
         </label>
         <button
@@ -82,7 +82,7 @@ export function TargetSeasonControl({
             }
             submit(parsed, reason);
           }}
-          className="flex items-center gap-1.5 rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+          className="flex min-h-11 items-center gap-1.5 rounded-lg bg-accent/15 px-3 text-xs font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
         >
           {pending ? (
             <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
@@ -108,7 +108,7 @@ export function TargetSeasonControl({
                 }
               });
             }}
-            className="flex items-center gap-1.5 rounded-lg bg-surface-1 px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+            className="flex min-h-11 items-center gap-1.5 rounded-lg bg-surface-1 px-3 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
           >
             <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
             Back to {calendarSeasonYear} (the calendar season)
@@ -124,7 +124,7 @@ export function TargetSeasonControl({
             setValue(String(suggestedYear));
             submit(suggestedYear, reason.trim().length > 0 ? reason : `Plan does not cover ${calendarSeasonYear}`);
           }}
-          className="self-start rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-left text-xs font-medium text-accent transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+          className="inline-flex min-h-11 items-center self-start rounded-lg border border-accent/30 bg-accent/10 px-3 text-left text-xs font-medium text-accent transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
         >
           Use {suggestedYear} — a season the provider itself said this plan can serve
         </button>

@@ -28,7 +28,7 @@ export function AdminSidebar({ permitted }: { permitted: string[] }) {
       <div className="kivo-glass-brand flex h-full flex-col gap-5 rounded-3xl p-4">
         <Link
           href="/admin"
-          className="kivo-focusable flex items-center gap-2 rounded-xl px-2 py-1"
+          className="kivo-focusable flex min-h-11 items-center gap-2 rounded-xl px-2"
           aria-label="KIVO Admin overview"
         >
           <Image src={kivoLogo} alt="" width={32} height={32} className="kivo-ink h-8 w-8 shrink-0" priority />

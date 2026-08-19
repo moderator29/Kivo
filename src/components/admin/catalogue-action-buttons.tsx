@@ -80,7 +80,7 @@ function ActionButton({
           setFeedback(null);
           startTransition(async () => setFeedback(await onRun()));
         }}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-surface-1 px-4 py-2 text-sm font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-surface-1 px-4 text-sm font-semibold text-foreground-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
       >
         {pending ? <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={1.75} /> : icon}
         {pending ? busyLabel : label}

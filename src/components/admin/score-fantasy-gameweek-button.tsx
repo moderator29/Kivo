@@ -29,7 +29,7 @@ export function ScoreFantasyGameweekButton({ gameweekId }: { gameweekId: string 
         disabled={pending}
         aria-busy={pending}
         onClick={handleClick}
-        className="flex items-center gap-1.5 rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+        className="flex min-h-11 items-center gap-1.5 rounded-lg bg-accent/15 px-3 text-xs font-semibold text-accent transition hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
       >
         <Trophy className={`h-3.5 w-3.5 ${pending ? "animate-pulse" : ""}`} strokeWidth={2} />
         {pending ? "Scoring…" : "Score gameweek"}

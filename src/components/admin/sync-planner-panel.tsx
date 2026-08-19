@@ -132,7 +132,7 @@ function PlanSection({
             <li key={item.key}>
               <Link
                 href={item.href}
-                className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-xs transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 text-xs transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-foreground">{item.primary}</span>

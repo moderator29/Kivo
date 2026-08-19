@@ -98,7 +98,7 @@ export function TeamMergePanel({ teams }: { teams: { id: string; name: string }[
               setSurvivorId(event.target.value);
               setReport(null);
             }}
-            className="kivo-glass-sharp rounded-xl px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="kivo-glass-sharp h-11 rounded-xl px-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <option value="">Choose…</option>
             {teams.map((team) => (
@@ -116,7 +116,7 @@ export function TeamMergePanel({ teams }: { teams: { id: string; name: string }[
               setMergedId(event.target.value);
               setReport(null);
             }}
-            className="kivo-glass-sharp rounded-xl px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="kivo-glass-sharp h-11 rounded-xl px-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <option value="">Choose…</option>
             {teams
@@ -135,7 +135,7 @@ export function TeamMergePanel({ teams }: { teams: { id: string; name: string }[
           type="button"
           disabled={!canPreview || pending}
           onClick={preview}
-          className="kivo-glass-sharp rounded-xl px-4 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="kivo-glass-sharp inline-flex min-h-11 items-center rounded-xl px-4 text-xs font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           {pending ? "Checking…" : "Preview merge"}
         </button>
@@ -144,7 +144,7 @@ export function TeamMergePanel({ teams }: { teams: { id: string; name: string }[
             type="button"
             disabled={pending}
             onClick={confirm}
-            className="rounded-xl border border-critical/40 bg-critical/10 px-4 py-2 text-xs font-semibold text-critical transition-transform active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-critical/60"
+            className="inline-flex min-h-11 items-center rounded-xl border border-critical/40 bg-critical/10 px-4 text-xs font-semibold text-critical transition-transform active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-critical/60"
           >
             Merge for real — this can&apos;t be undone
           </button>
