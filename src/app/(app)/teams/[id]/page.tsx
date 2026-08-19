@@ -41,6 +41,7 @@ import { positionGroup, type PositionGroupOrOther } from "@/app/(app)/fantasy/fa
 import type { Database } from "@/lib/supabase/types";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { ClubCommunity } from "@/components/teams/club-community";
+import { TeamAbsencesPanel } from "@/components/football/absences-panel";
 
 type FixtureStatus = Database["public"]["Enums"]["fixture_status"];
 
@@ -557,6 +558,10 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           </div>
         )}
       </FadeIn>
+
+      {/* Directly above the squad, because "who is available" is the question
+          a reader is already asking by the time they reach the squad list. */}
+      <TeamAbsencesPanel teamId={team.id} teamName={team.name} />
 
       <FadeIn delay={0.3} className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">

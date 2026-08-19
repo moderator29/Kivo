@@ -27,6 +27,8 @@ import { calculateAge, formatDate } from "@/lib/format";
 import { ensureFantasyPlayerPrices, getFantasyPriceMap } from "@/lib/fantasy";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { DEFAULT_FANTASY_PRICE, formatFantasyPrice } from "@/app/(app)/fantasy/fantasy-rules";
+import { PlayerAbsenceNote } from "@/components/football/absences-panel";
+import { PlayerSeasonStatisticsPanel } from "@/components/football/season-statistics-panel";
 
 // RECOMMENDATIONS.md item 296: same minimum-sample suppression convention as
 // this document's other real-but-thin aggregates (items 168/170/250) — a
@@ -255,11 +257,24 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
         </FadeIn>
       </div>
 
+      {/* Above everything else about this player, because whether they are
+          currently available changes how every number below it should be read.
+          Renders nothing at all when there is no report — an "available" badge
+          would be a fitness claim KIVO cannot make, since the absence of a
+          report is not evidence of fitness. */}
+      <PlayerAbsenceNote playerId={player.id} />
+
       {viewerConnection && (
         <FadeIn delay={0.18}>
           <YourPlayerConnection connection={viewerConnection} />
         </FadeIn>
       )}
+
+      {/* The provider's own per-competition season aggregates. Renders nothing
+          when none are synced — the match log below is already built from
+          KIVO's own fixtures, and two empty panels would say the same nothing
+          twice. */}
+      <PlayerSeasonStatisticsPanel playerId={player.id} />
 
       <FadeIn delay={0.2} className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">

@@ -2,6 +2,10 @@ import { CheckCircle2, CircleDashed, CircleHelp, CircleSlash } from "lucide-reac
 import { FadeIn } from "@/components/ui/fade-in";
 import { LocalDateTime } from "@/components/ui/relative-time";
 import { getCompetitionCoverage } from "@/lib/football/coverage";
+import { getOrCreateProfile } from "@/lib/profile";
+import { canManageFootballData } from "@/lib/admin";
+import { InlineSyncButton } from "@/components/admin/inline-sync-button";
+import { triggerCoverageSync } from "@/app/admin/data-health/provider-data-actions";
 
 /**
  * "KIVO knows / KIVO doesn't", per competition (KN-103, now reading the real
@@ -40,6 +44,13 @@ export async function CompetitionCoveragePanel({
   currentSeasonId: string | null;
 }) {
   const coverage = await getCompetitionCoverage(competitionId, currentSeasonId);
+
+  // The registry sync is a single provider request that answers this question
+  // for EVERY competition at once, which is why the button is offered here — at
+  // the exact moment an admin is looking at a row that says "not established"
+  // — rather than only buried on Data Health.
+  const profile = await getOrCreateProfile();
+  const canSync = profile !== null && canManageFootballData(profile.role);
 
   return (
     <FadeIn className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
@@ -105,6 +116,14 @@ export async function CompetitionCoveragePanel({
         <p className="text-[11px] text-foreground-subtle">
           No football data source is configured on this deployment yet, so nothing can be synced at all.
         </p>
+      )}
+
+      {canSync && coverage.providerLabel && (
+        <InlineSyncButton
+          label={coverage.registrySynced ? "Refresh coverage" : "Read published coverage"}
+          action={triggerCoverageSync.bind(null, undefined)}
+          hint="One request, and it answers this for every competition at once."
+        />
       )}
     </FadeIn>
   );
