@@ -10,7 +10,7 @@ import { YourTeamConnection } from "@/components/football/your-connection-card";
 import { getViewerTeamConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { LastUpdatedNote } from "@/components/football/last-updated-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TrackView } from "@/components/ui/track-view";
 import { TeamAbsencesPanel } from "@/components/football/absences-panel";
@@ -31,7 +31,7 @@ import { TransferLedger, type TransferLedgerEntry } from "@/components/teams/tra
 import { PositionHistoryCard, type PositionSnapshot } from "@/components/teams/position-history-card";
 import { ClubCommunity } from "@/components/teams/club-community";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
-import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { getLastUpdatedAt } from "@/lib/football/last-updated";
 import { summarizeGoalTiming } from "@/lib/football/goal-timing";
 import { computeTeamForm, resolveFixtureResult, type ResolvedResult } from "@/lib/football/form-engine";
 import { parseUuidParam } from "@/lib/params";
@@ -121,12 +121,12 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
     { data: recent },
     { data: followRow },
     isSaved,
-    squadLastSyncedAt,
+    squadLastUpdatedAt,
     { data: goalEvents },
     { data: cardEvents },
     { count: finishedMatchesCount },
     { data: transfersLedger },
-    transfersLastSyncedAt,
+    transfersLastUpdatedAt,
     { data: matchStatistics },
   ] = await Promise.all([
     supabase
@@ -189,7 +189,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
           .eq("target_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
-    getLastSyncedAt(["player"]),
+    getLastUpdatedAt(["player"]),
     // Goal timing: 'goal' and 'penalty_goal' only, scoped to this team's own
     // team_id. Own goals are excluded rather than guessed at — which side's
     // team_id an own goal is recorded under is a provider convention this
@@ -219,7 +219,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       )
       .or(`from_team_id.eq.${id},to_team_id.eq.${id}`)
       .order("transfer_date", { ascending: false }),
-    getLastSyncedAt(["transfer"]),
+    getLastUpdatedAt(["transfer"]),
     // Per-match team statistics — possession, shots, passing. Aggregated by
     // `summarizeTeamStatistics`, which counts each metric's own sample.
     supabase
@@ -538,7 +538,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       count: squadPlayers.length,
       content: (
         <>
-          <Section title="Squad" action={<LastSyncedNote timestamp={squadLastSyncedAt} />}>
+          <Section title="Squad" action={<LastUpdatedNote timestamp={squadLastUpdatedAt} />}>
             <SquadSummary players={squadPlayers} />
           </Section>
           <SquadPanel groups={squadGroups} />
@@ -727,7 +727,7 @@ export default async function TeamProfilePage({ params }: { params: Promise<{ id
       label: "Transfers",
       count: transferEntries.length,
       content: (
-        <Section title="Transfer activity" action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}>
+        <Section title="Transfer activity" action={<LastUpdatedNote timestamp={transfersLastUpdatedAt} />}>
           <TransferLedger entries={transferEntries} />
         </Section>
       ),

@@ -206,8 +206,8 @@ export default async function PlayerComparePage({
 
           <p className="text-center text-[11px] text-foreground-subtle">
             From {playerA.stats.appearances} match{playerA.stats.appearances === 1 ? "" : "es"} on KIVO
-            for {playerA.name}, and {playerB.stats.appearances} for {playerB.name}. Sync coverage is
-            admin-triggered and partial, not a full season record.
+            for {playerA.name}, and {playerB.stats.appearances} for {playerB.name}. These are the matches KIVO
+            holds for each player, which is not yet a complete season record.
           </p>
 
           {/* Only rows where both players have a real number make it onto the

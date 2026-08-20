@@ -140,14 +140,14 @@ export default async function LivePage() {
     // A failed count is a third state again: KIVO does not know which of the
     // two it is. It says the smaller, certain thing — nothing is on today —
     // rather than guessing at coverage it could not read.
-    const syncedSomething = anyFixtures.error === null && (anyFixtures.count ?? 0) > 0;
+    const hasFixturesToday = anyFixtures.error === null && (anyFixtures.count ?? 0) > 0;
 
     return (
       <NoDataYet
         icon={<item.icon className="h-6 w-6" strokeWidth={1.75} />}
         title={item.label}
         description={
-          syncedSomething
+          hasFixturesToday
             ? "No match is in play right now, and nothing else kicks off today."
             : (item.emptyDescription ?? "Nothing to show here yet.")
         }

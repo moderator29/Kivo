@@ -3,9 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrCreateProfile } from "@/lib/profile";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { LastUpdatedNote } from "@/components/football/last-updated-note";
 import { TrackView } from "@/components/ui/track-view";
-import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { getLastUpdatedAt } from "@/lib/football/last-updated";
 import { readRow } from "@/lib/query-result";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import { TopScorersPanel } from "@/components/football/top-scorers-panel";
@@ -123,7 +123,7 @@ export default async function LeagueDetailPage({
   const supabase = createServerSupabaseClient();
   const profile = await getOrCreateProfile();
 
-  const [competitionResult, isFollowing, standingsLastSyncedAt] = await Promise.all([
+  const [competitionResult, isFollowing, standingsLastUpdatedAt] = await Promise.all([
     supabase
       .from("competitions")
       .select("id, name, short_name, country, logo_url, seasons(id, name, is_current)")
@@ -138,7 +138,7 @@ export default async function LeagueDetailPage({
           .eq("followed_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
-    getLastSyncedAt(["standing"]),
+    getLastUpdatedAt(["standing"]),
   ]);
 
   // A failed read is not a missing competition. readRow throws so the route's
@@ -319,9 +319,9 @@ export default async function LeagueDetailPage({
         <StandingsTable
           groups={groups}
           footnote={
-            standingsLastSyncedAt ? (
+            standingsLastUpdatedAt ? (
               <div className="flex justify-end px-1">
-                <LastSyncedNote timestamp={standingsLastSyncedAt} />
+                <LastUpdatedNote timestamp={standingsLastUpdatedAt} />
               </div>
             ) : null
           }

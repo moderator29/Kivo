@@ -144,7 +144,7 @@ These are the highest-leverage findings in the document. Each one is a surface t
 
 59. **`ensureTeamHasSquad` can silently blow the daily quota.** Inside `processLineupSide`, a first-time fixture-details sync triggers a full squad sync per side, each of which makes two more provider calls. Syncing details for five fixtures across ten unseen teams is 20+ unplanned requests. Make the auto-squad-sync opt-in and tell the admin what it will cost. **Small.** **RESOLVED (2026-08-18):** `ensureTeamHasSquad`'s auto-squad-sync is now opt-in (`autoSyncMissingSquads` flag), off by default — an unseen team's lineup entries are skipped rather than silently triggering more provider calls.
 
-60. **Add a "sync this fixture" affordance on the public Match Centre for admins only** (the pattern already exists via `InlineSyncButton`), plus a visible "last synced" timestamp on every football surface. `retrievedAt` is carried on `NormalizedFixture` specifically for freshness display and is currently dropped at the sync boundary. **Small.** **RESOLVED (2026-08-18):** `src/components/football/last-synced-note.tsx` renders a "last synced" freshness readout across public football surfaces (team/player/league/live/fantasy/match pages).
+60. **Add a "sync this fixture" affordance on the public Match Centre for admins only** (the pattern already exists via `InlineSyncButton`), plus a visible "last synced" timestamp on every football surface. `retrievedAt` is carried on `NormalizedFixture` specifically for freshness display and is currently dropped at the sync boundary. **Small.** **RESOLVED (2026-08-18):** `src/components/football/last-updated-note.tsx` (named `last-synced-note.tsx` until 2026-08-20) renders an "Updated X ago" freshness readout across public football surfaces (team/player/league/live/fantasy/match pages).
 
 61. **Standings sync requires a season with a provider-mapped competition and a numeric name,** both of which depend on a prior fixture sync. That dependency chain (fixtures then squads then transfers; fixtures then standings) is only discoverable by reading error strings. Document it on the Data Health page as an ordered checklist. **Small.** **RESOLVED (2026-08-18):** Data Health's `SYNC_ORDER_STEPS` documents the fixtures-before-squads/standings-before-transfers dependency chain as an explicit ordered checklist in the UI.
 
@@ -803,7 +803,7 @@ Also confirmed shipped: Next.js App Router + TypeScript with genuinely server-si
 
 ### Genuine gaps and partials
 
-**298. "No API provider is a single point of failure — primary/secondary/fallback with graceful degradation and a visible freshness indicator."** Checked `src/lib/football/index.ts` directly. **Partial, and the "no SPOF" half is a genuine, confirmed gap.** `getFootballDataProvider()` selects exactly one provider instance via the `FOOTBALL_DATA_PROVIDER` env var and caches it; there is no runtime failover anywhere in the codebase — if the active provider fails or exhausts quota mid-sync, nothing attempts a second provider. The code's own comment is explicit this is deliberate: "A single env-var switch (rather than e.g. automatic fallback/failover between providers) was a deliberate judgment call... building real failover would mean deciding how to reconcile two providers' IDs for the same real-world entity — a genuinely separate, larger feature." That's a defensible engineering call — this document's own item 62 made essentially the same call, in weaker language, and marked itself "RESOLVED," though that resolution only addressed "a public page never shows broken" (true) rather than "a fallback chain exists" (the stronger thing the founding brief actually asked for). Two real halves of the original sentence **are** shipped: a visible freshness indicator (`last-synced-note.tsx`, item 60) and graceful read-path degradation (public pages only ever read already-synced DB rows, never call the provider live — confirmed by grep, zero client-facing routes import a provider adapter — so a provider outage never breaks a page someone is actively viewing). What's missing is specifically the primary/secondary/fallback mechanism itself. **Recommendation: not a build ask** — real failover is a large, legitimately separate feature exactly as the code comment argues — **but this decision deserves a `DECISIONS.md` entry.** Right now "KIVO runs one provider at a time by design, no automatic failover" exists only as a code comment nobody outside this file will ever read, for a decision that directly overrides an explicit founding-brief architecture commitment. **Small** (documentation only). **RESOLVED (2026-08-18):** `DECISIONS.md` now carries a dated entry ("No provider failover: KIVO runs one football data provider at a time, by design") naming the decision, the rationale already in the code comment, what it does and doesn't mean for a user-facing page (the read-path degradation and freshness-indicator halves stay real and unaffected), and the concrete consequence (a provider outage requires a manual `FOOTBALL_DATA_PROVIDER` flip, not an automatic retry) — findable outside the code comment for the first time.
+**298. "No API provider is a single point of failure — primary/secondary/fallback with graceful degradation and a visible freshness indicator."** Checked `src/lib/football/index.ts` directly. **Partial, and the "no SPOF" half is a genuine, confirmed gap.** `getFootballDataProvider()` selects exactly one provider instance via the `FOOTBALL_DATA_PROVIDER` env var and caches it; there is no runtime failover anywhere in the codebase — if the active provider fails or exhausts quota mid-sync, nothing attempts a second provider. The code's own comment is explicit this is deliberate: "A single env-var switch (rather than e.g. automatic fallback/failover between providers) was a deliberate judgment call... building real failover would mean deciding how to reconcile two providers' IDs for the same real-world entity — a genuinely separate, larger feature." That's a defensible engineering call — this document's own item 62 made essentially the same call, in weaker language, and marked itself "RESOLVED," though that resolution only addressed "a public page never shows broken" (true) rather than "a fallback chain exists" (the stronger thing the founding brief actually asked for). Two real halves of the original sentence **are** shipped: a visible freshness indicator (`last-updated-note.tsx`, item 60) and graceful read-path degradation (public pages only ever read already-synced DB rows, never call the provider live — confirmed by grep, zero client-facing routes import a provider adapter — so a provider outage never breaks a page someone is actively viewing). What's missing is specifically the primary/secondary/fallback mechanism itself. **Recommendation: not a build ask** — real failover is a large, legitimately separate feature exactly as the code comment argues — **but this decision deserves a `DECISIONS.md` entry.** Right now "KIVO runs one provider at a time by design, no automatic failover" exists only as a code comment nobody outside this file will ever read, for a decision that directly overrides an explicit founding-brief architecture commitment. **Small** (documentation only). **RESOLVED (2026-08-18):** `DECISIONS.md` now carries a dated entry ("No provider failover: KIVO runs one football data provider at a time, by design") naming the decision, the rationale already in the code comment, what it does and doesn't mean for a user-facing page (the read-path degradation and freshness-indicator halves stay real and unaffected), and the concrete consequence (a provider outage requires a manual `FOOTBALL_DATA_PROVIDER` flip, not an automatic retry) — findable outside the code comment for the first time.
 
 **299. "Coverage registry (don't show a tab a provider doesn't actually support for that competition)."** Checked `match-centre-tabs.tsx` and `docs/PROVIDER_ABSTRACTION.md` directly. **Gap — this does not exist anywhere in the codebase.** `TABS = ["Details", "Stats", "Lineups", "Heatmap", "Standings", "Room"]` (`match-centre-tabs.tsx` line 114) is a static array rendered unconditionally for every fixture regardless of competition or active provider; nothing filters it. `docs/PROVIDER_ABSTRACTION.md`'s "Capability matrix" section is real but (a) a human-readable markdown table never read by any runtime code — grepped, zero imports of that doc anywhere in `src/` — and (b) provider-level ("does API-Football support X at all"), not competition-level ("does the active provider support X for *this specific* league"), which is the more precise thing the brief actually named. What the codebase does instead, and does honestly, is show every tab always and let each render its own true empty state when the DB genuinely has no rows (confirmed: item 228's Heatmap tab always shows "Positional data unavailable," correctly, by design). That's a legitimate way to never show fabricated data, but it's a different mechanism than a registry — a user can't tell "nobody's synced this yet" apart from "this provider structurally cannot ever supply this for this competition," which is exactly the distinction a coverage registry would carry. **Recommendation:** a small `getProviderCapabilities(providerName)` lookup — already 90% written as the markdown table, just needs to become a real object — consulted by `MatchCentreTabs` to visually distinguish a structurally-unsupported tab from a supported-but-not-yet-synced one. **Medium.**
 
@@ -813,7 +813,7 @@ Also confirmed shipped: Next.js App Router + TypeScript with genuinely server-si
 
 **302. Notification system's specific named properties: "quiet hours, timezone-aware, deduplicated, deep-linked, intelligently batched."** Checked `src/lib/notification-registry.ts` (207 lines, read in full) and every producer (`match-notifications.ts`, `follow-actions.ts`, `social/actions.ts`, `social/comment-actions.ts`) directly. **Two of five are real, two are confirmed absent and unaddressed by anything else in this document; the fifth (per-entity preference enforcement) is a real gap too, but section 20's items 285 and 287 — added while this pass was in progress — already found and scoped it in more depth, so it's cross-referenced here rather than re-derived.** Deduplicated: **real**, at two levels — `notifyFixtureEvent` explicitly dedupes across audience paths ("deduped so a user who both favourites the team and follows the player gets one row, not two") and every producer fires only on a genuine state transition (`previousStatus !== newStatus`) or a genuinely new `fixture_events` row, so a re-run sync never re-notifies. Deep-linked: **real** (`postHref`/`fixtureHref` in the registry; item 237's `?post=<id>` fix). Quiet hours: **gap, confirmed absent** — zero mention anywhere in any producer, no time-of-day check of any kind exists, and neither item 285 nor 287 addresses it. Timezone-aware: **gap, and structurally can't exist yet** — `profiles` has no timezone column at all; migration `0037_activity_streak.sql`'s own comment states this plainly ("Day boundary is UTC — profiles has no timezone column"), confirmed by grepping every migration for "timezone." This is the same missing column item 304 below needs for timezone-aware display/delivery generally — one schema addition would unblock both. Intelligently batched: **gap, confirmed absent** — every event producer inserts individual notification rows immediately (`insertNotifications` in `match-notifications.ts` is one bulk `.insert()` of one row per recipient per event, not a windowed digest); three goals in the same match ten minutes apart today means three separate notifications, never one batched summary. Preferences unenforced by every producer, and per-entity mute granularity: **real gaps, independently confirmed by this pass** (grepped the same four producer files; only `settings/actions.ts`/`notification-preferences.ts` ever touch `notification_preferences`) **— see section 20's items 285 (the enforcement fix) and 287 (the schema-correct `follows.muted` granularity fix) for the full treatment**, including item 285's own note that it corrects item 10's "RESOLVED" marking, which checked only that Settings reads/writes the columns, not that anything downstream respects them. **Recommendation:** items 285/287 already cover the highest-leverage fix (preference enforcement) and the right-shaped granularity fix; this item's own contribution is quiet hours and timezone-awareness, both of which genuinely need a `profiles.timezone` (or `quiet_hours_start/end`) column first — real schema work item 285/287 don't touch. Batching is a legitimate, separate design project (a short delay-and-collect window per recipient) and should stay explicitly out of scope until the simpler fixes land. **Medium** for a timezone column plus quiet-hours gating; **Large** for true batching.
 
-**303. Data architecture: "every synced record carries source, retrieved_at, freshness, and confidence" plus "conflict detection."** Checked every migration for a `confidence` column and checked `upsertFixture`/the atomic upsert RPCs for any conflict-detection logic. **Three of the four per-record properties are real, one is a clean gap, and "conflict detection" — named separately in the same sentence — doesn't exist in any form.** Source: real (`provider_mappings.provider`). Freshness: real and user-visible (`sync_runs`-driven, `last-synced-note.tsx`, item 60). Retrieved_at: partial, already honestly tracked as such (`BUILD_STATUS.md`: "`retrievedAt` exists on fixtures; not yet a uniform pattern across every normalized type"). Confidence: **gap** — grepped every file in `supabase/migrations/`, zero occurrences of a `confidence` column anywhere in the schema; no synced record of any kind — fixture, event, standing, transfer — carries a per-record confidence value. Conflict detection: **gap** — grepped `upsertFixture` and the atomic upsert RPCs (`upsert_fixture_with_mapping` etc.) for any validation, regression check, or sanity guard (a score that would go backward, an impossible status transition, two sources disagreeing); none exists anywhere. This is a reasonable state for a single-active-provider system with no multi-provider merge logic (see item 298) — there is genuinely nothing to detect conflict *between*, today — but it means the specific words "conflict detection" describe a mechanism this codebase has never built, in any form, even a same-provider sanity-check version. **Recommendation:** confidence scoring is correctly low-priority to add speculatively without a second concurrent source to derive it from — a column that's always `1.0` would itself be a small dishonesty, so this should stay deprioritized until item 298's provider-plurality question is actually decided one way or the other. A cheap, real, genuinely useful first step on "conflict detection" that doesn't require a second provider: a same-provider sanity check inside `upsertFixture` (reject or flag a score decrease on an already-live fixture, log an unexpected status transition). **Small** for the sanity-check version; **not recommended** for a fabricated confidence number. **RESOLVED (2026-08-18)** for the sanity-check version; confidence scoring correctly left undone, per this item's own reasoning. `syncTodayFixtures` (`src/lib/football/sync.ts`) now carries each known fixture's prior `home_score`/`away_score` alongside the prior status it already batch-fetched for notifications (same round trip, no new query) and passes both into `upsertFixture`, which flags — via `console.warn`, the same "every failure path is console.error"-adjacent convention item 204 already documents as this codebase's current logging story — a same-provider score decrease on either side, or a status regression away from `finished`, before the write proceeds. Deliberately flags rather than rejects: a false positive (e.g. a legitimate admin data correction) shouldn't drop real provider data, and the underlying write still lands either way — this is visibility into an anomaly, not a data-integrity gate.
+**303. Data architecture: "every synced record carries source, retrieved_at, freshness, and confidence" plus "conflict detection."** Checked every migration for a `confidence` column and checked `upsertFixture`/the atomic upsert RPCs for any conflict-detection logic. **Three of the four per-record properties are real, one is a clean gap, and "conflict detection" — named separately in the same sentence — doesn't exist in any form.** Source: real (`provider_mappings.provider`). Freshness: real and user-visible (`sync_runs`-driven, `last-updated-note.tsx`, item 60). Retrieved_at: partial, already honestly tracked as such (`BUILD_STATUS.md`: "`retrievedAt` exists on fixtures; not yet a uniform pattern across every normalized type"). Confidence: **gap** — grepped every file in `supabase/migrations/`, zero occurrences of a `confidence` column anywhere in the schema; no synced record of any kind — fixture, event, standing, transfer — carries a per-record confidence value. Conflict detection: **gap** — grepped `upsertFixture` and the atomic upsert RPCs (`upsert_fixture_with_mapping` etc.) for any validation, regression check, or sanity guard (a score that would go backward, an impossible status transition, two sources disagreeing); none exists anywhere. This is a reasonable state for a single-active-provider system with no multi-provider merge logic (see item 298) — there is genuinely nothing to detect conflict *between*, today — but it means the specific words "conflict detection" describe a mechanism this codebase has never built, in any form, even a same-provider sanity-check version. **Recommendation:** confidence scoring is correctly low-priority to add speculatively without a second concurrent source to derive it from — a column that's always `1.0` would itself be a small dishonesty, so this should stay deprioritized until item 298's provider-plurality question is actually decided one way or the other. A cheap, real, genuinely useful first step on "conflict detection" that doesn't require a second provider: a same-provider sanity check inside `upsertFixture` (reject or flag a score decrease on an already-live fixture, log an unexpected status transition). **Small** for the sanity-check version; **not recommended** for a fabricated confidence number. **RESOLVED (2026-08-18)** for the sanity-check version; confidence scoring correctly left undone, per this item's own reasoning. `syncTodayFixtures` (`src/lib/football/sync.ts`) now carries each known fixture's prior `home_score`/`away_score` alongside the prior status it already batch-fetched for notifications (same round trip, no new query) and passes both into `upsertFixture`, which flags — via `console.warn`, the same "every failure path is console.error"-adjacent convention item 204 already documents as this codebase's current logging story — a same-provider score decrease on either side, or a status regression away from `finished`, before the write proceeds. Deliberately flags rather than rejects: a false positive (e.g. a legitimate admin data correction) shouldn't drop real provider data, and the underlying write still lands either way — this is visibility into an anomaly, not a data-integrity gate.
 
 **304. Vision statement: "multi-competition, multi-timezone, multi-language-ready" — checking readiness, not completeness, per the brief's own wording.** Multi-competition: **real and demonstrated**, not just plausible — the normalized schema (competitions → seasons → teams → …), the provider-agnostic `FootballDataProvider` interface, and `competitions-config.ts`'s config-driven (env-var) sync allowlist together mean adding a new competition requires zero schema or code change, only a config value. Multi-timezone: **real at the data layer, not yet at the display/delivery layer** — every timestamp in the schema is `timestamptz` (`fixtures.kickoff_at` etc.), which is the correct, genuinely timezone-ready foundation; but `toLocaleString`/`Intl` calls across 20 files rely on the browser's default locale/timezone rather than an explicit one (already tracked honestly as item 262), and item 302 above confirms there's no per-user timezone value stored anywhere for notification delivery to key off even if it wanted to. Precisely: the storage layer would not need to change if multi-timezone display shipped tomorrow; the display and delivery layers would. Multi-language: **not demonstrated as ready in any structural sense.** Grepped `package.json` and every import in `src/`: no i18n library (no `next-intl`, `i18next`, `react-intl`, or equivalent), no locale routing segment, no message-catalog file anywhere, no `useTranslation`-shaped hook. Every string in the product is inline English JSX. This is not a criticism of not having shipped translations — the brief only claims "ready," and full i18n was correctly never promised as MVP scope — but "ready" implies some structural accommodation (even just centralized strings, or a locale-aware routing convention) that would make adding a language a config change, the same way multi-competition genuinely is. Today, adding a second language would mean touching every component that renders text. **Recommendation:** no build ask — item 262 already scoped a locale/timezone audit as the right-sized next step, and this entry's only addition is precision: the "multi-language-ready" clause specifically is not yet true of the architecture, so the absence of a complaint elsewhere in this document isn't mistaken for a confirmed capability. **N/A** (documentation precision, not a build item).
 
@@ -899,7 +899,7 @@ Three queued builds, one rule between them: build everything the real data suppo
 
 328. **RESOLVED, and the item was wrong (2026-08-19).** It claimed KIVO had no assist data anywhere, reasoning from `fixture_event_type` having no `assist` member. That reasoning was sound and the conclusion was false: API-Football does not model an assist as an event, it attaches the assister to the goal (`response[].assist`), `normalizers.ts` has always mapped it, and `sync-match-details.ts` has always resolved it into `fixture_events.related_player_id`. **`src/lib/fantasy-scoring.ts` was awarding `ASSIST_POINTS` from that column the whole time** — the data was not merely present, it was in production use while this item said it did not exist. The lesson worth keeping: an absence in KIVO's own vocabulary is not evidence of an absence in the provider's, and the way to check is to read the normalizer, not the enum. **Now wired through** to the player page, the player comparison page, the transfer page's player record, and the player and comparison share cards, via a third argument to `computePlayerMatchStats` that is explicitly nullable — a caller that has not queried assists reports "unknown", never zero. Two traps are handled and tested: `assist` is also populated on substitution events (the player coming on), so an unfiltered count reads every substitute appearance as an assist; and `fixture_player_statistics.assists` is a real but *different* number that is deliberately not used for career totals, because it exists only for competitions with per-player coverage while goals span everything synced — pairing them would put two true numbers on a card that together say something false. Full write-up in `docs/API_FOOTBALL.md`.
 
-332. **The Match Centre timeline shows the assister with no indication that it is an assist.** A goal renders as `Scorer · Assister`, and a substitution renders as `Off · On`, using the same separator and the same two plain player links — so the row cannot be read without already knowing which event type it belongs to, and the assist, which is the second thing a fan asks about a goal, is invisible as such. The data is entirely real and already on screen; only the labelling is missing. **Not actioned here because `src/components/matches/match-centre-tabs.tsx` belongs to another agent this session** — raised with them directly rather than edited. **Small:** an "assist" affordance on goal-type events and an arrow or "on/off" affordance on substitutions, keyed off `event.eventType`, which the row already has.
+332. **The Match Centre timeline shows the assister with no indication that it is an assist.** A goal renders as `Scorer · Assister`, and a substitution renders as `Off · On`, using the same separator and the same two plain player links — so the row cannot be read without already knowing which event type it belongs to, and the assist, which is the second thing a fan asks about a goal, is invisible as such. The data is entirely real and already on screen; only the labelling is missing. **SHIPPED 2026-08-20.** `playerRolesFor()` in `match-centre-tabs.tsx` keys off `event.eventType`: a goal now reads `Scorer · assisted by Assister`, a substitution reads `Player off · Player on`, and every other event type gets no role words at all. Words rather than icons, deliberately — "assisted by" and "off"/"on" are what a commentator says, they need no legend, and a screen reader announces them correctly without an `aria-label` that has to be kept in step with a glyph. The assist branch reuses the row's existing `isGoalEventType` test rather than a second list, so the set of events that show an assist cannot drift from the set that count as goals — which is the same trap `ASSISTED_GOAL_EVENT_TYPES` exists to close (see item 328 and `docs/API_FOOTBALL.md`: `related_player_id` is the assister on a goal and the player coming *on* for a substitution, and rendering both as `Name · Name` was exactly why the row could not be read without already knowing its type).
 
 329. **A user's own uploaded share-card background must be PNG or JPEG; a WEBP upload silently falls back to KIVO's gradient on the card.** `next/og`'s rasteriser cannot decode WEBP — verified for real on the match card, where a WEBP data URI throws "u2 is not iterable" inside resvg. The ten KIVO backgrounds are handled by committed JPEG derivatives (`scripts/generate-share-card-backgrounds.mjs`), but a user upload has no derivative and is fetched live through `fetchImageDataUri`, which only ever returns PNG/JPEG bytes. The `backgrounds` bucket accepts WEBP because it is a perfectly good profile *cover* format. The share sheet states this limitation in its own copy rather than letting the card quietly ignore the chosen background. **Recommendation:** transcode on upload — the same `sharp` that generates the committed derivatives could write a PNG sibling into the bucket at upload time, which also caps the fetch cost of every card render. **Small.** Do not solve it by rejecting WEBP uploads; that would degrade the profile cover to fix the card.
 
@@ -1011,14 +1011,21 @@ longer true** — `src/lib/football/coverage-registry.ts` exists, migration `008
 stores API-Football's own per-competition `coverage` object, and
 `shouldAttemptCapability()` already gates real sync spending on it.
 
-What has not happened is the half the founding brief actually named: *don't show
+What had not happened is the half the founding brief actually named: *don't show
 a tab a provider doesn't support for that competition.*
-`match-centre-tabs.tsx` still renders a static six-tab array unconditionally for
-every fixture. Today each tab renders an honest empty state, which is defensible
-— but "the provider will never have this for this league" and "nobody has synced
-it yet" are different sentences, and KIVO now holds the data to say which.
 
-The expensive half is done. Wiring it is a filter over one array.
+> **SHIPPED, and this item's "not done" was stale by the time it was read
+> (verified 2026-08-20).** `match-centre-tabs.tsx` no longer renders a static
+> six-tab array: `resolveVisibleMatchTabs({ status, present, coverage })` takes
+> the per-competition coverage record and returns the tabs to draw, with
+> `FALLBACK_TABS` for the pre-resolution case. The `competitionCoverage` prop
+> carries the three-state distinction the paragraph above asks for — `false`
+> means the provider says it does not publish this, `null` means KIVO has not
+> established either way and says nothing rather than guessing.
+>
+> Nothing needed doing here. It is recorded because the correction is the point
+> of section 5: this entry was written the day the registry landed and never
+> re-read against the file it names.
 
 ### 5. Both backlog files were wrong about their own status, and one called a shipped feature impossible.
 
@@ -1167,12 +1174,34 @@ available for this match yet", never "not synced yet". The banned vocabulary on
 any surface under `src/app/(app)`: synced, syncing, provider, quota, ingested,
 pulled, loaded, scraped, endpoint, and any database or provider id.
 
-A cheap regression check, until something better exists:
+**Enforced since 2026-08-20 by `src/lib/product-vocabulary.test.ts`**, which
+parses every file under `src/app/(app)` and `src/components` (Admin excluded)
+and fails on a banned word in JSX text or in any string literal that reads as
+prose. The grep this section originally shipped is superseded, and *why* is the
+part worth keeping: run over those two trees it returned about seventy hits, of
+which sixty-eight were engineering comments explaining why the vocabulary had
+been removed. Nobody reads a check that is 97% false positives, and nobody did —
+three real leaks were sitting inside that noise on the day the test was written:
 
-```
-grep -rniE "\b(synced|syncing|quota|provider|ingested|scraped)\b" \
-  src/app/\(app\) src/components --include=*.tsx | grep -v components/admin/
-```
+- `players/compare/page.tsx` rendered "**Sync coverage** is admin-triggered and
+  partial" as a whole sentence to any fan comparing two players;
+- the Match Centre timeline footnote said "KIVO's **provider** does not publish
+  ball-by-ball commentary";
+- the Transfer Centre said window dates "are not in the data KIVO **syncs**".
+
+All three are fixed. The lesson is F3's, arriving a second time from a different
+direction: a rule with a check nobody can stand to read is still just a rule.
+
+Two scoping decisions are written into the test rather than left implicit.
+It looks at **prose only, not identifiers** — a single-token string is code
+wearing quotes (`.eq("provider", name)` is a correct query), and flagging it
+teaches the next author to distrust the test; naming is a review concern, and
+`syncEdges` in `section-tabs.tsx` synchronises two scroll edges. And **`loaded`
+and `pulled` are off the list** even though the paragraph above names them:
+"Couldn't be loaded" is ordinary product English, whereas sync/quota/provider/
+ingest/scrape/endpoint have no non-internal reading on a football page, so a hit
+is always a leak and never a judgement call. A test that asks for a judgement
+gets an exception written into it instead of a fix.
 
 ### F2. Role-gating an admin control is not the same as marking it
 
@@ -1243,21 +1272,32 @@ the reader feels without being able to name.
 
 Anything that changes a list's layout must change its skeleton in the same commit.
 
-### F6. Still open, deliberately not done in this sweep
+### F6. Still open, deliberately not done in this sweep — **ALL THREE CLOSED 2026-08-20**
 
-- **`FixtureDetailsSyncControl` still renders on the public match page** (behind
-  the role check, and now inside the staff shell). Per F2 it should move into
-  `/admin` entirely — an operator fetching one fixture's details does not need to
-  be standing on that fixture's page. Not done here because it requires
-  restructuring `src/components/matches/match-centre-tabs.tsx`, which another
-  agent owns this pass.
-- **`getTransparencyFreshness()` still returns `quotaRemaining`** with no reader
-  left on any public surface. Harmless, and it lives under `src/lib/football/`,
-  which the data-architecture pass owns.
-- **`LastSyncedNote` / `getLastSyncedAt` keep "synced" in their names.** Fan-visible
-  output is clean; the names are not. Renaming them would enforce F1 structurally
-  rather than by grep, and is worth doing when the branch is not moving under three
-  agents at once.
+Every item here was deferred for one reason: the branch had six agents on it and
+each fix touches a file somebody else was holding. That condition ended, and the
+backlog pass below cleared all three. Kept in place rather than deleted, because
+the pattern is the useful part — *"blocked on a shared file"* is a real reason and
+also an expiring one, and nothing in this document was tracking the expiry.
+
+- ~~**`FixtureDetailsSyncControl` still renders on the public match page.**~~
+  **Already fixed before this pass, and this entry was wrong from the moment it
+  was written to the moment it was checked.** The control was deleted outright in
+  `c342f90` ("Delete the fixture sync control now that nothing renders it"); the
+  only surviving mention of the name in the entire tree is a comment in
+  `src/app/admin/data-health/actions.ts` explaining why a line exists. Verified by
+  `grep -rn FixtureDetailsSyncControl src/`, not by reading a commit message.
+- ~~**`getTransparencyFreshness()` still returns `quotaRemaining`.**~~ Removed.
+  Admin was confirmed to hold the number independently first — `provider-platform-panel.tsx`,
+  `admin/data-health/page.tsx` and `admin/data-health/pipeline/page.tsx` all read
+  `sync_runs.provider_quota_remaining` directly — so nothing was deleted before its
+  replacement existed (A5's rule). "Harmless" was the wrong test: the field was
+  computed on every render of two guest-viewable pages and thrown away, and a value
+  a fan-facing code path can still reach is a value the next author can render.
+- ~~**`LastSyncedNote` / `getLastSyncedAt` keep "synced" in their names.**~~
+  Now `LastUpdatedNote` / `getLastUpdatedAt`, in `last-updated-note.tsx` /
+  `last-updated.ts`, with every call site and every local variable renamed to match
+  what the component actually says on screen ("Updated 5h ago").
 
 ---
 
@@ -1394,3 +1434,95 @@ ignores is a rule with an exception nobody agreed to.
   back in for a locked-out user and it is checked only by somebody choosing to
   open the page. The overview now escalates an open request older than 24h to
   critical, which is a better nothing, but it is still nothing.
+
+---
+
+## Backlog pass, 2026-08-20 — clearing what was blocked on other agents
+
+Every deferral in this document that gave *"another agent owns that file"* as its
+reason was re-read against the code today. That reason had an expiry nobody was
+tracking, and the audit found three separate outcomes, which is the finding
+worth carrying forward more than any individual fix:
+
+| Item | Reason it was deferred | What was actually true today |
+|---|---|---|
+| F6 · `FixtureDetailsSyncControl` on the public match page | `match-centre-tabs.tsx` was another agent's | **Already deleted** (`c342f90`). The entry was wrong when written. |
+| F6 · `getTransparencyFreshness()` returns `quotaRemaining` | `src/lib/football/` was the data pass's | Still true. Removed. |
+| F6 · `LastSyncedNote` / `getLastSyncedAt` names | branch moving under three agents | Still true. Renamed. |
+| "Five to act on now" #4 · coverage registry unread at the tab layer | — | **Already shipped.** `resolveVisibleMatchTabs` reads it. |
+| 332 · assister indistinguishable from substitute in the timeline | `match-centre-tabs.tsx` was another agent's | Still true. Shipped. |
+| 325 · no transfer notification preference | schema was another agent's lane | Still true. **Declined for a different reason — see below.** |
+| 329 · WEBP share-card background upload | — | Still true. **Declined — see below.** |
+
+**Two of the seven had already been done and nobody had told the file.** Both
+sat under headings that assert their own currency — one under "Still open,
+deliberately", one under a list whose preamble says "everything here was
+verified by reading the code". Section 5 of that same list is *about* backlog
+files being wrong about their own status, and it was wrong four entries above
+itself. There is no process fix for this beyond the one that already works:
+re-derive a status from the file, never from the entry, and never from a commit
+message — which is how both were caught.
+
+### What shipped
+
+1. **`getTransparencyFreshness()` no longer computes provider quota.** Admin's
+   three independent readers of `sync_runs.provider_quota_remaining` were
+   confirmed first, so nothing was removed before its replacement existed (A5).
+2. **`LastSyncedNote` → `LastUpdatedNote`, `getLastSyncedAt` → `getLastUpdatedAt`**,
+   files renamed to match, all nine call sites and every local (`squadLastSyncedAt`,
+   `fixturesLastSyncedAt`, …) updated. The component says "Updated 5h ago"; now so
+   does everything that reaches for it.
+3. **Item 332** — the timeline says which player assisted and which came on.
+4. **`src/lib/product-vocabulary.test.ts`** — F1 enforced by a parser instead of a
+   grep, and three live fan-visible leaks fixed with it (see F1, rewritten).
+5. **Three more internal names off the product surface**, found by the same audit
+   rather than by the test (which deliberately does not judge identifiers):
+   `hasSyncedFixtures` → `hasFixturesToday` (a prop on the AI chat component),
+   `syncedPlayerCount` → `knownPlayerCount` (rendered as "N players at Club"),
+   `syncedSomething` → `hasFixturesToday`, and the heatmap's `"nothing-synced"`
+   empty-state discriminant → `"nothing-recorded"`.
+
+### What was declined, and why
+
+- **325, the `transfer_alerts_enabled` column.** The recommendation is sound and
+  the gap is real. It is declined *now* for a reason the original entry could not
+  have known: the migration cannot be applied or verified from any build
+  environment on this project, and the change is not additive-safe in the
+  meantime. `getNotificationPreferences` selects a **literal column list** —
+  deliberately, so supabase-js can infer per-column booleans — so the moment
+  `transfer_alerts_enabled` joins that list, every Settings read fails for every
+  user until the migration actually runs against the live database. On a branch
+  that is already deployed that is a live outage traded for a preference toggle.
+  It should ship as one change *with* the migration applied, by whoever can watch
+  it land. Everything else about the item stands, including its refusal to borrow
+  `match_alerts_enabled`.
+- **329, transcoding WEBP share-card backgrounds on upload.** The entry scopes
+  this as "Small" on the basis that `sharp` is already here. It is here only as a
+  transitive dependency of `next`, not a declared one — `scripts/generate-share-card-backgrounds.mjs`
+  says so in its own header and guards the `require`. Reaching into a transitive
+  native dependency from a production Server Action is a different proposition
+  from using it in a build script: it survives until a hoist changes. Doing it
+  properly means declaring `sharp`, plus a story for the second object each upload
+  now writes into the bucket and for pruning it. That is a real piece of work, not
+  a small one, and the product already states the limitation in the share sheet's
+  own copy rather than letting the card quietly ignore the chosen background.
+- **326, `TRANSFER_WINDOWS`.** Unchanged and correctly open. It is data entry with
+  a citation requirement, and this pass has no more access to a national
+  association's published dates than the last one did. Typing them from memory is
+  the exact failure the empty array exists to prevent.
+- **The heatmap's `lateralConfidence: "provider-order"`** was left alone on
+  purpose, and it is the case that shows where the F1 line actually falls. It
+  never renders, it lives in `src/lib/football/heatmap/`, and "the order the
+  provider listed them in" is a precise description of what the value means to the
+  person maintaining the aggregator. F1 governs surfaces under `src/app/(app)`;
+  inside the football library this vocabulary is the correct vocabulary, and
+  renaming it would touch three files in another lane to make a comment vaguer.
+
+### Not this agent's lane, named rather than edited
+
+`A8`'s open items are all Admin (`/admin/data-health` → `/admin/football/provider`,
+the four duplicated role gates, `standings.zone_description` on the Coverage page,
+the missing audit-log view, and nothing notifying anybody). `src/app/admin/**` and
+`src/components/admin/**` were being restructured while this pass ran, so their
+statuses here are **not** re-verified and should be re-derived by whoever owns that
+tree next.

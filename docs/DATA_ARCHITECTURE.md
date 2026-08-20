@@ -136,7 +136,7 @@ Every provider call happens inside an admin-triggered server action (`src/app/ad
 | Normalized domain models, provider-agnostic everywhere downstream | **REAL** |
 | Admin-triggered sync (fixtures, squads, lineups/events/stats, standings, transfers) | **REAL** |
 | `provider_mappings` dedup/identity translation | **REAL** |
-| Freshness display (`last-synced.ts`, "Last synced X ago" on public pages) | **REAL**, see `docs/CACHING_STRATEGY.md` |
+| Freshness display (`last-updated.ts`, "Updated X ago" on public pages) | **REAL**, see `docs/CACHING_STRATEGY.md` |
 | Quota-aware retry/backoff (API-Football) | **REAL**, see `docs/API_QUOTA.md` |
 | Supabase Realtime distribution of already-synced updates | **REAL** (a separate work stream — see `docs/LIVE_DATA.md`) |
 | Automated live worker / scheduled polling | **NOT BUILT** — `FOOTBALL_LIVE_POLLING_ENABLED` stays `false`. This is a real, separate infrastructure project (cron/scheduler, dedup under concurrent runs, provider health monitoring), intentionally out of scope for this pass — see `docs/LIVE_DATA.md`'s checklist for exactly what has to be true before the flag can flip. |

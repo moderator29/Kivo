@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ShieldCheck } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getTransparencyFreshness } from "@/lib/football/last-synced";
+import { getTransparencyFreshness } from "@/lib/football/last-updated";
 import { formatNumber, timeAgo } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 
@@ -83,7 +83,7 @@ export default async function TransparencyPage() {
           <p className="text-foreground-muted">
             Last updated:{" "}
             <span className="font-medium text-foreground">
-              {freshness.lastSyncedAt ? `${timeAgo(freshness.lastSyncedAt)} ago` : "not yet"}
+              {freshness.lastUpdatedAt ? `${timeAgo(freshness.lastUpdatedAt)} ago` : "not yet"}
             </span>
           </p>
           <p className="text-xs text-foreground-subtle">

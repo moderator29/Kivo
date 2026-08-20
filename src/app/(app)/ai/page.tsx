@@ -8,7 +8,7 @@ import { buildGroundingContext, type GroundingFocus } from "@/lib/ai/grounding";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
-import { getTransparencyFreshness } from "@/lib/football/last-synced";
+import { getTransparencyFreshness } from "@/lib/football/last-updated";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
 import type { ConversationSummary } from "./actions";
 
@@ -86,9 +86,9 @@ export default async function AiCopilotPage({
   const grounding = focus ? await buildGroundingContext(profile, focus) : await buildGroundingContext(profile);
 
   // RECOMMENDATIONS.md item 189: reuses /transparency's exact freshness
-  // helper rather than re-deriving "last synced"/"quota remaining" here —
-  // see getTransparencyFreshness's own doc comment for why only these two
-  // narrow fields ever leave sync_runs this way.
+  // helper rather than re-deriving "how current is this" here — see
+  // getTransparencyFreshness's own doc comment for why exactly one narrow
+  // field ever leaves sync_runs this way.
   const freshness = await getTransparencyFreshness();
 
   // The most recent answer this viewer actually received, if there is one.
@@ -115,11 +115,11 @@ export default async function AiCopilotPage({
       signedIn={viewerIsSignedIn(profile)}
       initialConversations={initialConversations}
       hasFollowedEntities={grounding.hasFollowedEntities}
-      hasSyncedFixtures={grounding.hasSyncedFixtures}
+      hasFixturesToday={grounding.hasFixturesToday}
       initialFocus={focus}
       focusLabel={grounding.disclosureLabel}
       groundingSummary={grounding.summary}
-      lastSyncedAt={freshness.lastSyncedAt}
+      lastUpdatedAt={freshness.lastUpdatedAt}
     />
       {latestAnswerId && (
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 pb-8 lg:px-8">

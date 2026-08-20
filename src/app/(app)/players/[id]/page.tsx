@@ -11,7 +11,7 @@ import { YourPlayerConnection } from "@/components/football/your-connection-card
 import { getViewerPlayerConnection } from "@/lib/football/viewer-connection";
 import { FollowWithMute } from "@/components/ui/follow-with-mute";
 import { SaveButton } from "@/components/ui/save-button";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { LastUpdatedNote } from "@/components/football/last-updated-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TrackView } from "@/components/ui/track-view";
@@ -30,7 +30,7 @@ import {
   summarizeCareerBySeason,
   type PlayerFixtureInput,
 } from "@/components/players/player-career";
-import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { getLastUpdatedAt } from "@/lib/football/last-updated";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { TRANSFER_TYPE_LABEL } from "@/lib/football/transfer-labels";
 import { computePlayerMatchStats } from "@/lib/football/player-stats";
@@ -112,7 +112,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
     { data: transfers },
     { data: followRow },
     isSaved,
-    transfersLastSyncedAt,
+    transfersLastUpdatedAt,
     { data: seasonStatRows },
   ] = await Promise.all([
     supabase
@@ -172,7 +172,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
           .eq("target_id", id)
           .then(({ count }) => (count ?? 0) > 0)
       : Promise.resolve(false),
-    getLastSyncedAt(["transfer"]),
+    getLastUpdatedAt(["transfer"]),
     supabase
       .from("player_season_statistics")
       .select("season_year, appearances, minutes_played, goals, assists")
@@ -526,7 +526,7 @@ export default async function PlayerProfilePage({ params }: { params: Promise<{ 
       label: "Transfers",
       count: transfers!.length,
       content: (
-        <Section title="Transfer history" action={<LastSyncedNote timestamp={transfersLastSyncedAt} />}>
+        <Section title="Transfer history" action={<LastUpdatedNote timestamp={transfersLastUpdatedAt} />}>
           <ListSurface>
             {(transfers ?? []).map((transfer) => (
                 <li key={transfer.id} className="flex flex-col gap-2 px-4 py-3">

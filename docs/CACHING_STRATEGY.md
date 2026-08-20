@@ -23,13 +23,13 @@ Every provider request goes through Next.js's `fetch` with an explicit `next: { 
 
 ## What actually exists: sync-run-based freshness display
 
-Separately from the `fetch` cache above, public pages show "Last synced X ago" via `src/lib/football/last-synced.ts`'s `getLastSyncedAt(entityTypes)`. This is **not** derived from the `fetch` cache windows, and it's worth being precise about why:
+Separately from the `fetch` cache above, public pages show "Updated X ago" via `src/lib/football/last-updated.ts`'s `getLastUpdatedAt(entityTypes)`. This is **not** derived from the `fetch` cache windows, and it's worth being precise about why:
 
 - `NormalizedFixture.retrievedAt` (and equivalent fields) are carried on every normalized object specifically for per-row freshness, but are discarded at the sync boundary — `upsertFixture` and equivalents never write it to a per-row column.
-- Instead, `getLastSyncedAt` reads `sync_runs.last_synced_at`, written once per completed sync run (`finished_at`, effectively). Since every provider call within one sync run completes inside the same request window `retrievedAt` would have captured per-row, the two are equivalent for display purposes — this is a deliberate simplification (avoiding a new column and new provider-boundary wiring for every normalized type), not an oversight.
+- Instead, `getLastUpdatedAt` reads `sync_runs.last_synced_at`, written once per completed sync run (`finished_at`, effectively). Since every provider call within one sync run completes inside the same request window `retrievedAt` would have captured per-row, the two are equivalent for display purposes — this is a deliberate simplification (avoiding a new column and new provider-boundary wiring for every normalized type), not an oversight.
 - Only `"success"`/`"partial"` runs count. A `"failed"` run (e.g. quota exhausted before anything was fetched) never actually refreshed what a viewer is looking at, so it doesn't get to claim freshness.
 
-This is what powers the "Last synced" note on team, player, and match pages — real, working, sourced from `sync_runs`, not a cache-header inference.
+This is what powers the "Updated X ago" note on team, player, and match pages (`LastUpdatedNote`; the helper and the component were both named "…Synced…" until 2026-08-20 — a fan has no sync pipeline, only a scoreline that is current or not, see RECOMMENDATIONS.md F1) — real, working, sourced from `sync_runs`, not a cache-header inference.
 
 ## The formal system, as of 2026-08-19: resource classes
 

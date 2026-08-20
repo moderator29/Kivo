@@ -231,7 +231,7 @@ export function HeatmapView({ heatmaps, homeTeamName, awayTeamName }: HeatmapVie
   }, [subject, enriched, activePeriod]);
 
   if (drawable.length === 0 && undrawable.length === 0) {
-    return <HeatmapEmptyState reason="nothing-synced" />;
+    return <HeatmapEmptyState reason="nothing-recorded" />;
   }
 
   return (
@@ -518,7 +518,7 @@ function SegmentedControl<T extends string>({
  * The two genuinely-empty states, kept apart because they mean different things
  * and ask the reader to do different things.
  */
-function HeatmapEmptyState({ reason, teamName }: { reason: "nothing-synced" | "no-positions"; teamName?: string }) {
+function HeatmapEmptyState({ reason, teamName }: { reason: "nothing-recorded" | "no-positions"; teamName?: string }) {
   return (
     <div className="kivo-glass relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl p-8 text-center">
       <PitchLines />
@@ -526,7 +526,7 @@ function HeatmapEmptyState({ reason, teamName }: { reason: "nothing-synced" | "n
         <Radar className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
       </div>
       <div className="relative flex flex-col gap-1.5">
-        {reason === "nothing-synced" ? (
+        {reason === "nothing-recorded" ? (
           <>
             <p className="text-sm font-medium text-foreground">No lineup for this match yet</p>
             <p className="max-w-xs text-xs leading-relaxed text-foreground-subtle">

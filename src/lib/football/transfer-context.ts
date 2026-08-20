@@ -37,7 +37,7 @@ export type SquadShape = {
   teamName: string;
   /** How many players KIVO has on file for this club. Stated wherever the
    * breakdown is, because the breakdown is only as complete as this is. */
-  syncedPlayerCount: number;
+  knownPlayerCount: number;
   /** Counts per position group, only for groups that actually have players. */
   byPosition: { group: PositionGroupOrOther; count: number }[];
   /** How many of those play the moving player's own position group — the one
@@ -208,7 +208,7 @@ async function loadSquadShape(
   return {
     teamId,
     teamName,
-    syncedPlayerCount: rows.length,
+    knownPlayerCount: rows.length,
     byPosition: [...counts.entries()]
       .map(([group, count]) => ({ group, count }))
       .sort((a, b) => b.count - a.count),

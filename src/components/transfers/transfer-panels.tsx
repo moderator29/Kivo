@@ -156,7 +156,7 @@ export function TransferFacts({
             ))}
           </div>
           <span className="text-[11px] text-foreground-subtle">
-            {squad.syncedPlayerCount} player{squad.syncedPlayerCount === 1 ? "" : "s"} at {squad.teamName}
+            {squad.knownPlayerCount} player{squad.knownPlayerCount === 1 ? "" : "s"} at {squad.teamName}
             {squad.countInPlayerPosition != null && playerPosition
               ? `, of whom ${squad.countInPlayerPosition} play ${playerPosition.toLowerCase()}.`
               : "."}
