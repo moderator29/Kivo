@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
-import { DEFAULT_API_FOOTBALL_COMPETITIONS, getCompetitionScope } from "./competitions-config";
+import { DEFAULT_API_FOOTBALL_COMPETITIONS } from "./competitions-config";
+import { resolveCompetitionScope } from "./competition-scope";
 import { resolveSeasonYear } from "./target-season";
 import { findMappedId, findProviderEntityId } from "./provider-mappings";
 import { readLastSpendAt, reserveProviderRequests, type BudgetDecision } from "./request-budget";
@@ -11,6 +12,7 @@ import { shouldAttemptCapability } from "./coverage-registry";
 import { syncTeamSquad } from "./sync-squads";
 import type { SyncResult } from "./sync";
 import { logError } from "@/lib/log";
+import { recordUnstartableRun } from "./sync-run-recorder";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -185,11 +187,24 @@ export async function adoptAllowlistedCompetitions(): Promise<{
     return { error: err instanceof Error ? err.message : String(err), competitions: [] };
   }
 
-  const scope = getCompetitionScope(providerName);
+  /**
+   * `resolveCompetitionScope`, not `getCompetitionScope`.
+   *
+   * The static one reads env vars and the shipped constant and nothing else,
+   * so the `competition_scope` table — the operator's own picks, chosen from
+   * the provider's registry precisely so nobody types a league id (migration
+   * 0114) — was invisible to this function. The chain the Coverage page lays
+   * out is: refresh the registry, pick competitions out of it, adopt them.
+   * Step three ignored step two: an operator could add La Liga to the scope,
+   * press Adopt, and be told about the eight ids shipped in a TypeScript
+   * constant instead. Rows in the table win here for exactly the same reason
+   * they win everywhere else.
+   */
+  const scope = await resolveCompetitionScope(supabase, providerName);
   if (!scope.providerIds || scope.orderedIds.length === 0) {
     return {
       error:
-        "No competition allowlist is in effect, so there is nothing to adopt. Set FOOTBALL_SYNC_COMPETITION_IDS, or unset it to use the shipped default.",
+        "No competition allowlist is in effect, so there is nothing to adopt. Pick competitions from the coverage registry, set FOOTBALL_SYNC_COMPETITION_IDS, or unset it to use the shipped default.",
       competitions: [],
     };
   }
@@ -387,7 +402,7 @@ export async function backfillCompetitionCountries(): Promise<{ error: string | 
  * running. A club list for a season an operator typed into a button is not that
  * evidence, and flipping `is_current` off the season that actually has fixtures
  * would empty "/fantasy" and every team's league position. */
-async function ensureSeason(
+export async function ensureSeason(
   supabase: ServiceClient,
   competitionId: string,
   seasonYear: number,
@@ -459,7 +474,24 @@ export async function syncCompetitionTeams(
   season?: number,
 ): Promise<CompetitionTeamsSyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+  // Wrapped so a press that never reaches a provider still leaves a row. A sync
+  // that throws here inserts nothing and updates nothing, which in `sync_runs`
+  // is indistinguishable from a button nobody touched — see
+  // `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    // This one returns a wider shape than the shared helper does, so the helper
+    // writes the row and its result is widened here rather than the helper
+    // being taught about a budget it plays no part in.
+    const recorded = await recordUnstartableRun(
+      supabase,
+      "team",
+      `The club list sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return { ...recorded, requestsSpent: 0, budget: null };
+  }
   // The operator's target season, not the calendar's. Season-scoped
   // endpoints are refused outright by a free API-Football plan asked for the
   // current year — see target-season.ts for the provider's own wording.
@@ -655,6 +687,176 @@ export async function syncCompetitionTeams(
 }
 
 // ---------------------------------------------------------------------------
+// League membership from fixtures KIVO has already paid for (0 requests)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fills `competition_teams` from the fixtures already in the database, for the
+ * competitions in scope, without spending a single provider request.
+ *
+ * ## The deadlock this breaks
+ *
+ * Squads are the one thing on this platform that a free plan can serve at any
+ * season: `/players/squads?team=` and `/coachs?team=` carry no season parameter
+ * and are not subject to the plan's season window. Every other empty table on
+ * the live database traces back to a season refusal. Players do not.
+ *
+ * And yet players are zero, because the ONLY way into the squad queue was
+ * `competition_teams`, and the only thing that wrote `competition_teams` was
+ * `syncCompetitionTeams` — `/teams?league=&season=`, which is season-scoped and
+ * refused. A season-free capability was sitting behind a season-scoped
+ * prerequisite. Verified on the live database, 2026-08-20: 730 teams, 367
+ * fixtures, `competition_teams` 0, `players` 0, and the squad backfill
+ * answering "No clubs are queued."
+ *
+ * ## Why fixtures are a legitimate source, and where the line is
+ *
+ * A `fixtures` row already carries the provider's own statement that two named
+ * clubs played each other in a named competition and season. That is the same
+ * fact `/teams?league=&season=` returns, obtained from a request that was
+ * already made. Nothing is inferred and nothing is invented: a club is written
+ * as a member of a competition only where the provider reported it playing one.
+ *
+ * What this deliberately does NOT do is what the fixture sync's own directory
+ * did wrong. `listSquadBackfillCandidates` exists because 730 clubs scraped off
+ * one Tuesday in August are not a club directory, and spending a request each
+ * on Polish reserve sides is the exact failure this module was built to stop.
+ * So the scope is the filter: only competitions the operator actually covers.
+ * On an unfiltered deployment this refuses rather than queueing everything.
+ *
+ * ## Never overwrites a real club list
+ *
+ * Rows are inserted, never updated (`ignoreDuplicates`). A membership already
+ * written by `syncCompetitionTeams` came from the provider's authoritative club
+ * list and keeps its own `last_seen_at`; this is a floor under that list, never
+ * an opinion about it.
+ */
+export async function seedCompetitionTeamsFromFixtures(): Promise<{
+  error: string | null;
+  recordsProcessed: number;
+  /** How many in-scope competitions contributed at least one membership. */
+  competitions: number;
+}> {
+  const supabase = createServiceRoleSupabaseClient();
+
+  let providerName: string;
+  try {
+    providerName = (await getFootballDataProvider()).name;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err), recordsProcessed: 0, competitions: 0 };
+  }
+
+  const scope = await resolveCompetitionScope(supabase, providerName);
+  if (!scope.providerIds || scope.orderedIds.length === 0) {
+    return {
+      error:
+        "No competition allowlist is in effect, so there is nothing to bound this to. Queueing every club in the database would put a request per Polish reserve side ahead of Real Madrid — pick the competitions KIVO covers first.",
+      recordsProcessed: 0,
+      competitions: 0,
+    };
+  }
+
+  const { data: mappings, error: mappingsError } = await supabase
+    .from("provider_mappings")
+    .select("kivo_entity_id, provider_entity_id")
+    .eq("provider", providerName)
+    .eq("entity_type", "competition")
+    .in("provider_entity_id", [...scope.orderedIds]);
+
+  if (mappingsError) {
+    logError("football.sync-catalogue.seedMemberships", mappingsError);
+    return { error: "Couldn't read the provider's competition mappings. Try again.", recordsProcessed: 0, competitions: 0 };
+  }
+
+  const competitionIds = (mappings ?? []).map((m) => m.kivo_entity_id);
+  if (competitionIds.length === 0) {
+    return {
+      error:
+        "None of the competitions in scope has been adopted into KIVO yet, so no fixture can be attributed to one. Adopt the allowlisted competitions first.",
+      recordsProcessed: 0,
+      competitions: 0,
+    };
+  }
+
+  const { data: fixtures, error: fixturesError } = await supabase
+    .from("fixtures")
+    .select("competition_id, season_id, home_team_id, away_team_id")
+    .in("competition_id", competitionIds)
+    .limit(5000);
+
+  if (fixturesError) {
+    logError("football.sync-catalogue.seedFixtures", fixturesError);
+    return { error: "Couldn't read KIVO's fixtures. Try again.", recordsProcessed: 0, competitions: 0 };
+  }
+  if (!fixtures || fixtures.length === 0) {
+    return {
+      error:
+        "No fixture in the database belongs to a competition in scope, so there is no membership to read. Sync fixtures first, or widen the competitions KIVO covers.",
+      recordsProcessed: 0,
+      competitions: 0,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const rows = new Map<string, Database["public"]["Tables"]["competition_teams"]["Insert"]>();
+  for (const fixture of fixtures) {
+    for (const teamId of [fixture.home_team_id, fixture.away_team_id]) {
+      if (!teamId || !fixture.season_id) continue;
+      // The table's own unique key, so a pair seen in fifty fixtures is one row.
+      const key = `${fixture.season_id}:${teamId}`;
+      if (rows.has(key)) continue;
+      rows.set(key, {
+        competition_id: fixture.competition_id,
+        season_id: fixture.season_id,
+        team_id: teamId,
+        provider: providerName,
+        first_seen_at: now,
+        last_seen_at: now,
+      });
+    }
+  }
+
+  if (rows.size === 0) return { error: null, recordsProcessed: 0, competitions: 0 };
+
+  const payload = [...rows.values()];
+
+  // Counted before and after, rather than read off the write's own returned
+  // representation. `ignoreDuplicates` maps to ON CONFLICT DO NOTHING, and what
+  // that returns for rows it skipped is a property of the REST layer rather
+  // than something this function should be asserting a number from. Two cheap
+  // head counts make the reported figure a measurement.
+  const before = await supabase
+    .from("competition_teams")
+    .select("id", { count: "exact", head: true })
+    .eq("provider", providerName);
+
+  const { error: insertError } = await supabase
+    .from("competition_teams")
+    // Never an update. See the note above: a row written by the real club-list
+    // sync is authority and this is a floor under it.
+    .upsert(payload, { onConflict: "provider,season_id,team_id", ignoreDuplicates: true });
+
+  if (insertError) {
+    logError("football.sync-catalogue.seedInsert", insertError);
+    return { error: "Couldn't write the league memberships. Try again.", recordsProcessed: 0, competitions: 0 };
+  }
+
+  const after = await supabase
+    .from("competition_teams")
+    .select("id", { count: "exact", head: true })
+    .eq("provider", providerName);
+
+  const added =
+    before.count !== null && after.count !== null ? Math.max(0, after.count - before.count) : payload.length;
+
+  return {
+    error: null,
+    recordsProcessed: added,
+    competitions: new Set(payload.map((r) => r.competition_id)).size,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Squads: the expensive half, one club at a time, resumable
 // ---------------------------------------------------------------------------
 
@@ -841,12 +1043,40 @@ export async function backfillSquads(maxClubs?: number): Promise<SquadBackfillRe
     }
   }
 
-  const { error: listError, candidates } = await listSquadBackfillCandidates(200);
+  let { error: listError, candidates } = await listSquadBackfillCandidates(200);
   if (listError) return empty(listError);
+
   if (candidates.length === 0) {
-    return empty(
-      "No clubs are queued. Sync an allowlisted competition's club list first — the squad backfill only ever touches clubs KIVO pulled deliberately as part of a competition, never the ones a fixture happened to mention.",
-    );
+    /**
+     * An empty queue used to be the end of the road, and on the live database
+     * it was a permanent one: `competition_teams` could only be written by
+     * `/teams?league=&season=`, which a free plan refuses, so the ONE capability
+     * a free plan can serve at any season was unreachable. Reading the
+     * membership out of fixtures already on file costs nothing and is the
+     * provider's own statement about who plays where — see
+     * `seedCompetitionTeamsFromFixtures` for where the line is drawn.
+     *
+     * Attempted here rather than left to a separate button because this is the
+     * moment it matters, and because a press that reports "nothing to do" while
+     * a zero-cost way to find work exists is the same empty-state-over-a-real-
+     * answer failure this codebase keeps having to fix.
+     */
+    const seeded = await seedCompetitionTeamsFromFixtures();
+    if (seeded.error) {
+      return empty(
+        `No clubs are queued, and none could be read from the fixtures already on file: ${seeded.error}`,
+      );
+    }
+    // The candidate list, not the seed's own count, decides whether there is
+    // work: it is the same question the queue answers everywhere else, and it
+    // stays right whether the seed added rows or found them already there.
+    ({ error: listError, candidates } = await listSquadBackfillCandidates(200));
+    if (listError) return empty(listError);
+    if (candidates.length === 0) {
+      return empty(
+        "No clubs are queued. Sync an allowlisted competition's club list first — the squad backfill only ever touches clubs KIVO pulled deliberately as part of a competition, never the ones a fixture happened to mention.",
+      );
+    }
   }
 
   const requestedClubs = Math.max(1, Math.min(maxClubs ?? SQUAD_BATCH_MAX_REQUESTS, SQUAD_BATCH_MAX_REQUESTS));

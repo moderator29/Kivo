@@ -205,7 +205,7 @@ export async function resolveSeasonYear(
  * an engineer understands which season they are looking at.
  */
 export function describeTargetSeason(resolved: ResolvedTargetSeason): string {
-  const label = `${resolved.seasonYear}/${String((resolved.seasonYear + 1) % 100).padStart(2, "0")}`;
+  const label = seasonLabel(resolved.seasonYear);
   if (!resolved.isOverride) {
     return `KIVO is syncing the ${label} season — the current season by the calendar.`;
   }
@@ -214,6 +214,78 @@ export function describeTargetSeason(resolved: ResolvedTargetSeason): string {
       ? "set by an operator"
       : `set by the ${TARGET_SEASON_ENV} environment variable`;
   const because = resolved.reason ? ` Reason given: ${resolved.reason}` : "";
-  const calendarLabel = `${resolved.calendarSeasonYear}/${String((resolved.calendarSeasonYear + 1) % 100).padStart(2, "0")}`;
-  return `KIVO is syncing the ${label} season, ${where} — not the current ${calendarLabel} season.${because}`;
+  const calendarLabel = seasonLabel(resolved.calendarSeasonYear);
+
+  /**
+   * The trade, said out loud, in the same sentence as the setting.
+   *
+   * Naming the year was never the hard part. What an operator cannot see from
+   * the number alone is that this choice is not confined to Admin: it decides
+   * what a fan reads on a league table, a scoring chart and a player's season
+   * page, and none of those screens looks any different for being two seasons
+   * out of date. A setting whose consequence is invisible on every surface it
+   * changes has to carry its consequence in its own description.
+   *
+   * The squad exception is not a footnote. `/players/squads` and `/coachs`
+   * carry no season parameter, so squads and managers are current whatever this
+   * is set to — an operator weighing "should I point at 2024" deserves to know
+   * that the thing they most want is not what they are trading away.
+   */
+  const gap = resolved.calendarSeasonYear - resolved.seasonYear;
+  const staleness =
+    gap > 0
+      ? ` Every league table, scoring chart and player season page KIVO syncs will be ${label} — ${gap} season${gap === 1 ? "" : "s"} behind what a reader will assume they are looking at, unless the screen says otherwise.`
+      : "";
+  const unaffected =
+    " Squads and managers are unaffected either way: those requests carry no season, so they stay current.";
+  const reversible = ` Clearing this puts KIVO back on ${calendarLabel} for the next sync; nothing already synced moves.`;
+
+  return `KIVO is syncing the ${label} season, ${where} — not the current ${calendarLabel} season.${because}${staleness}${unaffected}${reversible}`;
+}
+
+/** `YYYY/YY`, the way a season is written on a shirt. */
+function seasonLabel(year: number): string {
+  return `${year}/${String((year + 1) % 100).padStart(2, "0")}`;
+}
+
+/**
+ * The sentence for a season row that is not the season the operator chose, or
+ * null when there is nothing to say.
+ *
+ * ## The disagreement this exists to end
+ *
+ * Every season-scoped sync in this codebase resolves its year through
+ * `resolveSeasonYear` — except `syncStandings`, which takes the year off the
+ * `seasons` row it is given, because a standings table belongs to the season it
+ * is filed under and writing 2024's table into the 2026 row would be a worse
+ * bug than asking for the wrong year.
+ *
+ * Both of those are right, and together they were silently wrong. On the live
+ * database the season rows carry provider years 2025, 2026 and 2027 — whatever
+ * the fixture sync last saw kick off — so a standings press asked for a year
+ * nobody had chosen, and `describePlanRefusal` then told the operator that
+ * setting the target season would make "every season-scoped sync start
+ * working", which for this one was not true.
+ *
+ * So the year is still the row's. What changes is that a row which contradicts
+ * an operator's explicit choice is refused BEFORE a request is spent, and the
+ * refusal names both years rather than letting the provider name one of them.
+ *
+ * Returns null when no override is in force — the calendar is not a choice
+ * anybody made, and refusing a row for disagreeing with it would stop standings
+ * working on a plan that has no season problem at all.
+ */
+export function describeSeasonRowMismatch(
+  resolved: ResolvedTargetSeason,
+  rowSeasonYear: number,
+): string | null {
+  if (!resolved.isOverride) return null;
+  if (resolved.seasonYear === rowSeasonYear) return null;
+
+  const where = resolved.source === "database" ? "set by an operator" : `set by ${TARGET_SEASON_ENV}`;
+  return (
+    `This season row is the ${seasonLabel(rowSeasonYear)} season, but KIVO's target season is ${resolved.seasonYear} (${where}). ` +
+    `Asking the provider for ${rowSeasonYear} would spend a request on a season this deployment has deliberately pointed away from, so nothing was sent. ` +
+    `Refresh the league tables for the competitions in scope instead — that syncs the ${seasonLabel(resolved.seasonYear)} season — or clear the target season to sync ${seasonLabel(rowSeasonYear)} again.`
+  );
 }

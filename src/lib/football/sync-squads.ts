@@ -6,6 +6,7 @@ import { getFootballDataProvider } from "./index";
 import { createMapping, findMappedId, findProviderEntityId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedManager, NormalizedPlayer } from "./types";
+import { recordUnstartableRun } from "./sync-run-recorder";
 import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
@@ -112,7 +113,22 @@ async function upsertManager(
  */
 export async function syncTeamSquad(teamId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+
+  // Wrapped so a press that cannot reach a provider still leaves a row. This
+  // is the one sync in the codebase that works at ANY season — `/players/squads`
+  // and `/coachs` carry no season parameter — so "pressed it, nothing happened,
+  // nothing recorded" is the most expensive silence the product currently has.
+  // See `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "player",
+      `The squad sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")

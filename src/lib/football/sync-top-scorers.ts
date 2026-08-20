@@ -4,7 +4,7 @@ import type { Database } from "@/lib/supabase/types";
 import { getFootballDataProvider } from "./index";
 import { batchFindMappedIds, findProviderEntityId } from "./provider-mappings";
 import { shouldAttemptCapability } from "./coverage-registry";
-import { SyncRunRecorder } from "./sync-run-recorder";
+import { SyncRunRecorder, recordUnstartableRun } from "./sync-run-recorder";
 import { resolveSeasonYear } from "./target-season";
 import type { SyncResult } from "./sync";
 import type { NormalizedTopScorer } from "./types";
@@ -32,7 +32,20 @@ import { logError } from "@/lib/log";
  */
 export async function syncCompetitionTopScorers(competitionId: string, season?: number): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+  // Wrapped so a press that never reaches a provider still leaves a row. A sync
+  // that throws here inserts nothing and updates nothing, which in `sync_runs`
+  // is indistinguishable from a button nobody touched — see
+  // `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "top_scorer",
+      `The top scorers sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   // The operator's target season, not the calendar's. Season-scoped
   // endpoints are refused outright by a free API-Football plan asked for the
   // current year — see target-season.ts for the provider's own wording.

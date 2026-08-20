@@ -7,6 +7,7 @@ import { findMappedId } from "./provider-mappings";
 import type { SyncResult } from "./sync";
 import type { NormalizedCompetitionCoverage } from "./types";
 import { resolveSeasonYear } from "./target-season";
+import { recordUnstartableRun } from "./sync-run-recorder";
 import { logError } from "@/lib/log";
 
 type ServiceClient = SupabaseClient<Database>;
@@ -111,7 +112,33 @@ async function upsertCoverageRow(
  */
 export async function syncProviderCoverage(season?: number): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+
+  /**
+   * Wrapped, not awaited bare.
+   *
+   * `provider_coverage` and `sync_runs.entity_type = 'coverage'` are BOTH zero
+   * on the live database, and those two zeroes together are what made this
+   * unreadable: the run row below is opened before the provider is ever called,
+   * so a plan refusal — the expected failure here, since `/leagues?season=` is
+   * season-scoped — would have left a `failed` coverage row behind. None
+   * exists. The only remaining way to press this and leave nothing at all is a
+   * throw from this line, and until now that throw escaped the function
+   * entirely: no row inserted, no row updated, the server action rejected, and
+   * the Admin button stopped spinning without a word. See
+   * `recordUnstartableRun`.
+   */
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "coverage",
+      `The coverage registry refresh could not start: ${err instanceof Error ? err.message : String(err)}`,
+      "manual",
+    );
+  }
+
   // The operator's target season, not the calendar's — `/leagues?season=` is
   // season-scoped and is refused outright by a free plan asked for the current
   // year, which is why this registry has never once been filled on the live
@@ -120,7 +147,7 @@ export async function syncProviderCoverage(season?: number): Promise<SyncResult>
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
-    .insert({ provider: provider.name, entity_type: "coverage", status: "running" })
+    .insert({ provider: provider.name, entity_type: "coverage", status: "running", trigger_source: "manual" })
     .select("id")
     .single();
 
