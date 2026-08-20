@@ -42,7 +42,7 @@ const PROOF_POINTS = [
   {
     icon: "/assets/icons/navigation/live-scores.webp",
     title: "Real football, verified",
-    description: "Real fixtures, real scores, synced from live football data. Nothing invented, nothing guessed.",
+    description: "Real fixtures, real scores, straight from the football itself. Nothing invented, nothing guessed.",
   },
   {
     icon: "/assets/icons/navigation/ai-copilot.webp",
@@ -75,9 +75,9 @@ const PROOF_POINTS = [
 // 0038_realtime_fixture_distribution; the same pattern powers Social's live
 // "new posts" banner via migration 0042_realtime_posts).
 const TICKER_ITEMS = [
-  "Real-time score updates the instant a fixture syncs",
+  "Scores that move the moment the football does",
   "Match Rooms scoped to real fixtures",
-  "AI Copilot grounded in synced data, never guessed",
+  "AI Copilot grounded in real football, never guessed",
   "Predictions scored from real match results",
   "Fantasy points computed from real match events",
   "Zero fabricated stats, ever",
@@ -110,7 +110,7 @@ const FEATURE_SHOWCASE: {
     icon: "/assets/icons/navigation/matches.webp",
     title: "Match Centre",
     description:
-      "Every fixture gets its own command centre: live match events as they're synced, starting lineups with real formations, full team stats, shot maps and heatmaps, fan ratings, and a Match Room where supporters talk through the game.",
+      "Every fixture gets its own command centre: match events as they happen, starting lineups with real formations, full team stats, shot maps and heatmaps, fan ratings, and a Match Room where supporters talk through the game.",
     bullets: ["Lineups & real formations", "Live match events", "Team stats & heatmaps", "Fan ratings"],
     href: "/matches",
     cta: "Open Match Centre",
@@ -119,9 +119,9 @@ const FEATURE_SHOWCASE: {
     icon: "/assets/icons/navigation/ai-copilot.webp",
     title: "AI Copilot",
     description:
-      "Ask why a match turned, compare two players, or get a fantasy pick — every answer is built from KIVO's own synced data. A disclosure panel shows exactly what it knew when it answered, and it says so plainly when the data isn't there yet.",
+      "Ask why a match turned, compare two players, or get a fantasy pick — every answer is built from the football KIVO actually holds. A panel shows exactly what it knew when it answered, and it says so plainly when the answer isn't there yet.",
     bullets: [
-      "Grounded in real synced data",
+      "Grounded in real football, not guesswork",
       "“What KIVO knows right now” disclosure",
       "Deep-links from any fixture, team or player",
       "Full conversation history",
@@ -142,7 +142,7 @@ const FEATURE_SHOWCASE: {
     icon: "/assets/icons/fantasy-rewards/fantasy.webp",
     title: "Fantasy",
     description:
-      "Build a squad from real players at real prices, under scoring rules that are actually published, not a black box. Points come from the match events KIVO synced. Join or create a league and track the table against friends.",
+      "Build a squad from real players at real prices, under scoring rules that are actually published, not a black box. Points come from what those players really did on the pitch. Join or create a league and track the table against friends.",
     bullets: ["Squad builder & transfers", "Scoring from real match events", "Leagues & leaderboards", "Deadline countdown per gameweek"],
     href: "/fantasy",
     cta: "Build a squad",
@@ -165,15 +165,15 @@ const WHY_KIVO = [
     icon: ShieldCheck,
     title: "Zero fabricated data",
     description:
-      "Every score, stat, lineup and table on KIVO is synced from real football data — never invented, never guessed. The transparency page shows exactly what's synced right now, down to the row count.",
+      "Every score, stat, lineup and table on KIVO comes from real football — never invented, never guessed. One page shows exactly how much football KIVO has on record right now, counted live.",
     href: "/transparency",
-    cta: "See what's synced",
+    cta: "See what KIVO knows",
   },
   {
     icon: Sparkles,
     title: "AI grounded in what's real",
     description:
-      "The AI Copilot only states facts it can verify from KIVO's own synced data, and a disclosure panel shows exactly what it knew when it answered — never a guess dressed up as fact.",
+      "The AI Copilot only states facts it can check against the football KIVO holds, and a panel shows exactly what it knew when it answered — never a guess dressed up as fact.",
     href: "/ai",
     cta: "Try the Copilot",
   },
@@ -191,7 +191,7 @@ const WHY_KIVO = [
     description:
       "No data yet doesn't get a fabricated placeholder. If a leaderboard hasn't scored or a match's stats aren't published, KIVO says so plainly instead of faking a number.",
     href: "/transparency",
-    cta: "Read the freshness log",
+    cta: "See what KIVO knows",
   },
 ];
 
@@ -406,13 +406,13 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/sign-in"
-            className="flex min-h-10 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex min-h-11 items-center rounded-xl px-4 text-sm font-medium text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             Sign in
           </Link>
           <Link
             href="/sign-up"
-            className="kivo-gradient-prime flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="kivo-gradient-prime flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-on-accent kivo-glow kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             Sign up
           </Link>
@@ -840,14 +840,14 @@ export default function LandingPage() {
                     <span className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
                       {group.heading}
                     </span>
-                    {group.note && <span className="text-[10px] text-foreground-subtle/70">{group.note}</span>}
+                    {group.note && <span className="text-xs text-foreground-subtle">{group.note}</span>}
                   </span>
                   <ul className="flex flex-col">
                     {group.links.map((link) => (
                       <li key={link.href}>
                         <Link
                           href={link.href}
-                          className="flex min-h-10 items-center text-sm text-foreground-muted transition-colors hover:text-foreground"
+                          className="flex min-h-11 items-center text-sm text-foreground-muted transition-colors hover:text-foreground"
                         >
                           {link.label}
                         </Link>
@@ -864,7 +864,7 @@ export default function LandingPage() {
               href={signInTo("/transparency")}
               className="inline-flex items-center gap-1.5 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
-              Real football data, real fans, no fabricated stats. Ever. See what&apos;s synced
+              Real football, real fans, no fabricated stats. Ever. See what KIVO knows
               <ArrowRight className="h-3 w-3" strokeWidth={2} />
             </Link>
           </div>

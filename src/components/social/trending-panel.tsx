@@ -65,7 +65,7 @@ export function TrendingPanel({ result }: { result: TrendingResult }) {
       )}
 
       {verdict.kind === "ranked" && (
-        <p className="flex items-start gap-1.5 border-t border-hairline-soft pt-3 text-[10px] leading-relaxed text-foreground-subtle">
+        <p className="flex items-start gap-1.5 border-t border-hairline-soft pt-3 text-xs leading-relaxed text-foreground-subtle">
           <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
           Ordered by how many different people posted or replied, then by how much was said. Real counts only —
           nothing here is weighted or scored, and a room needs at least {MIN_TRENDING_PARTICIPANTS} people to appear.

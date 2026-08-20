@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Star, Shield, UserRound, BellOff, Users } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -13,6 +12,7 @@ import { FOLLOW_MEANING } from "@/lib/follow-meaning";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Following" };
 
@@ -40,7 +40,10 @@ export default async function FollowingPage() {
   // This page only makes sense for a signed-in profile's own follows (RLS
   // scopes `follows` selects to the caller already) — guests are routed to
   // sign-up rather than shown an empty shell.
-  if (!profile) redirect(`/sign-up?redirect_url=${encodeURIComponent("/profile/following")}`);
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const supabase = createServerSupabaseClient();
   // RECOMMENDATIONS.md item 291: no longer filtered to team/player/

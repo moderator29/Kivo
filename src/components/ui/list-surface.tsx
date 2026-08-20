@@ -75,8 +75,20 @@ export function ListRow({
   title,
   /** One line under the title. Metadata that is still meant to be read. */
   subtitle,
-  /** The right-hand value: a score, a count, a rating. Right-aligned and
-   *  tabular so a column of them lines up on the decimal. */
+  /**
+   * The right-hand value: a score, a count, a rating. Right-aligned so a
+   * column of them lines up.
+   *
+   * **It is deliberately NOT `tabular-nums`.** It was, and that turned out to
+   * be a trap: `globals.css` escalates `.tabular-nums` to the mono *font
+   * family* (see the note there — mono digits are the scoreboard convention),
+   * and this slot takes a `ReactNode`, so the escalation applied to whatever
+   * a caller put in it. On /home alone that rendered "v Manchester United",
+   * "2h ago", "Live" and "Loan" in Geist Mono, four different typefaces from
+   * the rest of their own rows. A row cannot know whether its trailing value
+   * is a number; the caller always does, so a caller with a real numeric
+   * column adds `tabular-nums` itself.
+   */
   trailing,
   /** Set when the row leads somewhere and you want the affordance. Ignored
    *  without an `href` — a chevron on a row that does not navigate is a lie. */
@@ -84,6 +96,17 @@ export function ListRow({
   /** Marks the viewer's own row, or the row under the cursor in a list the
    *  page is driving. One step up the surface ladder, never a colour. */
   selected = false,
+  /**
+   * Fires alongside the navigation, for a caller that has to record the tap
+   * as well as follow it — search remembering the term that led somewhere is
+   * the case this exists for.
+   *
+   * Client-only, obviously: a Server Component cannot pass a function across
+   * the boundary. It is deliberately *not* an alternative to `href` — a row
+   * that only responds to a click is a button, and a list of those wants its
+   * own component rather than a link pretending not to be one.
+   */
+  onClick,
   className,
 }: {
   href?: string;
@@ -93,6 +116,7 @@ export function ListRow({
   trailing?: ReactNode;
   chevron?: boolean;
   selected?: boolean;
+  onClick?: () => void;
   className?: string;
 }) {
   const body = (
@@ -103,7 +127,7 @@ export function ListRow({
         {subtitle && <span className="truncate text-xs text-foreground-subtle">{subtitle}</span>}
       </span>
       {trailing && (
-        <span className="shrink-0 text-sm tabular-nums text-foreground-muted">{trailing}</span>
+        <span className="shrink-0 text-right text-sm text-foreground-muted">{trailing}</span>
       )}
       {href && chevron && (
         <ChevronRight
@@ -128,6 +152,7 @@ export function ListRow({
       {href ? (
         <Link
           href={href}
+          onClick={onClick}
           className={cn(
             shape,
             "kivo-focus transition-colors duration-150 hover:bg-surface-2 motion-reduce:transition-none",

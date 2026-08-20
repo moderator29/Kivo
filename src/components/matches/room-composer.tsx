@@ -341,7 +341,7 @@ function SignedInRoomComposer({
                     )}
                   </div>
                 ))}
-                <p className="text-[10px] text-foreground-subtle">
+                <p className="text-xs leading-relaxed text-foreground-subtle">
                   A Room poll is what this room thinks. KIVO counts the votes and nothing else — it never predicts a
                   result.
                 </p>
@@ -497,7 +497,7 @@ function TemplatedPollActions({ fixtureId, disabled }: { fixtureId: string; disa
                   Ask the room
                 </button>
               </div>
-              <p className="text-[10px] text-foreground-subtle">
+              <p className="text-xs leading-relaxed text-foreground-subtle">
                 The minute is your own note about which incident you mean — KIVO does not check it against the match
                 events, because a disputed decision often is not one.
               </p>

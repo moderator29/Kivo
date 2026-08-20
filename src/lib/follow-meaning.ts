@@ -47,7 +47,7 @@ export type FollowTargetKind = "team" | "player" | "competition" | "user";
 
 export const FOLLOW_MEANING: Record<FollowTargetKind, string> = {
   team: "Kickoff, goals, red cards and full time reach your notifications, and their fixtures lead your home screen.",
-  player: "You'll hear when they score, get sent off, or feature in a match KIVO has synced.",
+  player: "You'll hear when they score, get sent off, or feature in a match KIVO is covering.",
   competition:
     "It's pinned to the top of your matches list, saved to your Following list, and used as context when you ask the Copilot about football. KIVO doesn't send competition alerts — this is a bookmark, not a subscription.",
   user: "Their posts show up in your Following feed, and they'll know you followed them.",

@@ -11,6 +11,7 @@ import { NOTIFICATION_GROUPS, notificationGroup } from "@/lib/notification-regis
 import { getNotificationFantasyContext } from "@/lib/football/notification-fantasy-context";
 import { blockedActorUsernames, notificationIsFromBlockedActor } from "@/lib/blocks";
 import { cn } from "@/lib/utils";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Notifications" };
 
@@ -25,20 +26,10 @@ export default async function NotificationsPage({
   searchParams: Promise<{ page?: string; type?: string }>;
 }) {
   const profile = await getOrCreateProfile();
-  if (!profile) {
-    return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
-        <Bell className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-        <p className="text-sm text-foreground-muted">Sign up to see your notifications.</p>
-        <Link
-          href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Sign up
-        </Link>
-      </div>
-    );
-  }
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const { page: pageParam, type: typeParam } = await searchParams;
   const page = Math.max(1, Math.trunc(Number(pageParam)) || 1);

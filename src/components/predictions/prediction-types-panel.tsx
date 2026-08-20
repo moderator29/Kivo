@@ -333,7 +333,7 @@ function TypeGroup({
         </>
       )}
 
-      <p className="text-[10px] leading-relaxed text-foreground-subtle">{PREDICTION_TYPE_SOURCE[type]}</p>
+      <p className="text-xs leading-relaxed text-foreground-subtle">{PREDICTION_TYPE_SOURCE[type]}</p>
     </div>
   );
 }

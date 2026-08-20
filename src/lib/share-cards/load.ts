@@ -120,9 +120,13 @@ async function loadPlayerTotals(supabase: Client, playerId: string): Promise<Pla
 }
 
 /** What window the player numbers cover, said plainly. KIVO aggregates every
- * synced match rather than filtering to a season, and the card says exactly
- * that instead of implying a season it never filtered on. */
-const PLAYER_WINDOW_LABEL = "All matches synced to KIVO";
+ * match it holds rather than filtering to a season, and the card says exactly
+ * that instead of implying a season it never filtered on.
+ *
+ * FRONTEND SWEEP: "All matches synced to KIVO" — a share card is the one piece
+ * of this product that leaves it, posted by a fan to people who have never
+ * opened KIVO, and "synced" is the word they would have met first. */
+const PLAYER_WINDOW_LABEL = "All matches KIVO has on record";
 
 async function loadPlayer(supabase: Client, playerId: string): Promise<PlayerRow | null> {
   const { data } = await supabase.from("players").select(PLAYER_SELECT).eq("id", playerId).maybeSingle();
@@ -390,7 +394,7 @@ async function loadTransfer(supabase: Client, transferId: string): Promise<Share
     // Real attribution, from the row that actually recorded the move, rather
     // than a hardcoded provider name that would keep saying "API-Football"
     // long after the data came from somewhere else.
-    (await loadTransferSource(supabase, transferId)) ?? "KIVO synced data",
+    (await loadTransferSource(supabase, transferId)) ?? "KIVO",
   );
 }
 

@@ -76,6 +76,13 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
 
   const dimension = size === "sm" ? "h-8 w-8" : "h-10 w-10";
   const iconSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+  // The circle stays 32/40px because that is the size it should *look*; the
+  // thumb gets 44 either way. A pseudo-element belongs to the button, so it
+  // enlarges the hit region without moving anything or changing the ring.
+  // min-h-11 is called "the one non-negotiable number on this project" in
+  // back-link.tsx, and a star you have to aim at is exactly what it is for.
+  const hitArea =
+    "before:absolute before:content-[''] " + (size === "sm" ? "before:-inset-1.5" : "before:-inset-0.5");
 
   return (
     <span className="relative flex shrink-0 items-center">
@@ -87,7 +94,7 @@ export function FollowButton({ targetType, targetId, initialFollowing, signedIn,
         aria-pressed={following}
         aria-label={following ? "Unfollow" : "Follow"}
         title={!signedIn ? GUEST_ACTION_TITLE : undefined}
-        className={`relative flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-60 ${dimension} ${
+        className={`relative flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-60 ${dimension} ${hitArea} ${
           following ? "border-achievement/40 bg-achievement/10" : "border-hairline hover:bg-surface-2"
         }`}
       >

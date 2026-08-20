@@ -47,13 +47,26 @@ export function AuthScreen({
   );
 }
 
-/** Shown instead of a form when this deployment has no Supabase credentials.
- *  Honest about which of the three states it is in: not empty, not broken —
- *  unconfigured. */
+/**
+ * Shown instead of a form when this deployment cannot reach the account
+ * system. Honest about which of the three states it is in: not empty, not
+ * broken on the reader's side — unavailable.
+ *
+ * FRONTEND SWEEP: this used to read "isn't configured in this environment yet.
+ * See ENVIRONMENT.md for the required Supabase keys." That is a message to
+ * whoever deployed KIVO, rendered on /sign-in and /sign-up, which are the two
+ * pages a stranger sees first. It named an internal document and a vendor, and
+ * asked a football fan to go and read the repository. The reader here can do
+ * exactly one thing — come back later — so that is the only thing this says.
+ * The detail an operator needs is in the server logs, where the operator is.
+ */
 export function AuthUnconfigured({ what }: { what: string }) {
   return (
-    <div className="kivo-glass-brand max-w-sm rounded-3xl p-6 text-center text-sm text-foreground-muted">
-      {what} isn&apos;t configured in this environment yet. See ENVIRONMENT.md for the required Supabase keys.
+    <div
+      role="status"
+      className="kivo-glass-brand max-w-sm rounded-3xl p-6 text-center text-sm text-foreground-muted"
+    >
+      {what} isn&apos;t available right now. This one is on KIVO, not on you — try again shortly.
     </div>
   );
 }

@@ -563,7 +563,7 @@ export default async function MatchCentrePage({
     // score, the sections, the section. Nothing was deleted; the cards that
     // sat in the gap moved into the front page they belong to, which is the
     // Overview section, as `overviewExtras` below.
-    <FadeIn className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 lg:px-8">
+    <FadeIn className="kivo-page">
       <MatchHero
         fixtureId={fixture.id}
         home={{

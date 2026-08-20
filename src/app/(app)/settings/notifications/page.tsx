@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
-import { signInHref } from "@/lib/auth";
 import { getNotificationPreferences, getQuietHours } from "@/app/(app)/settings/actions";
 import { QuietHoursSection } from "@/components/settings/quiet-hours-section";
 import { NotificationPreferencesPanel } from "@/components/settings/notification-preferences-panel";
@@ -9,12 +7,16 @@ import { NotificationMutesPanel } from "@/components/settings/notification-mutes
 import { getNotifiableEntities } from "@/app/(app)/settings/notification-mute-actions";
 import { SettingsCard, SettingsLinkRow, SettingsPageShell } from "@/components/settings/settings-shell";
 import { getSettingsSection } from "@/lib/settings-sections";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: getSettingsSection("notifications").label };
 
 export default async function NotificationSettingsPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(await signInHref());
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const [preferences, quietHours, notifiableEntities] = await Promise.all([
     getNotificationPreferences(),

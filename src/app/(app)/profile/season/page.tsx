@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleUserRound, Flame, Target, Trophy, Users, MessageSquare, Award } from "lucide-react";
+import { Flame, Target, Trophy, Users, MessageSquare, Award } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { getSeasonSummary, MIN_SETTLED_FOR_ACCURACY } from "@/lib/season-summary";
 import { resolveTimeZone } from "@/lib/timezone";
@@ -8,6 +8,7 @@ import { FadeIn } from "@/components/ui/fade-in";
 import { formatDate, formatNumber } from "@/lib/format";
 import { staggerDelay } from "@/lib/stagger";
 import { SeasonFantasyArc } from "@/components/profile/season-fantasy-arc";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Your season" };
 
@@ -41,20 +42,10 @@ export const metadata: Metadata = { title: "Your season" };
 export default async function SeasonPage() {
   const profile = await getOrCreateProfile();
 
-  if (!profile) {
-    return (
-      <div className="kivo-page items-center justify-center text-center">
-        <CircleUserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-        <p className="text-sm text-foreground-muted">Sign in to see your season.</p>
-        <Link
-          href="/sign-in"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-        >
-          Sign in
-        </Link>
-      </div>
-    );
-  }
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const summary = await getSeasonSummary(profile.id, profile.created_at);
   // KN-89: the joined date is a real instant, so it is shown in the zone the

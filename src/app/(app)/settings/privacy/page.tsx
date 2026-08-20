@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
-import { signInHref } from "@/lib/auth";
 import { signOut } from "@/app/(app)/session-actions";
 import { ActivityPrivacyToggle } from "@/components/settings/activity-privacy-toggle";
 import { OtherDevicesSection } from "@/components/settings/other-devices-section";
@@ -10,12 +8,16 @@ import { SettingsCard, SettingsPageShell } from "@/components/settings/settings-
 import { getSettingsSection } from "@/lib/settings-sections";
 import { BlockedAccountsSection } from "@/components/settings/blocked-accounts-section";
 import { getBlockedProfiles } from "@/lib/blocks";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: getSettingsSection("privacy").label };
 
 export default async function PrivacySettingsPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(await signInHref());
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const blocked = await getBlockedProfiles();
 

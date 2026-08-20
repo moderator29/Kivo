@@ -1,13 +1,11 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { PageHeaderSkeleton } from "@/components/ui/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function TeamsLoading() {
   return (
     <PageSkeleton className="kivo-page" label="Loading Teams">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-6 w-24" />
-        <Skeleton className="h-4 w-56" />
-      </div>
+      <PageHeaderSkeleton titleWidth="w-24" />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {Array.from({ length: 9 }).map((_, i) => (

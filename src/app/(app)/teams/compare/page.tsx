@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { isUuid } from "@/lib/params";
 import Link from "next/link";
-import { Trophy, History, Users, MapPin } from "lucide-react";
+import { Trophy, History, Users, MapPin, Shield } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { QueryFailedError, readList, readRow } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { FadeIn } from "@/components/ui/fade-in";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { TeamComparePicker, type CompareTeamOption } from "@/components/teams/team-compare-picker";
 import { FormBadges } from "@/components/teams/form-badges";
@@ -202,16 +203,26 @@ export default async function TeamComparePage({
 
   if (!teamCount || teamCount < 2) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
-        <p className="text-sm text-foreground-muted">
-          Comparing needs at least two clubs. Check back soon.
-        </p>
-        <Link
-          href="/teams"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Browse teams
-        </Link>
+      // FRONTEND SWEEP: this borrowed the signed-out gate's chrome — a bare
+      // sentence, no icon, and the sign-up column — for something that is not
+      // a sign-up moment at all. Nobody is locked out here; there are simply
+      // not two clubs yet, which is an empty state and should read like every
+      // other one in the product.
+      <div className="kivo-page">
+        <EmptyState
+          icon={Shield}
+          tone="page"
+          title="Not enough clubs to compare"
+          description="A comparison needs two sides. KIVO only has one club on record so far — more arrive as its coverage grows."
+          action={
+            <Link
+              href="/teams"
+              className="kivo-focus kivo-gradient-prime kivo-raise flex min-h-11 items-center rounded-xl px-5 text-sm font-semibold text-on-accent"
+            >
+              Browse clubs
+            </Link>
+          }
+        />
       </div>
     );
   }

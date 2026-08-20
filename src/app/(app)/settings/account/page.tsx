@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { Mail, AtSign } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
-import { getAuthUser, signInHref } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 import { UsernameEditor } from "@/components/profile/username-editor";
 import { ProfileDetailsEditor } from "@/components/settings/profile-details-editor";
 import { SettingsCard, SettingsPageShell } from "@/components/settings/settings-shell";
 import { getSettingsSection } from "@/lib/settings-sections";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: getSettingsSection("account").label };
 
 export default async function AccountSettingsPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(await signInHref());
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   // Email is the one identity field KIVO deliberately does NOT copy into
   // `profiles` (see ARCHITECTURE.md) — Supabase Auth owns it, so it is read

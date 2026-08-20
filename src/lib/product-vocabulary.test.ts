@@ -137,6 +137,45 @@ describe("product vocabulary", () => {
     expect(files.length).toBeGreaterThan(200);
   });
 
+  /**
+   * QA SWEEP 2026-08-20: the scan above had two holes, and both of them were
+   * holding real leaks on the day this block was written.
+   *
+   * **`src/app/page.tsx` is not under `src/app/(app)`.** The landing page is
+   * the most public surface KIVO has, and it said "synced" eleven times, plus
+   * "down to the row count" and a call to action reading "See what's synced".
+   *
+   * **`src/lib` was exempted** on the reasoning that the vocabulary is correct
+   * there — which is true of the football layer and false of the handful of
+   * modules that exist purely to hold sentences. `FOLLOW_MEANING`,
+   * `PREDICTION_TYPE_SOURCE`, every unresolvable settlement reason, the three
+   * empty-search explanations, the Coming Soon copy in `navigation.ts` and the
+   * share-card labels are all *rendered verbatim*; they are components that
+   * happen to be arrays. Between them they carried an environment variable
+   * name, a repository filename, "empty database", and eleven more "synced"s.
+   *
+   * So the list below is explicit rather than a directory walk: naming the
+   * copy-carrying modules one by one is what keeps `src/lib`'s genuinely
+   * technical files out, and adding a file here is the correct cost of putting
+   * fan-visible prose into `src/lib`.
+   */
+  const COPY_MODULES = [
+    "src/app/page.tsx",
+    "src/app/about/page.tsx",
+    "src/lib/navigation.ts",
+    "src/lib/follow-meaning.ts",
+    "src/lib/predictions.ts",
+    "src/lib/search-coverage.ts",
+    "src/lib/share-cards/load.ts",
+  ];
+
+  it.each(COPY_MODULES)("%s holds sentences a fan reads, so the same rule applies", (module) => {
+    expect(
+      leaksIn(join(process.cwd(), module)),
+      "This module's strings are rendered verbatim. Same rule as a component: say the fact in football.",
+    ).toEqual([]);
+  });
+
   it("catches a leak when there is one", () => {
     // The test's own worked example, so the check is verified rather than
     // trusted: this is close to the exact sentence that was live on the player

@@ -215,10 +215,10 @@ export const PREDICTION_TYPE_LABEL: Record<PredictionType, string> = {
 export const PREDICTION_TYPE_SOURCE: Record<PredictionType, string> = {
   winner: "Settled by the final score.",
   correct_score: "Settled by the final score. Exact — 2-1 is not 3-1.",
-  first_scorer: "Settled by KIVO's synced match events. Own goals don't count as a first scorer.",
+  first_scorer: "Settled by the match's goal timeline. Own goals don't count as a first scorer.",
   total_goals: "Settled by the final score, both teams combined.",
-  cards_corners: "Settled by the match statistics feed. Both bands must be right.",
-  motm: "Settled by this match's Room vote — KIVO has no provider man-of-the-match award, so the room's own vote is the only real answer there is.",
+  cards_corners: "Settled by the match's official statistics. Both bands must be right.",
+  motm: "Settled by this match's Room vote — there is no official man-of-the-match award for KIVO to read, so the room's own vote is the only real answer there is.",
 };
 
 export const TOTAL_GOALS_BAND_LABEL: Record<TotalGoalsBand, string> = {
@@ -391,7 +391,7 @@ export function resolvePrediction(pick: PredictionPick, facts: FixtureFacts): Pr
     case "first_scorer": {
       if (pick.playerId === null) return unresolvable("This prediction is missing the player it was saved with.");
       if (facts.events === null) {
-        return unresolvable("KIVO hasn't synced this match's events, so it can't say who scored first.");
+        return unresolvable("KIVO doesn't have this match's goal timeline, so it can't say who scored first.");
       }
 
       const scorelineEvents = facts.events.filter((e) => SCORELINE_EVENT_TYPES.has(e.eventType));
@@ -403,7 +403,7 @@ export function resolvePrediction(pick: PredictionPick, facts: FixtureFacts): Pr
         // that disagrees with its own scoreline, and KIVO will not settle a
         // prediction on data it can see is incomplete.
         if (totalGoals === 0) return correct("first_scorer", false);
-        return unresolvable("This match's goals aren't in KIVO's event feed yet, so the first scorer can't be confirmed.");
+        return unresolvable("This match's goals haven't reached KIVO yet, so the first scorer can't be confirmed.");
       }
 
       const sorted = [...scorelineEvents].sort((a, b) => eventClock(a) - eventClock(b));
@@ -414,7 +414,7 @@ export function resolvePrediction(pick: PredictionPick, facts: FixtureFacts): Pr
         return correct("first_scorer", false);
       }
       if (firstScoring.playerId === null) {
-        return unresolvable("The first goal is synced without a scorer, so KIVO can't settle this honestly.");
+        return unresolvable("The first goal has no scorer recorded against it, so KIVO can't settle this honestly.");
       }
       return correct("first_scorer", pick.playerId === firstScoring.playerId);
     }
@@ -424,11 +424,11 @@ export function resolvePrediction(pick: PredictionPick, facts: FixtureFacts): Pr
         return unresolvable("This prediction is missing the bands it was saved with.");
       }
       if (facts.statistics === null) {
-        return unresolvable("KIVO hasn't synced this match's team statistics, so cards and corners can't be counted.");
+        return unresolvable("KIVO doesn't have this match's statistics, so cards and corners can't be counted.");
       }
       const { totalCards, totalCorners } = facts.statistics;
       if (totalCards === null || totalCorners === null) {
-        return unresolvable("The provider didn't report cards or corners for this match, so this can't be settled.");
+        return unresolvable("No cards or corners were recorded for this match, so this can't be settled.");
       }
       // Both halves must land. Said plainly on the picker (see
       // PREDICTION_TYPE_SOURCE) so it is a known rule rather than a surprise.

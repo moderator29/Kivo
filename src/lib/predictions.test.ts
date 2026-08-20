@@ -90,11 +90,14 @@ describe("total goals", () => {
 describe("first scorer", () => {
   const scorer = pick({ type: "first_scorer", playerId: "player-a" });
 
-  it("is unresolvable when no events were ever synced", () => {
+  it("is unresolvable when there is no goal timeline at all", () => {
     const verdict = resolvePrediction(scorer, facts({ events: null }));
     expect(verdict.resolution).toBe("unresolvable");
     expect(verdict.points).toBeNull();
-    expect(verdict.reason).toMatch(/synced this match's events/i);
+    expect(verdict.reason).toMatch(/goal timeline/i);
+    // The reason is shown to whoever made the prediction, so it may not name
+    // KIVO's plumbing back at them.
+    expect(verdict.reason?.toLowerCase()).not.toMatch(/sync|provider|feed|api/);
   });
 
   it("is unresolvable when the event feed disagrees with the scoreline", () => {

@@ -81,10 +81,10 @@ export function SquadPanel({ groups }: { groups: SquadGroup[] }) {
                 subtitle={[player.position, player.nationality].filter(Boolean).join(" · ") || undefined}
                 trailing={
                   player.dateOfBirth ? (
-                    <>
+                    <span className="tabular-nums">
                       {calculateAge(player.dateOfBirth)}
                       <span className="sr-only"> years old</span>
-                    </>
+                    </span>
                   ) : undefined
                 }
               />

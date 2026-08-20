@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Camera, ImageIcon, ShieldHalf } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -12,6 +11,7 @@ import { KivoAvatar } from "@/components/ui/kivo-avatar";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { resolveAvatarSrc, resolveBackgroundSrc } from "@/lib/kivo-assets";
 import { getCountryName } from "@/lib/countries";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Edit profile" };
 
@@ -27,7 +27,10 @@ export const metadata: Metadata = { title: "Edit profile" };
  */
 export default async function EditProfilePage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(`/sign-up?redirect_url=${encodeURIComponent("/profile/edit")}`);
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const supabase = createServerSupabaseClient();
   const { data: club } = profile.favourite_team_id

@@ -15,7 +15,7 @@ const WHAT_YOU_FIND = [
   {
     icon: "/assets/icons/navigation/live-scores.webp",
     title: "Live scores, verified",
-    description: "Real fixtures, real scores, synced from live football data. Nothing invented, nothing guessed.",
+    description: "Real fixtures, real scores, straight from the football itself. Nothing invented, nothing guessed.",
   },
   {
     icon: "/assets/icons/social/chat-social.webp",
@@ -98,7 +98,7 @@ export default function AboutPage() {
           <p className="text-sm leading-relaxed text-foreground-muted sm:text-base">
             It would be easy to make KIVO look more complete by quietly filling gaps: a placeholder score, a made-up
             transfer rumor, a ranking nobody actually calculated. We don&apos;t do that, anywhere in the product.
-            Live scores come from a real football data provider. The AI Copilot is told explicitly to say &ldquo;KIVO
+            Live scores come from real football, recorded as it happened. The AI Copilot is told explicitly to say &ldquo;KIVO
             doesn&apos;t have that yet&rdquo; rather than guess. If a feature isn&apos;t connected to real data yet,
             it&apos;s labeled &ldquo;Coming Soon&rdquo; instead of faked. This isn&apos;t a marketing line, it&apos;s
             a constraint we build against every time we ship something new.

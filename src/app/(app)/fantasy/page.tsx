@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
@@ -12,6 +11,7 @@ import { GameweekScorecard } from "./gameweek-scorecard";
 import { DEFAULT_FANTASY_PRICE, positionGroup } from "./fantasy-rules";
 import { FantasyOnboarding } from "./fantasy-onboarding";
 import { FantasyBuilder } from "./fantasy-builder";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Fantasy" };
 
@@ -23,19 +23,10 @@ export default async function FantasyPage({
   const { team: teamIdParam } = await searchParams;
   const profile = await getOrCreateProfile();
 
-  if (!profile) {
-    return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
-        <p className="text-sm text-foreground-muted">Sign up to build your fantasy squad.</p>
-        <Link
-          href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Sign up
-        </Link>
-      </div>
-    );
-  }
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const supabase = createServerSupabaseClient();
 

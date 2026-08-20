@@ -1819,3 +1819,214 @@ the correction appended to A7 itself.
   token is a number this codebase does not hold, and multiplying by a rate typed
   into a constant would be a fabricated cost that goes wrong silently the next
   time pricing changes. Tokens are what the rows say.
+
+---
+
+# QA sweep, 2026-08-20 — every `(app)` route, plus `/`, `/sign-in`, `/sign-up`
+
+Second pass of the front-end QA sweep, picking up the two items the previous
+agent named as unreached and then doing the systematic walk it never got to.
+
+**Nothing in this pass was checked against live data.** This environment cannot
+reach the Supabase host, and `(app)` is fully gated (`src/app/(app)/layout.tsx`
+redirects a signed-out visitor before rendering anything), so no authenticated
+route could be loaded in a browser at all. What *was* verified in Chromium at
+390px and 1280px, dark and light, was a temporary harness route rendering the
+changed primitives with realistic props — populated, single-item, empty, thin,
+and failed — plus `/`, `/sign-in` and `/sign-up` as they really render. Measured
+in-page rather than eyeballed: `scrollWidth === clientWidth` at both widths (no
+horizontal overflow), no text below 11px, no interactive control under 44px. The
+harness was deleted before committing.
+
+## Q1. The two named leftovers
+
+**The search skeleton** and **the rewards streak block** had in fact been
+touched by the salvage commit — their *geometry* was corrected, but both were
+still hand-rolled copies of primitives rather than the primitives. `/search`
+now renders `ListSurface`/`ListRow`/`ListSkeleton`/`EmptyState`/`InlineError`
+throughout, and the rewards XP ledger renders `ListSurface`. That matters beyond
+tidiness: the searching skeleton and the results list now read their geometry
+from the same component, so the reflow the salvage fixed by hand cannot come
+back the next time a row changes.
+
+Two things the conversion exposed that hand-rolling had hidden: the result rows
+drew a 28px crest against a 32px icon fallback, so the leading column was one
+pixel-column off for every result without an image; and `/search/loading.tsx`
+promised a row of pill-shaped chips for a "Browse everything" block that has
+been a list since the primitives landed.
+
+The streak block itself was left as one panel with hairline-divided regions,
+which is correct — it is mixed content about one subject, not a list.
+
+## Q2. The biggest thing found: a null profile means four different things
+
+`src/app/(app)/layout.tsx` guarantees, before any page renders, that the viewer
+is signed in, has a profile row, and has finished onboarding. `guest-preview.ts`
+states the consequence outright: inside the group a null profile "is a transient
+read failure between two calls in the same request, not a guest".
+
+**Twenty-five pages disagreed with that, in three different ways.** Seven
+rendered a hand-built "Sign up" screen; eight `redirect`ed to
+`/sign-up?redirect_url=…`; nine `redirect`ed to `signInHref()`. Exactly one —
+`/home` — did the right thing and rendered `<ProfileUnavailable />`.
+
+None of the three wrong answers is merely dead. The sign-up screens offer an
+account to somebody who already has one. The `signInHref()` redirects are the
+founder's original "sign-in keeps throwing me out" loop, rebuilt: `/sign-in`
+sees a perfectly valid session and sends the user straight back, which is the
+precise bug `ProfileUnavailable` was written to stop. All twenty-five now match
+`/home`.
+
+The seven bespoke screens were also, separately, seven different designs: four
+had an icon and three did not, all seven hand-rolled a container that exists
+nowhere else in the product, all seven repeated the primary button's classes
+inline with a hand-written focus ring instead of `.kivo-focus`, and
+`/predictions/mine` said "Sign in" above a button labelled "Sign up".
+
+`/teams/compare` was the odd one out — it borrowed that same chrome for "there
+are not two clubs yet", which is a genuine empty state and now renders as one.
+
+## Q3. Internal vocabulary a fan can read
+
+The previous sweep cleared the components. The words had retreated into the
+data and copy files, where a grep of `.tsx` does not find them.
+
+- **`/` — the landing page said "synced" eleven times**, plus "row count" and a
+  CTA reading "See what's synced". The most public surface in the product,
+  describing itself in the vocabulary of its own ingestion layer. Rewritten in
+  football.
+- **`src/lib/navigation.ts`** — the AI Copilot's Coming Soon told a football fan
+  that it "switches on the moment `ANTHROPIC_API_KEY` is set in the deployment.
+  Nothing else is missing — see ENVIRONMENT.md." An environment variable and a
+  repository document, rendered on a public page. News and Highlights named
+  "KIVO's football provider" and "a data API".
+- **`src/components/auth/auth-screen.tsx`** — when the account system is
+  unreachable, `/sign-in` and `/sign-up` told the reader to "See ENVIRONMENT.md
+  for the required Supabase keys". A message written for whoever deployed KIVO,
+  shown to the stranger who arrived first.
+- **`src/lib/search-coverage.ts`** — all three empty-search sentences, on the one
+  screen a fan reads when the product has just failed to find what they asked
+  for: "synced", "index", and "This is an empty database, not a broken search."
+- **`src/lib/predictions.ts`** — six strings, including the rule text shown next
+  to the picker *before* somebody commits a prediction ("Settled by KIVO's
+  synced match events") and four settlement reasons ("The provider didn't report
+  cards or corners").
+- **`src/lib/share-cards/load.ts`** — `"All matches synced to KIVO"` is printed
+  on player cards, which are the one artefact of this product that leaves it and
+  is posted to people who have never opened KIVO.
+- **`src/lib/follow-meaning.ts`** — "a match KIVO has synced", shown at the
+  moment somebody follows a player.
+
+The transfer share card's source credit (`"API-Football"`, `"TheSportsDB"`) was
+deliberately **kept**: naming who recorded a move is attribution, not plumbing.
+Only the fallback `"KIVO synced data"` changed, to `"KIVO"`.
+
+`src/lib/predictions.test.ts` now asserts that a settlement reason contains no
+internal word, and `search-coverage.test.ts` asserts the same for all three
+branches of the empty-search explanation.
+
+The durable fix, though, is the scanner another agent landed the same day in
+`src/lib/product-vocabulary.test.ts` — which had **two holes, and both were
+holding live leaks**. It walks `src/app/(app)` and `src/components`, so
+`src/app/page.tsx` was never scanned (the landing page is not inside the route
+group), and it exempts `src/lib` outright on the reasoning that the vocabulary
+is correct there. That is true of the football layer and false of the handful of
+modules that exist purely to hold sentences: `FOLLOW_MEANING`,
+`PREDICTION_TYPE_SOURCE`, the settlement reasons, the empty-search
+explanations, `navigation.ts`'s Coming Soon copy and the share-card labels are
+rendered verbatim — they are components that happen to be arrays. The test now
+also scans those seven files by name (an explicit list, not a walk, so
+`src/lib`'s genuinely technical files stay out and adding a file is the correct
+price of putting fan-visible prose there). It immediately found an eighth leak
+nobody had spotted: `/about` said "Live scores come from a real football data
+provider".
+
+## Q4. Skeletons that promise the wrong page
+
+`page-container.test.ts` catches a skeleton in the wrong *container*. Nothing
+was checking the shape inside it, and five browse routes had drifted:
+`/players`, `/managers`, `/venues` and `/leagues` all drew stacked
+`kivo-glass-sharp` cards for lists that became one `ListSurface`, so every
+arrival ended in six-to-eight boxes collapsing into one panel. All five browse
+skeletons — `/teams` included — also drew their page title as an `h-6` bar
+against `PageHeader`'s real 32px line box, nudging the whole page down 8px at
+the moment the words landed.
+
+While fixing the skeletons it turned out **two of the browse lists themselves
+had never been converted**: `players-browser.tsx` and `managers-list.tsx` were
+still a glass card per row with a hover lift and a staggered entrance, on pages
+whose only job is to be scanned. The "five browse pages" commit had moved their
+containers, not their rows.
+
+`managers-list.tsx` also printed `"-"` when a manager had neither a nationality
+nor a club — the exact thing `venues-list.tsx`'s own comment forbids ("a '-' in
+the place a city goes reads as a fact about the ground").
+
+## Q5. The trailing slot was quietly switching typeface
+
+`globals.css` deliberately escalates `.tabular-nums` to the mono **font
+family** — mono digits are the scoreboard convention, and the rule is
+documented. `ListRow` applied `tabular-nums` to its `trailing` slot, which takes
+an arbitrary `ReactNode`.
+
+On `/home` alone that rendered **"v Manchester United", "2h ago", "Live" and
+"Loan" in Geist Mono** — four values in a different typeface from the rows they
+sit in, on the app's most-visited screen. This is exactly the class of thing the
+brief describes as "nobody can name but everybody feels".
+
+A row cannot know whether its trailing value is a number; the caller always can.
+`trailing` is now plain and right-aligned, and the two callers that genuinely
+have a numeric column (venue capacity, squad age) opt in.
+
+## Q6. 44px
+
+`back-link.tsx` calls `min-h-11` "the one non-negotiable number on this
+project". Measured in the browser rather than grepped:
+
+- the landing header's Sign in / Sign up were `min-h-10` (40px);
+- `site-header.tsx` and `site-footer.tsx` were `min-h-10` throughout, **with
+  comments defending it** — "keeps each a real mobile tap target … under the
+  40px guideline". There is no 40px guideline on this project;
+- the password show/hide toggle on `/sign-in` and `/sign-up` was a 40px box —
+  the one control on the page a thumb is most likely to miss;
+- the follow star (`follow-button.tsx`) is a 32px circle. It still *looks* 32px,
+  because that is the size it should look; the hit region is now 44 via a
+  pseudo-element, which enlarges the target without moving anything.
+
+## Q7. Containers and type
+
+- `/transparency` and `/matches/[id]` hand-rolled their own column — a different
+  width, gutter and vertical rhythm from every other route. Both on `.kivo-page`
+  now, skeletons with them. `/transparency`'s eight counts also moved to
+  `StatGrid`/`StatBlock`, and "Standings rows" — a table's name, not
+  football's — became "League positions".
+- `/ai` hand-rolled a second column for its share panel, inset by a few pixels
+  from the `.kivo-page` the chat above it renders into.
+- `TYPE_STEPS` calls `text-[10px]` "a defect". There are ~60 uses. The ones
+  fixed here are the ones that are **sentence-case copy a person has to read**:
+  the prediction-type rule text under the picker, the Room poll and minute
+  explainers, the trending-panel methodology note, the landing footer's group
+  notes (which were additionally at 70% of an already-subtle colour), and the
+  "Earned 3d ago" line on `/rewards` and `/profile`. Uppercase micro-labels and
+  numerals inside badges and pitch shirts were left alone deliberately —
+  converting all sixty mechanically is the mistake, not the fix.
+
+## Q8. Still open — named so it can be routed
+
+- **`src/components/transfers/transfers-list.tsx`** is still a glass card per
+  transfer, and each card contains four separate links (player, both clubs,
+  "Details"), so a keyboard user takes four tab stops per row. It is a genuinely
+  three-line item, so this is not the mechanical `ListRow` conversion the browse
+  lists were — it wants either a `TransferRow` alongside `MatchListRow`, or a
+  deliberate decision that a transfer is a card. Not mine to guess at.
+- **`src/lib/fantasy-gameweek-scoring.ts`** returns `"This season has no synced
+  fixtures yet."` That string surfaces only in Admin Data Health, where the word
+  is correct — flagged only so the next vocabulary grep does not "fix" it.
+- **~55 remaining `text-[10px]`/`text-[9px]` call sites**, listed above as
+  deliberately untouched. Someone should decide whether `TYPE_STEPS` means what
+  it says about sub-11px type, or whether the scale needs a sanctioned
+  numerals-in-a-badge step. Right now the document and the codebase disagree,
+  and every new component inherits the argument.
+- **`src/components/teams/transfer-ledger.tsx`** renders `entry.feeText` under
+  `tabular-nums`, so a fee of "Free" or "Undisclosed" prints in mono. Same class
+  as Q5, one call site, harmless enough to leave for whoever owns that panel.

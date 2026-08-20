@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
-import { signInHref } from "@/lib/auth";
 import { isUuid } from "@/lib/params";
 import { resolveAvatarSrc } from "@/lib/kivo-assets";
 import { ComposeForm } from "@/components/social/compose-form";
 import { PageHeader } from "@/components/layout/page-header";
 import { fetchAttachableMatch, fetchAttachableMatches } from "./matches";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "New post" };
 
@@ -23,7 +22,10 @@ export default async function ComposePage({
   searchParams: Promise<{ match?: string }>;
 }) {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(await signInHref());
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const { match: matchParam } = await searchParams;
 

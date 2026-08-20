@@ -227,7 +227,7 @@ export async function GameweekScorecard({
                       ×{line.multiplier}
                     </span>
                   )}
-                  {!line.isStarting && <span className="text-[10px] text-foreground-subtle">bench</span>}
+                  {!line.isStarting && <span className="text-[11px] text-foreground-subtle">bench</span>}
                 </span>
                 <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
                   {line.isStarting ? (

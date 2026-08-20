@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import Link from "next/link";
 import { Search, UserRound } from "lucide-react";
-import { StaggeredList } from "@/components/ui/staggered-list";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TeamCrest } from "@/components/ui/team-crest";
-import { staggerDelay } from "@/lib/stagger";
 import { CappedListFooter } from "@/components/ui/capped-list-footer";
 import { CAPPED_LIST_STEP, nextVisibleCount } from "@/lib/capped-list";
 
@@ -63,34 +62,41 @@ export function ManagersList({ managers }: { managers: ManagerListItem[] }) {
         />
       </div>
 
+      {/* FRONTEND SWEEP: the other browse list still built as a glass card per
+          row. Same fix as /players, /leagues and /venues — one surface,
+          hairline-divided rows (CONTAINER_ROLES.row). */}
       {filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-foreground-muted">No managers match &quot;{query}&quot;.</p>
-      ) : (
-        <StaggeredList
-          items={shown}
-          keyExtractor={(manager) => manager.id}
-          delay={(index) => staggerDelay(index % 60, 0.02)}
-          className="flex flex-col gap-2"
-          renderItem={(manager) => (
-            <Link
-              href={`/managers/${manager.id}`}
-              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2">
-                <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium text-foreground">{manager.full_name}</span>
-                <span className="truncate text-xs text-foreground-subtle">
-                  {[manager.nationality, manager.current_team?.name].filter(Boolean).join(" · ") || "-"}
-                </span>
-              </div>
-              {manager.current_team && (
-                <TeamCrest crestUrl={manager.current_team.crest_url} name={manager.current_team.name} size={24} />
-              )}
-            </Link>
-          )}
+        <EmptyState
+          icon={UserRound}
+          tone="section"
+          title={`No managers match “${query}”`}
+          description="Try a surname, or clear the search to see everyone KIVO covers."
         />
+      ) : (
+        <ListSurface>
+          {shown.map((manager) => (
+            <ListRow
+              key={manager.id}
+              href={`/managers/${manager.id}`}
+              leading={
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2">
+                  <UserRound className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+                </span>
+              }
+              title={manager.full_name}
+              // No dash. venues-list.tsx says it best: "a '-' in the place a
+              // city goes reads as a fact about the ground". A manager with no
+              // recorded nationality or club gets one line, not a hyphen
+              // standing in for two facts KIVO does not have.
+              subtitle={[manager.nationality, manager.current_team?.name].filter(Boolean).join(" · ") || undefined}
+              trailing={
+                manager.current_team ? (
+                  <TeamCrest crestUrl={manager.current_team.crest_url} name={manager.current_team.name} size={24} />
+                ) : undefined
+              }
+            />
+          ))}
+        </ListSurface>
       )}
 
       <CappedListFooter visible={shown.length} total={filtered.length} onShowMore={showMore} label="managers" />

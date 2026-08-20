@@ -37,7 +37,7 @@ export function SiteFooter() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="flex max-w-xs flex-col gap-3">
-            <Link href="/" className="flex min-h-10 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
+            <Link href="/" className="flex min-h-11 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
               <KivoMarkGlyph size={28} />
               <span className="text-base font-semibold tracking-tight text-foreground">KIVO</span>
             </Link>
@@ -51,7 +51,7 @@ export function SiteFooter() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">
                   {group.heading}
                 </span>
-                {/* min-h-10 (40px) per link keeps each a real mobile tap
+                {/* min-h-11 (40px) per link keeps each a real mobile tap
                     target — plain text-sm links with no padding measured
                     well under the 40px guideline. */}
                 <ul className="flex flex-col">
@@ -59,7 +59,7 @@ export function SiteFooter() {
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="flex min-h-10 items-center text-sm text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                        className="flex min-h-11 items-center text-sm text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                       >
                         {link.label}
                       </Link>

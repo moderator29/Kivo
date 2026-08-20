@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
-import { Search, X, Clock, Flame, ArrowRight } from "lucide-react";
+import { Search, X, Clock, Flame } from "lucide-react";
 import { motion } from "motion/react";
 import { searchPlatform, type PopularTeam, type SearchResult } from "@/app/(app)/search-actions";
 import { SEARCH_TYPE_META, SEARCH_TYPE_ORDER, searchResultHref } from "./search-result-meta";
 import { TeamCrest } from "@/components/ui/team-crest";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
+import { ListSkeleton } from "@/components/ui/skeletons";
+import { EmptyState, InlineError } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { searchEmptyExplanation, type SearchCoverage } from "@/lib/search-coverage";
 import {
   clearRecentSearches,
@@ -233,43 +234,37 @@ export function SearchSurface({
             <Section title="Popular teams" icon={<Flame className="h-3 w-3" strokeWidth={2} />}>
               {/* "Popular", never "Trending": a real follower count, not
                   time-windowed activity KIVO does not record. */}
-              <ul className="kivo-glass flex flex-col rounded-2xl">
-                {popularTeams.map((team, index) => (
-                  <li key={team.id} className={cn(index > 0 && "border-t border-hairline-soft")}>
-                    <Link
-                      href={`/teams/${team.id}`}
-                      className="kivo-focus flex min-h-14 items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2 focus-visible:ring-inset"
-                    >
-                      <TeamCrest crestUrl={team.crestUrl} name={team.name} size={24} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{team.name}</span>
-                      <span className="shrink-0 text-[11px] text-foreground-subtle">
-                        {team.followerCount} follower{team.followerCount === 1 ? "" : "s"}
-                      </span>
-                    </Link>
-                  </li>
+              <ListSurface>
+                {popularTeams.map((team) => (
+                  <ListRow
+                    key={team.id}
+                    href={`/teams/${team.id}`}
+                    leading={<TeamCrest crestUrl={team.crestUrl} name={team.name} size={24} />}
+                    title={team.name}
+                    subtitle={`${team.followerCount} follower${team.followerCount === 1 ? "" : "s"}`}
+                  />
                 ))}
-              </ul>
+              </ListSurface>
             </Section>
           )}
 
           <Section title="Browse everything">
-            <ul className="kivo-glass flex flex-col rounded-2xl">
-              {BROWSE_LINKS.map((link, index) => {
+            <ListSurface>
+              {BROWSE_LINKS.map((link) => {
                 const Icon = SEARCH_TYPE_META[link.type].icon;
                 return (
-                  <li key={link.href} className={cn(index > 0 && "border-t border-hairline-soft")}>
-                    <Link
-                      href={link.href}
-                      className="kivo-focus flex min-h-14 items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2 focus-visible:ring-inset"
-                    >
-                      <Icon className="h-[18px] w-[18px] shrink-0 text-foreground-subtle" strokeWidth={1.75} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{link.label}</span>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-foreground-subtle/60" strokeWidth={1.75} />
-                    </Link>
-                  </li>
+                  <ListRow
+                    key={link.href}
+                    href={link.href}
+                    chevron
+                    leading={
+                      <Icon className="h-[18px] w-[18px] text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+                    }
+                    title={link.label}
+                  />
                 );
               })}
-            </ul>
+            </ListSurface>
           </Section>
         </div>
         )
@@ -277,37 +272,30 @@ export function SearchSurface({
         // FRONTEND SWEEP 2026-08-19: five stacked glass cards, standing in for
         // results that arrive as one surface with divided rows. Every search
         // therefore ended in a reflow — five boxes collapsing into one panel —
-        // at the exact moment the reader started scanning. Same geometry as the
-        // real results now: group label, one surface, `min-h-16` rows.
+        // at the exact moment the reader started scanning.
+        //
+        // Now it is <ListSkeleton> in front of <ListSurface>, which is the only
+        // version of this that cannot drift: the two read their geometry from
+        // the same primitive, so a change to the row changes both.
         <div className="flex flex-col gap-2" role="status" aria-label="Searching">
           <Skeleton className="mx-1 h-3 w-24" />
-          <div className="kivo-glass overflow-hidden rounded-2xl">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn("flex min-h-16 items-center gap-3 px-4 py-3", i > 0 && "border-t border-hairline-soft")}
-              >
-                <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-2.5 w-24" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <ListSkeleton rows={5} leading="circle" subtitle />
         </div>
       ) : error ? (
-        <p className="kivo-glass rounded-2xl px-4 py-8 text-center text-sm text-critical" role="status" aria-live="polite">
-          {error}
-        </p>
+        // A failed search is a failed read, not an empty result, and the two
+        // must not look alike — <InlineError> is one hairline row inside the
+        // space the results would have filled, so a retype does not reflow the
+        // page. The raw message is deliberately dropped: it is written for a
+        // log, and "Search didn't load just now" is the whole of what the
+        // reader can act on.
+        <InlineError what="Search" />
       ) : grouped.length === 0 ? (
-        <div className="kivo-glass flex flex-col items-center gap-2 rounded-2xl px-6 py-12 text-center">
-          <Search className="h-6 w-6 text-foreground-subtle" strokeWidth={1.75} />
-          <p className="text-sm text-foreground">No matches for &ldquo;{trimmed}&rdquo;.</p>
-          <p className="max-w-sm text-xs leading-relaxed text-foreground-subtle">
-            {searchEmptyExplanation(coverage)}
-          </p>
-        </div>
+        <EmptyState
+          icon={Search}
+          tone="section"
+          title={`No matches for \u201C${trimmed}\u201D`}
+          description={searchEmptyExplanation(coverage)}
+        />
       ) : (
         <div className="flex flex-col gap-6" aria-live="polite">
           {grouped.map((group, groupIndex) => (
@@ -321,35 +309,30 @@ export function SearchSurface({
               <h2 className="px-1 text-[11px] font-semibold uppercase tracking-wider text-foreground-subtle">
                 {SEARCH_TYPE_META[group.type].group}
               </h2>
-              <ul className="kivo-glass flex flex-col rounded-2xl">
-                {group.items.map((result, index) => {
+              <ListSurface>
+                {group.items.map((result) => {
                   const Icon = SEARCH_TYPE_META[result.type].icon;
                   return (
-                    <li key={`${result.type}-${result.id}`} className={cn(index > 0 && "border-t border-hairline-soft")}>
-                      <Link
-                        href={searchResultHref(result.type, result.id)}
-                        onClick={remember}
-                        className="kivo-focus flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2 focus-visible:ring-inset"
-                      >
-                        {result.imageUrl ? (
+                    <ListRow
+                      key={`${result.type}-${result.id}`}
+                      href={searchResultHref(result.type, result.id)}
+                      onClick={remember}
+                      chevron
+                      leading={
+                        result.imageUrl ? (
                           <TeamCrest crestUrl={result.imageUrl} name={result.label} size={28} />
                         ) : (
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-1">
-                            <Icon className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} />
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-1">
+                            <Icon className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
                           </span>
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-foreground">{result.label}</span>
-                          {result.sublabel && (
-                            <span className="block truncate text-xs text-foreground-subtle">{result.sublabel}</span>
-                          )}
-                        </span>
-                        <ArrowRight className="h-4 w-4 shrink-0 text-foreground-subtle/60" strokeWidth={1.75} />
-                      </Link>
-                    </li>
+                        )
+                      }
+                      title={result.label}
+                      subtitle={result.sublabel ?? undefined}
+                    />
                   );
                 })}
-              </ul>
+              </ListSurface>
             </motion.div>
           ))}
         </div>

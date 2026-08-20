@@ -299,7 +299,7 @@ export function HeatmapView({ heatmaps, homeTeamName, awayTeamName }: HeatmapVie
                       <span className="mr-1.5 tabular-nums text-foreground-subtle">{player.shirtNumber}</span>
                     )}
                     {player.playerName}
-                    {!player.isStarting && <span className="ml-1.5 text-[10px] text-foreground-subtle">sub</span>}
+                    {!player.isStarting && <span className="ml-1.5 text-[11px] text-foreground-subtle">sub</span>}
                   </button>
                 );
               })}
