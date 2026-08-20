@@ -1,8 +1,6 @@
 import { ShieldCheck, Trophy, ArrowLeftRight, Sparkles, Wrench } from "lucide-react";
 import { DISPLAY_LOCALE } from "@/lib/format";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
 import { FadeIn } from "@/components/ui/fade-in";
 import { staggerDelay } from "@/lib/stagger";
 import { LocalDateTime } from "@/components/ui/relative-time";
@@ -15,8 +13,8 @@ import { SyncPlannerPanel } from "@/components/admin/sync-planner-panel";
 import { DataQualityPanel } from "@/components/admin/data-quality-panel";
 import { TeamMergePanel } from "@/components/admin/team-merge-panel";
 import { FantasyGameweekGenerator } from "@/components/admin/fantasy-gameweek-generator";
-import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
-import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
+import { AdminPageHeader, AdminSection } from "@/components/admin/admin-chrome";
+import { footballDataGate } from "../access";
 
 /**
  * Football data → Integrity. Is what arrived correct and complete, and what
@@ -45,18 +43,11 @@ function formatTimestamp(value: string | null): string {
 }
 
 export default async function IntegrityPage() {
-  const profile = await getOrCreateProfile();
-
-  if (!canManageFootballData(profile?.role)) {
-    return (
-      <AdminAccessNotice
-        title="Integrity"
-        role={profile?.role}
-        subject="Football data"
-        because="These checks read and repair the football reference tables, which is limited to the football data, admin and super-admin roles."
-      />
-    );
-  }
+  // The layout above renders the lock screen; this returns nothing rather than
+  // a second copy of it. What matters is that it returns BEFORE the reads
+  // below — a layout does not stop a page from running (see ../access.tsx).
+  const { denied } = await footballDataGate("Integrity");
+  if (denied) return null;
 
   const supabase = createServerSupabaseClient();
 
@@ -156,8 +147,6 @@ export default async function IntegrityPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <AdminSectionTabs groupId="football-data" />
-
       <AdminPageHeader
         icon={ShieldCheck}
         title="Integrity"
@@ -275,7 +264,7 @@ export default async function IntegrityPage() {
           <FantasyGameweekGenerator />
 
           <details className="text-xs text-foreground-subtle">
-            <summary className="kivo-focusable inline-flex min-h-9 cursor-pointer items-center rounded-lg font-medium text-foreground-muted">
+            <summary className="kivo-focusable inline-flex min-h-11 cursor-pointer items-center rounded-lg font-medium text-foreground-muted">
               Published scoring rules
             </summary>
             <ul className="mt-2 flex flex-col gap-1 pl-1">

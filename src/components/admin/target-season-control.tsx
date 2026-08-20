@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlertTriangle, Check, RefreshCw, RotateCcw } from "lucide-react";
-import { setTargetSeason, clearTargetSeason } from "@/app/admin/data-health/season-actions";
+import { setTargetSeason, clearTargetSeason } from "@/app/admin/football/season-actions";
 
 /**
  * The number that unblocks the platform.

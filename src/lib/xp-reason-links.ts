@@ -35,7 +35,7 @@ export type XpReasonLink = { href: string; label: string };
 
 /** Keyed on the `kind:` prefix of `xp_ledger.source_key`. */
 const SOURCE_KIND_LINKS: Record<string, XpReasonLink> = {
-  // src/app/admin/data-health/predictions-actions.ts — `prediction:<id>`,
+  // src/app/admin/football/predictions-actions.ts — `prediction:<id>`,
   // and its `prediction:<id>:adj:<n>` reconciliation rows, which share the
   // prefix on purpose so an adjustment links to the same place as the award
   // it corrects.

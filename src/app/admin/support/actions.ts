@@ -66,7 +66,7 @@ export async function updateSupportRequest(
     return { error: "That request couldn't be updated — it may have been removed." };
   }
 
-  await logAudit(profile.id, "support_request_updated", "support_requests", { request_id: id, status });
+  await logAudit(profile.id, "support_request_updated", "support_requests", { status }, { targetId: id });
 
   revalidatePath("/admin/support");
   return { error: null };

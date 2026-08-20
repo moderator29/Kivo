@@ -825,7 +825,7 @@ Also confirmed shipped: Next.js App Router + TypeScript with genuinely server-si
 
 **308. Fantasy system: "versioned/config-driven scoring (not hardcoded)."** Checked `src/lib/fantasy-scoring.ts` directly. **Partial.** "Not hardcoded per call site" is genuinely true and valuable — every scoring call goes through one shared module, not duplicated inline logic, and the exact rules are published to users via `SCORING_RULES_SUMMARY` (a real honesty feature matching item 5's own instruction to "publish the scoring rules in the UI so points are auditable"). But the values themselves — `APPEARANCE_POINTS = 2`, `ASSIST_POINTS = 3`, `GOAL_POINTS_BY_POSITION`, etc. — are literal TypeScript `export const` module constants, not rows in a database config table; changing them requires a code deploy, not an admin action, which is the more literal reading of "config-driven." And unlike the Rating Engine, which ships an explicit `RATING_MODEL_VERSION` specifically so a historical rating can be attributed to the ruleset that produced it (`rating-engine.ts`), `fantasy-scoring.ts` has no version marker at all — grepped, zero matches for "version" anywhere in the file. If the point values are ever tuned (a realistic future need — item 251 already proposes dynamic pricing off real `fantasy_points` history), every previously-scored gameweek becomes ambiguous about which ruleset actually produced it, with no way to distinguish old points from new. **Recommendation:** add a `SCORING_MODEL_VERSION` constant, mirroring the Rating Engine's own pattern almost exactly, and stamp it onto `fantasy_gameweeks` or `fantasy_points` at scoring time — cheap, and closes exactly the gap this same codebase already solved for itself in the Rating Engine. Making the values genuinely database-driven (config in the fullest sense) is a larger, lower-urgency step behind that. **Small** for versioning; **Medium** for true DB-driven config. **RESOLVED (2026-08-18)** for the versioning half; true DB-driven config correctly left as the larger, separate follow-up. Migration `0052_fantasy_scoring_model_version.sql` adds a nullable `fantasy_points.scoring_model_version text` (nullable and not backfilled — existing rows genuinely predate versioning, and stamping them with today's version would be a fabricated claim about what actually scored them). `fantasy-scoring.ts` now exports `SCORING_MODEL_VERSION = "1.0"`, doc-commented the same way `RATING_MODEL_VERSION` is, to be bumped whenever a constant or the scoring formula changes in a way that would score identical real match facts differently. `scoreFantasyGameweek` (`admin/data-health/fantasy-actions.ts`) stamps it onto every row it upserts from this point forward.
 
-**309. Admin system: "platform + provider + AI + social + fantasy health."** Checked `admin/page.tsx` and `admin/data-health/page.tsx` directly for every named domain. **Four of five real; AI health has zero presence anywhere in `/admin`.** Platform: real (`admin/page.tsx`'s user/post/report stat cards). Provider: real and detailed (Data Health's quota pill, sync-order checklist, automated-worker status section). Social: real, if thin (pending-report count on the overview; the moderation queue itself). Fantasy: real (Data Health's dedicated "Fantasy scoring" section). AI: **confirmed absent** — grepped every file under `src/app/admin` for `ai_messages`/`ai_conversations`/any AI-usage concept; zero matches. There is no visibility anywhere in admin into AI Copilot call volume, error rate, or token spend, even though `ai_messages.input_tokens`/`output_tokens` are already captured per message (item 190) — the data exists, nothing surfaces it — and no visibility into `ai_chat`/`ai_chat_daily` rate-limit rejections either. An operator currently has no way to know the AI Copilot is unhealthy, expensive, or being abused without querying the database directly. **Recommendation:** a small "AI Copilot" card on Data Health — daily message count, a real `sum(input_tokens + output_tokens)` cost readout, and a count of AI rate-limit rejections from `rate_limit_events` — is a shallow query over data that already exists, the same shape as every other Data Health stat. **Small.**
+**309. Admin system: "platform + provider + AI + social + fantasy health."** Checked `admin/page.tsx` and `admin/data-health/page.tsx` directly for every named domain. **Four of five real; AI health has zero presence anywhere in `/admin`.** Platform: real (`admin/page.tsx`'s user/post/report stat cards). Provider: real and detailed (Data Health's quota pill, sync-order checklist, automated-worker status section). Social: real, if thin (pending-report count on the overview; the moderation queue itself). Fantasy: real (Data Health's dedicated "Fantasy scoring" section). AI: **confirmed absent** — grepped every file under `src/app/admin` for `ai_messages`/`ai_conversations`/any AI-usage concept; zero matches. There is no visibility anywhere in admin into AI Copilot call volume, error rate, or token spend, even though `ai_messages.input_tokens`/`output_tokens` are already captured per message (item 190) — the data exists, nothing surfaces it — and no visibility into `ai_chat`/`ai_chat_daily` rate-limit rejections either. An operator currently has no way to know the AI Copilot is unhealthy, expensive, or being abused without querying the database directly. **Recommendation:** a small "AI Copilot" card on Data Health — daily message count, a real `sum(input_tokens + output_tokens)` cost readout, and a count of AI rate-limit rejections from `rate_limit_events` — is a shallow query over data that already exists, the same shape as every other Data Health stat. **Small.** — **RESOLVED 2026-08-20 as `/admin/ai`, with one part of this recommendation refused as unbuildable: `rate_limit_events` records ALLOWED requests only, because `consume_rate_limit` (migration 0066) deliberately does not record refusals. There is no rejection count to show. Also note this item's description of the Overview predates A1/A4. See A9.6.**
 
 **310. UX/UI principles: "the palette is 'a compass, not a cage' — I'm authorized to extend it when it demonstrably improves hierarchy, and expected to document why in `RECOMMENDATIONS.md` rather than drift silently."** Checked `globals.css`'s `--kivo-*` token block directly. **Minor partial.** The four brand colors match the brief exactly (`--kivo-obsidian`, `--kivo-navy`, `--kivo-blue`→`--kivo-cyan`, `--kivo-violet`, `--kivo-magenta`). The palette *was* extended, sensibly, with five functional state tokens the brief never named — `--kivo-live`, `--kivo-critical`, `--kivo-warning`, `--kivo-info`, `--kivo-achievement` — used throughout for live-match pulses, error states, warnings, info banners, and reward moments. That is exactly the kind of demonstrable-hierarchy-improvement extension the brief pre-authorizes. What's missing is the other half of that same sentence: nowhere else in this document is there a documented "why" for this specific extension — grepped, no entry names these five tokens or the reasoning for adding them. **Recommendation:** a single retroactive note (here is sufficient) naming the five tokens and the one-line reason — semantic state colors, deliberately distinct from the four brand/energy colors — closes this. Genuinely a sentence, not a design task: KIVO uses `--kivo-live`/`--kivo-critical`/`--kivo-warning`/`--kivo-info`/`--kivo-achievement` as functional state colors (live match, error, warning, info, reward) layered on top of the four brand colors named in Brand Color System v2, added because UI state communication needs colors distinct from brand/energy colors to stay legible — the "compass, not cage" clause covers exactly this kind of addition. **Small.** **RESOLVED (2026-08-18):** the retroactive note this item asked for is the sentence immediately above it, written in the same pass that found the gap — no further action needed. Recorded here as its own event rather than silently: item 300 (this same 2026-08-18 pass) reused `--kivo-warning`/`--color-warning` for the new "Limited data" AI provenance chip, itself a small real instance of this exact "compass, not cage" allowance in practice.
 
@@ -955,7 +955,8 @@ about a match — winner, correct score, first scorer, total goals, cards and
 corners, man of the match. `scorePredictions()` reads real finished fixtures,
 real match events, real team statistics and the Room's own MOTM vote, awards XP,
 badges and streaks, and **is reachable from exactly one place: an admin opening
-`/admin/data-health` and clicking a button.**
+`/admin/data-health` and clicking a button.** (That route is
+`/admin/football/integrity` since 2026-08-20 — see A9.1. The old URL redirects.)
 
 Until someone clicks, every prediction on the platform sits unresolved, the
 leaderboard stays empty, and the feature reads as broken rather than as pending.
@@ -1299,6 +1300,22 @@ also an expiring one, and nothing in this document was tracking the expiry.
   `last-updated.ts`, with every call site and every local variable renamed to match
   what the component actually says on screen ("Updated 5h ago").
 
+**One correction to the first bullet, 2026-08-20, and it matters.** The control
+was indeed deleted outright — and **its Admin replacement was never built**, which
+the deletion commit did not notice and this entry did not either. F6 originally
+said the control "should move into `/admin` entirely"; the move never happened,
+so `triggerFixtureDetailsSync` was left with no caller anywhere in the codebase
+(grep-verified), and the Provider page's own sync-order checklist still told the
+operator step 5 lived on "that fixture's Match Centre". A capability removed
+before its replacement exists is a capability deleted — A5's own rule, broken by
+the pass that wrote it. Both halves are fixed now: `FixtureDetailsPanel` on
+Coverage is the replacement, and step 5 of the checklist names it. See A9.6.
+
+**Two path references above are stale**: the surviving comment is in
+`src/app/admin/football/actions.ts`, and the two Admin readers of
+`sync_runs.provider_quota_remaining` are `admin/football/provider/page.tsx` and
+`admin/football/pipeline/page.tsx`. The segment was renamed on 2026-08-20 — A9.1.
+
 ---
 
 ## Admin IA + QA pass, 2026-08-19 — what the Admin section learned
@@ -1344,7 +1361,8 @@ It was kept anyway, because six other agents import server actions out of
 `src/app/admin/data-health/*-actions.ts`, and renaming the segment would have
 moved those import paths under them mid-pass. A better URL is worth less than
 not breaking five other people's working tree. Rename it when the branch is
-quiet.
+quiet. — **DONE 2026-08-20, and the naive rename would have been wrong. See
+A9.1.**
 
 ### A3. A check the viewer cannot read must not be run
 
@@ -1413,27 +1431,51 @@ worst possible place for a mis-tap. All are now 44px. Admin is used from a phone
 by this founder; a design rule the product enforces and the operator's tool
 ignores is a rule with an exception nobody agreed to.
 
-### A8. Still open, deliberately
+**Correction, 2026-08-20.** "All are now 44px" was not true when it was written.
+Seven interactive controls under `src/app/admin/**` and
+`src/components/admin/**` were still 36–40px: the section tab rail's four links
+(`admin-section-tabs.tsx`), the competition chips on Coverage
+(`competition-coverage-matrix.tsx`), both "Clear search" links (Users and the
+player-statistics panel), the season-data buttons, the prune cancel button, the
+mobile drawer's open and close buttons, the sidebar's "Back to KIVO" link, and
+the published-scoring-rules `<summary>` on Integrity. All are 44px now, verified
+by grep for `min-h-9`/`h-9 w-9`/`min-h-10` across both directories rather than
+by re-reading this paragraph. **The general lesson is the one this whole pass
+keeps producing: a claim of completeness in a backlog file is a claim, and the
+grep is the fact.** A7 counted twenty-six controls and fixed twenty-six
+controls; nothing in the pass established that twenty-six was the total.
+
+### A8. Still open, deliberately — CLEARED 2026-08-20, see A9
+
+Every one of the five below was written with the same caveat: the branch had six
+agents on it and each fix touched a shared file or moved an import path. That
+condition ended. All five were taken on 2026-08-20; four are closed outright and
+the fifth (notification) is closed as far as this codebase can honestly close
+it, with the remainder written down rather than left implied. Original text
+preserved, per this document's convention:
 
 - **`/admin/data-health` should be `/admin/football/provider`.** See A2. Costs
   nothing to do when the branch is quiet; costs five agents a broken import now.
+  — **DONE.** A9.1.
 - **Migration 0117's `standings.zone_description`, `group_label` and `form` are
   not surfaced in Admin.** Deliberately not turned into a data-quality check:
   they are optional provider fields, and flagging a null the provider never
   publishes as a "quality issue" would be an invented signal. Worth surfacing on
   the Coverage page's league-tables panel as *columns present* rather than as a
-  defect count.
+  defect count. — **DONE, and the refusal upheld.** A9.4.
 - **The four football pages each carry their own role gate.** Correct, and
   duplicated four times. A route-group layout under `data-health` could hold it
   once — worth doing, but a layout is a shared file and this branch has six
-  agents on it.
+  agents on it. — **DONE, and the proposed shape was wrong.** A layout cannot be
+  the gate in this version of Next. A9.2.
 - **Admin has no audit-log view.** `logAudit` is called by the moderation and
   user actions and nothing reads it back. An operator cannot answer "who banned
-  this account, and when" from Admin at all.
+  this account, and when" from Admin at all. — **DONE.** A9.3.
 - **Nothing notifies anybody of anything.** The support queue is the only route
   back in for a locked-out user and it is checked only by somebody choosing to
   open the page. The overview now escalates an open request older than 24h to
-  critical, which is a better nothing, but it is still nothing.
+  critical, which is a better nothing, but it is still nothing. — **PARTLY, and
+  the rest is honestly out of reach.** A9.5.
 
 ---
 
@@ -1526,3 +1568,254 @@ the missing audit-log view, and nothing notifying anybody). `src/app/admin/**` a
 `src/components/admin/**` were being restructured while this pass ran, so their
 statuses here are **not** re-verified and should be re-derived by whoever owns that
 tree next.
+
+**They were, the same day — see A9 immediately below.** All five are closed or
+closed-as-far-as-honest, and the Admin pass reached the same conclusion this one
+did about `F6`'s first bullet from the other side: the control was deleted, and
+its Admin replacement had never been built, so the capability was gone rather
+than moved.
+
+---
+
+## A9. Admin backlog clearance, 2026-08-20 — A8 cleared, and four things A8 did not know
+
+Written by the agent that owns `src/app/admin/**` and `src/components/admin/**`,
+working that section exclusively. **Nothing here was verified against live data
+— this environment cannot reach the Supabase host.** Every claim is read from
+the code, the migrations, the generated schema types and the five gates
+(`next build`, `tsc --noEmit`, `eslint .`, `vitest run`, `check:assets`), all of
+which pass.
+
+### A9.1. The rename, and the shape it revealed
+
+`/admin/data-health` is now `/admin/football/provider`, and the section is
+`/admin/football/{provider,coverage,pipeline,integrity}` — **four siblings, not
+three pages nested under the first one.**
+
+That distinction is the only interesting part of an otherwise mechanical move. A
+blind rename produces `/admin/football/provider/coverage`, which encodes a claim
+the IA pass explicitly rejected: that Provider is the parent and the other three
+are its children. They are four peer questions (A1), and the URL now says so.
+It also deleted a workaround — `AdminNavItem.exact` existed on the Provider item
+purely because its href was a prefix of the other three, and with four siblings
+the generic `isActiveRoute()` prefix rule is correct with no special case.
+`admin-nav.test.ts` now asserts that no football item carries `exact`, so the
+flatter shape cannot quietly regress.
+
+Seventeen import paths and every `revalidatePath` moved with it. The
+revalidations became `revalidatePath("/admin/football", "layout")` — one call
+covering all four pages instead of a per-page path that had been aimed at the
+pre-split page and never re-aimed. Old URLs redirect permanently from
+`next.config.ts`: the founder administers this from a phone, and his history and
+home screen are not collateral for a naming decision.
+
+**Cost of having waited: nothing. Cost of having done it during the six-agent
+pass: five broken working trees.** A2's judgement was right, and the thing that
+made it cheap now is that "the branch is quiet" was a real, checkable condition
+rather than a feeling.
+
+### A9.2. A layout cannot be the gate, and the framework says so in writing
+
+A8 proposed "a route-group layout under `data-health` could hold [the role gate]
+once". The layout exists now and it does **not** hold the gate, because in this
+version of Next it cannot. From
+`node_modules/next/dist/docs/01-app/02-guides/authentication.md`:
+
+> A layout also does not control whether the rest of the route renders. Route
+> segments and parallel route slots are rendered by the router, so a layout that
+> hides or swaps them does not stop them from running or from appearing in the
+> RSC Payload.
+
+> Due to Partial Rendering, be cautious when doing checks in Layouts as these
+> don't re-render on navigation.
+
+So a layout returning a lock screen instead of `{children}` does not stop the
+page underneath from executing. Every one of these four pages opens by querying
+`sync_runs`, `standings`, `provider_mappings` and `competition_teams` — all
+RLS-gated — and A3's rule is that a check the viewer cannot read must not be
+run, because an RLS-filtered zero renders as "all clear". **Deleting the page
+gates in favour of a layout gate would have been a correctness regression
+wearing the costume of a cleanup.**
+
+The shape that is actually correct, and is what shipped
+(`src/app/admin/football/access.tsx`):
+
+- One `footballDataGate()` — one predicate, one sentence of explanation, one
+  `<AdminAccessNotice>`. The four hand-written `because` strings that could each
+  drift out of step with `FOOTBALL_DATA_MANAGE_ROLES` are gone.
+- **The layout** calls it and renders the denial, once, and drops the tab rail.
+  That is the half the operator sees.
+- **Each page** calls it and returns `null` before its first query. That is the
+  half that matters, and it is two lines rather than the eight-line block it
+  replaced.
+
+The general rule, and it is worth carrying beyond this section: **"put the
+shared thing in the shared file" is an instinct, not an argument.** Ask what the
+shared file is actually able to guarantee. Here it can guarantee presentation
+and cannot guarantee execution, so it got the presentation and the pages kept
+the execution.
+
+### A9.3. `audit_log` had a reader for the first time, and two columns nothing had ever written
+
+`/admin/audit` is the read side of `audit_log`. Before it, `logAudit` had been
+writing from account sanctions, report resolutions, support triage and six
+football actions, and **nothing in KIVO read a single row back** — a write-only
+hole where the sensitive-action trail was supposed to be.
+
+It is `ListSurface`/`ListRow` per `docs/UI_PRIMITIVES.md` §2, newest first,
+filterable by actor and by target type, with the target-id filter arriving as a
+query param rather than a chip list because target ids are uuids out of an
+unbounded set (A6). It is gated on `canViewAuditLog`, a new predicate mirroring
+`audit_log_select_admin`'s `private.is_admin()` and deliberately **not** a reuse
+of `canViewUserData` despite holding the same two roles today: two lists that
+would be widened for different reasons must not share a constant.
+
+Two things this turned up that A8 could not have known:
+
+**The action strings are printed verbatim, on purpose.** The obvious nicety —
+`resolve_report_dismissed` → "Dismissed a report" — is wrong twice: the map goes
+stale the moment somebody adds an action, and a friendly label is a paraphrase
+of what is meant to be a record. Admin gets precise technical vocabulary; this
+is what that rule is for.
+
+**`target_id` and `reason` existed since migration 0001, along with
+`idx_audit_log_target on (target_type, target_id)`, and no writer had ever
+populated either.** Every caller had put the identifying id inside `metadata`,
+under a different key each time — `anomaly_id`, `reportId`, `request_id`,
+`targetProfileId`. That is fine for a trail nobody reads and useless for one
+somebody does: "every action ever taken against this account" is an index scan
+on one and a full-table jsonb rummage on the other. `logAudit` now takes them
+explicitly, and the callers that have exactly one uuid subject pass it; the ones
+that do not (a prune spanning thousands of `sync_runs` rows) leave it null
+rather than invent a target. **An unused column plus an index over it is a
+design somebody meant; finding both empty is a signal that the writer was
+finished before the reader was imagined.**
+
+### A9.4. "Columns present", not "defects missing"
+
+The Coverage page's league-tables panel now shows, per competition, how many of
+its standings rows carry migration 0117's `zone_description`, `group_label` and
+`form` — as counts of what arrived, in the same round trip that was already
+reading those rows to count them.
+
+A8's refusal to make these a data-quality check stands, and is worth restating
+because it is the more useful half: **a cup group stage has a `group` and a
+domestic league never will.** Flagging that null as a quality issue would invent
+a signal, and a panel reporting permanent unfixable "problems" is a panel an
+operator learns to scroll past — which costs more than the panel was ever worth.
+An empty string counts as absent, not as a populated field holding nothing,
+because API-Football sends `""` for a side that has played nothing yet.
+
+### A9.5. Notification: what was reachable, and precisely what was not
+
+**Not built, and here is the honest reason.** A real notification channel needs a
+transport out of the application, and KIVO has none. There is no transactional
+email of its own (this document's own "Configure custom SMTP before you tell
+anyone the product exists" is still open, and the auth one-time-code path is the
+only mail KIVO sends at all). There is no push infrastructure —
+`docs/CONSTRAINTS.md` §7 is the standing statement of that, and item 302's
+resolution is bounded by the same sentence. There is no paging integration and
+no on-call rota to page. Building "notifications" out of what exists would mean
+writing an in-app notification into the product's own fan-facing feed, which is
+`(app)` territory this pass does not own, is written to by a public route
+(`src/app/support/actions.ts`) this pass does not own, and would put staff
+vocabulary in a surface whose entire vocabulary rule is that staff words never
+appear in it.
+
+**What was reachable, and was done.** The claim "somebody must open the page"
+was never quite the real problem — the real problem was that the escalation
+lived on `/admin` alone, so an operator who opened Admin at Users or Moderation
+saw nothing at all. So:
+
+- `getSupportQueueSignal()` reads the open queue once per Admin page load, and
+  **only for a role that can read it** — a role without `canHandleSupport` gets
+  `null` with no query run, because an RLS-filtered zero here renders as "nobody
+  is locked out" (A3). A failed read returns `unreadable`, never zero.
+- A banner above every Admin page carries the count and the age of the oldest,
+  amber while open and red past 24 hours. It is not dismissible: a control whose
+  only function is to hide an open lockout is a control that exists to make the
+  operator feel finished. It renders on the seven pages that had nothing and
+  deliberately not on the two that already say it — `/admin/support`, where it
+  would point at the screen you are standing on, and `/admin`, where the
+  Overview already derives the same fact as a ranked attention item with more
+  detail than a banner can carry.
+- The Support nav item carries a badge in both navs, and the mobile bar's
+  hamburger carries a dot — because on a phone the drawer is closed by
+  definition, so a badge inside it is invisible until somebody already went
+  looking.
+
+**The two limits, stated rather than implied**, and both are in
+`src/lib/admin/support-signal.ts`'s header: it is a reading taken when the
+layout rendered, not a live counter, because layouts do not re-render on
+client-side navigation (the same Partial Rendering mechanism as A9.2); and it
+reaches nobody who is not already looking at Admin. A person locked out at 02:00
+is still waiting until somebody opens a browser. **This is a better nothing, and
+calling it a notification would be the same class of dishonesty as a
+hand-written status paragraph (A4).**
+
+### A9.6. Three things the audit found that the file had wrong
+
+The instruction was to verify every remaining Admin item against the code rather
+than against its own description. Three were wrong, in three different ways.
+
+**F6's first bullet was half-done, and the half that was skipped deleted a
+capability.** It recorded that `FixtureDetailsSyncControl` still rendered on the
+public match page and should move into `/admin` entirely. The removal happened;
+the move did not. `triggerFixtureDetailsSync` was left with **no caller anywhere
+in the codebase** — grep-verified — and the Provider page's own sync-order
+checklist still told the operator that step 5 lived on "that fixture's Match
+Centre", where nothing had been since the day before. This is exactly the
+failure A5 named in the same pass that caused it: *a control removed before its
+replacement exists is a capability deleted.* A5 got the rule right and then the
+next commit broke it, which says the rule needs a check and not just a
+paragraph. Fixed: `FixtureDetailsPanel` on Coverage lists finished fixtures from
+the last 14 days with neither line-ups nor events on file, oldest first, with the
+squad opt-in as a checkbox and the three-request price on the button; step 5 of
+the checklist now names it.
+
+**Item 309's AI half was correct and is now closed — and its recommendation
+contained an impossible query.** AI was genuinely the one domain of "platform +
+provider + AI + social + fantasy health" with zero presence in `/admin`;
+`/admin/ai` closes it with conversation and message counts, real token sums off
+`ai_messages.input_tokens`/`output_tokens`, and the configuration state. Two
+notes worth keeping. It reads through the service-role client, because
+`ai_conversations`/`ai_messages` carry one owner-scoped policy each with no admin
+override, so `canViewPlatformHealth` is the *entire* boundary rather than a
+mirror of one — which is why it is the narrowest predicate in `src/lib/admin.ts`
+and why the page reads counts and token columns and **never message content**.
+And item 309's proposed "count of AI rate-limit rejections from
+`rate_limit_events`" cannot be built: `consume_rate_limit` (migration 0066)
+deliberately does not record a refused attempt, and says why in the function
+body — recording refusals would slide the window forward on every rejected retry
+and let a caller lock themselves, or anybody whose key can be guessed, out
+indefinitely. That table holds allowed requests and only allowed requests, so
+the page counts them as what they are. **A recommendation written from a table's
+name rather than from its writer is how an invented number gets commissioned in
+good faith.** (Item 309's description of the Overview as "user/post/report stat
+cards" is also stale — A1 and A4 replaced that page.)
+
+**A7's "all are now 44px" was not true.** Seven controls were still 36–40px. See
+the correction appended to A7 itself.
+
+### A9.7. What is left, and why
+
+- **Fantasy scoring is still not config-driven** (item 308). Unchanged and
+  correctly open; it is not an Admin-section problem, it is a schema one.
+- **`getTransparencyFreshness()` still returns `quotaRemaining`** with no reader
+  (F6). Still harmless, still under `src/lib/football/`, still not this
+  section's file.
+- **`LastSyncedNote` / `getLastSyncedAt` keep "synced" in their names** (F6).
+  Fan-visible output is clean. Renaming them is a `src/components/` and
+  `src/lib/` job that touches surfaces other agents own; the branch was quiet
+  for Admin this pass, not for them.
+- **The audit log has no retention policy.** `audit_log` is append-only with no
+  update or delete policy at all, deliberately, and `/admin/audit` paginates
+  rather than capping — so it will keep working as the table grows, and the
+  table will keep growing forever. That is the correct default for an audit
+  trail and it is worth someone deciding on deliberately rather than discovering
+  in a year. Not decided here, because a retention rule on a legal-ish record is
+  a founder's decision, not an agent's.
+- **`/admin/ai` shows spend in tokens, not in money.** Deliberately: a price per
+  token is a number this codebase does not hold, and multiplying by a rate typed
+  into a constant would be a fabricated cost that goes wrong silently the next
+  time pricing changes. Tokens are what the rows say.

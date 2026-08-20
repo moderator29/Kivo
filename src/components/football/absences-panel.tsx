@@ -44,7 +44,7 @@ export async function TeamAbsencesPanel({ teamId, teamName }: { teamId: string; 
   // ADMIN IA PASS 2026-08-19: this used to fetch the club's most recent fixture
   // as well, purely to work out which competition a staff-only "Sync absences"
   // button should target. That button now lives on
-  // /admin/data-health/coverage, per competition — which is the granularity the
+  // /admin/football/coverage, per competition — which is the granularity the
   // sync actually has — so the extra query and the coverage-registry lookup
   // that depended on it are both gone. Nothing a fan could see changed.
   const { data: rows } = await supabase

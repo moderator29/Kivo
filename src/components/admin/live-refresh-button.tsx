@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlertTriangle, Check, RadioTower, RefreshCw } from "lucide-react";
-import { triggerLiveScoresRefresh } from "@/app/admin/data-health/actions";
+import { triggerLiveScoresRefresh } from "@/app/admin/football/actions";
 
 /**
  * A manual live-score refresh, in Admin.

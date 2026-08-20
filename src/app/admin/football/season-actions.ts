@@ -91,7 +91,7 @@ export async function setTargetSeason(seasonYear: number, reason: string): Promi
   // Every surface that renders synced football changes meaning when this
   // changes, so every one of them is invalidated — a standings table cached
   // under the old season would otherwise keep claiming to be the new one.
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/leagues");
   revalidatePath("/matches");
   revalidatePath("/teams");
@@ -115,7 +115,7 @@ export async function clearTargetSeason(): Promise<TargetSeasonResult> {
     return { error: "Couldn't clear the target season." };
   }
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/leagues");
   revalidatePath("/matches");
   revalidatePath("/teams");

@@ -118,7 +118,7 @@ export async function removeCompetitionFromScope(providerCompetitionId: string):
  * ordered, so both have to be re-rendered — a panel that changed the scope but
  * left /matches showing the old order would read as the change not working. */
 function revalidateScopeSurfaces() {
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/matches");
   revalidatePath("/live");
   revalidatePath("/leagues");

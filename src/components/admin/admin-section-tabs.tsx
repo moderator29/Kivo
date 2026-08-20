@@ -35,7 +35,7 @@ export function AdminSectionTabs({ groupId }: { groupId: string }) {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "kivo-focusable flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
+              "kivo-focusable flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
               active
                 ? "border-transparent bg-accent/15 text-accent"
                 : "border-hairline text-foreground-muted hover:bg-surface-2 hover:text-foreground",

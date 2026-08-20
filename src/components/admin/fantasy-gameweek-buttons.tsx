@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlertTriangle, CalendarPlus, Check, RefreshCw } from "lucide-react";
-import { generateFantasyGameweeks } from "@/app/admin/data-health/fantasy-actions";
+import { generateFantasyGameweeks } from "@/app/admin/football/fantasy-actions";
 
 /**
  * Deriving one season's fantasy gameweeks.

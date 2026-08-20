@@ -9,6 +9,8 @@ import {
   Globe2,
   Workflow,
   ShieldCheck,
+  ScrollText,
+  Sparkles,
 } from "lucide-react";
 
 /**
@@ -57,9 +59,14 @@ import {
  *   3. Pipeline  — is the pipeline running, and is it succeeding?
  *   4. Integrity — is what arrived correct and complete, and what fixes it?
  *
- * `/admin/data-health` stays the Provider route rather than being renamed:
- * every server action under `src/app/admin/data-health/` is imported by pages
- * six other agents own, and moving the segment would move those import paths.
+ * The segment is `/admin/football` and Provider is `/admin/football/provider` —
+ * four siblings, none of them the parent of the other three. It was
+ * `/admin/data-health` with the other three nested under it until this pass:
+ * the name was left wrong on purpose while six agents were importing server
+ * actions out of that directory (RECOMMENDATIONS A2), because a better URL is
+ * worth less than not moving seventeen import paths under five working trees.
+ * The old URLs redirect permanently from `next.config.ts` — the founder
+ * administers this from a phone and his bookmarks are not collateral.
  */
 
 /**
@@ -70,7 +77,7 @@ import {
  * the real check, so a role predicate changing in one place cannot leave the
  * nav advertising a page that answers with a lock screen.
  */
-export type AdminCapability = "any" | "football" | "moderation" | "users" | "support";
+export type AdminCapability = "any" | "football" | "moderation" | "users" | "support" | "audit" | "platform";
 
 export type AdminNavItem = {
   href: string;
@@ -80,10 +87,11 @@ export type AdminNavItem = {
   description: string;
   capability: AdminCapability;
   /**
-   * True when this href is a prefix of its siblings' — `/admin` and
-   * `/admin/data-health` both are, and the shared `isActiveRoute()`'s
-   * startsWith check would highlight them alongside whichever child is
-   * genuinely active.
+   * True when this href is a prefix of its siblings'. `/admin` is, and the
+   * shared `isActiveRoute()`'s startsWith check would otherwise highlight it
+   * alongside whichever child is genuinely active. No football page needs it
+   * any more: `/admin/football/provider` is a peer of the other three rather
+   * than their parent, which is half the point of the rename above.
    */
   exact?: boolean;
 };
@@ -103,6 +111,19 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         capability: "any",
         exact: true,
       },
+      // Under the Overview, because it is the same question one step back in
+      // time: the Overview says what needs a decision now, this says which
+      // decisions were already taken and by whom. `logAudit` has been writing
+      // to `audit_log` from moderation, account sanctions, support triage and
+      // six football actions since it was added, and until this pass nothing
+      // in KIVO read a single row of it back — see /admin/audit's own header.
+      {
+        href: "/admin/audit",
+        label: "Audit log",
+        icon: ScrollText,
+        description: "Every sensitive action on record: who did it, to what, and when.",
+        capability: "audit",
+      },
     ],
   },
   {
@@ -110,29 +131,28 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: "Football data",
     items: [
       {
-        href: "/admin/data-health",
+        href: "/admin/football/provider",
         label: "Provider",
         icon: PlugZap,
         description: "Connection, plan, season window, quota. Start here when something is empty.",
         capability: "football",
-        exact: true,
       },
       {
-        href: "/admin/data-health/coverage",
+        href: "/admin/football/coverage",
         label: "Coverage",
         icon: Globe2,
         description: "Which competitions KIVO covers, and how much of each is on file.",
         capability: "football",
       },
       {
-        href: "/admin/data-health/pipeline",
+        href: "/admin/football/pipeline",
         label: "Pipeline",
         icon: Workflow,
         description: "Automation layers, the live worker, sync history and failures.",
         capability: "football",
       },
       {
-        href: "/admin/data-health/integrity",
+        href: "/admin/football/integrity",
         label: "Integrity",
         icon: ShieldCheck,
         description: "Gaps, conflicts, scoring jobs and the repairs that close them.",
@@ -177,6 +197,17 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     id: "system",
     label: "System",
     items: [
+      // RECOMMENDATIONS item 309 listed AI as the one domain of "platform +
+      // provider + AI + social + fantasy health" with zero presence anywhere in
+      // Admin. It is not football, so it does not belong in that group; it is a
+      // system-level cost-and-abuse readout, so it belongs here.
+      {
+        href: "/admin/ai",
+        label: "AI Copilot",
+        icon: Sparkles,
+        description: "Whether the Copilot is configured, what it is being asked, and what it is spending.",
+        capability: "platform",
+      },
       // KN-63. An internal reference, not an operational tool — last in the list
       // for that reason, but in the list, because a design system nobody can find
       // is the same as no design system.

@@ -106,7 +106,7 @@ async function applyFantasyPriceNudges(
     .in("fixture_id", finishedFixtureIds)
     .eq("is_starting", true);
   if (lineupsError) {
-    logError("admin.data-health.fantasy-actions.loadLineupsFantasyPrice", lineupsError);
+    logError("admin.football.fantasy-actions.loadLineupsFantasyPrice", lineupsError);
     return { playersRepriced: 0, repricedPlayerIds: [] };
   }
   if (!lineupRows || lineupRows.length === 0) return { playersRepriced: 0, repricedPlayerIds: [] };
@@ -122,7 +122,7 @@ async function applyFantasyPriceNudges(
     .select("id, position, current_team_id")
     .in("id", involvedPlayerIds);
   if (playersError || !players || players.length === 0) {
-    if (playersError) logError("admin.data-health.fantasy-actions.loadPlayersFantasyPrice", playersError);
+    if (playersError) logError("admin.football.fantasy-actions.loadPlayersFantasyPrice", playersError);
     return { playersRepriced: 0, repricedPlayerIds: [] };
   }
 
@@ -211,7 +211,7 @@ async function loadScoringRules(
     .maybeSingle();
 
   if (error) {
-    logError("admin.data-health.fantasy-actions.loadScoringRuleset", error);
+    logError("admin.football.fantasy-actions.loadScoringRuleset", error);
     return { rules: null, error: "Couldn't read the scoring rules. Try again." };
   }
   if (!data) {
@@ -257,7 +257,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .order("kickoff_at", { ascending: true });
 
   if (fixturesError) {
-    logError("admin.data-health.fantasy-actions.loadFixturesGameweekScoring", fixturesError);
+    logError("admin.football.fantasy-actions.loadFixturesGameweekScoring", fixturesError);
     return { error: "Couldn't load this season's fixtures. Try again." };
   }
   if (!seasonFixtures || seasonFixtures.length === 0) {
@@ -311,7 +311,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .select("fixture_id, player_id, related_player_id, event_type")
     .in("fixture_id", finishedFixtureIds);
   if (eventsError) {
-    logError("admin.data-health.fantasy-actions.loadFixtureEventsGameweek", eventsError);
+    logError("admin.football.fantasy-actions.loadFixtureEventsGameweek", eventsError);
     return { error: "Couldn't load match events. Try again." };
   }
 
@@ -352,7 +352,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .select("fantasy_team_id, player_id, is_starting, is_captain, is_vice_captain")
     .eq("gameweek_id", gameweekId);
   if (rosterError) {
-    logError("admin.data-health.fantasy-actions.loadFantasyRostersGameweek", rosterError);
+    logError("admin.football.fantasy-actions.loadFantasyRostersGameweek", rosterError);
     return { error: "Couldn't load fantasy squads. Try again." };
   }
 
@@ -373,7 +373,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .select("id, position, current_team_id")
     .in("id", rosteredPlayerIds);
   if (playersError) {
-    logError("admin.data-health.fantasy-actions.loadPlayersGameweekScoring", playersError);
+    logError("admin.football.fantasy-actions.loadPlayersGameweekScoring", playersError);
     return { error: "Couldn't load player data. Try again." };
   }
 
@@ -401,7 +401,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .select("fantasy_team_id, points_cost")
     .eq("gameweek_id", gameweekId);
   if (transfersError) {
-    logError("admin.data-health.fantasy-actions.loadFantasyTransfers", transfersError);
+    logError("admin.football.fantasy-actions.loadFantasyTransfers", transfersError);
   }
   const transferCostByTeam = new Map<string, number>();
   for (const row of transferRows ?? []) {
@@ -510,7 +510,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .from("fantasy_points")
     .upsert(upsertRows, { onConflict: "fantasy_team_id,gameweek_id" });
   if (upsertError) {
-    logError("admin.data-health.fantasy-actions.writeFantasyPoints", upsertError);
+    logError("admin.football.fantasy-actions.writeFantasyPoints", upsertError);
     return { error: "Couldn't save fantasy points. Try again." };
   }
 
@@ -529,7 +529,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
     .delete()
     .eq("gameweek_id", gameweekId);
   if (clearBreakdownError) {
-    logError("admin.data-health.fantasy-actions.clearFantasyBreakdowns", clearBreakdownError);
+    logError("admin.football.fantasy-actions.clearFantasyBreakdowns", clearBreakdownError);
   } else if (breakdownRows.length > 0) {
     const { error: breakdownError } = await service
       .from("fantasy_point_breakdowns")
@@ -539,7 +539,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
       // written. A missing breakdown makes the score unexplained, which the UI
       // says honestly (computed_at is set but no rows exist), rather than
       // making it wrong.
-      logError("admin.data-health.fantasy-actions.writeFantasyBreakdowns", breakdownError);
+      logError("admin.football.fantasy-actions.writeFantasyBreakdowns", breakdownError);
     }
   }
 
@@ -560,7 +560,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
       .select("id, owner_profile_id")
       .in("id", notifiableTeamIds);
     if (notifiableTeamsError) {
-      logError("admin.data-health.fantasy-actions.loadOwnersForGameweekNotices", notifiableTeamsError);
+      logError("admin.football.fantasy-actions.loadOwnersForGameweekNotices", notifiableTeamsError);
     } else {
       await notifyFantasyGameweekOutcome(
         service,
@@ -586,7 +586,7 @@ export async function runGameweekScoring(gameweekId: string): Promise<ScoreFanta
       .select("id, owner_profile_id")
       .in("id", scoringTeamIds);
     if (scoringTeamsError) {
-      logError("admin.data-health.fantasy-actions.loadFantasyTeamOwners", scoringTeamsError);
+      logError("admin.football.fantasy-actions.loadFantasyTeamOwners", scoringTeamsError);
     } else {
       await Promise.all((scoringTeams ?? []).map((t) => awardBadge(t.owner_profile_id, "fantasy_gameweek_scored")));
     }

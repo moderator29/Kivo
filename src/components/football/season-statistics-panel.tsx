@@ -74,7 +74,7 @@ export async function PlayerSeasonStatisticsPanel({ playerId }: { playerId: stri
   // staff-only card, visible to nobody but an admin, existing solely to host
   // the button that fills this section. The reasoning was that a section which
   // only appears once it has data can never be made to have data. True, and the
-  // fix was never a phantom card on a fan's page: /admin/data-health/coverage
+  // fix was never a phantom card on a fan's page: /admin/football/coverage
   // now has a searchable per-player queue, so the section that only appears
   // once it has data has somewhere else to be filled from.
   if (!rows || rows.length === 0) return null;

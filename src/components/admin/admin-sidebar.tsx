@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ADMIN_NAV_GROUPS, isAdminNavItemActive } from "@/lib/admin-nav";
+import type { SupportQueueSignal } from "@/lib/admin/support-signal";
+import { SupportBadge } from "@/components/admin/support-badge";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
@@ -19,7 +21,14 @@ import kivoLogo from "../../../public/brand/kivo-logo-transparent.webp";
  * group with nothing left in it is dropped rather than rendered as a bare
  * heading.
  */
-export function AdminSidebar({ permitted }: { permitted: string[] }) {
+
+export function AdminSidebar({
+  permitted,
+  supportSignal,
+}: {
+  permitted: string[];
+  supportSignal: SupportQueueSignal | null;
+}) {
   const pathname = usePathname();
   const allowed = new Set(permitted);
 
@@ -61,6 +70,7 @@ export function AdminSidebar({ permitted }: { permitted: string[] }) {
                     >
                       <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
                       {item.label}
+                      {item.href === "/admin/support" && <SupportBadge signal={supportSignal} className="ml-auto" />}
                     </Link>
                   );
                 })}
@@ -78,7 +88,7 @@ export function AdminSidebar({ permitted }: { permitted: string[] }) {
           <ThemeToggle className="max-w-none" />
           <Link
             href="/home"
-            className="flex min-h-10 items-center text-xs text-foreground-subtle transition-colors hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex min-h-11 items-center text-xs text-foreground-subtle transition-colors hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             ← Back to KIVO
           </Link>

@@ -30,7 +30,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * chart" button. The gating was correct; the placement was not. A fan reading a
  * league table should not share the page with ingestion controls, and a founder
  * reviewing his own product could not tell which half of the screen the public
- * sees. The button now lives on /admin/data-health/coverage, per competition,
+ * sees. The button now lives on /admin/football/coverage, per competition,
  * with its provider cost stated before it is pressed — which the inline version
  * never did. Nothing a fan could see has been removed: the chart, the ordering
  * and the one-line empty state are unchanged.

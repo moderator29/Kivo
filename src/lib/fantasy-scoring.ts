@@ -1,7 +1,7 @@
 /**
  * Pure fantasy-points scoring rules, kept framework/DB-client-free (like
  * fantasy-rules.ts's validateRoster) so both the admin scoring action
- * (src/app/admin/data-health/fantasy-actions.ts) and the UI's published
+ * (src/app/admin/football/fantasy-actions.ts) and the UI's published
  * "how scoring works" explanation import the exact same numbers — nothing
  * here can drift between what's computed and what's shown to users.
  *

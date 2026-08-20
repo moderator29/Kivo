@@ -98,7 +98,9 @@ describe("backTargetFor", () => {
   it.each([
     "/admin/moderation",
     "/admin/users",
-    "/admin/data-health",
+    "/admin/football/provider",
+    "/admin/football/integrity",
+    "/admin/audit",
     "/admin/support",
     "/admin/design",
   ])("sends %s back to the admin overview", (path) => {

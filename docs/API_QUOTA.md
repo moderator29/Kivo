@@ -20,7 +20,7 @@ Every sync function (`sync.ts`, `sync-squads.ts`, `sync-match-details.ts`, `sync
 
 ## What Admin → Data Health actually shows today (confirmed real, not proposed)
 
-`src/app/admin/data-health/page.tsx` already surfaces this — verified by reading the page, not assumed from the table's existence:
+`src/app/admin/football/provider/page.tsx` already surfaces this — verified by reading the page, not assumed from the table's existence:
 
 1. **A live "X requests left today" pill** next to the sync status header, sourced from the most recent `sync_runs` row with a non-null `provider_quota_remaining` (not necessarily the most recent run overall — a run that failed before any provider call leaves this column null, so the query specifically looks for the last row that *does* have a reading). Turns amber when remaining quota is ≤ 10.
 2. **A "Quota used today" stat** in the four-stat summary strip: the highest quota reading seen today minus the lowest, both real `provider_quota_remaining` values — a real delta, not an estimate of request volume. (API-Football's quota counts down through the day and resets daily, so highest-seen-today is the best available proxy for "what today started with.")

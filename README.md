@@ -65,7 +65,7 @@ src/
       profile/, profile/following/, u/[username]/  — own profile + public profiles
       settings/              — account/notification preference settings
     admin/                 — /admin, RBAC-gated, separate shell from the public app
-      data-health/, moderation/, users/
+      ai/, audit/, football/, moderation/, support/, users/
     onboarding/            — post-signup handle/profile setup, outside the (app) shell
     sign-in/, sign-up/     — KIVO's own email one-time-code auth forms (Supabase Auth)
     about/, privacy/, terms/  — static marketing/legal pages

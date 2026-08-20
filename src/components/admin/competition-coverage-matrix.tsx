@@ -109,10 +109,10 @@ export async function CompetitionCoverageMatrix({ competitionId }: { competition
           return (
             <Link
               key={option.id}
-              href={active ? "/admin/data-health/coverage" : `/admin/data-health/coverage?competition=${option.id}`}
+              href={active ? "/admin/football/coverage" : `/admin/football/coverage?competition=${option.id}`}
               scroll={false}
               aria-current={active ? "true" : undefined}
-              className={`kivo-focusable flex min-h-9 items-center rounded-full border px-3 text-xs font-semibold transition-colors ${
+              className={`kivo-focusable flex min-h-11 items-center rounded-full border px-3 text-xs font-semibold transition-colors ${
                 active
                   ? "border-transparent bg-accent/15 text-accent"
                   : "border-hairline text-foreground-muted hover:bg-surface-2 hover:text-foreground"

@@ -70,7 +70,7 @@ export async function adoptCompetitions(): Promise<AdoptCompetitionsResult> {
 
   const result = await adoptAllowlistedCompetitions();
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/leagues");
   return result;
 }
@@ -89,7 +89,7 @@ export async function fillCompetitionCountries(): Promise<{ error: string | null
 
   const result = await backfillCompetitionCountries();
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/leagues");
   revalidatePath("/teams");
   return result;
@@ -111,7 +111,7 @@ export async function syncCompetitionClubs(
 
   const result = await syncCompetitionTeams(competitionId, season);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/teams");
   revalidatePath(`/leagues/${competitionId}`);
 
@@ -151,7 +151,7 @@ export async function runSquadBackfill(maxClubs?: number): Promise<SquadBackfill
 
   const result = await backfillSquads(maxClubs);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/players");
   revalidatePath("/teams");
   return result;

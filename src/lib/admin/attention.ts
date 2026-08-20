@@ -165,7 +165,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
       title: "No football data provider is connected",
       detail:
         "Nothing can sync, so every football surface in the product is empty for that reason rather than because the season hasn't started. Set API_FOOTBALL_KEY, or THE_SPORTS_DB_API_KEY with FOOTBALL_DATA_PROVIDER=thesportsdb.",
-      href: "/admin/data-health",
+      href: "/admin/football/provider",
       hrefLabel: "Provider",
     });
     return items;
@@ -209,7 +209,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
   ]);
 
   if (anyRuns.error) {
-    items.push(unknownItem("sync-history", "Sync history", "/admin/data-health/pipeline", "Pipeline"));
+    items.push(unknownItem("sync-history", "Sync history", "/admin/football/pipeline", "Pipeline"));
     return items;
   }
 
@@ -220,7 +220,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
       title: `${providerLabel ?? providerName} is connected but nothing has ever synced`,
       detail:
         "Not one sync run of any kind is on record, so every football table in the database is empty. Provider → Sync now pulls today's fixtures, which is what every other sync depends on.",
-      href: "/admin/data-health",
+      href: "/admin/football/provider",
       hrefLabel: "Provider",
     });
     return items;
@@ -242,21 +242,21 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
       title: `The provider refused ${refusedEntityTypes.size} data type${refusedEntityTypes.size === 1 ? "" : "s"} on plan grounds`,
       detail:
         "A plan refusal arrives as a successful HTTP response with an empty body, so it reaches the product as an empty table rather than an error. Provider shows the season window the provider named and the one setting that changes it.",
-      href: "/admin/data-health",
+      href: "/admin/football/provider",
       hrefLabel: "Provider",
     });
   }
 
   const failedCount = failedRuns.error ? null : (failedRuns.count ?? 0);
   if (failedCount === null) {
-    items.push(unknownItem("failed-syncs", "Recent sync failures", "/admin/data-health/pipeline", "Pipeline"));
+    items.push(unknownItem("failed-syncs", "Recent sync failures", "/admin/football/pipeline", "Pipeline"));
   } else if (failedCount > 0) {
     items.push({
       id: "failed-syncs",
       level: "warning",
       title: `${failedCount} sync${failedCount === 1 ? "" : "s"} failed in the last 24 hours`,
       detail: "Each failed run keeps the provider's own error message. Pipeline lists them with that message intact.",
-      href: "/admin/data-health/pipeline",
+      href: "/admin/football/pipeline",
       hrefLabel: "Pipeline",
     });
   }
@@ -272,7 +272,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
           : `${quotaRemaining} provider request${quotaRemaining === 1 ? "" : "s"} left today`,
       detail:
         "Read from the provider's own x-ratelimit-requests-remaining header on the last run that saw it, not estimated. The allowance resets daily; until then every sync will be refused.",
-      href: "/admin/data-health",
+      href: "/admin/football/provider",
       hrefLabel: "Provider",
     });
   }
@@ -285,7 +285,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
       title: "The once-a-minute worker has never fired",
       detail:
         "Live scores are the only thing this layer refreshes, so nothing else is affected. Vercel Cron never fires from local dev — on a real deployment this means the crons entry, CRON_SECRET or FOOTBALL_LIVE_POLLING_ENABLED is still outstanding.",
-      href: "/admin/data-health/pipeline",
+      href: "/admin/football/pipeline",
       hrefLabel: "Pipeline",
     });
   } else {
@@ -296,7 +296,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
         level: "warning",
         title: "The once-a-minute worker has stopped checking in",
         detail: `Last check-in was ${Math.round(minutesSince)} minutes ago against a one-minute schedule. Live scores are the only thing that goes stale, but it goes stale silently.`,
-        href: "/admin/data-health/pipeline",
+        href: "/admin/football/pipeline",
         hrefLabel: "Pipeline",
       });
     }
@@ -316,12 +316,12 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
         title: `${total} data-quality gap${total === 1 ? "" : "s"} on file`,
         detail:
           "Missing crests and photos, clubs with no squad synced, and provider mappings pointing at rows that no longer exist. None of these break a page; each one makes one look unfinished.",
-        href: "/admin/data-health/integrity",
+        href: "/admin/football/integrity",
         hrefLabel: "Integrity",
       });
     }
   } catch {
-    items.push(unknownItem("data-quality", "The data-quality checks", "/admin/data-health/integrity", "Integrity"));
+    items.push(unknownItem("data-quality", "The data-quality checks", "/admin/football/integrity", "Integrity"));
   }
 
   if (items.length === 0) {
@@ -330,7 +330,7 @@ async function footballItems(supabase: ReturnType<typeof createServerSupabaseCli
       level: "clear",
       title: "Football data has nothing outstanding",
       detail: `${providerLabel ?? providerName} is connected, no sync has failed in the last 24 hours, no plan refusal is on record and the day's allowance is not short.`,
-      href: "/admin/data-health",
+      href: "/admin/football/provider",
       hrefLabel: "Provider",
     });
   }

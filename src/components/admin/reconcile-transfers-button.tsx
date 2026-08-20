@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { RefreshCw, Check, AlertTriangle } from "lucide-react";
-import { reconcileTransferTeams } from "@/app/admin/data-health/actions";
+import { reconcileTransferTeams } from "@/app/admin/football/actions";
 
 /**
  * RECOMMENDATIONS.md item 64: resolveTeamId in src/lib/football/sync-transfers.ts

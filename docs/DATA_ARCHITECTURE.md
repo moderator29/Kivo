@@ -126,7 +126,7 @@ Every synced entity (team, player, competition, fixture, transfer, fixture event
 
 ## Nothing public calls a provider live
 
-Every provider call happens inside an admin-triggered server action (`src/app/admin/data-health/actions.ts` and the per-page inline sync buttons it powers). A public page render — `/matches`, `/teams/[id]`, `/players/[id]`, Match Centre — reads Supabase directly, never a provider. This means: a provider outage or quota exhaustion never breaks a public page (it just means the data on screen doesn't get fresher until an admin syncs again), and a 429/5xx from a provider only ever surfaces on the admin-only Data Health screen, not to an ordinary visitor.
+Every provider call happens inside an admin-triggered server action (`src/app/admin/football/actions.ts` and the per-page inline sync buttons it powers). A public page render — `/matches`, `/teams/[id]`, `/players/[id]`, Match Centre — reads Supabase directly, never a provider. This means: a provider outage or quota exhaustion never breaks a public page (it just means the data on screen doesn't get fresher until an admin syncs again), and a 429/5xx from a provider only ever surfaces on the admin-only Data Health screen, not to an ordinary visitor.
 
 ## What's real vs. not-yet-built (honest status)
 

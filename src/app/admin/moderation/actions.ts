@@ -135,11 +135,16 @@ export async function resolveReport(reportId: string, decision: Decision, note: 
 
   if (auditError) logError("admin.moderation.writeAuditRow", auditError);
 
-  await logAudit(profile.id, `resolve_report_${decision}`, resolved.target_type, {
-    reportId: resolved.id,
-    targetId: resolved.target_id,
-    note: trimmedNote || null,
-  });
+  await logAudit(
+    profile.id,
+    `resolve_report_${decision}`,
+    resolved.target_type,
+    { reportId: resolved.id },
+    // The reported content, not the report — `target_type` above is already the
+    // content's type, so the pair reads as one addressable subject on
+    // /admin/audit and matches the (target_type, target_id) index.
+    { targetId: resolved.target_id, reason: trimmedNote || null },
+  );
 
   revalidatePath("/admin/moderation");
   return { error: null };

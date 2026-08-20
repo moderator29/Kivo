@@ -79,12 +79,18 @@ async function runMerge(
   if (!report) return { error: "The merge returned an unreadable result.", report: null };
 
   if (!dryRun && report.ok) {
-    await logAudit(profile.id, "team.merged", "team", {
-      survivor_id: survivorId,
-      merged_id: mergedId,
-      counts: report.counts as unknown as Json,
-    });
-    revalidatePath("/admin/data-health");
+    // The survivor is the row that still exists afterwards, so it is the one an
+    // operator can look up. The merged-away id stays in metadata: it names a row
+    // that is gone, which is a fact about the action rather than an addressable
+    // target.
+    await logAudit(
+      profile.id,
+      "team.merged",
+      "team",
+      { survivor_id: survivorId, merged_id: mergedId, counts: report.counts as unknown as Json },
+      { targetId: survivorId },
+    );
+    revalidatePath("/admin/football", "layout");
     revalidatePath("/teams");
   }
 

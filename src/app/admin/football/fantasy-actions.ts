@@ -41,7 +41,7 @@ export async function generateFantasyGameweeks(
     .order("kickoff_at", { ascending: true });
 
   if (fixturesError) {
-    logError("admin.data-health.fantasy-actions.loadFixturesGameweekGeneration", fixturesError);
+    logError("admin.football.fantasy-actions.loadFixturesGameweekGeneration", fixturesError);
     return { error: "Couldn't load this season's fixtures. Try again." };
   }
 
@@ -57,7 +57,7 @@ export async function generateFantasyGameweeks(
     .eq("season_id", seasonId);
 
   if (existingError) {
-    logError("admin.data-health.fantasy-actions.loadExistingGameweeks", existingError);
+    logError("admin.football.fantasy-actions.loadExistingGameweeks", existingError);
     return { error: "Couldn't check existing gameweeks. Try again." };
   }
 
@@ -69,7 +69,7 @@ export async function generateFantasyGameweeks(
   if (toInsert.length > 0) {
     const { error: insertError } = await supabase.from("fantasy_gameweeks").insert(toInsert);
     if (insertError) {
-      logError("admin.data-health.fantasy-actions.insertFantasyGameweeks", insertError);
+      logError("admin.football.fantasy-actions.insertFantasyGameweeks", insertError);
       return { error: "Couldn't create gameweeks. Try again." };
     }
   }
@@ -104,7 +104,7 @@ export async function generateFantasyGameweeks(
   });
 
   revalidatePath("/fantasy");
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
 
   return { error: null, recordsProcessed: toInsert.length };
 }
@@ -164,7 +164,7 @@ export async function scoreFantasyGameweek(gameweekId: string): Promise<ScoreFan
   });
 
   revalidatePath("/fantasy");
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   // Concrete per-page revalidation for the players whose price actually moved —
   // never the wildcard `/players/[id]` segment form, which would drop the cache
   // for every player page regardless. Bounded by this run's real repriced count.

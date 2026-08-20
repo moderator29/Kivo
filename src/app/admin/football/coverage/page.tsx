@@ -1,12 +1,11 @@
 import { Globe2 } from "lucide-react";
-import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
-import { AdminPageHeader, AdminAccessNotice } from "@/components/admin/admin-chrome";
-import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
+import { AdminPageHeader } from "@/components/admin/admin-chrome";
+import { footballDataGate } from "../access";
 import { CompetitionScopePanel } from "@/components/admin/competition-scope-panel";
 import { ClubCataloguePanel } from "@/components/admin/club-catalogue-panel";
 import { StandingsTransfersPanel } from "@/components/admin/standings-transfers-panel";
 import { SquadCoveragePanel } from "@/components/admin/squad-coverage-panel";
+import { FixtureDetailsPanel } from "@/components/admin/fixture-details-panel";
 import { SeasonDataPanel } from "@/components/admin/season-data-panel";
 import { PlayerStatisticsPanel } from "@/components/admin/player-statistics-panel";
 import { CompetitionCoverageMatrix } from "@/components/admin/competition-coverage-matrix";
@@ -37,18 +36,11 @@ export default async function CoveragePage({
   // a competition or a club, so it is the one that needs to be searchable.
   searchParams: Promise<{ player?: string | string[]; competition?: string | string[] }>;
 }) {
-  const profile = await getOrCreateProfile();
-
-  if (!canManageFootballData(profile?.role)) {
-    return (
-      <AdminAccessNotice
-        title="Coverage"
-        role={profile?.role}
-        subject="Football data"
-        because="Changing what KIVO covers writes to the football reference tables, which is limited to the football data, admin and super-admin roles."
-      />
-    );
-  }
+  // The layout above renders the lock screen; this returns nothing rather than
+  // a second copy of it. What matters is that it returns BEFORE the reads
+  // below — a layout does not stop a page from running (see ../access.tsx).
+  const { denied } = await footballDataGate("Coverage");
+  if (denied) return null;
 
   const { player, competition } = await searchParams;
   const playerQuery = Array.isArray(player) ? player[0] : player;
@@ -56,8 +48,6 @@ export default async function CoveragePage({
 
   return (
     <div className="flex flex-col gap-8">
-      <AdminSectionTabs groupId="football-data" />
-
       <AdminPageHeader
         icon={Globe2}
         title="Coverage"
@@ -75,6 +65,12 @@ export default async function CoveragePage({
           clubs are synced, and until its squad lands the club's squad list,
           its side of every lineup and every fantasy cross-reference are empty. */}
       <SquadCoveragePanel />
+      {/* Straight after squads, because that is the dependency: a fixture's
+          line-ups skip whichever side has no squad on file. This panel is also
+          the Admin home of a control that used to live on the public match page
+          and was removed without a replacement being built — see
+          `fixture-details-panel.tsx` for that account. */}
+      <FixtureDetailsPanel />
       <StandingsTransfersPanel />
       {/* Absences and scoring charts last: they are the narrowest of the four,
           and both depend on the competitions above having been adopted. */}

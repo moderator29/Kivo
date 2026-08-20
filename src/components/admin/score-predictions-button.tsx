@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Trophy, Check, AlertTriangle } from "lucide-react";
-import { scorePredictions } from "@/app/admin/data-health/predictions-actions";
+import { scorePredictions } from "@/app/admin/football/predictions-actions";
 
 export function ScorePredictionsButton() {
   const [pending, startTransition] = useTransition();

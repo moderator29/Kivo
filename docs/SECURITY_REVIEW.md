@@ -455,7 +455,7 @@ clients — they write through the ordinary session client, so RLS is genuinely 
 enforcing layer and the TypeScript check is the belt-and-braces its own comments
 claim it is. `admin/users/actions.ts` additionally refuses self-targeting, which
 has no RLS equivalent and would otherwise let a lone admin ban themselves out of
-the product. The admin actions that *do* use the service role (data-health syncs,
+the product. The admin actions that *do* use the service role (football-data syncs,
 prediction and fantasy scoring, entity merges) are ones where the credential is
 server-only and never reaches a browser, so the action is a legitimate boundary
 there rather than a bypassed one.

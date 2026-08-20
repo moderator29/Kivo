@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Trophy, Check, AlertTriangle } from "lucide-react";
-import { scoreFantasyGameweek, type ScoreFantasyGameweekResult } from "@/app/admin/data-health/fantasy-actions";
+import { scoreFantasyGameweek, type ScoreFantasyGameweekResult } from "@/app/admin/football/fantasy-actions";
 
 /** Data Health's per-gameweek scoring trigger — same shape as
  * ScorePredictionsButton, but bound to one gameweek since fantasy scoring

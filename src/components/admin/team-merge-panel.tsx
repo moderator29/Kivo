@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GitMerge, AlertTriangle } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
-import { previewTeamMerge, confirmTeamMerge, type TeamMergeReport } from "@/app/admin/data-health/merge-actions";
+import { previewTeamMerge, confirmTeamMerge, type TeamMergeReport } from "@/app/admin/football/merge-actions";
 
 /**
  * KIVO_NEXT_GEN KN-83. Merging two clubs that are the same real club.

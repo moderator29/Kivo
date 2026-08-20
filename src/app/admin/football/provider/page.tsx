@@ -1,15 +1,14 @@
 import { Database, PlugZap, ListChecks, Gauge } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getOrCreateProfile } from "@/lib/profile";
 import { canManageFootballData } from "@/lib/admin";
 import { getActiveProviderStatus } from "@/lib/football";
 import { FadeIn } from "@/components/ui/fade-in";
 import { FootballSyncButton } from "@/components/admin/football-sync-button";
 import { PlanCapabilityPanel } from "@/components/admin/plan-capability-panel";
 import { ProviderPlatformPanel } from "@/components/admin/provider-platform-panel";
-import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
-import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
+import { AdminPageHeader, AdminSection } from "@/components/admin/admin-chrome";
+import { footballDataGate } from "../access";
 
 /**
  * Football data → Provider. The first question, and only the first question.
@@ -21,10 +20,6 @@ import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
  * the plan, the season window, the day's quota, and the order syncs have to run
  * in. What is on file lives on Coverage; whether the pipeline ran lives on
  * Pipeline; whether what arrived is correct lives on Integrity.
- *
- * The segment keeps the `data-health` name because every server action in this
- * directory is imported by pages six other agents own this pass, and renaming
- * the segment would move those import paths under them.
  */
 
 /**
@@ -64,25 +59,23 @@ const SYNC_ORDER_STEPS: { title: string; where: string; requires: string }[] = [
   },
   {
     title: "5. Sync a fixture's lineups, events, and stats",
-    where: "that fixture's Match Centre",
+    // This said "that fixture's Match Centre" until 2026-08-20, and by then it
+    // was false: the control had been removed from the public match page a day
+    // earlier and no Admin replacement had been built, leaving
+    // triggerFixtureDetailsSync with no caller anywhere. A checklist that names
+    // a control which does not exist is worse than no checklist.
+    where: "Coverage → match detail",
     requires:
-      "Step 1 first, for that fixture. A side with no squad synced yet has its lineup entries skipped, not auto-synced, unless squad auto-sync is opted into on the fixture's own sync control (RECOMMENDATIONS.md item 59) — that's an extra provider call per unseen team, so it's off by default.",
+      "Step 1 first, for that fixture. A side with no squad synced yet has its lineup entries skipped, not auto-synced, unless squad auto-sync is opted into on the panel's own checkbox (RECOMMENDATIONS.md item 59) — that's an extra provider call per unseen team, so it's off by default.",
   },
 ];
 
 export default async function ProviderHealthPage() {
-  const profile = await getOrCreateProfile();
-
-  if (!canManageFootballData(profile?.role)) {
-    return (
-      <AdminAccessNotice
-        title="Provider"
-        role={profile?.role}
-        subject="Football data"
-        because="Writing football data and reading sync history are limited to the football data, admin and super-admin roles."
-      />
-    );
-  }
+  // The layout above renders the lock screen; this returns nothing rather than
+  // a second copy of it. What matters is that it returns BEFORE the reads
+  // below — a layout does not stop a page from running (see ../access.tsx).
+  const { profile, denied } = await footballDataGate("Provider");
+  if (denied) return null;
 
   // Honest per this platform's zero-fake-data rule: the mock provider never counts as
   // "connected" here, even in dev — it exists only so UI can be built without spending
@@ -132,8 +125,6 @@ export default async function ProviderHealthPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <AdminSectionTabs groupId="football-data" />
-
       <AdminPageHeader
         icon={PlugZap}
         title="Provider"

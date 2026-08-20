@@ -41,14 +41,28 @@ describe("admin nav", () => {
   });
 
   /**
-   * The reason `exact` exists. `/admin` is a prefix of every admin route and
-   * `/admin/data-health` is a prefix of its three children, so a plain
-   * startsWith check highlights two nav items at once — which is how the
+   * The reason `exact` exists. `/admin` is a prefix of every admin route, so a
+   * plain startsWith check highlights two nav items at once — which is how the
    * previous flat nav had to special-case the root by hand.
+   *
+   * The football pages used to need it too, when Provider was `/admin/data-health`
+   * and the other three were nested inside it. They are four siblings now
+   * (RECOMMENDATIONS A2), and this asserts the flatter shape actually holds:
+   * one active item per football route, from the generic rule, with no `exact`
+   * on any of them.
    */
-  it("highlights exactly one item for a nested football route", () => {
-    const active = ADMIN_NAV.filter((item) => isAdminNavItemActive("/admin/data-health/coverage", item));
-    expect(active.map((item) => item.href)).toEqual(["/admin/data-health/coverage"]);
+  it.each(["/admin/football/provider", "/admin/football/coverage", "/admin/football/pipeline", "/admin/football/integrity"])(
+    "highlights exactly one nav item for %s",
+    (pathname) => {
+      const active = ADMIN_NAV.filter((item) => isAdminNavItemActive(pathname, item));
+      expect(active.map((item) => item.href)).toEqual([pathname]);
+    },
+  );
+
+  it("gives no football page an `exact` flag, because none of them nests inside another", () => {
+    const football = ADMIN_NAV.filter((item) => item.href.startsWith("/admin/football"));
+    expect(football).toHaveLength(4);
+    expect(football.filter((item) => item.exact)).toEqual([]);
   });
 
   it("highlights the overview only on the overview itself", () => {

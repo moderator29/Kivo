@@ -204,7 +204,7 @@ with nothing visible on it pointing back out. One `RouteBackLink` in
 | Route | Category | Decision | Back lands on |
 | --- | --- | --- | --- |
 | `/admin` | B · inner | `RouteBackLink` in the admin layout | Home |
-| `/admin/data-health` | B · inner | `RouteBackLink` in the admin layout | Admin |
+| `/admin/football/provider` | B · inner | `RouteBackLink` in the admin layout | Admin |
 | `/admin/design` | B · inner | `RouteBackLink` in the admin layout | Admin |
 | `/admin/moderation` | B · inner | `RouteBackLink` in the admin layout | Admin |
 | `/admin/support` | B · inner | `RouteBackLink` in the admin layout | Admin |

@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
 import { hasAdminAccess, permittedAdminNavHrefs } from "@/lib/admin";
+import { getSupportQueueSignal } from "@/lib/admin/support-signal";
 import { getAuthUser } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
+import { SupportQueueBanner } from "@/components/admin/support-queue-banner";
 import { BackNavigationTracker } from "@/components/layout/back-navigation-tracker";
 import { RouteBackLink } from "@/components/ui/back-link";
 
@@ -51,12 +53,21 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // backs that up.
   const permitted = permittedAdminNavHrefs(profile.role);
 
+  // One extra read per full page load of any Admin route, and only for a role
+  // that can actually see the queue — `getSupportQueueSignal` returns null
+  // without querying otherwise, because an RLS-filtered zero here would render
+  // as "nobody is locked out" (A3). This is the closest thing KIVO has to a
+  // notification: the queue is the only route back in for a user whose sign-in
+  // code never arrived, and until this it was visible on the Overview alone.
+  // Its limits are real and are written down in that module's header.
+  const supportSignal = await getSupportQueueSignal(profile.role);
+
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
       {/* Renders nothing — see src/hooks/use-in-app-history.ts. */}
       <BackNavigationTracker />
-      <AdminMobileNav permitted={permitted} />
-      <AdminSidebar permitted={permitted} />
+      <AdminMobileNav permitted={permitted} supportSignal={supportSignal} />
+      <AdminSidebar permitted={permitted} supportSignal={supportSignal} />
       <main className="flex min-w-0 flex-1 flex-col gap-4 px-4 py-6 lg:px-10 lg:py-8">
         {/* /admin's own navigation is a sidebar at lg+ and a hamburger drawer
             below it, so on a phone every page under here was a screen you
@@ -64,6 +75,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             in the same place on every admin page: up to the Overview from a
             sub-page, out to KIVO from the Overview itself. */}
         <RouteBackLink tone="inline" />
+        {/* Above the page, on every page. See the component for why it is not
+            dismissible and why it hides itself on /admin/support. */}
+        <SupportQueueBanner signal={supportSignal} />
         {children}
       </main>
     </div>

@@ -20,7 +20,7 @@ type EntityType = Database["public"]["Enums"]["provider_entity_type"];
  *
  * sync_runs is admin-only under RLS (`sync_runs_all_admin`, migration 0001), so
  * this goes through the service-role client like the other admin-restricted
- * reads on Data Health (src/app/admin/data-health/page.tsx) — only a timestamp
+ * reads on Data Health (src/app/admin/football/provider/page.tsx) — only a timestamp
  * leaves this table for a public page, nothing else on the row.
  *
  * Only "success"/"partial" runs count — a "failed" run (e.g. quota exhausted

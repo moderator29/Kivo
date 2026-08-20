@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlertTriangle, Check, RefreshCw, Users } from "lucide-react";
-import { triggerTeamSquadSync } from "@/app/admin/data-health/actions";
+import { triggerTeamSquadSync } from "@/app/admin/football/actions";
 
 /**
  * One club's squad, on demand.
