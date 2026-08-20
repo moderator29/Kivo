@@ -63,7 +63,7 @@ export function TeamHeader({
           <TeamCrest crestUrl={crestUrl} name={name} size={56} />
         </FadeIn>
         <FadeIn delay={0.05} className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold leading-tight text-foreground sm:text-2xl">{name}</h1>
+          <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">{name}</h1>
           {metaParts.length > 0 && (
             <p className="mt-1 truncate text-xs text-foreground-subtle">{metaParts.join(" · ")}</p>
           )}

@@ -114,7 +114,7 @@ export function FollowWithMute({
         aria-label={following ? "Unfollow" : "Follow"}
         title={!signedIn ? GUEST_ACTION_TITLE : undefined}
         className={`relative flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-60 ${dimension} ${
-          following ? "border-achievement/40 bg-achievement/10" : "border-white/10 hover:bg-white/5"
+          following ? "border-achievement/40 bg-achievement/10" : "border-hairline hover:bg-surface-2"
         }`}
       >
         <Star
@@ -142,7 +142,7 @@ export function FollowWithMute({
           aria-label={muted ? "Unmute notifications" : "Mute notifications"}
           title={muted ? "Notifications muted" : "Mute notifications"}
           className={`flex shrink-0 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 disabled:opacity-60 ${dimension} ${
-            muted ? "border-white/15 bg-white/[0.06]" : "border-white/10 hover:bg-white/5"
+            muted ? "border-hairline bg-surface-2" : "border-hairline hover:bg-surface-2"
           }`}
         >
           {muted ? (

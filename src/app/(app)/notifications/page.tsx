@@ -114,9 +114,9 @@ export default async function NotificationsPage({
   const hasNext = from + PAGE_SIZE < total;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Notifications</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Notifications</h1>
       </FadeIn>
 
       {/* Only rendered once there is more than one thing to choose between —

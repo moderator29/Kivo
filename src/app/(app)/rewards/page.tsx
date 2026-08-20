@@ -200,9 +200,9 @@ export default async function RewardsPage() {
         : `${currentStreak} days strong. Keep the streak alive.`;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Rewards</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Rewards</h1>
         <p className="text-sm text-foreground-muted">XP and badges earned across KIVO.</p>
       </FadeIn>
 
@@ -226,10 +226,19 @@ export default async function RewardsPage() {
           Activity streak
         </h2>
 
-        {/* Big pill stat: flame + current streak. Driven entirely by
-            get_activity_streak() — a profile with zero qualifying days
-            genuinely shows 0, never a placeholder number. */}
-        <div className="kivo-glass flex items-center gap-3 rounded-3xl p-5">
+        {/* FRONTEND SWEEP 2026-08-19: this was four separate glass cards
+            stacked — the streak number, the week strip, the tier/longest pair,
+            the progress bar. Four surfaces, four shadows and three gutters, all
+            of them saying one thing about one subject. DENSITY_RULES' "padding
+            beats gap" cannot group anything when every child brings its own
+            box. One panel now, with hairline-divided regions inside it, which
+            is what a panel is for: "a section that contains cards or rows and
+            has its own heading". */}
+        <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
+          {/* Big pill stat: flame + current streak. Driven entirely by
+              get_activity_streak() — a profile with zero qualifying days
+              genuinely shows 0, never a placeholder number. */}
+          <div className="flex items-center gap-3 p-5">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2">
             <Flame className="h-5 w-5 text-accent" strokeWidth={1.75} />
           </div>
@@ -244,7 +253,7 @@ export default async function RewardsPage() {
         {/* Mon-Sun week strip, real dates in UTC. Future days are always
             plain (no fake checkmark); past/today days light up only if a
             real xp_ledger row exists for that date. */}
-        <div className="kivo-glass flex items-center justify-between rounded-2xl p-3">
+        <div className="flex items-center justify-between p-4">
           {weekStrip.map((day) => (
             <div key={day.isoDate} className="flex flex-1 flex-col items-center gap-1.5">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
@@ -266,15 +275,15 @@ export default async function RewardsPage() {
         </div>
 
         {/* Tier + longest streak, side by side. */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="kivo-glass rounded-2xl p-4">
+        <div className="grid grid-cols-2 divide-x divide-hairline-soft">
+          <div className="p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
               <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={2} />
               Tier
             </span>
             <p className="mt-1.5 text-lg font-bold text-foreground">{tier.tierName}</p>
           </div>
-          <div className="kivo-glass rounded-2xl p-4">
+          <div className="p-4">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
               <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
               Longest streak
@@ -288,7 +297,7 @@ export default async function RewardsPage() {
         {/* Progress toward the next tier — see STREAK_TIER_LENGTH_DAYS in
             src/lib/streak.ts for the single source of truth on the 7-day
             threshold this bar and copy both use. */}
-        <div className="kivo-glass rounded-2xl p-4">
+        <div className="p-4">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-track">
             <div
               className="kivo-gradient-prime h-full rounded-full transition-[width]"
@@ -299,6 +308,7 @@ export default async function RewardsPage() {
             {tier.daysToNextTier} more {tier.daysToNextTier === 1 ? "day" : "days"} to unlock next tier
           </p>
           <p className="mt-2 text-xs text-foreground-muted">{streakMessage}</p>
+        </div>
         </div>
       </FadeIn>
 

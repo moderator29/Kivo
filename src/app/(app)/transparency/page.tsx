@@ -50,7 +50,7 @@ export default async function TransparencyPage() {
           <ShieldCheck className="h-6 w-6 text-on-accent" strokeWidth={1.75} />
         </div>
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-foreground">What KIVO knows</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">What KIVO knows</h1>
           <p className="text-sm text-foreground-muted">
             KIVO never invents football data. Here is exactly what it has on record right now, counted live, and
             how fresh it is.

@@ -45,7 +45,7 @@ function PointsByGameweekStrip({ pointsHistory }: { pointsHistory: PointsByGamew
               className="flex w-8 shrink-0 flex-col items-center gap-1"
             >
               <span className="text-[11px] font-semibold tabular-nums text-foreground">{gw.points}</span>
-              <div className="flex h-16 w-full items-end overflow-hidden rounded-md bg-white/[0.05]">
+              <div className="flex h-16 w-full items-end overflow-hidden rounded-md bg-surface-track">
                 <div
                   className={`w-full rounded-md ${gw.points < 0 ? "bg-critical/60" : "kivo-gradient-prime"}`}
                   style={{ height: `${barHeightPct}%` }}

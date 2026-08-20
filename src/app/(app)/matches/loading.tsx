@@ -4,7 +4,7 @@ import { MatchListSkeleton } from "@/components/matches/match-list";
 
 export default function MatchesLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading Matches">
+    <PageSkeleton className="kivo-page" label="Loading Matches">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-6 w-28" />
         <Skeleton className="h-4 w-64" />

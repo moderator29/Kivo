@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RewardsLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading Rewards">
+    <PageSkeleton className="kivo-page" label="Loading Rewards">
       <div className="flex flex-col gap-1.5">
         <Skeleton className="h-6 w-28" />
         <Skeleton className="h-3.5 w-48" />

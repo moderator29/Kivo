@@ -284,7 +284,7 @@ export function MatchShareCard({ fixtureId, data, matchUrl }: { fixtureId: strin
             href={`https://wa.me/?text=${encodedText}%20${encodedUrl}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="kivo-glass-sharp rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-white/5"
+            className="kivo-glass-sharp rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-surface-2"
           >
             WhatsApp
           </a>
@@ -292,7 +292,7 @@ export function MatchShareCard({ fixtureId, data, matchUrl }: { fixtureId: strin
             href={`https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="kivo-glass-sharp rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-white/5"
+            className="kivo-glass-sharp rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-surface-2"
           >
             X
           </a>
@@ -300,7 +300,7 @@ export function MatchShareCard({ fixtureId, data, matchUrl }: { fixtureId: strin
             href={`https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="kivo-glass-sharp rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-white/5"
+            className="kivo-glass-sharp rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-surface-2"
           >
             Telegram
           </a>

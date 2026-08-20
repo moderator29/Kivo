@@ -166,9 +166,9 @@ export default async function FollowingPage() {
     followerPeople.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">Following</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Following</h1>
         <p className="text-sm text-foreground-subtle">
           Teams, players and competitions you follow — and the people you follow and who follow you.
         </p>
@@ -240,7 +240,7 @@ export default async function FollowingPage() {
               {followingPeople.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <h3 className="text-xs font-medium text-foreground-subtle">Following · {followingPeople.length}</h3>
-                  <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+                  <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                     {followingPeople.map((person) => (
                       <div key={person.id} className="flex items-center gap-3 px-4 py-3">
                         <Link
@@ -263,7 +263,7 @@ export default async function FollowingPage() {
               {followerPeople.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <h3 className="text-xs font-medium text-foreground-subtle">Followers · {followerPeople.length}</h3>
-                  <div className="kivo-glass flex flex-col divide-y divide-white/5 rounded-2xl">
+                  <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-2xl">
                     {followerPeople.map((person) => (
                       <div key={person.id} className="flex items-center gap-3 px-4 py-3">
                         <Link

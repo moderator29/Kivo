@@ -6,6 +6,7 @@ import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
+import { ListSurface } from "@/components/ui/list-surface";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { FixtureStatusBadge } from "@/components/matches/fixture-status-badge";
 import { ResultBadgeReveal } from "@/components/predictions/result-badge-reveal";
@@ -20,7 +21,7 @@ import {
   predictionResultInfo,
 } from "@/lib/predictions";
 
-export const metadata: Metadata = { title: "My Predictions" };
+export const metadata: Metadata = { title: "My predictions" };
 
 // RECOMMENDATIONS.md items 168/250: the same minimum-sample suppression
 // convention already established for PredictionCard's consensus bar and
@@ -85,7 +86,7 @@ export default async function MyPredictionsPage() {
 
   if (predictionsOutcome.failed) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+      <div className="kivo-page">
         <LoadFailed
           title="Your predictions"
           description="KIVO couldn't read your prediction history just now. Your record hasn't changed — try again rather than reading a zero it can't stand behind."
@@ -141,9 +142,9 @@ export default async function MyPredictionsPage() {
     .sort((a, b) => b.total - a.total);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">My Predictions</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">My predictions</h1>
         <p className="text-sm text-foreground-subtle">Your prediction history and record.</p>
       </FadeIn>
 
@@ -203,7 +204,7 @@ export default async function MyPredictionsPage() {
               <h2 className="pb-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                 By competition
               </h2>
-              <div className="flex flex-col divide-y divide-white/5">
+              <div className="flex flex-col divide-y divide-hairline-soft">
                 {competitionAccuracy.map((entry) => (
                   <div key={entry.name} className="flex items-center justify-between gap-3 py-2.5">
                     <span className="truncate text-sm text-foreground">{entry.name}</span>
@@ -234,7 +235,21 @@ export default async function MyPredictionsPage() {
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          {/* FRONTEND SWEEP 2026-08-19. This was one `kivo-glass rounded-2xl p-4`
+              per prediction, stacked with a gap — up to a hundred of them. A
+              hundred borders, a hundred shadows, a hundred backdrop blurs and
+              ninety-nine gutters, to show one person their own record. It is
+              the exact pattern CONTAINER_ROLES.row exists to prevent ("stacked
+              boxes are what makes a list look cluttered") and the single most
+              recognisable ingredient of the founder's "AI-generated dashboard"
+              note. One surface now, hairline-divided rows.
+
+              The rows are genuinely three lines deep — competition and status,
+              the fixture, then the pick and its verdict — so this is not
+              `<ListRow>`, which is built for a title-and-subtitle line. It is
+              `<ListSurface>`'s geometry with a taller row, the same way
+              `MatchList` is. */}
+          <ListSurface>
             {rows.map((row, index) => {
               const fixture = row.fixture!;
               const competitionName = competitionNameOf(fixture.competition, "short");
@@ -248,8 +263,8 @@ export default async function MyPredictionsPage() {
               const ResultIcon = result.icon;
 
               return (
-                <FadeIn key={row.id} delay={0.1 + staggerDelay(index, 0.03)}>
-                  <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-4">
+                <li key={row.id}>
+                  <FadeIn delay={0.1 + staggerDelay(index, 0.03)} className="flex flex-col gap-3 px-4 py-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-foreground-subtle">{competitionName}</span>
                       <FixtureStatusBadge status={fixture.status} kickoffAt={fixture.kickoff_at} includeWeekday />
@@ -309,11 +324,11 @@ export default async function MyPredictionsPage() {
                         {result.label}
                       </ResultBadgeReveal>
                     </div>
-                  </div>
-                </FadeIn>
+                  </FadeIn>
+                </li>
               );
             })}
-          </div>
+          </ListSurface>
         </>
       )}
     </div>

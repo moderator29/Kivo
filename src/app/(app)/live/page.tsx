@@ -207,11 +207,11 @@ export default async function LivePage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       {/* The "Refresh live scores" button that used to sit here is gone. It was
           correctly role-gated and it was still in the wrong place: an operator
           asking for a fetch does not have to be standing on the fan-facing
-          Live Center to do it, and its presence is a large part of why this
+          Live page to do it, and its presence is a large part of why this
           product read as a dashboard. The equivalent lives in Admin.
 
           What it was standing next to is NOT gone. `LiveFreshnessNote` tells a
@@ -219,7 +219,7 @@ export default async function LivePage() {
           fact about the football rather than a control over the machinery, and
           removing the button must not cost them that. */}
       <FadeIn className="flex min-w-0 flex-col gap-1.5">
-        <h1 className="text-xl font-semibold text-foreground">Live Center</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Live</h1>
         {/* Said at the top, not the bottom. A fan reading a scoreline needs to
             know how current it is before they read it, not after. */}
         <LiveFreshnessNote />

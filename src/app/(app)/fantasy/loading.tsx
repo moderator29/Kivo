@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // the page grew 96px taller the moment the squad arrived.
 export default function FantasyLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-8 pb-28 lg:px-8" label="Loading Fantasy">
+    <PageSkeleton className="kivo-page pb-28" label="Loading Fantasy">
       <div className="kivo-glass-brand flex items-center justify-between gap-4 rounded-2xl p-5">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-4 w-28" />

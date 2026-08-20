@@ -296,9 +296,9 @@ export default async function TeamComparePage({
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn>
-        <h1 className="text-xl font-semibold text-foreground">Compare teams</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Compare teams</h1>
         <p className="text-sm text-foreground-muted">Two clubs, side by side. Real numbers, no guesswork.</p>
       </FadeIn>
 

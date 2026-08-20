@@ -12,12 +12,12 @@ const MAX_TEAMS_DEFAULT = 12;
 
 export function FantasyOnboarding({ availableSeasons }: { availableSeasons: SeasonOption[] }) {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="kivo-glass-brand flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
         <div className="kivo-gradient-victory flex h-14 w-14 items-center justify-center rounded-2xl">
           <Trophy className="h-7 w-7 text-on-accent" strokeWidth={1.75} />
         </div>
-        <h1 className="text-xl font-semibold text-foreground">Build your fantasy squad</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Build your fantasy squad</h1>
         <p className="max-w-sm text-sm leading-relaxed text-foreground-muted">
           You haven&apos;t joined a fantasy league yet. Create one to start your own, or enter a friend&apos;s
           invite code to join theirs.

@@ -75,14 +75,14 @@ export default async function ManagerProfilePage({ params }: { params: Promise<{
     .filter((result): result is FormResult => result !== null);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <div className="kivo-glass-brand rounded-2xl p-6">
         <div className="flex items-center gap-4">
           <FadeIn delay={0} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-2">
             <UserRound className="h-7 w-7 text-foreground-subtle" strokeWidth={1.75} />
           </FadeIn>
           <FadeIn delay={0.05} className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold text-foreground">{manager.full_name}</h1>
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{manager.full_name}</h1>
           </FadeIn>
         </div>
 
