@@ -54,7 +54,7 @@ import { EMPTY_SETTLEMENT, settlePredictionsBestEffort } from "@/lib/prediction-
  *      src/lib/football/index.ts) — while it's false, every single one of
  *      these once-a-minute invocations is a same-millisecond no-op.
  *   3. A real provider must actually be configured (mirrors
- *      requireFootballDataAccess in admin/data-health/actions.ts) — never run
+ *      requireFootballDataAccess in admin/football/actions.ts) — never run
  *      against nothing just because a cron fired.
  *   4. Dedup — does any run (cron or admin) currently hold the fixtures sync
  *      lease? (The prerequisite docs/LIVE_DATA.md flagged as missing: "dedup
@@ -100,7 +100,7 @@ const QUOTA_SAFETY_FLOOR = 10;
  * actually observed, which is exactly the kind of made-up data this
  * platform's standing rule forbids. 10 is instead the same absolute
  * threshold Data Health's own UI already uses to color the "requests left
- * today" pill amber (src/app/admin/data-health/page.tsx) — reusing it here
+ * today" pill amber (src/app/admin/football/provider/page.tsx) — reusing it here
  * means the automated worker and the human-facing warning agree on what
  * "running low" means, and an admin who's seen that pill go amber already
  * knows, without reading this file, roughly when the worker will start
@@ -610,7 +610,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
     return NextResponse.json({ ok: true, decision: "polling_disabled" });
   }
 
-  // 2. Mirrors requireFootballDataAccess in admin/data-health/actions.ts — never
+  // 2. Mirrors requireFootballDataAccess in admin/football/actions.ts — never
   // run against nothing (or silently fall through to the dev-only mock
   // provider) just because a cron fired against a not-yet-configured deploy.
   if (!process.env.API_FOOTBALL_KEY) {

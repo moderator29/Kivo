@@ -116,7 +116,7 @@ async function upsertCompetition(
  *
  * `name` is the "YYYY/YYYY+1" display string the seasons.name column comment
  * (migration 0001) has always promised — it's genuinely rendered to users
- * (teams/[id]'s "League position" card, admin/data-health's gameweek list).
+ * (teams/[id]'s "League position" card, admin/football's gameweek list).
  * `provider_year` (migration 0028) is the bare year the dedupe key and every
  * provider-facing lookup (syncStandings in sync-match-details.ts) should read
  * instead of parsing it back out of `name` — see RECOMMENDATIONS.md item 30.

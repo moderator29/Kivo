@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlertTriangle, ChartColumn, Check, RefreshCw } from "lucide-react";
-import { triggerPlayerSeasonStatisticsSync } from "@/app/admin/data-health/provider-data-actions";
+import { triggerPlayerSeasonStatisticsSync } from "@/app/admin/football/provider-data-actions";
 
 /**
  * One player's season statistics. One provider request, said before the press —

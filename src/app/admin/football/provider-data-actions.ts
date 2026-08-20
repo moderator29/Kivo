@@ -56,7 +56,7 @@ export async function triggerCoverageSync(season?: number): Promise<ActionResult
 
   const result = await syncProviderCoverage(season);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/leagues");
   revalidatePath("/transparency");
 
@@ -75,7 +75,7 @@ export async function reconcileCoverage(): Promise<ActionResult> {
   }
 
   const result = await reconcileCoverageCompetitions();
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/leagues");
   return result;
 }
@@ -88,7 +88,7 @@ export async function triggerInjuriesSync(competitionId: string, season?: number
 
   const result = await syncCompetitionInjuries(competitionId, season);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath(`/leagues/${competitionId}`);
   // Absences surface on club and player pages, which is where a reader will
   // look for them — revalidated broadly rather than per team, since one sync
@@ -109,7 +109,7 @@ export async function triggerTopScorersSync(competitionId: string, season?: numb
 
   const result = await syncCompetitionTopScorers(competitionId, season);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath(`/leagues/${competitionId}`);
 
   if (result.status === "failed") {
@@ -125,7 +125,7 @@ export async function triggerPlayerSeasonStatisticsSync(playerId: string, season
 
   const result = await syncPlayerSeasonStatistics(playerId, season);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath(`/players/${playerId}`);
 
   if (result.status === "failed") {
@@ -142,7 +142,7 @@ export async function reconcileSeasonStatistics(): Promise<ActionResult> {
   }
 
   const result = await reconcilePlayerSeasonCompetitions();
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/players", "layout");
   return result;
 }
@@ -165,7 +165,7 @@ export async function triggerFixturePlayerStatisticsSync(fixtureId: string): Pro
 
   const result = await syncFixturePlayerStatistics(fixtureId);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath(`/matches/${fixtureId}`);
 
   if (result.status === "failed") {

@@ -20,7 +20,7 @@ import { logError } from "@/lib/log";
  *
  * ## Why this stopped being a Server Action and became a module
  *
- * This engine lived inside `admin/data-health/predictions-actions.ts`, which is
+ * This engine lived inside `admin/football/predictions-actions.ts`, which is
  * a `"use server"` file — so the only way to reach it was for a signed-in
  * football-data admin to open a page and press a button. On a deployed product
  * that means a fan makes a correct call, the match finishes, and **nothing

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { RefreshCw, Check, AlertTriangle, CalendarDays } from "lucide-react";
-import { triggerFootballSync } from "@/app/admin/data-health/actions";
+import { triggerFootballSync } from "@/app/admin/football/actions";
 
 /** Local `YYYY-MM-DD` for the date input's default and its "today" comparison.
  * Deliberately the UTC day, matching the boundary `syncTodayFixtures` and the

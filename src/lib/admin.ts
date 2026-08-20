@@ -61,6 +61,46 @@ export function canHandleSupport(role: UserRole | undefined | null): boolean {
   return !!role && SUPPORT_ROLES.includes(role);
 }
 
+/** Matches `audit_log_select_admin` in supabase/migrations/0001, whose USING
+ * clause is `private.is_admin()` — the same two roles as `canViewUserData`, and
+ * deliberately a separate predicate rather than a reuse of it. They answer
+ * different questions ("can you see other people's profile rows" vs. "can you
+ * read the sensitive-action trail"), they are enforced by two different
+ * policies, and either one could be widened without the other. A shared
+ * predicate would silently widen both.
+ *
+ * `audit_log` is append-only by design (no update or delete policy exists,
+ * including for admins), so this is the only access the table has beyond the
+ * inserts `logAudit` makes with the service-role key. */
+const AUDIT_LOG_VISIBLE_ROLES: UserRole[] = ["admin", "super_admin"];
+
+export function canViewAuditLog(role: UserRole | undefined | null): boolean {
+  return !!role && AUDIT_LOG_VISIBLE_ROLES.includes(role);
+}
+
+/**
+ * Who may read platform-health figures that RLS cannot gate.
+ *
+ * `ai_conversations` and `ai_messages` carry exactly one policy each —
+ * `ai_conversations_all_own` / `ai_messages_all_own`, migration 0001 — scoped to
+ * the conversation's owner, with no admin override of any kind. There is no
+ * "admins may read AI usage" policy to mirror, and adding one would widen access
+ * to the message *content*, which is the last thing an operator needs in order
+ * to answer "is the Copilot being abused".
+ *
+ * So /admin/ai counts through the service-role client, and this predicate is
+ * therefore **the entire boundary** rather than a restatement of one enforced
+ * underneath it. That is why it is the narrowest set in this file and why it is
+ * not folded into `canViewUserData` despite currently holding the same two
+ * roles: those two lists would have to be widened for different reasons, and a
+ * shared constant would widen both at once.
+ */
+const PLATFORM_HEALTH_ROLES: UserRole[] = ["admin", "super_admin"];
+
+export function canViewPlatformHealth(role: UserRole | undefined | null): boolean {
+  return !!role && PLATFORM_HEALTH_ROLES.includes(role);
+}
+
 /**
  * The admin pages this role can actually use, as plain href strings.
  *
@@ -85,6 +125,8 @@ export function permittedAdminNavHrefs(role: UserRole | undefined | null): strin
     moderation: canViewModerationData(role),
     users: canViewUserData(role),
     support: canHandleSupport(role),
+    audit: canViewAuditLog(role),
+    platform: canViewPlatformHealth(role),
   };
   return ADMIN_NAV.filter((item) => allows[item.capability]).map((item) => item.href);
 }

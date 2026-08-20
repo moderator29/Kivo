@@ -247,7 +247,7 @@ export default async function FantasyPage({
     }));
 
     // fantasy_points is populated by an admin-triggered scoring pass
-    // (scoreFantasyGameweek, src/app/admin/data-health/fantasy-actions.ts)
+    // (scoreFantasyGameweek, src/app/admin/football/fantasy-actions.ts)
     // that only writes a row once this gameweek has at least one finished
     // fixture — an absent row means "not scored yet", not zero.
     const { data: pointsRow } = await supabase
@@ -269,7 +269,7 @@ export default async function FantasyPage({
   // invisible to fans and it was still in the wrong place — the fix for "fantasy
   // has no gameweeks in this season" was reachable only by an admin who first
   // navigated into the broken state as a player. It now lives on
-  // /admin/data-health/integrity, listing every current season with its fixture
+  // /admin/football/integrity, listing every current season with its fixture
   // and gameweek counts.
 
   return (

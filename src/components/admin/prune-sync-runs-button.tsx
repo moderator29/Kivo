@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Trash2, Check, X, AlertTriangle } from "lucide-react";
-import { pruneSyncRuns } from "@/app/admin/data-health/actions";
+import { pruneSyncRuns } from "@/app/admin/football/actions";
 
 // This is the most consequential action on Data health — an irreversible
 // delete of sync_runs history — so it gets the same arm-then-confirm pattern
@@ -47,7 +47,7 @@ export function PruneSyncRunsButton() {
             type="button"
             onClick={() => setArmed(false)}
             aria-label="Cancel prune"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-foreground-subtle transition hover:bg-surface-2 hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <X className="h-4 w-4" strokeWidth={1.75} />
           </button>

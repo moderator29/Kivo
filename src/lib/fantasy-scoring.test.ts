@@ -22,7 +22,7 @@ const STARTING = { isStarting: true, isCaptain: false, doubleAsVice: false } as 
 const BENCH = { isStarting: false, isCaptain: false, doubleAsVice: false } as const;
 
 // RECOMMENDATIONS.md item 308: a scored gameweek's fantasy_points row is
-// stamped with this constant (see admin/data-health/fantasy-actions.ts) so a
+// stamped with this constant (see admin/football/fantasy-actions.ts) so a
 // future retuning of the point values above doesn't leave previously-scored
 // gameweeks ambiguous about which ruleset produced them. This locks in that
 // the marker exists and stays a real, non-empty string — the same guard

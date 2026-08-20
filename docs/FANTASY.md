@@ -7,7 +7,7 @@ accurately as the founder's requested "FantasyScoringEngine"; the module
 itself was not rebuilt or renamed this pass. `FantasyScoringEngine` is an
 alias for what the file already does, not a new implementation. The file
 wasn't renamed from `fantasy-scoring.ts` because every call site
-(`src/app/admin/data-health/fantasy-actions.ts`, the "How scoring works" UI
+(`src/app/admin/football/fantasy-actions.ts`, the "How scoring works" UI
 at `src/app/(app)/fantasy/how-scoring-works.tsx`, its own test file) already
 imports it by that path, and a rename this late in the session — while a
 sibling work stream has an active, uncoordinated edit in flight on an
@@ -20,7 +20,7 @@ a pure mechanical `git mv` + import-path update with no logic change.
 Pure, framework/DB-client-free scoring rules — no Supabase client, no React
 — so both the real scoring action
 (`generateFantasyGameweekScores`/`scoreGameweek` in
-`src/app/admin/data-health/fantasy-actions.ts`, admin-triggered) and the
+`src/app/admin/football/fantasy-actions.ts`, admin-triggered) and the
 published "How scoring works" UI (`how-scoring-works.tsx`) import the exact
 same numbers. Nothing shown to a user can drift from what actually gets
 computed and written to `fantasy_rosters`.
@@ -63,7 +63,7 @@ not an oversight.
 ## Real consumer
 
 `generateFantasyGameweekScores` in
-`src/app/admin/data-health/fantasy-actions.ts` is the one real call site
+`src/app/admin/football/fantasy-actions.ts` is the one real call site
 that writes scores: it loads a gameweek's finished fixtures + events +
 rosters, calls `computePlayerMatchFacts` then `scoreRosterSlot` per roster
 row, and persists the totals. It's admin-triggered (`canManageFootballData`

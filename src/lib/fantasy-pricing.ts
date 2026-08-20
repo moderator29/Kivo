@@ -2,7 +2,7 @@
  * Pure fantasy-pricing derivation, kept framework/DB-client-free (same
  * convention as fantasy-scoring.ts and rating-engine.ts) so both the real
  * write path (applyFantasyPriceNudges in
- * src/app/admin/data-health/fantasy-actions.ts, called at the end of
+ * src/app/admin/football/fantasy-actions.ts, called at the end of
  * scoreFantasyGameweek) and any future "how pricing works" UI import the
  * exact same numbers.
  *

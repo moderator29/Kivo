@@ -228,7 +228,7 @@ seventeen of them inherited one shaped like a different page.
 | `/admin/moderation` | `/admin` | `/admin` | `/admin` | yes | — |
 | `/admin/support` | `/admin` | `/admin` | `/admin` | yes | — |
 | `/admin/users` | `/admin` | `/admin` | `/admin` | yes | — |
-| `/admin/data-health` | `/admin` | `/admin` | `/admin` | yes | — |
+| `/admin/football/provider` | `/admin` | `/admin` | `/admin` | yes | — |
 | `/admin/design` | `/admin` | `/admin` | `/admin` | n/a — static reference | n/a |
 
 `/admin` had no `not-found.tsx`, so a mistyped admin URL fell through to the

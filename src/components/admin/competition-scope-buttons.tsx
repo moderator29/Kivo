@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { AlertTriangle, Check, Minus, Plus, RefreshCw } from "lucide-react";
-import { addCompetitionToScope, removeCompetitionFromScope } from "@/app/admin/data-health/scope-actions";
+import { addCompetitionToScope, removeCompetitionFromScope } from "@/app/admin/football/scope-actions";
 
 /**
  * One competition, in or out.

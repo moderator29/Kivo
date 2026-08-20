@@ -117,6 +117,25 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // The Admin football section was `/admin/data-health` with coverage, pipeline
+  // and integrity nested under it. It is now `/admin/football/{provider,
+  // coverage,pipeline,integrity}` — four siblings, one per question the section
+  // answers (RECOMMENDATIONS A2, and the header of src/app/admin/football/
+  // layout.tsx). Nothing in the app links to the old paths any more; these
+  // exist because the founder administers KIVO from a phone and the old URLs
+  // are in his history and on his home screen. Permanent, because they are
+  // never coming back — and the exact `/admin/data-health` entry has to precede
+  // the wildcard, which would otherwise send it to `/admin/football` with no
+  // page there.
+  async redirects() {
+    return [
+      { source: "/admin/data-health", destination: "/admin/football/provider", permanent: true },
+      { source: "/admin/data-health/:path*", destination: "/admin/football/:path*", permanent: true },
+      // `/admin/football` itself is a section, not a page. Its first question
+      // is the provider, so that is where a bare visit lands.
+      { source: "/admin/football", destination: "/admin/football/provider", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

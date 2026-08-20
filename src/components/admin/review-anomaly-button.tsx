@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Check } from "lucide-react";
-import { markAnomalyReviewed } from "@/app/admin/data-health/actions";
+import { markAnomalyReviewed } from "@/app/admin/football/actions";
 
 /**
  * Marks one detected data conflict as looked at (KN-95).

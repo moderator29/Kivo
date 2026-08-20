@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeftRight, Check, ListOrdered, RefreshCw } from "lu
 import {
   triggerScopedStandingsSync,
   triggerTeamTransfersSync,
-} from "@/app/admin/data-health/standings-transfers-actions";
+} from "@/app/admin/football/standings-transfers-actions";
 
 /**
  * The two buttons that fill league tables and transfers.

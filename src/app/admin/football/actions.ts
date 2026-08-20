@@ -47,7 +47,7 @@ export async function triggerFootballSync(
 
   const result = await syncTodayFixtures("manual", targetDate ? { targetDate } : undefined);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/matches");
 
   if (result.status === "failed") {
@@ -85,20 +85,20 @@ export async function markAnomalyReviewed(anomalyId: string): Promise<{ error: s
     .maybeSingle();
 
   if (error) {
-    logError("admin.data-health.markAnomalyReviewed", error);
+    logError("admin.football.markAnomalyReviewed", error);
     return { error: "Something went wrong. Try again." };
   }
   // No row came back: either the id does not exist, or somebody else reviewed
   // it first. Neither is an error worth showing — the anomaly is reviewed
   // either way, which is what the admin wanted.
   if (!data) {
-    revalidatePath("/admin/data-health");
+    revalidatePath("/admin/football", "layout");
     return { error: null };
   }
 
-  await logAudit(profile.id, "data_anomaly.reviewed", "data_anomaly", { anomaly_id: anomalyId });
+  await logAudit(profile.id, "data_anomaly.reviewed", "data_anomaly", {}, { targetId: anomalyId });
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   return { error: null };
 }
 
@@ -124,7 +124,7 @@ export async function triggerTeamSquadSync(teamId: string): Promise<{ error: str
 
   const result = await syncTeamSquad(teamId);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   // RECOMMENDATIONS.md item 99: this is the public page InlineSyncButton
   // actually renders on (teams/[id]/page.tsx) — without revalidating it
   // too, router.refresh() re-fetches a payload the framework never marked
@@ -155,7 +155,7 @@ export async function triggerFixtureDetailsSync(
 
   const result = await syncFixtureDetails(fixtureId, { autoSyncMissingSquads });
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   // Still required, and now for a stronger reason than the one it arrived with.
   // This line was added because FixtureDetailsSyncControl rendered ON that
   // public page, so an admin pressing it there needed the page under their feet
@@ -180,7 +180,7 @@ export async function triggerStandingsSync(seasonId: string): Promise<{ error: s
 
   const result = await syncStandings(seasonId);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   // RECOMMENDATIONS.md item 99: same gap as triggerTeamSquadSync/
   // triggerFixtureDetailsSync above, for the public leagues/[id] page's own
   // InlineSyncButton. syncStandings only takes a seasonId, and leagues/[id]
@@ -210,7 +210,7 @@ export async function triggerPlayerTransfersSync(playerId: string): Promise<{ er
 
   const result = await syncPlayerTransfers(playerId);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/transfers");
   revalidatePath(`/players/${playerId}`);
 
@@ -247,7 +247,7 @@ export async function pruneSyncRuns(): Promise<{ error: string | null; recordsPr
   const { data: deletedCount, error } = await service.rpc("prune_sync_runs", { p_older_than_days: 90 });
 
   if (error) {
-    logError("admin.data-health.pruneSyncRuns", error);
+    logError("admin.football.pruneSyncRuns", error);
     return { error: "Couldn't prune old sync runs. Try again." };
   }
 
@@ -256,7 +256,7 @@ export async function pruneSyncRuns(): Promise<{ error: string | null; recordsPr
     recordsProcessed: deletedCount ?? 0,
   });
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
 
   return { error: null, recordsProcessed: deletedCount ?? 0 };
 }
@@ -289,7 +289,7 @@ export async function triggerLiveScoresRefresh(): Promise<{ error: string | null
 
   const result = await syncTodayFixtures();
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/live");
   revalidatePath("/matches");
 
@@ -326,7 +326,7 @@ export async function reconcileTransferTeams(): Promise<{ error: string | null; 
     recordsProcessed: result.recordsProcessed,
   });
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/transfers");
 
   return { error: null, recordsProcessed: result.recordsProcessed };

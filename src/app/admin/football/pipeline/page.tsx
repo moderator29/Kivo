@@ -3,8 +3,6 @@ import { DISPLAY_LOCALE, formatNumber } from "@/lib/format";
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
-import { getOrCreateProfile } from "@/lib/profile";
-import { canManageFootballData } from "@/lib/admin";
 import { FOOTBALL_LIVE_POLLING_ENABLED, getActiveProviderStatus } from "@/lib/football";
 import { reapAbandonedSyncRuns } from "@/lib/football/sync-instrumentation";
 import { FadeIn } from "@/components/ui/fade-in";
@@ -14,8 +12,8 @@ import { AutomationStatusPanel } from "@/components/admin/automation-status-pane
 import { LiveWorkerPanel } from "@/components/admin/live-worker-panel";
 import { SyncReliabilityPanel } from "@/components/admin/sync-reliability-panel";
 import { LiveRefreshButton } from "@/components/admin/live-refresh-button";
-import { AdminPageHeader, AdminSection, AdminAccessNotice } from "@/components/admin/admin-chrome";
-import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
+import { AdminPageHeader, AdminSection } from "@/components/admin/admin-chrome";
+import { footballDataGate } from "../access";
 import type { Database as DatabaseType } from "@/lib/supabase/types";
 
 /**
@@ -73,18 +71,11 @@ function isQuotaExhaustedMessage(message: string): boolean {
 const CRON_STALE_THRESHOLD_MINUTES = 5;
 
 export default async function PipelinePage() {
-  const profile = await getOrCreateProfile();
-
-  if (!canManageFootballData(profile?.role)) {
-    return (
-      <AdminAccessNotice
-        title="Pipeline"
-        role={profile?.role}
-        subject="Sync history"
-        because="`sync_runs` is readable only by the football data, admin and super-admin roles (sync_runs_all_admin, migration 0001)."
-      />
-    );
-  }
+  // The layout above renders the lock screen; this returns nothing rather than
+  // a second copy of it. What matters is that it returns BEFORE the reads
+  // below — a layout does not stop a page from running (see ../access.tsx).
+  const { denied } = await footballDataGate("Pipeline");
+  if (denied) return null;
 
   const { name: activeProviderName } = getActiveProviderStatus();
   const providerConfigured = activeProviderName !== null;
@@ -153,8 +144,6 @@ export default async function PipelinePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <AdminSectionTabs groupId="football-data" />
-
       <AdminPageHeader
         icon={Workflow}
         title="Pipeline"

@@ -7,7 +7,7 @@ import {
   reconcileSeasonStatistics,
   triggerInjuriesSync,
   triggerTopScorersSync,
-} from "@/app/admin/data-health/provider-data-actions";
+} from "@/app/admin/football/provider-data-actions";
 
 /**
  * The per-competition season-data buttons, in Admin.
@@ -63,7 +63,7 @@ function ActionButton({
           setFeedback(null);
           startTransition(async () => setFeedback(await onRun()));
         }}
-        className={`kivo-focusable flex min-h-9 items-center justify-center gap-2 rounded-lg bg-surface-1 px-3 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 ${
+        className={`kivo-focusable flex min-h-11 items-center justify-center gap-2 rounded-lg bg-surface-1 px-3 text-xs font-semibold text-foreground-muted transition hover:bg-surface-2 disabled:opacity-50 ${
           compact ? "w-full sm:w-auto" : "w-full px-4 text-sm"
         }`}
       >

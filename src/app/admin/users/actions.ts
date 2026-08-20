@@ -62,7 +62,7 @@ const REASON_MAX_LENGTH = 500;
  * only-admin account with no way back in). Not a substitute for RLS, a
  * friendlier failure than the raw Postgres error a stray self-target would
  * otherwise surface, same reasoning as triggerFootballSync's own early
- * checks in admin/data-health/actions.ts.
+ * checks in admin/football/actions.ts.
  */
 async function requireModerationActor(targetProfileId: string): Promise<{ profile: Profile } | { error: string }> {
   const profile = await getOrCreateProfile();
@@ -199,7 +199,13 @@ async function applyStatusChange(opts: {
   });
   if (ledgerError) logError(`admin.users.${opts.auditAction}.ledger`, ledgerError);
 
-  await logAudit(opts.actorProfileId, opts.auditAction, "profile", metadata);
+  // targetId is the account the sanction landed on, so "every action ever taken
+  // against this account" is one indexed lookup on /admin/audit rather than a
+  // jsonb search. `note` is the operator's own words and belongs in `reason`.
+  await logAudit(opts.actorProfileId, opts.auditAction, "profile", metadata, {
+    targetId: opts.targetProfileId,
+    reason: opts.note ?? null,
+  });
 
   revalidatePath("/admin/users");
   return { error: null };

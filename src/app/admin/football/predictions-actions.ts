@@ -50,7 +50,7 @@ export async function scorePredictions(): Promise<{
   try {
     result = await settlePredictions(service);
   } catch (error) {
-    logError("admin.data-health.predictions-actions.scorePredictions", error);
+    logError("admin.football.predictions-actions.scorePredictions", error);
     return { error: "Couldn't settle predictions. Try again." };
   }
 
@@ -62,7 +62,7 @@ export async function scorePredictions(): Promise<{
   });
 
   revalidatePath("/predictions");
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/rewards");
 
   return {

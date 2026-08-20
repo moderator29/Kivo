@@ -3,7 +3,7 @@
 // Error boundaries must be Client Components (Next.js requirement).
 //
 // Placed at the admin route root so it wraps every /admin page (overview,
-// moderation, users, data-health) in one boundary. Per the component
+// moderation, users, football data) in one boundary. Per the component
 // hierarchy (see node_modules/next/dist/docs/01-app/03-api-reference/
 // 03-file-conventions/error.md), error.js wraps page.js but NOT the
 // layout.js in the same segment — so src/app/admin/layout.tsx's sidebar nav

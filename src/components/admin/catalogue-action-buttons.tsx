@@ -7,8 +7,8 @@ import {
   fillCompetitionCountries,
   runSquadBackfill,
   syncCompetitionClubs,
-} from "@/app/admin/data-health/catalogue-actions";
-import { triggerCoverageSync } from "@/app/admin/data-health/provider-data-actions";
+} from "@/app/admin/football/catalogue-actions";
+import { triggerCoverageSync } from "@/app/admin/football/provider-data-actions";
 
 /**
  * The four buttons that build the club catalogue.

@@ -115,8 +115,8 @@ export async function PlayerStatisticsPanel({ query: rawQuery }: { query?: strin
       </form>
       {query && (
         <Link
-          href="/admin/data-health/coverage"
-          className="kivo-focusable -mt-2 inline-flex min-h-9 w-fit items-center gap-1 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground"
+          href="/admin/football/coverage"
+          className="kivo-focusable -mt-2 inline-flex min-h-11 w-fit items-center gap-1 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
           Clear search

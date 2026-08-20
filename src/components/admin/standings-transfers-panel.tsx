@@ -43,7 +43,41 @@ type TableRow = {
   competitionName: string;
   rows: number;
   lastRefreshed: string | null;
+  /** How many of this table's rows carry each of migration 0117's three
+   *  optional provider fields. Counts, not verdicts — see OPTIONAL_COLUMNS. */
+  optional: Record<OptionalColumn, number>;
 };
+
+/**
+ * Migration 0117's three columns, surfaced as **what arrived**, never as a
+ * defect count.
+ *
+ * API-Football sends a per-standings-row `description` ("Promotion - Champions
+ * League (Group Stage)"), a `group` ("Group A") and a `form` string ("WWDLW").
+ * The adapter's response interface declared none of the three, so all three
+ * were silently discarded; 0117 added the columns and the adapter keeps them.
+ *
+ * RECOMMENDATIONS A8 recorded a deliberate refusal to turn these into a
+ * data-quality check, and that refusal stands. They are OPTIONAL. A cup group
+ * stage has a `group`; a domestic league does not, and never will. A
+ * competition whose provider publishes no zone sentence is not defective.
+ * Counting those nulls as "quality issues" would invent a signal, and a panel
+ * reporting permanent, unfixable "problems" is a panel an operator learns to
+ * scroll past — which costs more than the panel was ever worth.
+ *
+ * So: a count of the rows that HAVE each field, against the rows on file. That
+ * answers the one operational question these columns actually raise — "will the
+ * product be able to draw this table's qualification lines, or is that empty
+ * because the provider says nothing?" — without asserting anything about
+ * whether the answer is good.
+ */
+const OPTIONAL_COLUMNS = [
+  { key: "zone", column: "zone_description", label: "Zones", what: "the qualification-zone sentence" },
+  { key: "group", column: "group_label", label: "Groups", what: "the group label" },
+  { key: "form", column: "form", label: "Form", what: "the provider's own last-five string" },
+] as const;
+
+type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]["key"];
 
 type ClubRow = {
   teamId: string;
@@ -86,6 +120,14 @@ export async function StandingsTransfersPanel() {
         <div className="flex flex-col gap-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground-subtle">League tables</h3>
 
+          <p className="text-xs leading-relaxed text-foreground-muted">
+            Three optional fields ride along with every standings row (migration 0117): the qualification-zone
+            sentence, the group label, and the provider&apos;s own last-five form string. What follows each table is
+            how many rows carry each — <span className="font-medium text-foreground">present</span>, not missing. A
+            league the provider publishes no groups for is not defective, and counting that as a defect would be an
+            invented signal.
+          </p>
+
           {tables.length === 0 ? (
             <p className="flex items-start gap-1.5 text-xs text-foreground-muted">
               <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
@@ -95,11 +137,33 @@ export async function StandingsTransfersPanel() {
           ) : (
             <ul className="flex flex-col divide-y divide-hairline-soft">
               {tables.map((table) => (
-                <li key={table.competitionId} className="flex items-baseline justify-between gap-3 py-2">
-                  <span className="text-sm text-foreground">{table.competitionName}</span>
-                  <span className="shrink-0 text-xs text-foreground-subtle">
-                    {table.rows === 0 ? "No table yet" : `${table.rows} rows`}
-                  </span>
+                <li key={table.competitionId} className="flex flex-col gap-1.5 py-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm text-foreground">{table.competitionName}</span>
+                    <span className="shrink-0 text-xs text-foreground-subtle">
+                      {table.rows === 0 ? "No table yet" : `${table.rows} rows`}
+                    </span>
+                  </div>
+                  {table.rows > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {OPTIONAL_COLUMNS.map(({ key, column, label, what }) => {
+                        const present = table.optional[key];
+                        return (
+                          <span
+                            key={key}
+                            title={`standings.${column} — ${what}. ${present} of ${table.rows} row(s) on file carry it.`}
+                            className={
+                              present > 0
+                                ? "rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-foreground-muted"
+                                : "rounded-full border border-hairline px-2 py-0.5 text-[11px] text-foreground-subtle"
+                            }
+                          >
+                            {label} {present > 0 ? `${present}/${table.rows}` : "not published"}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -178,18 +242,32 @@ async function loadTables(
 
   const providerIdByCompetition = new Map((mappings ?? []).map((m) => [m.kivo_entity_id, m.provider_entity_id]));
 
+  // The three optional columns are read here rather than counted with three
+  // extra head-count queries: these rows are already being fetched to count them
+  // and to find the newest `updated_at`, so this is the same round trip carrying
+  // three more columns.
   const { data: standingRows } = await supabase
     .from("standings")
-    .select("season_id, updated_at")
+    .select("season_id, updated_at, zone_description, group_label, form")
     .in("season_id", seasons.map((s) => s.id))
     .limit(4000);
 
   const countBySeason = new Map<string, number>();
   const newestBySeason = new Map<string, string>();
+  const optionalBySeason = new Map<string, Record<OptionalColumn, number>>();
   for (const row of standingRows ?? []) {
     countBySeason.set(row.season_id, (countBySeason.get(row.season_id) ?? 0) + 1);
     const known = newestBySeason.get(row.season_id);
     if (!known || row.updated_at > known) newestBySeason.set(row.season_id, row.updated_at);
+
+    const tally = optionalBySeason.get(row.season_id) ?? { zone: 0, group: 0, form: 0 };
+    // An empty string is not something the provider published — API-Football
+    // sends "" for form where a side has played nothing yet — so it counts as
+    // absent rather than as a populated field holding nothing.
+    if (row.zone_description?.trim()) tally.zone += 1;
+    if (row.group_label?.trim()) tally.group += 1;
+    if (row.form?.trim()) tally.form += 1;
+    optionalBySeason.set(row.season_id, tally);
   }
 
   const position = new Map(scopeProviderIds.map((id, index) => [id, index]));
@@ -202,14 +280,16 @@ async function loadTables(
       competitionName: s.competition?.short_name || s.competition?.name || "Unnamed competition",
       rows: countBySeason.get(s.id) ?? 0,
       lastRefreshed: newestBySeason.get(s.id) ?? null,
+      optional: optionalBySeason.get(s.id) ?? { zone: 0, group: 0, form: 0 },
       sortKey: position.get(providerIdByCompetition.get(s.competition_id) ?? "") ?? Number.MAX_SAFE_INTEGER,
     }))
     .sort((a, b) => a.sortKey - b.sortKey)
-    .map(({ competitionId, competitionName, rows, lastRefreshed }) => ({
+    .map(({ competitionId, competitionName, rows, lastRefreshed, optional }) => ({
       competitionId,
       competitionName,
       rows,
       lastRefreshed,
+      optional,
     }));
 }
 

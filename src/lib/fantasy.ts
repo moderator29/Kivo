@@ -129,7 +129,7 @@ export type BulkCarryForwardResult = { teamsCarried: number; carried: CarriedFor
  * rows of its own yet — real fantasy-football games never start a new
  * gameweek with an empty squad, they start it as whatever the manager last
  * set, and now that generateFantasyGameweeks (see
- * src/app/admin/data-health/fantasy-actions.ts) can actually flip
+ * src/app/admin/football/fantasy-actions.ts) can actually flip
  * `is_current` onto a new gameweek, a team hitting that empty state is a
  * usability gap, not a deliberate "start fresh" moment.
  *
@@ -249,7 +249,7 @@ export async function carryForwardFantasyRoster(
 /**
  * Bulk counterpart to carryForwardFantasyRoster, for the one other place a
  * gameweek's rosters get read besides the squad-builder page: admin-triggered
- * scoring (scoreFantasyGameweek in src/app/admin/data-health/fantasy-actions.ts).
+ * scoring (scoreFantasyGameweek in src/app/admin/football/fantasy-actions.ts).
  * carryForwardFantasyRoster above is lazy and per-viewer — it only ever runs
  * for the one team whose owner happens to load /fantasy for this gameweek
  * before scoring does. A team whose owner hasn't opened the app since the
@@ -395,7 +395,7 @@ export type GameweekFixtureGroup = { number: number; deadlineAt: string; fixture
  * provider's own `matchday` when every fixture in the season has one, else
  * bucketed by calendar week from the season's first kickoff and renumbered
  * 1..N chronologically. This is the exact grouping generateFantasyGameweeks
- * (src/app/admin/data-health/fantasy-actions.ts) uses to create
+ * (src/app/admin/football/fantasy-actions.ts) uses to create
  * fantasy_gameweeks rows in the first place, extracted here so
  * scoreFantasyGameweek can find precisely the same fixture set for a given
  * gameweek's scoring pass — the two must never disagree about which

@@ -49,7 +49,7 @@ export async function triggerScopedStandingsSync(): Promise<ScopedStandingsResul
 
   const result = await syncScopedStandings();
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   // Every league page that just got a table, plus the standings tab inside
   // every Match Centre for those competitions — which is the surface a fan
   // actually notices. Only the competitions that really changed.
@@ -97,7 +97,7 @@ export async function triggerTeamTransfersSync(teamId: string): Promise<TeamTran
 
   const result = await syncTeamTransfers(teamId);
 
-  revalidatePath("/admin/data-health");
+  revalidatePath("/admin/football", "layout");
   revalidatePath("/transfers");
   revalidatePath(`/teams/${teamId}`);
 

@@ -12,7 +12,7 @@ import { EXTRA_IMAGE_HOSTS_ENV, missingImageHostWarning } from "./image-hosts";
  * once they've decided the account can absorb the request volume.
  *
  * RECOMMENDATIONS.md item 51: this guards two call sites today —
- * triggerLiveScoresRefresh (src/app/admin/data-health/actions.ts), the manual
+ * triggerLiveScoresRefresh (src/app/admin/football/actions.ts), the manual
  * "Refresh live scores" action on /live, and (2026-08-18) the real Vercel Cron
  * worker at src/app/api/cron/sync-live/route.ts. The worker itself is now
  * genuinely automated infrastructure — Vercel invokes that route on a fixed

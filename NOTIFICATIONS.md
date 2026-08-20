@@ -25,7 +25,7 @@ Every notification type, every producer, and the two things the founding brief a
 | `post_like` | Somebody reacts to your post | `social/actions.ts` |
 | `post_comment` / `comment_reply` | Somebody comments or replies | `social/comment-actions.ts` |
 | `new_follower` | Somebody follows you | `follow-actions.ts` |
-| `fantasy_points` / `fantasy_roster_carried` | A gameweek is scored | `admin/data-health/fantasy-actions.ts` |
+| `fantasy_points` / `fantasy_roster_carried` | A gameweek is scored | `admin/football/fantasy-actions.ts` |
 | `transfer_recorded` | A transfer involving a followed entity is synced | `transfer-notifications.ts` |
 
 ### Registered, no producer yet
