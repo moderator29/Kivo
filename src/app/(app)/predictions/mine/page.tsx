@@ -20,6 +20,7 @@ import {
   pickFromRow,
   predictionResultInfo,
 } from "@/lib/predictions";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "My predictions" };
 
@@ -37,20 +38,10 @@ export default async function MyPredictionsPage() {
   // Separate server-rendered route, so gate with a plain inline sign-in
   // prompt (matching /profile's guest view) rather than a client redirect —
   // `predictions_select_own` means there is nothing real to show a guest here.
-  if (!profile) {
-    return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
-        <Target className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-        <p className="text-sm text-foreground-muted">Sign in to see your prediction history and record.</p>
-        <Link
-          href={`/sign-up?redirect_url=${encodeURIComponent("/predictions/mine")}`}
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Sign up
-        </Link>
-      </div>
-    );
-  }
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const supabase = createServerSupabaseClient();
   // predictions_select_own already restricts this to the caller's own rows,

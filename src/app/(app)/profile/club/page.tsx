@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ProfilePageShell } from "@/components/profile/profile-page-shell";
 import { ClubChoice } from "@/components/profile/club-choice";
 import { readClubFacets, readClubs } from "@/lib/football/club-directory";
 import { TEAM_PICKER_LIMIT } from "@/lib/profile-picker";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Club you support" };
 
 export default async function ProfileClubPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(`/sign-up?redirect_url=${encodeURIComponent("/profile/club")}`);
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   // The opening list is a real answer, not a placeholder: `readClubs` with no
   // query returns the clubs most KIVO profiles follow first and the rest

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export default function MatchDetailLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 lg:px-8" label="Loading this match">
+    <PageSkeleton className="kivo-page" label="Loading this match">
       <div className="kivo-glass-brand flex flex-col gap-4 rounded-3xl p-4 sm:p-6">
         <div className="flex items-center justify-between">
           <Skeleton className="h-3 w-32" />

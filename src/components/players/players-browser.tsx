@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, UserRound } from "lucide-react";
 import { FadeIn } from "@/components/ui/fade-in";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
-import { StaggeredList } from "@/components/ui/staggered-list";
-import { staggerDelay } from "@/lib/stagger";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
+import { ListSkeleton } from "@/components/ui/skeletons";
+import { EmptyState, InlineError } from "@/components/ui/empty-state";
 import { searchPlayers, type PlayerSearchResult } from "@/app/(app)/players/actions";
 import { RESULTS_LIMIT } from "@/app/(app)/players/constants";
 import { POSITION_GROUPS } from "@/app/(app)/fantasy/fantasy-rules";
@@ -107,35 +107,38 @@ export function PlayersBrowser({
         </div>
       </FadeIn>
 
+      {/* FRONTEND SWEEP: a `kivo-glass-sharp` card per player, stacked with a
+          gap and each one lifting on hover, plus a staggered entrance on a list
+          whose entire job is to be scanned. Forty players was forty borders,
+          forty shadows and forty blurs; `CONTAINER_ROLES.row` has always said a
+          list is one surface with hairline-divided rows, and /leagues, /venues
+          and /teams had already moved. This was one of the two that had not. */}
       {error ? (
-        <p className="py-10 text-center text-sm text-critical" role="status" aria-live="polite">
-          {error}
-        </p>
+        <InlineError what="Players" />
+      ) : searching ? (
+        <ListSkeleton rows={6} leading="circle" subtitle />
       ) : players.length === 0 ? (
-        <p className="py-10 text-center text-sm text-foreground-muted">
-          {searching ? "Searching…" : "No players match those filters."}
-        </p>
-      ) : (
-        <StaggeredList
-          items={players}
-          keyExtractor={(player) => player.id}
-          delay={(index) => staggerDelay(index, 0.02)}
-          className="flex flex-col gap-2"
-          renderItem={(player) => (
-            <Link
-              href={`/players/${player.id}`}
-              className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3 transition-all hover:-translate-y-0.5 hover:bg-surface-2 kivo-focusable"
-            >
-              <PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={36} />
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium text-foreground">{player.name}</span>
-                <span className="truncate text-xs text-foreground-subtle">
-                  {[player.position, player.teamName, player.nationality].filter(Boolean).join(" · ")}
-                </span>
-              </div>
-            </Link>
-          )}
+        <EmptyState
+          icon={UserRound}
+          tone="section"
+          title="No players match those filters"
+          description="Try a different club, or clear the search and browse from the top."
         />
+      ) : (
+        <ListSurface>
+          {players.map((player) => (
+            <ListRow
+              key={player.id}
+              href={`/players/${player.id}`}
+              chevron
+              leading={<PlayerAvatar photoUrl={player.photoUrl} name={player.name} size={32} />}
+              title={player.name}
+              subtitle={
+                [player.position, player.teamName, player.nationality].filter(Boolean).join(" · ") || undefined
+              }
+            />
+          ))}
+        </ListSurface>
       )}
 
       {!error && !searching && truncated && players.length > 0 && (

@@ -24,21 +24,33 @@ describe("describeSearchCoverage", () => {
 });
 
 describe("searchEmptyExplanation", () => {
-  it("tells an empty database apart from a failed search", () => {
-    expect(searchEmptyExplanation(empty)).toContain("not a broken search");
+  // The words are the test. These three sentences are the only copy on the
+  // screen when search fails a fan, and they used to name KIVO's plumbing.
+  it.each([empty, { ...empty, teams: 1 }, { ...empty, teams: 20, players: 400 }])(
+    "never says an internal word to a fan (%o)",
+    (coverage) => {
+      const explanation = searchEmptyExplanation(coverage).toLowerCase();
+      for (const word of ["sync", "database", "provider", "api", "quota", "index"]) {
+        expect(explanation).not.toContain(word);
+      }
+    },
+  );
+
+  it("tells a product with no football in it apart from a failed search", () => {
+    expect(searchEmptyExplanation(empty)).toContain("Search isn't broken");
   });
 
   it("blames the thin index, not the speller, when the index really is thin", () => {
-    // The coordinator's case: under two synced clubs, an empty result must
-    // explain itself with the real number.
+    // The coordinator's case: with under two clubs covered, an empty result
+    // must explain itself with the real number.
     const explanation = searchEmptyExplanation({ ...empty, teams: 1, competitions: 1 });
     expect(explanation).toContain("1 club");
-    expect(explanation).toContain("has not landed yet");
+    expect(explanation).toContain("hasn't arrived yet");
   });
 
   it("stops apologising once the index is a real one", () => {
     const explanation = searchEmptyExplanation({ ...empty, teams: 20, players: 400 });
-    expect(explanation).toContain("has not been synced yet");
+    expect(explanation).toContain("doesn't cover it yet");
     expect(explanation).not.toContain("only");
   });
 });

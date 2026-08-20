@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
-import { ArrowUpRight, Flame, Zap, Award, History, Trophy } from "lucide-react";
+import { Flame, Zap, Award, History, Trophy } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
 import { logError } from "@/lib/log";
 import { getOrCreateProfile } from "@/lib/profile";
 import { FadeIn } from "@/components/ui/fade-in";
+import { ListRow, ListSurface } from "@/components/ui/list-surface";
 import { CountUp } from "@/components/ui/count-up";
 import { getNavItem } from "@/lib/navigation";
 import { staggerDelay } from "@/lib/stagger";
 import { DISPLAY_LOCALE, timeAgo } from "@/lib/format";
 import { buildWeekStrip, getStreakTier, mondayOfWeekUtc } from "@/lib/streak";
 import { xpReasonLink } from "@/lib/xp-reason-links";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 const item = getNavItem("rewards");
 
@@ -98,20 +99,10 @@ function groupXpHistoryByDay(
 
 export default async function RewardsPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) {
-    return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
-        <item.icon className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-        <p className="text-sm text-foreground-muted">Sign up to start earning XP and badges.</p>
-        <Link
-          href="/sign-up"
-          className="kivo-gradient-prime rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent kivo-raise focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Sign up
-        </Link>
-      </div>
-    );
-  }
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const supabase = createServerSupabaseClient();
 
@@ -239,76 +230,76 @@ export default async function RewardsPage() {
               get_activity_streak() — a profile with zero qualifying days
               genuinely shows 0, never a placeholder number. */}
           <div className="flex items-center gap-3 p-5">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2">
-            <Flame className="h-5 w-5 text-accent" strokeWidth={1.75} />
-          </div>
-          <div>
-            <span className="text-2xl font-bold tracking-tight text-foreground">{currentStreak}</span>
-            <span className="ml-1.5 text-sm font-medium text-foreground-muted">
-              {currentStreak === 1 ? "Day streak" : "Days streak"}
-            </span>
-          </div>
-        </div>
-
-        {/* Mon-Sun week strip, real dates in UTC. Future days are always
-            plain (no fake checkmark); past/today days light up only if a
-            real xp_ledger row exists for that date. */}
-        <div className="flex items-center justify-between p-4">
-          {weekStrip.map((day) => (
-            <div key={day.isoDate} className="flex flex-1 flex-col items-center gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground-subtle">
-                {day.label}
-              </span>
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
-                  day.isActive
-                    ? "kivo-gradient-victory text-on-accent"
-                    : day.isFuture
-                      ? "bg-surface-2 text-foreground-subtle/50"
-                      : "bg-surface-2 text-foreground-subtle"
-                } ${day.isToday ? "ring-1 ring-inset ring-accent/50" : ""}`}
-              >
-                {day.dayNumber}
-              </div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2">
+              <Flame className="h-5 w-5 text-accent" strokeWidth={1.75} />
             </div>
-          ))}
-        </div>
-
-        {/* Tier + longest streak, side by side. */}
-        <div className="grid grid-cols-2 divide-x divide-hairline-soft">
-          <div className="p-4">
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={2} />
-              Tier
-            </span>
-            <p className="mt-1.5 text-lg font-bold text-foreground">{tier.tierName}</p>
+            <div>
+              <span className="text-2xl font-bold tracking-tight text-foreground">{currentStreak}</span>
+              <span className="ml-1.5 text-sm font-medium text-foreground-muted">
+                {currentStreak === 1 ? "Day streak" : "Days streak"}
+              </span>
+            </div>
           </div>
+
+          {/* Mon-Sun week strip, real dates in UTC. Future days are always
+              plain (no fake checkmark); past/today days light up only if a
+              real xp_ledger row exists for that date. */}
+          <div className="flex items-center justify-between p-4">
+            {weekStrip.map((day) => (
+              <div key={day.isoDate} className="flex flex-1 flex-col items-center gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                  {day.label}
+                </span>
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                    day.isActive
+                      ? "kivo-gradient-victory text-on-accent"
+                      : day.isFuture
+                        ? "bg-surface-2 text-foreground-subtle/50"
+                        : "bg-surface-2 text-foreground-subtle"
+                  } ${day.isToday ? "ring-1 ring-inset ring-accent/50" : ""}`}
+                >
+                  {day.dayNumber}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tier + longest streak, side by side. */}
+          <div className="grid grid-cols-2 divide-x divide-hairline-soft">
+            <div className="p-4">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                <Trophy className="h-3.5 w-3.5 text-achievement" strokeWidth={2} />
+                Tier
+              </span>
+              <p className="mt-1.5 text-lg font-bold text-foreground">{tier.tierName}</p>
+            </div>
+            <div className="p-4">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
+                <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
+                Longest streak
+              </span>
+              <p className="mt-1.5 text-lg font-bold text-foreground">
+                {longestStreak} {longestStreak === 1 ? "day" : "days"}
+              </p>
+            </div>
+          </div>
+
+          {/* Progress toward the next tier — see STREAK_TIER_LENGTH_DAYS in
+              src/lib/streak.ts for the single source of truth on the 7-day
+              threshold this bar and copy both use. */}
           <div className="p-4">
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
-              <Flame className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
-              Longest streak
-            </span>
-            <p className="mt-1.5 text-lg font-bold text-foreground">
-              {longestStreak} {longestStreak === 1 ? "day" : "days"}
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-track">
+              <div
+                className="kivo-gradient-prime h-full rounded-full transition-[width]"
+                style={{ width: `${Math.round(tier.progress * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-foreground-subtle">
+              {tier.daysToNextTier} more {tier.daysToNextTier === 1 ? "day" : "days"} to unlock next tier
             </p>
+            <p className="mt-2 text-xs text-foreground-muted">{streakMessage}</p>
           </div>
-        </div>
-
-        {/* Progress toward the next tier — see STREAK_TIER_LENGTH_DAYS in
-            src/lib/streak.ts for the single source of truth on the 7-day
-            threshold this bar and copy both use. */}
-        <div className="p-4">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-track">
-            <div
-              className="kivo-gradient-prime h-full rounded-full transition-[width]"
-              style={{ width: `${Math.round(tier.progress * 100)}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-foreground-subtle">
-            {tier.daysToNextTier} more {tier.daysToNextTier === 1 ? "day" : "days"} to unlock next tier
-          </p>
-          <p className="mt-2 text-xs text-foreground-muted">{streakMessage}</p>
-        </div>
         </div>
       </FadeIn>
 
@@ -348,7 +339,7 @@ export default async function RewardsPage() {
                     <span className="text-xs font-semibold text-foreground">{badge.name}</span>
                     <span className="text-[11px] text-foreground-subtle">{badge.description}</span>
                     {earned ? (
-                      <span className="text-[10px] font-medium text-accent">Earned {timeAgo(earnedAt)}</span>
+                      <span className="text-[11px] font-medium text-accent">Earned {timeAgo(earnedAt)}</span>
                     ) : (
                       <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                         Locked
@@ -379,42 +370,40 @@ export default async function RewardsPage() {
                 <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-foreground-subtle">
                   {group.label}
                 </p>
-                <div className="kivo-glass flex flex-col divide-y divide-hairline-soft rounded-3xl">
+                {/* FRONTEND SWEEP: this was a hand-rolled copy of <ListSurface>
+                    at `rounded-3xl` — the feature radius, on a ledger — with
+                    its own row box, its own 12px title where the app's row
+                    title is 14px, and its own ArrowUpRight where every other
+                    row in the product uses a chevron. Three small ways of
+                    being slightly different from the rest of the app, on the
+                    densest list on the screen. */}
+                <ListSurface>
                   {collapseConsecutiveXpEntries(group.entries).map((line) => {
                     // KN-44: XP had no route back to what earned it. The ledger
                     // has no target column, so a per-row deep link would mean
                     // inventing a relationship the schema doesn't hold — this
                     // links the reason *category* to its surface instead, and
-                    // renders plain text for any reason it doesn't recognise.
+                    // leaves the row unlinked for any reason it doesn't
+                    // recognise.
                     const link = xpReasonLink(line.reason, line.source_key);
                     return (
-                    <div key={line.key} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0">
-                        {link ? (
-                          <Link
-                            href={link.href}
-                            className="group flex items-center gap-1 text-xs font-medium text-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-                          >
-                            <span className="truncate">{line.reason}</span>
-                            <ArrowUpRight
-                              className="h-3 w-3 shrink-0 text-foreground-subtle transition-colors group-hover:text-accent"
-                              strokeWidth={2}
-                            />
-                          </Link>
-                        ) : (
-                          <p className="text-xs font-medium text-foreground">{line.reason}</p>
-                        )}
-                        <p className="text-[11px] text-foreground-subtle">{timeAgo(line.created_at)}</p>
-                      </div>
-                      <span className="shrink-0 text-xs font-semibold text-live">
-                        {line.amount > 0 ? "+" : ""}
-                        {line.amount} XP
-                        {line.count > 1 && <span className="text-foreground-subtle"> &times; {line.count}</span>}
-                      </span>
-                    </div>
+                      <ListRow
+                        key={line.key}
+                        href={link?.href}
+                        chevron={Boolean(link)}
+                        title={line.reason}
+                        subtitle={timeAgo(line.created_at)}
+                        trailing={
+                          <span className="font-semibold text-live">
+                            {line.amount > 0 ? "+" : ""}
+                            {line.amount} XP
+                            {line.count > 1 && <span className="text-foreground-subtle"> &times; {line.count}</span>}
+                          </span>
+                        }
+                      />
                     );
                   })}
-                </div>
+                </ListSurface>
               </div>
             ))}
           </div>

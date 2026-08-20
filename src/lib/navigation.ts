@@ -144,7 +144,7 @@ export const NAV_ITEMS: NavItem[] = [
       "News attached to the match it is about, so a Match Room and its coverage sit in one place.",
     ],
     comingSoonBlocker:
-      "News needs a licensed feed. KIVO's football provider supplies fixtures, events and squads — it carries no editorial content, and scraping headlines from publishers who have not licensed them is not something this product will do. This turns on the day a licence is in place, not before.",
+      "News needs a licence. What KIVO carries today is football itself — fixtures, events and squads — not journalism, and lifting headlines from publishers who have not agreed to it is not something this product will do. This turns on the day a licence is in place, not before.",
     comingSoonImage: "/assets/icons/navigation/news.webp",
   },
   // Rights, not effort. Named in the directive, genuinely unbuildable today,
@@ -165,7 +165,7 @@ export const NAV_ITEMS: NavItem[] = [
       "Shareable the same way a KIVO card is, within whatever the licence allows.",
     ],
     comingSoonBlocker:
-      "Match video is licensed per competition, per territory, by the rights holder — it is not something a data API grants and not something KIVO can host on its own. Until KIVO holds those rights for a competition, there is no lawful clip to show, and a highlights tab full of links to someone else's uploads is not a feature.",
+      "Match video is licensed per competition, per territory, by the rights holder, and it is not something KIVO can host on its own. Until KIVO holds those rights for a competition, there is no lawful clip to show, and a highlights tab full of links to someone else's uploads is not a feature.",
     comingSoonImage: "/assets/icons/match-centre/highlights.webp",
   },
   {
@@ -225,12 +225,12 @@ export const NAV_ITEMS: NavItem[] = [
     comingSoonDescription:
       "Ask anything about a match, player or team and get answers grounded in verified KIVO data.",
     comingSoonDetails: [
-      "Answers built from KIVO's own synced rows first, with the model explaining them rather than inventing them.",
+      "Answers built from the football KIVO actually holds, with the model explaining it rather than inventing it.",
       "Fact, KIVO-calculated insight and uncertainty labelled separately on every answer.",
       "Ask from any match, team or player page and arrive with that context already loaded.",
     ],
     comingSoonBlocker:
-      "The Copilot is fully built and switches on the moment ANTHROPIC_API_KEY is set in the deployment. Nothing else is missing — see ENVIRONMENT.md.",
+      "The Copilot is finished and waiting on nothing but being switched on. When it is, it appears here — there is no waiting list and nothing for you to do.",
     comingSoonImage: "/assets/icons/navigation/ai-copilot.webp",
   },
   { id: "rewards", label: "Rewards", href: "/rewards", icon: Award, status: "live" },

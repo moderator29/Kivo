@@ -178,7 +178,10 @@ export function PasswordInput({
         onClick={() => setShown((current) => !current)}
         aria-label={shown ? "Hide password" : "Show password"}
         aria-pressed={shown}
-        className="kivo-focusable absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:text-foreground"
+        // 44px, not 40. back-link.tsx calls min-h-11 "the one non-negotiable
+        // number on this project", and the show/hide toggle on a password
+        // field is precisely the control a thumb misses.
+        className="kivo-focusable absolute right-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-foreground-subtle transition-colors hover:text-foreground"
       >
         {shown ? (
           <EyeOff strokeWidth={1.75} className="h-4 w-4" aria-hidden="true" />

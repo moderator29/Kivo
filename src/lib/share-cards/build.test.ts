@@ -112,7 +112,7 @@ describe("buildPlayerPerformanceCard", () => {
     const card = buildPlayerPerformanceCard(
       player("Victor Osimhen"),
       { ...emptyTotals, appearances: 4, starts: 3, goals: 0 },
-      "All matches synced to KIVO",
+      "All matches KIVO has on record",
     );
     expect(card?.stats.map((s) => s.label)).toEqual(["Apps", "Starts", "Goals"]);
     expect(card?.stats.find((s) => s.label === "Goals")?.value).toBe("0");

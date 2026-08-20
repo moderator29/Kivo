@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, CircleUserRound } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
 import { effectiveModerationStatus } from "@/lib/moderation";
 import { ModerationStatusPanel } from "@/components/settings/moderation-status-panel";
@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { FadeIn } from "@/components/ui/fade-in";
 import { SETTINGS_GROUPS, SETTINGS_SECTIONS } from "@/lib/settings-sections";
 import { cn } from "@/lib/utils";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -27,20 +28,10 @@ export const metadata: Metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const profile = await getOrCreateProfile();
 
-  if (!profile) {
-    return (
-      <div className="kivo-page kivo-page--narrow items-center text-center">
-        <CircleUserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
-        <p className="text-sm text-foreground-muted">Sign up to manage your settings.</p>
-        <Link
-          href="/sign-up"
-          className="kivo-gradient-prime kivo-raise kivo-focus rounded-xl px-5 py-2.5 text-sm font-semibold text-on-accent"
-        >
-          Sign up
-        </Link>
-      </div>
-    );
-  }
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   // Mirrors exactly what ModerationStatusPanel itself renders for
   // (suspended/banned only, lazy-expiry-adjusted) so an active or

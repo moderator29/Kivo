@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { getOrCreateProfile } from "@/lib/profile";
-import { signInHref } from "@/lib/auth";
 import { AvatarPicker } from "@/components/settings/avatar-picker";
 import { SettingsCard, SettingsPageShell } from "@/components/settings/settings-shell";
 import { getSettingsSection } from "@/lib/settings-sections";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: getSettingsSection("avatar").label };
 
@@ -13,7 +12,10 @@ export const metadata: Metadata = { title: getSettingsSection("avatar").label };
  * than a slot in a stack of nine. */
 export default async function AvatarSettingsPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(await signInHref());
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   return (
     <SettingsPageShell sectionId="avatar">

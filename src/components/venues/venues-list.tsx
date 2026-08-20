@@ -90,7 +90,13 @@ export function VenuesList({ venues }: { venues: VenueListItem[] }) {
               // No dash when a ground has neither a city nor a country. A "-"
               // in the place a city goes reads as a fact about the ground.
               subtitle={[venue.city, venue.country].filter(Boolean).join(", ") || undefined}
-              trailing={venue.capacity ? formatNumber(venue.capacity) : undefined}
+              // tabular here because it is a real numeric column — a list of
+              // capacities that lines up is readable in a way a ragged one is
+              // not. <ListRow> no longer does this for every caller; see its
+              // `trailing` note.
+              trailing={
+                venue.capacity ? <span className="tabular-nums">{formatNumber(venue.capacity)}</span> : undefined
+              }
             />
           ))}
         </ListSurface>

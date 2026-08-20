@@ -1,25 +1,13 @@
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { ListSkeleton, PageHeaderSkeleton } from "@/components/ui/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ManagersLoading() {
   return (
     <PageSkeleton className="kivo-page" label="Loading Managers">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-6 w-28" />
-        <Skeleton className="h-4 w-64" />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="kivo-glass-sharp flex items-center gap-3 rounded-xl p-3">
-            <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Skeleton className="h-3.5 w-32" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-          </div>
-        ))}
-      </div>
+      <PageHeaderSkeleton titleWidth="w-28" />
+      <Skeleton className="h-10 w-full rounded-xl" />
+      <ListSkeleton rows={8} leading="circle" subtitle trailing />
     </PageSkeleton>
   );
 }

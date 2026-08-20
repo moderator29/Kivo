@@ -6,10 +6,17 @@ import { formatNumber } from "@/lib/format";
  * "No matches for X" is the correct answer to a typo and the *wrong* answer to
  * an index with two clubs in it — in the second case the user has learned
  * nothing, and the honest explanation is not "try another spelling", it is
- * "KIVO has 2 clubs and 0 players synced so far". Search on this product is a
- * window onto whatever has been synced, and the empty state should say so with
- * the same counted-or-nothing vocabulary /discover and /transparency already
- * use, rather than implying the corpus is complete and the query was bad.
+ * "KIVO covers 2 clubs so far". Search on this product is a window onto
+ * whatever KIVO covers, and the empty state should say so with the same
+ * counted-or-nothing vocabulary /discover and /transparency already use,
+ * rather than implying the corpus is complete and the query was bad.
+ *
+ * The words themselves matter as much as the numbers. These three sentences
+ * said "synced", "database" and "index" — three engineering words on the one
+ * screen a fan reads when the product has just failed to find what they asked
+ * for. A fan does not have an index; they have a search that came back empty,
+ * and the only useful thing KIVO can tell them is how much football it covers
+ * and that more is coming.
  *
  * Deliberately counts rather than a verdict: there is no threshold at which
  * search becomes "fine", and a badge reading "limited coverage" would be a
@@ -55,20 +62,20 @@ export function describeSearchCoverage(coverage: SearchCoverage): string | null 
  *
  * Three genuinely different situations, and conflating them is what made the
  * old single line unhelpful:
- *   - nothing synced at all: the query never had a chance;
- *   - a thin index: the number itself is the explanation;
- *   - a full index: this really does look like a spelling or a gap.
+ *   - KIVO covers nothing at all: the query never had a chance;
+ *   - thin coverage: the number itself is the explanation;
+ *   - real coverage: this really does look like a spelling or a gap.
  */
 export function searchEmptyExplanation(coverage: SearchCoverage): string {
   const described = describeSearchCoverage(coverage);
   if (!described) {
-    return "Nothing has been synced into KIVO yet, so there is nothing to search. This is an empty database, not a broken search.";
+    return "KIVO doesn't cover any football yet, so there is nothing here to find. Search isn't broken — it just has nothing to look through.";
   }
   const total = searchCorpusSize(coverage);
   if (total < THIN_CORPUS) {
-    return `KIVO has only ${described} synced so far — search covers exactly that and nothing more. It is not missing; it has not landed yet.`;
+    return `KIVO covers only ${described} so far, and search looks across exactly that. What you asked for isn't missing — it hasn't arrived yet.`;
   }
-  return `KIVO searches ${described}. If a club is missing, it has not been synced yet.`;
+  return `KIVO searches ${described}. If a club is missing, KIVO doesn't cover it yet.`;
 }
 
 /**

@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, ShieldHalf } from "lucide-react";
 import { getOrCreateProfile } from "@/lib/profile";
-import { signInHref } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { readList } from "@/lib/query-result";
 import { LoadFailed } from "@/components/ui/load-failed";
@@ -12,6 +10,7 @@ import { TeamCrest } from "@/components/ui/team-crest";
 import { SettingsCard, SettingsPageShell } from "@/components/settings/settings-shell";
 import { getSettingsSection } from "@/lib/settings-sections";
 import type { ClubOption } from "@/app/(app)/settings/club-actions";
+import { ProfileUnavailable } from "@/components/auth/profile-unavailable";
 
 export const metadata: Metadata = { title: getSettingsSection("clubs").label };
 
@@ -28,7 +27,10 @@ export const metadata: Metadata = { title: getSettingsSection("clubs").label };
  */
 export default async function ClubSettingsPage() {
   const profile = await getOrCreateProfile();
-  if (!profile) redirect(await signInHref());
+  // The (app) layout already guarantees a signed-in viewer with a real profile
+  // row, so a null here is not a guest — it is a transient read failure between
+  // that check and this one. See src/lib/guest-preview.ts.
+  if (!profile) return <ProfileUnavailable />;
 
   const ids = [profile.favourite_team_id, profile.rival_team_id].filter((id): id is string => Boolean(id));
   let clubById = new Map<string, ClubOption>();

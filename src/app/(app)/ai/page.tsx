@@ -122,7 +122,11 @@ export default async function AiCopilotPage({
       lastUpdatedAt={freshness.lastUpdatedAt}
     />
       {latestAnswerId && (
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-4 pb-8 lg:px-8">
+        // FRONTEND SWEEP: this hand-rolled a column with a different gap and
+        // a different bottom padding from `.kivo-page`, which is what AiChat
+        // directly above it renders into — so the share panel sat inset from
+        // the conversation it belongs to by a few pixels nobody could name.
+        <div className="kivo-page pt-0">
           <div className="kivo-glass flex flex-col gap-3 rounded-2xl p-5">
             <ShareCardPanel
               kind="ai-insight"
