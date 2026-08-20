@@ -24,6 +24,7 @@ import {
   resolveEntityFailures,
   type EntityFailure,
 } from "./sync-instrumentation";
+import { recordUnstartableRun } from "./sync-run-recorder";
 
 type ServiceClient = SupabaseClient<Database>;
 type DbFixtureStatus = Database["public"]["Enums"]["fixture_status"];
@@ -710,7 +711,20 @@ export async function syncTodayFixtures(
   }
 
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+  // Wrapped so a press that never reaches a provider still leaves a row. A sync
+  // that throws here inserts nothing and updates nothing, which in `sync_runs`
+  // is indistinguishable from a button nobody touched — see
+  // `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "fixture",
+      `The fixtures sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // Before opening a new row, close any that a dead process left open. This is
   // the one place guaranteed to run often enough to matter and cheap enough to

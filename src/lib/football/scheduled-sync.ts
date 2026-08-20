@@ -6,6 +6,7 @@ import type { Database } from "@/lib/supabase/types";
 import { FOOTBALL_LIVE_POLLING_ENABLED, getActiveProviderStatus } from "@/lib/football";
 import { syncTodayFixtures, type SyncTriggerSource } from "@/lib/football/sync";
 import { syncStandings } from "@/lib/football/sync-match-details";
+import { resolveTargetSeason } from "@/lib/football/target-season";
 import { isAuthorizedCronRequest } from "@/lib/football/live-worker-rules";
 import { planLiveSync, type LiveFixtureSnapshot } from "@/lib/football/live-sync-planner";
 import {
@@ -223,15 +224,33 @@ const DAILY_STANDINGS_BUDGET = 5;
  * Best-effort throughout: a failure here must not make the fixtures sync — the
  * important half — report itself as broken.
  */
-async function syncStaleStandings(reserveOne: () => Promise<boolean>): Promise<{ synced: number }> {
+async function syncStaleStandings(
+  providerName: string,
+  reserveOne: () => Promise<boolean>,
+): Promise<{ synced: number }> {
   try {
     const supabase = createServiceRoleSupabaseClient();
 
-    const { data: seasons, error } = await supabase
-      .from("seasons")
-      .select("id")
-      .eq("is_current", true)
-      .limit(100);
+    /**
+     * The same season question `syncScopedStandings` asks, asked the same way.
+     *
+     * `is_current` is the right answer while nobody has named a season: it is
+     * the provider's own statement, arrived at because a fixture in that season
+     * kicked off. It is the WRONG answer the moment an operator sets
+     * `provider_season_target`, because the only reason to set that is that the
+     * plan refuses the current season — and this job would then spend five
+     * requests a day being refused, then record five failures a day, forever.
+     *
+     * Unlike the on-demand press, this creates no season rows. A schedule
+     * quietly manufacturing rows nobody asked for is a different thing from an
+     * operator pressing a button; if the chosen year has no seasons on file yet,
+     * this job finds nothing and the press is what fills them in.
+     */
+    const targetSeason = await resolveTargetSeason(supabase, providerName);
+    const seasonQuery = supabase.from("seasons").select("id").limit(100);
+    const { data: seasons, error } = targetSeason.isOverride
+      ? await seasonQuery.eq("provider_year", targetSeason.seasonYear)
+      : await seasonQuery.eq("is_current", true);
     if (error || !seasons || seasons.length === 0) {
       if (error) logError("cron.sync-daily.seasons", error);
       return { synced: 0 };
@@ -699,7 +718,7 @@ export async function handleScheduledSync(request: Request, mode: "live" | "dail
      * by the ledger rather than only by a constant that a future edit could
      * raise without noticing what it costs.
      */
-    const standings = await syncStaleStandings(async () => {
+    const standings = await syncStaleStandings(providerLabel, async () => {
       const perTable = await reserveProviderRequests(supabase, providerLabel, "daily");
       return perTable.allowed;
     });

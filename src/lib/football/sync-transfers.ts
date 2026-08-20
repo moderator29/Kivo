@@ -8,6 +8,7 @@ import type { SyncResult } from "./sync";
 import type { NormalizedTeamTransfer, NormalizedTransfer } from "./types";
 import { notifyTransferRecorded } from "./transfer-notifications";
 import { logError } from "@/lib/log";
+import { recordUnstartableRun } from "./sync-run-recorder";
 
 type ServiceClient = SupabaseClient<Database>;
 
@@ -132,7 +133,20 @@ async function loadTransferPartyNames(
  */
 export async function syncPlayerTransfers(playerId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+  // Wrapped so a press that never reaches a provider still leaves a row. A sync
+  // that throws here inserts nothing and updates nothing, which in `sync_runs`
+  // is indistinguishable from a button nobody touched — see
+  // `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "transfer",
+      `The transfer sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -345,7 +359,20 @@ export async function reconcileUnresolvedTransferTeams(): Promise<{ error: strin
  */
 export async function syncTeamTransfers(teamId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+  // Wrapped so a press that never reaches a provider still leaves a row. A sync
+  // that throws here inserts nothing and updates nothing, which in `sync_runs`
+  // is indistinguishable from a button nobody touched — see
+  // `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "transfer",
+      `The transfer sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")

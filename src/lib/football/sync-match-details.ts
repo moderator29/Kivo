@@ -7,6 +7,8 @@ import { getFootballDataProvider } from "./index";
 import { batchFindMappedIds, createMapping, findProviderEntityId } from "./provider-mappings";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { syncTeamSquad } from "./sync-squads";
+import { recordUnstartableRun } from "./sync-run-recorder";
+import { describeSeasonRowMismatch, resolveTargetSeason } from "./target-season";
 import type { SyncResult } from "./sync";
 import { notifyFixtureEvent, notifyLineupsReleased } from "./match-notifications";
 import { getKivoSystemProfileId, insertSystemEventPost } from "./match-room-system-posts";
@@ -467,7 +469,20 @@ export async function syncFixtureDetails(
 ): Promise<SyncResult> {
   const autoSyncMissingSquads = options.autoSyncMissingSquads ?? false;
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+  // Wrapped so a press that never reaches a provider still leaves a row. A sync
+  // that throws here inserts nothing and updates nothing, which in `sync_runs`
+  // is indistinguishable from a button nobody touched — see
+  // `recordUnstartableRun`.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "lineup",
+      `The fixture detail sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -697,7 +712,20 @@ export async function syncFixtureDetails(
  */
 export async function syncStandings(seasonId: string): Promise<SyncResult> {
   const supabase = createServiceRoleSupabaseClient();
-  const provider = await getFootballDataProvider();
+
+  // Wrapped so a press that never reaches the provider still leaves a row —
+  // see `recordUnstartableRun`. Standings is the sync the founder pressed most
+  // and the one whose failures matter most to read back.
+  let provider;
+  try {
+    provider = await getFootballDataProvider();
+  } catch (err) {
+    return recordUnstartableRun(
+      supabase,
+      "standing",
+      `The standings sync could not start: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const { data: syncRun, error: startError } = await supabase
     .from("sync_runs")
@@ -742,6 +770,35 @@ export async function syncStandings(seasonId: string): Promise<SyncResult> {
   if (!season) return fail(`Season ${seasonId} not found.`);
 
   const year = season.provider_year;
+
+  /**
+   * The one place the operator's target season and this sync could silently
+   * disagree, and did.
+   *
+   * `provider_season_target` (migration 0115) exists because a free
+   * API-Football plan refuses every season-scoped request outside the window it
+   * names, and `describePlanRefusal` tells the operator, in the sentence
+   * recorded in `sync_runs`, that setting it makes "every season-scoped sync
+   * start working". For `/standings` that sentence was not true. Every other
+   * season-scoped sync resolves its year through `resolveSeasonYear`; this one
+   * takes it from the season ROW, and the row's year is whatever the fixture
+   * sync last saw kick off. On the live database that is 2025 for one season,
+   * 2026 for eighty-three and 2027 for two — which is why the standings run
+   * recorded at 05:59 on 2026-08-20 was refused for "season 2027", a year
+   * nobody chose and no setting could change.
+   *
+   * Reading the row's year is still correct — a standings table belongs to the
+   * season it is filed under, and quietly writing 2024's table into the 2026
+   * row would be the worse bug. So the year is not overridden here. What is
+   * fixed is the silence: when an operator has named a season and this row is
+   * not it, the request is refused BEFORE it is sent, with a sentence that says
+   * which year was asked for, which was chosen, and where the tables for the
+   * chosen year are. `syncScopedStandings` is the caller that now picks rows by
+   * the target year, so the ordinary path never reaches this branch.
+   */
+  const targetSeason = await resolveTargetSeason(supabase, provider.name);
+  const mismatch = describeSeasonRowMismatch(targetSeason, year);
+  if (mismatch) return fail(mismatch);
 
   const leagueProviderId = await findProviderEntityId(supabase, provider.name, "competition", season.competition_id);
   if (!leagueProviderId) {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   currentProviderSeason,
+  describeSeasonRowMismatch,
   describeTargetSeason,
   parseTargetSeasonEnv,
   resolveTargetSeason,
@@ -154,5 +155,96 @@ describe("describeTargetSeason", () => {
     expect(sentence).toContain("2024/25");
     expect(sentence).toContain("not the current 2026/27 season");
     expect(sentence).toContain("free plan covers 2022-2024");
+  });
+});
+
+describe("describeSeasonRowMismatch", () => {
+  const override = {
+    seasonYear: 2024,
+    source: "database" as const,
+    calendarSeasonYear: 2026,
+    isOverride: true,
+    reason: "free plan covers 2022-2024",
+    setAt: "2026-08-19T20:00:00Z",
+  };
+
+  it("says nothing when the row is the season the operator chose", () => {
+    expect(describeSeasonRowMismatch(override, 2024)).toBeNull();
+  });
+
+  it("says nothing when nobody has overridden the calendar", () => {
+    // The live database's season rows carry 2025, 2026 and 2027 because that is
+    // what the fixture sync saw kick off. On a plan with no season problem all
+    // three are legitimate, and refusing them for disagreeing with a calendar
+    // nobody chose would break standings for a deployment that was working.
+    const calendar = {
+      seasonYear: 2026,
+      source: "calendar" as const,
+      calendarSeasonYear: 2026,
+      isOverride: false,
+      reason: null,
+      setAt: null,
+    };
+    expect(describeSeasonRowMismatch(calendar, 2027)).toBeNull();
+    expect(describeSeasonRowMismatch(calendar, 2025)).toBeNull();
+  });
+
+  it("names both years, and where the chosen one came from", () => {
+    // The exact case recorded on the live database: a standings run refused for
+    // "season 2027" while the operator had asked for something else entirely.
+    const sentence = describeSeasonRowMismatch(override, 2027);
+    expect(sentence).toContain("2027/28");
+    expect(sentence).toContain("2024");
+    expect(sentence).toContain("set by an operator");
+    expect(sentence).toContain("nothing was sent");
+  });
+
+  it("attributes an environment override to the environment variable", () => {
+    const sentence = describeSeasonRowMismatch({ ...override, source: "environment", reason: null }, 2026);
+    expect(sentence).toContain(TARGET_SEASON_ENV);
+  });
+});
+
+describe("describeTargetSeason names the trade, not only the year", () => {
+  it("says how far behind the chosen season is, and that squads are not", () => {
+    const sentence = describeTargetSeason({
+      seasonYear: 2024,
+      source: "database",
+      calendarSeasonYear: 2026,
+      isOverride: true,
+      reason: null,
+      setAt: null,
+    });
+    expect(sentence).toContain("2 seasons behind");
+    expect(sentence).toContain("Squads and managers are unaffected");
+    expect(sentence).toContain("nothing already synced moves");
+  });
+
+  it("says nothing about staleness when the calendar season is the choice", () => {
+    const sentence = describeTargetSeason({
+      seasonYear: 2026,
+      source: "calendar",
+      calendarSeasonYear: 2026,
+      isOverride: false,
+      reason: null,
+      setAt: null,
+    });
+    expect(sentence).not.toContain("behind");
+  });
+
+  it("does not claim staleness for a season AHEAD of the calendar", () => {
+    // Two of the live database's season rows are 2027. A target ahead of the
+    // calendar is a real configuration and it is not stale; claiming it was
+    // would be KIVO inventing a fact about its own data.
+    const sentence = describeTargetSeason({
+      seasonYear: 2027,
+      source: "database",
+      calendarSeasonYear: 2026,
+      isOverride: true,
+      reason: null,
+      setAt: null,
+    });
+    expect(sentence).not.toContain("behind");
+    expect(sentence).toContain("2027/28");
   });
 });

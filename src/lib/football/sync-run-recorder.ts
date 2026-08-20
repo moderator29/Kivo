@@ -5,6 +5,7 @@ import { logError } from "@/lib/log";
 import type { FootballDataProvider } from "./types";
 import type { SyncResult } from "./sync";
 import { reapAbandonedSyncRuns } from "./sync-instrumentation";
+import { getActiveProviderStatus } from "./index";
 
 type ServiceClient = SupabaseClient<Database>;
 type EntityType = Database["public"]["Enums"]["provider_entity_type"];
@@ -122,4 +123,57 @@ export class SyncRunRecorder {
     if (hadWork && processed === 0) return "failed";
     return "partial";
   }
+}
+
+/**
+ * Records a run that could never start, so that pressing a button and getting
+ * nothing is never indistinguishable from never pressing it.
+ *
+ * ## The bug shape this closes
+ *
+ * Every sync in this codebase opens its `sync_runs` row and then does its work,
+ * which is the right order — but each of them first does
+ * `await getFootballDataProvider()`, and that call THROWS when no provider is
+ * configured. A throw there escapes the sync entirely: no row is inserted, no
+ * row is updated, and the server action rejects. On the Admin panel the press
+ * resolves to a rejected promise inside a `startTransition`, so the button
+ * stops spinning with no feedback line, and `sync_runs` shows exactly what it
+ * shows for a button nobody has ever touched.
+ *
+ * That confusion has already cost this project once — `syncCompetitionTeams`
+ * carried it, with the run row opened after the mapping check, and its most
+ * common failure left no trace anywhere. This is the same shape one step
+ * earlier, and it is why the provider lookup in the callers below is wrapped
+ * rather than awaited bare.
+ *
+ * The provider name comes from `getActiveProviderStatus()`, which reads env
+ * vars only and cannot itself throw. When nothing is configured at all there is
+ * no name to record, and `"unconfigured"` is written rather than a guess — the
+ * row's job here is to prove the press happened and say why it went nowhere.
+ */
+export async function recordUnstartableRun(
+  supabase: ServiceClient,
+  entityType: EntityType,
+  message: string,
+  triggerSource?: string,
+): Promise<SyncResult> {
+  const now = new Date().toISOString();
+  const { name } = getActiveProviderStatus();
+
+  const { error } = await supabase.from("sync_runs").insert({
+    provider: name ?? "unconfigured",
+    entity_type: entityType,
+    status: "failed",
+    finished_at: now,
+    // A run that never reached the provider refreshed nothing, so it must not
+    // stamp freshness — the same rule SyncRunRecorder.finish enforces.
+    last_synced_at: null,
+    records_processed: 0,
+    error_message: message,
+    ...(triggerSource ? { trigger_source: triggerSource } : {}),
+  });
+
+  if (error) logError("football.syncRun.recordUnstartable", error, { entityType });
+
+  return { status: "failed", recordsProcessed: 0, error: message };
 }
