@@ -274,16 +274,27 @@ export function SearchSurface({
         </div>
         )
       ) : searching ? (
+        // FRONTEND SWEEP 2026-08-19: five stacked glass cards, standing in for
+        // results that arrive as one surface with divided rows. Every search
+        // therefore ended in a reflow — five boxes collapsing into one panel —
+        // at the exact moment the reader started scanning. Same geometry as the
+        // real results now: group label, one surface, `min-h-16` rows.
         <div className="flex flex-col gap-2" role="status" aria-label="Searching">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="kivo-glass flex items-center gap-3 rounded-2xl px-4 py-3.5">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <Skeleton className="h-3 w-40" />
-                <Skeleton className="h-2.5 w-24" />
+          <Skeleton className="mx-1 h-3 w-24" />
+          <div className="kivo-glass overflow-hidden rounded-2xl">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className={cn("flex min-h-16 items-center gap-3 px-4 py-3", i > 0 && "border-t border-hairline-soft")}
+              >
+                <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="h-2.5 w-24" />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : error ? (
         <p className="kivo-glass rounded-2xl px-4 py-8 text-center text-sm text-critical" role="status" aria-live="polite">

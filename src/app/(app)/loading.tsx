@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // rather than a fake progress bar implying specific, measurable progress.
 export default function AppLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <PageSkeleton className="kivo-page">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-7 w-56" />

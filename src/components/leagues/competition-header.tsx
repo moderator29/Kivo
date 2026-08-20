@@ -49,7 +49,7 @@ export function CompetitionHeader({
       <FadeIn className="flex items-center gap-3">
         <CompetitionLogo logoUrl={logoUrl} name={name} size={44} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{name}</h1>
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{name}</h1>
           {meta && <p className="truncate text-xs text-foreground-subtle">{meta}</p>}
         </div>
         <FollowButton

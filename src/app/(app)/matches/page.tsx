@@ -191,10 +191,10 @@ export default async function MatchesPage({
   const showFavouriteHeadings = favouriteGroupCount > 0 && favouriteGroupCount < competitionGroups.length;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Matches</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Matches</h1>
           <p className="text-sm text-foreground-muted">Every fixture, day by day.</p>
         </div>
         <LastSyncedNote timestamp={fixturesLastSyncedAt} className="shrink-0 pt-1" />

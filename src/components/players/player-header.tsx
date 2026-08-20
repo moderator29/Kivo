@@ -57,7 +57,7 @@ export function PlayerHeader({
           <PlayerAvatar photoUrl={photoUrl} name={name} size={64} />
         </FadeIn>
         <FadeIn delay={0.05} className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold leading-tight text-foreground sm:text-2xl">{name}</h1>
+          <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">{name}</h1>
           {showFullName && <p className="truncate text-xs text-foreground-subtle">{fullName}</p>}
           {club && (
             <Link

@@ -28,13 +28,22 @@ export const metadata: Metadata = { title: "Your season" };
  * A figure KIVO could not read renders as nothing at all rather than as zero.
  * Zero is a claim — "you have written no posts" — and a failed count has not
  * earned the right to make it.
+ *
+ * FRONTEND SWEEP 2026-08-19. Every one of the six regions below used to be its
+ * own `kivo-glass rounded-3xl p-5` panel, stacked. Six identical glass boxes,
+ * each holding a caps heading and a row of numbers, at the FEATURE radius —
+ * and `CONTAINER_ROLES.feature` says outright that "more than one on a screen
+ * means none of them is a feature". `Section`'s own doc names the failure this
+ * caused: "the default here is no surface at all … wrapping [a paragraph] in
+ * glass is how the dashboard look happens." The headings and the `.kivo-page`
+ * rhythm separate these regions perfectly well without six boxes to do it.
  */
 export default async function SeasonPage() {
   const profile = await getOrCreateProfile();
 
   if (!profile) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
+      <div className="kivo-page items-center justify-center text-center">
         <CircleUserRound className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
         <p className="text-sm text-foreground-muted">Sign in to see your season.</p>
         <Link
@@ -53,9 +62,9 @@ export default async function SeasonPage() {
   const { timeZone, isStated } = resolveTimeZone(profile.timezone);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold text-foreground">Your season</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Your season</h1>
         <p className="text-xs text-foreground-subtle">
           Everything here is counted from your own activity. Nothing is compared against anyone else, so nothing on
           this page depends on how many other people are using KIVO.
@@ -63,7 +72,7 @@ export default async function SeasonPage() {
       </FadeIn>
 
       {summary.isEmpty ? (
-        <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-3xl p-10 text-center">
+        <FadeIn delay={0.05} className="kivo-glass flex flex-col items-center gap-3 rounded-2xl p-8 text-center">
           <Trophy className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} />
           <p className="text-sm text-foreground-muted">
             Your season hasn&apos;t started yet. Make a prediction, post in a Match Room, or pick a fantasy squad —
@@ -87,7 +96,7 @@ export default async function SeasonPage() {
       ) : (
         <>
           {summary.predictions && summary.predictions.total > 0 && (
-            <FadeIn delay={0.05} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+            <FadeIn delay={0.05} className="flex flex-col gap-3">
               <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                 <Target className="h-3.5 w-3.5" strokeWidth={2} />
                 Predictions
@@ -117,7 +126,7 @@ export default async function SeasonPage() {
           )}
 
           {(summary.currentStreak !== null || summary.totalXp !== null) && (
-            <FadeIn delay={0.08} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+            <FadeIn delay={0.08} className="flex flex-col gap-3">
               <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                 <Flame className="h-3.5 w-3.5" strokeWidth={2} />
                 Consistency
@@ -135,7 +144,7 @@ export default async function SeasonPage() {
           )}
 
           {summary.fantasyArc && summary.fantasyArc.length > 0 && (
-            <FadeIn delay={0.11} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+            <FadeIn delay={0.11} className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                   <Trophy className="h-3.5 w-3.5" strokeWidth={2} />
@@ -152,7 +161,7 @@ export default async function SeasonPage() {
           )}
 
           {summary.badges && summary.badges.length > 0 && (
-            <FadeIn delay={0.14} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+            <FadeIn delay={0.14} className="flex flex-col gap-3">
               <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                 <Award className="h-3.5 w-3.5" strokeWidth={2} />
                 Badges
@@ -173,7 +182,7 @@ export default async function SeasonPage() {
           )}
 
           {((summary.posts ?? 0) > 0 || (summary.comments ?? 0) > 0) && (
-            <FadeIn delay={0.17} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+            <FadeIn delay={0.17} className="flex flex-col gap-3">
               <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                 <MessageSquare className="h-3.5 w-3.5" strokeWidth={2} />
                 In the conversation
@@ -188,7 +197,7 @@ export default async function SeasonPage() {
           {summary.follows &&
             summary.follows.teams + summary.follows.players + summary.follows.competitions + summary.follows.people >
               0 && (
-              <FadeIn delay={0.2} className="kivo-glass flex flex-col gap-3 rounded-3xl p-5">
+              <FadeIn delay={0.2} className="flex flex-col gap-3">
                 <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
                   <Users className="h-3.5 w-3.5" strokeWidth={2} />
                   Following

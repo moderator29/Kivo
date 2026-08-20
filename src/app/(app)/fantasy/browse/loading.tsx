@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // not a searchable list of leagues.
 export default function BrowseLeaguesLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading public leagues">
+    <PageSkeleton className="kivo-page" label="Loading public leagues">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-6 w-52" />
         <Skeleton className="h-4 w-72" />

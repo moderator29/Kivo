@@ -83,7 +83,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <MapPin className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
             {venue.name ?? "Unnamed venue"}
           </h1>
           {metaParts.length > 0 && <p className="truncate text-xs text-foreground-subtle">{metaParts.join(", ")}</p>}

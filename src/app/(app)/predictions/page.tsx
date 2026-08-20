@@ -132,10 +132,10 @@ export default async function PredictionsPage() {
   }));
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Predictions</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Predictions</h1>
           <p className="text-sm text-foreground-muted">Pick an outcome before kickoff. Predictions lock the moment a match starts.</p>
         </div>
         <Link

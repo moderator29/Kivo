@@ -465,7 +465,7 @@ export function AiChat({
   const showTypingDots = pending && messages[messages.length - 1]?.role !== "assistant";
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-8 lg:px-8">
+    <div className="kivo-page flex-1">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -479,7 +479,7 @@ export function AiChat({
         >
           <Sparkles className="h-4 w-4 text-on-accent" strokeWidth={1.75} />
         </motion.div>
-        <h1 className="flex-1 text-lg font-semibold text-foreground">AI Copilot</h1>
+        <h1 className="flex-1 text-2xl font-semibold tracking-tight text-foreground">AI Copilot</h1>
 
         {/* RECOMMENDATIONS.md item 189: "what KIVO knows right now" — a real
             disclosure the user opts into, not a badge pushed at them. */}

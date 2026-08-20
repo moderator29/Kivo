@@ -75,7 +75,7 @@ export function FaqSection() {
   const baseId = useId();
 
   return (
-    <div className="kivo-glass flex flex-col divide-y divide-white/5 overflow-hidden rounded-3xl">
+    <div className="kivo-glass flex flex-col divide-y divide-hairline-soft overflow-hidden rounded-3xl">
       {FAQS.map((item, index) => {
         const isOpen = openIndex === index;
         const questionId = `${baseId}-q-${index}`;
@@ -89,7 +89,7 @@ export function FaqSection() {
                 aria-expanded={isOpen}
                 aria-controls={answerId}
                 onClick={() => setOpenIndex(isOpen ? null : index)}
-                className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 focus-visible:ring-inset"
+                className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kivo-cyan/60 focus-visible:ring-inset"
               >
                 <span className="text-sm font-semibold text-foreground sm:text-base">{item.question}</span>
                 <ChevronDown

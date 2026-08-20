@@ -121,7 +121,7 @@ export function ProfileHeader({
         </div>
 
         <div className="mt-3 flex flex-col gap-0.5">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{name}</h1>
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{name}</h1>
           {/* With no display name the heading already IS the handle, so
               repeating it underneath says nothing. The owner gets the way to
               fix that instead; a visitor gets nothing extra, because "this

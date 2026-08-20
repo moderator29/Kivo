@@ -53,9 +53,9 @@ export default async function BrowsePublicFantasyLeaguesPage() {
   const hasMore = rows.length > PUBLIC_FANTASY_LEAGUES_PAGE_SIZE;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <div className="kivo-page">
       <FadeIn className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold text-foreground">Browse public leagues</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Browse public leagues</h1>
         <p className="text-sm text-foreground-muted">
           Join any public league below with one tap. Private leagues still need an invite code from the owner.
         </p>

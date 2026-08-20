@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // profile pages'.
 export default function ProfileSeasonLoading() {
   return (
-    <PageSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:px-8" label="Loading your season">
+    <PageSkeleton className="kivo-page" label="Loading your season">
       <div className="flex flex-col gap-1">
         <Skeleton className="h-6 w-36" />
         <Skeleton className="h-4 w-full max-w-md" />

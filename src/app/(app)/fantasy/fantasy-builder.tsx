@@ -305,11 +305,11 @@ export function FantasyBuilder({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-8 pb-28 lg:px-8">
+    <div className="kivo-page pb-28">
       <FadeIn className="kivo-glass-brand flex flex-col gap-4 rounded-2xl p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-foreground">{league.name}</h1>
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{league.name}</h1>
             <p className="text-xs text-foreground-subtle">
               {league.teamCount}/{league.maxTeams} teams · {league.isPrivate ? "Private" : "Public"}
             </p>
