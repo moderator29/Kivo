@@ -16,7 +16,7 @@ import { MatchShareCard } from "@/components/matches/match-share-card";
 import { ShareCardPanel } from "@/components/share/share-card-panel";
 import { YourPredictionCard } from "@/components/matches/your-prediction-card";
 import { PREDICTION_PICK_COLUMNS, pickFromRow } from "@/lib/predictions";
-import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { getLastUpdatedAt } from "@/lib/football/last-updated";
 import { competitionName } from "@/lib/football/competition-label";
 import { getHeadToHead } from "@/lib/football/head-to-head";
 import { computeTeamForm, resolveFixtureResult, type FixtureResultRow, type ResolvedResult } from "@/lib/football/form-engine";
@@ -120,8 +120,8 @@ export default async function MatchCentrePage({
     { data: stats },
     { data: standings },
     { posts: roomPostsPage },
-    fixturesLastSyncedAt,
-    detailsLastSyncedAt,
+    fixturesLastUpdatedAt,
+    detailsLastUpdatedAt,
     headToHead,
     { data: recentFinished },
     ownFanRating,
@@ -180,9 +180,9 @@ export default async function MatchCentrePage({
     // RECOMMENDATIONS.md item 60: "last synced" freshness for this fixture's core
     // score/status (entity_type 'fixture', written by syncTodayFixtures) and,
     // separately, its lineups/events/stats (entity_type 'lineup', written by
-    // syncFixtureDetails) — see getLastSyncedAt() and MatchCentreTabs.
-    getLastSyncedAt(["fixture"]),
-    getLastSyncedAt(["lineup"]),
+    // syncFixtureDetails) — see getLastUpdatedAt() and MatchCentreTabs.
+    getLastUpdatedAt(["fixture"]),
+    getLastUpdatedAt(["lineup"]),
     // RECOMMENDATIONS.md item 161: prior meetings only, excluding this very
     // fixture (it's the one already on screen, not "history").
     fixture.home_team?.id && fixture.away_team?.id
@@ -539,7 +539,7 @@ export default async function MatchCentrePage({
   // were — and the page used to print BOTH, three hundred pixels apart, in
   // identical words. Two "Updated 4d ago" lines on one screen read as a bug.
   // The later of the two is the answer to the question the line actually asks.
-  const pageLastUpdatedAt = [fixturesLastSyncedAt, detailsLastSyncedAt]
+  const pageLastUpdatedAt = [fixturesLastUpdatedAt, detailsLastUpdatedAt]
     .filter((value): value is string => value !== null)
     .sort()
     .at(-1) ?? null;

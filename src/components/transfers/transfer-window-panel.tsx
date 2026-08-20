@@ -66,9 +66,9 @@ export function TransferWindowPanel({
             </span>
           )}
           <p className="text-[11px] leading-relaxed text-foreground-subtle">
-            No countdown yet: registration windows are set per national association, change every year, and are not in
-            the data KIVO syncs. Rather than type in dates it cannot cite, KIVO shows what it has actually recorded.
-            The countdown turns on the moment a verified window is configured.
+            No countdown yet: registration windows are set per national association, change every year, and are not
+            published in the football data KIVO receives. Rather than type in dates it cannot cite, KIVO shows what it
+            has actually recorded. The countdown turns on the moment a verified window is configured.
           </p>
         </div>
       )}

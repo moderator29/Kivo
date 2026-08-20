@@ -117,6 +117,10 @@ collapsed-by-default panel in `chat.tsx`, toggled from the header, shows
 `grounding.summary` **verbatim** — the literal string handed to the model,
 not a separately hand-built summary that could quietly drift from what's
 actually grounding the conversation — plus a freshness line reusing
-`getTransparencyFreshness()` (`src/lib/football/last-synced.ts`, the same
-helper `/transparency` already uses) for "last provider sync" and "quota
-remaining today", rather than re-deriving that logic.
+`getTransparencyFreshness()` (`src/lib/football/last-updated.ts`, the same
+helper `/transparency` already uses) for a single "Last updated" line, rather
+than re-deriving that logic. The panel used to carry a second figure —
+requests remaining today — and the helper used to compute it; both are gone
+(RECOMMENDATIONS.md F1/F6). Remaining request budget says nothing about
+whether an answer can be trusted, which is the only question this panel
+exists to answer, and it is an operations metric that belongs to Admin.

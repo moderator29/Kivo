@@ -408,6 +408,44 @@ const EVENT_ICON: Record<keyof typeof EVENT_LABEL, LucideIcon> = {
 /** Colour is never the only signal here (directive item 15): each event also
  * carries a distinct icon and its full text label, so a red and a yellow card
  * remain tellable apart without colour vision. */
+/**
+ * RECOMMENDATIONS.md item 332. `fixture_events.related_player_id` carries two
+ * completely different people depending on the event: on a goal it is the
+ * **assister**, and on a substitution it is the player coming **on** (see
+ * docs/API_FOOTBALL.md — API-Football populates `assist` on both, which is
+ * also the trap `ASSISTED_GOAL_EVENT_TYPES` exists to avoid). The timeline
+ * rendered both as `Name · Name` with the same separator and the same two
+ * plain links, so a row could not be read without already knowing which event
+ * type it belonged to — and the assist, the second thing anyone asks about a
+ * goal, was invisible as one.
+ *
+ * The words rather than icons, deliberately: "assisted by" and "off"/"on" are
+ * what a commentator says, they need no legend, and they are announced
+ * correctly by a screen reader without an `aria-label` that has to be kept in
+ * step with a glyph.
+ *
+ * Every other event type returns no role words at all. A card or a VAR review
+ * has no second player, and on the rare row where one is attached anyway KIVO
+ * does not know what that person did — so it prints the name and claims
+ * nothing, which is the same rule the "Unknown player" removal above follows.
+ *
+ * `scored` is the same `isGoalEventType` test the row already runs, so the set
+ * of events that show an assist cannot drift from the set that count as goals.
+ */
+function playerRolesFor(eventType: keyof typeof EVENT_LABEL): {
+  primary: string | null;
+  relatedBefore: string | null;
+  relatedAfter: string | null;
+} {
+  if (isGoalEventType(eventType)) {
+    return { primary: null, relatedBefore: "assisted by", relatedAfter: null };
+  }
+  if (eventType === "substitution") {
+    return { primary: "off", relatedBefore: null, relatedAfter: "on" };
+  }
+  return { primary: null, relatedBefore: null, relatedAfter: null };
+}
+
 const EVENT_TONE: Record<keyof typeof EVENT_LABEL, string> = {
   goal: "text-accent",
   own_goal: "text-critical",
@@ -460,6 +498,7 @@ function TimelineEventCard({
 }) {
   const Icon = EVENT_ICON[event.eventType];
   const scored = isGoalEventType(event.eventType);
+  const roles = playerRolesFor(event.eventType);
 
   return (
     <div
@@ -492,20 +531,25 @@ function TimelineEventCard({
         {(event.playerName || event.relatedPlayerName || event.detail) && (
           <span className="text-xs text-foreground-subtle">
             {event.playerName && (
-              <PlayerNameLink
-                playerId={event.playerId ?? ""}
-                playerName={event.playerName}
-                className="hover:text-accent hover:underline"
-              />
+              <>
+                <PlayerNameLink
+                  playerId={event.playerId ?? ""}
+                  playerName={event.playerName}
+                  className="hover:text-accent hover:underline"
+                />
+                {roles.primary ? <> {roles.primary}</> : null}
+              </>
             )}
             {event.relatedPlayerName ? (
               <>
                 {event.playerName ? " · " : ""}
+                {roles.relatedBefore ? <>{roles.relatedBefore} </> : null}
                 <PlayerNameLink
                   playerId={event.relatedPlayerId ?? ""}
                   playerName={event.relatedPlayerName}
                   className="hover:text-accent hover:underline"
                 />
+                {roles.relatedAfter ? <> {roles.relatedAfter}</> : null}
               </>
             ) : null}
             {event.detail ? `${event.playerName || event.relatedPlayerName ? " · " : ""}${event.detail}` : ""}
@@ -641,9 +685,9 @@ function TimelineTab({
       </div>
 
       <p className="px-1 pt-1 text-[11px] leading-relaxed text-foreground-subtle">
-        Goals, penalties, cards, substitutions and VAR reviews. KIVO&apos;s provider does not
-        publish ball-by-ball commentary, so this is the complete event record for the match
-        rather than a shortened one.
+        Goals, penalties, cards, substitutions and VAR reviews. Ball-by-ball commentary is not
+        part of the match record KIVO receives, so this is the complete event record for the
+        match rather than a shortened one.
       </p>
     </div>
   );

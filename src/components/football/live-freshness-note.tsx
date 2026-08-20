@@ -1,8 +1,8 @@
 import { CircleAlert } from "lucide-react";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { LastUpdatedNote } from "@/components/football/last-updated-note";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { FOOTBALL_LIVE_POLLING_ENABLED, getActiveProviderStatus } from "@/lib/football";
-import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { getLastUpdatedAt } from "@/lib/football/last-updated";
 import { readBudgetUsage } from "@/lib/football/request-budget";
 import { logError } from "@/lib/log";
 
@@ -22,13 +22,13 @@ import { logError } from "@/lib/log";
  *     page and the data is already stale. That is the default, and a fan
  *     deserves to know it rather than infer it from a score that never changes.
  *
- * Deliberately built on `LastSyncedNote` rather than as a second freshness
+ * Deliberately built on `LastUpdatedNote` rather than as a second freshness
  * vocabulary. The timestamp is the same fact every other football surface
  * shows; this only adds the sentence that explains what will happen next.
  */
 export async function LiveFreshnessNote({ className = "" }: { className?: string }) {
   const { name: providerName } = getActiveProviderStatus();
-  const lastSyncedAt = await getLastSyncedAt(["fixture"]);
+  const lastUpdatedAt = await getLastUpdatedAt(["fixture"]);
 
   if (!providerName) {
     return (
@@ -52,7 +52,7 @@ export async function LiveFreshnessNote({ className = "" }: { className?: string
 
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
-      <LastSyncedNote timestamp={lastSyncedAt} />
+      <LastUpdatedNote timestamp={lastUpdatedAt} />
       {exhausted ? (
         <span className="flex items-start gap-1.5 text-[11px] leading-relaxed text-warning">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />

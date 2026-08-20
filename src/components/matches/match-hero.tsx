@@ -4,7 +4,7 @@ import { CalendarClock, MapPin } from "lucide-react";
 import { MatchScoreDisplay } from "@/components/matches/match-score-display";
 import { TeamCrest } from "@/components/ui/team-crest";
 import { LocalDateTime } from "@/components/ui/relative-time";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
+import { LastUpdatedNote } from "@/components/football/last-updated-note";
 import { AskAiLink } from "@/components/ai/ask-ai-link";
 import { SHARE_BACKGROUND_LAYERS } from "@/lib/share-cards/backgrounds";
 import type { FixtureStatus } from "@/lib/football/fixture-status";
@@ -153,7 +153,7 @@ export function MatchHero({
             {competitionLabel && roundLabel ? " · " : ""}
             {roundLabel}
           </span>
-          <LastSyncedNote timestamp={lastUpdatedAt} />
+          <LastUpdatedNote timestamp={lastUpdatedAt} />
         </div>
       )}
 

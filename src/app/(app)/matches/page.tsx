@@ -10,8 +10,8 @@ import { MatchesCompetitionFilter } from "@/components/matches/matches-competiti
 import { resolveTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { getOrCreateProfile } from "@/lib/profile";
 import { viewerIsSignedIn } from "@/lib/guest-preview";
-import { LastSyncedNote } from "@/components/football/last-synced-note";
-import { getLastSyncedAt } from "@/lib/football/last-synced";
+import { LastUpdatedNote } from "@/components/football/last-updated-note";
+import { getLastUpdatedAt } from "@/lib/football/last-updated";
 import { groupFixturesByCompetition } from "@/lib/football/group-by-competition";
 import { getCompetitionRankingSignals } from "@/lib/football/competition-ranking";
 import { rankCompetitionGroups } from "@/lib/football/competition-tier";
@@ -78,7 +78,7 @@ export default async function MatchesPage({
   const endOfDay = startOfDayInTimeZone(viewerTimeZone, new Date(startOfDay.getTime() + 36 * 60 * 60 * 1000));
   const isToday = dateKey(startOfDay, viewerTimeZone) === dateKey(todayIn(viewerTimeZone), viewerTimeZone);
 
-  const [fixturesResult, fixturesLastSyncedAt] = await Promise.all([
+  const [fixturesResult, fixturesLastUpdatedAt] = await Promise.all([
     supabase
       .from("fixtures")
       .select(
@@ -92,8 +92,8 @@ export default async function MatchesPage({
       .order("kickoff_at", { ascending: true }),
     // RECOMMENDATIONS.md item 60: freshness readout for this whole list — every
     // fixture on it came from the same daily syncTodayFixtures() batch (entity_type
-    // 'fixture'), so one timestamp covers all of them. See getLastSyncedAt().
-    getLastSyncedAt(["fixture"]),
+    // 'fixture'), so one timestamp covers all of them. See getLastUpdatedAt().
+    getLastUpdatedAt(["fixture"]),
   ]);
 
   // "Nothing is scheduled on this date" is a completely ordinary answer here —
@@ -197,7 +197,7 @@ export default async function MatchesPage({
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Matches</h1>
           <p className="text-sm text-foreground-muted">Every fixture, day by day.</p>
         </div>
-        <LastSyncedNote timestamp={fixturesLastSyncedAt} className="shrink-0 pt-1" />
+        <LastUpdatedNote timestamp={fixturesLastUpdatedAt} className="shrink-0 pt-1" />
       </FadeIn>
 
       <FadeIn delay={0.04} className="flex flex-col gap-3">

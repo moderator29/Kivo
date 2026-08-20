@@ -117,10 +117,10 @@ type StreamFrame =
  * instead of hardcoding a question — like "what's synced today" — the app
  * could just as easily answer without spending a model call, or suggesting
  * "how's my team doing" to someone who hasn't followed one. */
-function suggestionsFor(hasFollowedEntities: boolean, hasSyncedFixtures: boolean): string[] {
+function suggestionsFor(hasFollowedEntities: boolean, hasFixturesToday: boolean): string[] {
   return [
     hasFollowedEntities ? "What have I followed on KIVO?" : "How do I follow a team or player?",
-    hasSyncedFixtures ? "What matches are on today?" : "What can you actually help me with right now?",
+    hasFixturesToday ? "What matches are on today?" : "What can you actually help me with right now?",
     "Explain what xG means.",
   ];
 }
@@ -129,16 +129,16 @@ export function AiChat({
   signedIn,
   initialConversations = [],
   hasFollowedEntities = false,
-  hasSyncedFixtures = false,
+  hasFixturesToday = false,
   initialFocus = null,
   focusLabel = null,
   groundingSummary = "",
-  lastSyncedAt = null,
+  lastUpdatedAt = null,
 }: {
   signedIn: boolean;
   initialConversations?: ConversationSummary[];
   hasFollowedEntities?: boolean;
-  hasSyncedFixtures?: boolean;
+  hasFixturesToday?: boolean;
   /** RECOMMENDATIONS.md items 184/185: resolved server-side from `?ctx=&id=`
    * (see `src/app/(app)/ai/page.tsx`) — resent on every turn of this session
    * (see `streamAssistantReply`) so the deep-linked entity keeps grounding
@@ -152,7 +152,7 @@ export function AiChat({
    * text sent to the model on page load, shown in the disclosure panel
    * below unmodified. */
   groundingSummary?: string;
-  lastSyncedAt?: string | null;
+  lastUpdatedAt?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -452,11 +452,11 @@ export function AiChat({
     return result;
   }
 
-  const suggestions = suggestionsFor(hasFollowedEntities, hasSyncedFixtures);
+  const suggestions = suggestionsFor(hasFollowedEntities, hasFixturesToday);
   // Item 183: while the intro chips already avoid suggesting things KIVO
   // can't answer, the input's own placeholder is the more honest place to
   // say so up front, before the user even asks.
-  const inputPlaceholder = hasSyncedFixtures
+  const inputPlaceholder = hasFixturesToday
     ? "Ask KIVO's AI Copilot…"
     : "Ask about football. KIVO has no fixtures for today…";
   // Dots show only until the assistant's reply actually starts streaming —
@@ -539,9 +539,9 @@ export function AiChat({
                   on this line is an operations metric — it says nothing about
                   whether an answer can be trusted, which is the only question
                   this panel exists to answer. It lives on admin Data Health. */}
-              {lastSyncedAt && (
+              {lastUpdatedAt && (
                 <p className="text-xs text-foreground-muted">
-                  Last updated <RelativeTime iso={lastSyncedAt} className="text-foreground" />
+                  Last updated <RelativeTime iso={lastUpdatedAt} className="text-foreground" />
                 </p>
               )}
               <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface-inset p-3 text-[11px] leading-relaxed text-foreground-muted">

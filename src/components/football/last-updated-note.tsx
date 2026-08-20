@@ -3,8 +3,8 @@ import { timeAgo } from "@/lib/format";
 
 /**
  * The freshness readout on public football surfaces (RECOMMENDATIONS.md item 60).
- * Takes the timestamp already resolved server-side via getLastSyncedAt()
- * (src/lib/football/last-synced.ts) rather than fetching anything itself, so it
+ * Takes the timestamp already resolved server-side via getLastUpdatedAt()
+ * (src/lib/football/last-updated.ts) rather than fetching anything itself, so it
  * stays a plain server-renderable component.
  *
  * FRONTEND SWEEP 2026-08-19 — this component was the single most widely-rendered
@@ -20,7 +20,7 @@ import { timeAgo } from "@/lib/format";
  *    honest thing this component can say is when the page was last updated, and
  *    letting a caller re-word that is how the leak got in.
  *
- * 2. The null branch renders NOTHING. `getLastSyncedAt` returns null for two
+ * 2. The null branch renders NOTHING. `getLastUpdatedAt` returns null for two
  *    unrelated reasons — there genuinely is no run yet, and SUPABASE_SERVICE_ROLE_KEY
  *    is missing or rotated — and the second is reachable in production, which put
  *    "Sync time unknown" above fully-current full-time scorelines. An absent
@@ -28,7 +28,7 @@ import { timeAgo } from "@/lib/format";
  *    what KIVO actually knows in that case. Whether the page has data is something
  *    the page itself says, and it is the one that can tell.
  */
-export function LastSyncedNote({ timestamp, className = "" }: { timestamp: string | null; className?: string }) {
+export function LastUpdatedNote({ timestamp, className = "" }: { timestamp: string | null; className?: string }) {
   if (!timestamp) return null;
 
   // `timeAgo` returns both bare durations ("5h", "2d") and already-complete

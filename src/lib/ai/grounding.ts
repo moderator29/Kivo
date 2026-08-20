@@ -30,7 +30,7 @@ export interface GroundingContext {
   /** Rendered as plain text and injected into the system prompt — kept small and structured on purpose. */
   summary: string;
   hasFollowedEntities: boolean;
-  hasSyncedFixtures: boolean;
+  hasFixturesToday: boolean;
   /** RECOMMENDATIONS.md item 189: everything the "what KIVO knows right now"
    * disclosure panel needs to render without re-deriving it — item 189 asks
    * for `grounding.summary` "verbatim", so this is the same summary string
@@ -111,7 +111,7 @@ interface BaseGrounding {
    * different — what people said, not what happened. */
   community: string[];
   hasFollowedEntities: boolean;
-  hasSyncedFixtures: boolean;
+  hasFixturesToday: boolean;
   disclosureLabel: string | null;
   /** Teams the base context already describes, so KN-108 does not spend
    * queries re-describing them and does not put the same club into the prompt
@@ -173,7 +173,7 @@ function assembleSummary(base: {
 const NO_USER_CONTEXT: GroundingContext = {
   summary: "No signed-in user context available.",
   hasFollowedEntities: false,
-  hasSyncedFixtures: false,
+  hasFixturesToday: false,
   disclosureLabel: null,
 };
 
@@ -224,7 +224,7 @@ export async function buildGroundingContext(
   return {
     summary: assembleSummary({ identityLines: base.identityLines, verified, calculated, limited, community }),
     hasFollowedEntities: base.hasFollowedEntities,
-    hasSyncedFixtures: base.hasSyncedFixtures,
+    hasFixturesToday: base.hasFixturesToday,
     disclosureLabel: base.disclosureLabel,
   };
 }
@@ -520,7 +520,7 @@ async function buildBaseGrounding(profile: Profile, focus: GroundingFocus | null
     limited,
     community,
     hasFollowedEntities: followedNames.length > 0,
-    hasSyncedFixtures: !!todaysFixtures && todaysFixtures.length > 0,
+    hasFixturesToday: !!todaysFixtures && todaysFixtures.length > 0,
     disclosureLabel: focusResult?.label ?? null,
     // Every team this context already talks about by name: the favourite, and
     // every followed team whose form was computed above.
